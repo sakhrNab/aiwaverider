@@ -1,0 +1,117 @@
+.carousel-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 40px;
+}
+
+.carousel-slide {
+  padding: 20px;
+}
+
+.slick-slider {
+  margin: 0 -10px;
+}
+
+/* Navigation Arrows */
+.slick-prev,
+.slick-next {
+  z-index: 1;
+  width: 40px;
+  top: 145px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9) !important;
+  transition: background-color 0.3s ease;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.slick-prev {
+  left: -30px !important;
+  top: 145px;
+}
+
+.slick-next {
+  right: -30px !important;
+  top: 145px;
+}
+
+.slick-prev:before,
+.slick-next:before {
+  font-size: 24px !important;
+  color: #333 !important;
+  opacity: 0.8;
+}
+
+/* Dots */
+.slick-dots {
+  bottom: -40px;
+  padding: 10px 0;
+}
+
+.slick-dots li button:before {
+  font-size: 12px !important;
+  color: #333 !important;
+  opacity: 0.5;
+}
+
+.slick-dots li.slick-active button:before {
+  opacity: 1;
+}
+
+/* Box Slider Styles for proper height */
+.box-slider .slick-track {
+  display: flex !important;
+}
+
+.box-slider .slick-slide {
+  height: inherit !important;
+}
+
+.box-slider .slick-slide > div {
+  height: 100%;
+}
+
+/* Responsive Styles */
+@media (max-width: 1024px) {
+  .carousel-container {
+      padding: 0 30px;
+  }
+}
+
+@media (max-width: 768px) {
+  .carousel-container {
+      padding: 0 20px;
+  }
+
+  .slick-prev,
+  .slick-next {
+      width: 30px;
+      height: 30px;
+  }
+
+  .slick-prev:before,
+  .slick-next:before {
+      font-size: 20px !important;
+  }
+}
+
+/* Touch Interactions */
+@media (hover: none) {
+  .slick-prev,
+  .slick-next {
+      display: none !important;
+  }
+}
+
+/* Hover Effects */
+.slick-prev:hover,
+.slick-next:hover {
+  background: rgba(255, 255, 255, 1) !important;
+}
+
+.slick-prev:hover:before,
+.slick-next:hover:before {
+  opacity: 1;
+}
