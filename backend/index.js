@@ -1,4 +1,4 @@
-// index.js
+// backend/index.js
 
 require('dotenv').config();
 const express = require('express');
@@ -21,24 +21,19 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ error: 'Something went wrong!' });
-});
-  
-app.use(cors());
-app.use(express.json());
+// CORS configuration
 app.use(cors({
     origin: 'http://localhost:5173', // Replace with your React app's URL
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true,
-  }));
-  
+}));
+
+app.use(express.json());
+
 // ------------- Initialize Firebase Admin -------------
 
 const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-console.log("ServiceAccountPat: ", serviceAccountPath);
+console.log("ServiceAccountPath: ", serviceAccountPath);
 // Resolve the absolute path (ensure it points correctly)
 const resolvedServiceAccountPath = path.resolve(serviceAccountPath);
 
@@ -65,7 +60,7 @@ const commentsCollection = db.collection('comments');
  *
  *   comments (collection)
  *     doc: commentId
- *       postId, userId, commentText, createdAt
+ *       postId, userId, text, username, userRole, createdAt
  *************************************************************************/
 
 // Middleware to verify JWT
@@ -161,6 +156,7 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(500).json({ error: 'Internal server error.' });
     }
   });
+
 // ------------------ 2) Sign In ------------------------
 app.post('/api/auth/signin', async (req, res) => {
   try {
@@ -246,11 +242,16 @@ app.post('/api/posts', authenticateJWT, async (req, res) => {
         .json({ error: 'Only admin can create posts.' });
     }
 
+    // Get username from users collection
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+    const username = userDoc.exists ? userDoc.data().username : 'Unknown User';
+   
     // Add post to Firestore
     const newPostRef = await postsCollection.add({
       title,
       description,
       createdBy: userId || null,
+      createdByUsername: username,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -267,6 +268,8 @@ app.post('/api/posts', authenticateJWT, async (req, res) => {
 });
 
 // ------------------ 4) Get All Posts (public) ---------
+// backend/index.js
+
 app.get('/api/posts', async (req, res) => {
     try {
       const snapshot = await postsCollection
@@ -278,7 +281,7 @@ app.get('/api/posts', async (req, res) => {
         allPosts.push({ 
           id: doc.id, 
           ...data, 
-          createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : null 
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || null 
         });
       });
       return res.json(allPosts);
@@ -287,6 +290,8 @@ app.get('/api/posts', async (req, res) => {
       return res.status(500).json({ error: 'Internal server error.' });
     }
   });
+
+  
 
 // ------------------ 5) Add Comment (auth or admin) ----
 app.post('/api/posts/:postId/comments', authenticateJWT, async (req, res) => {
@@ -308,17 +313,31 @@ app.post('/api/posts/:postId/comments', authenticateJWT, async (req, res) => {
       return res.status(404).json({ error: 'Post not found.' });
     }
 
+    // Fetch user data to include in comment
+    let username = 'Anonymous';
+    let userRole = 'User';
+    if (userId) {
+      const userDoc = await usersCollection.doc(userId).get();
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        username = userData.username || 'Anonymous';
+        userRole = userData.role || 'User';
+      }
+    }
+
     // Add comment to Firestore
     const newCommentRef = await commentsCollection.add({
       postId,
       userId: userId || null,
-      commentText,
+      text: commentText,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      username, // Include username
+      userRole, // Include user role
     });
 
     return res.json({
       message: 'Comment added successfully.',
-      comment: { id: newCommentRef.id, commentText },
+      comment: { id: newCommentRef.id, text: commentText, username, userRole },
     });
   } catch (err) {
     console.error('Error in POST /api/posts/:postId/comments:', err);
@@ -349,6 +368,7 @@ app.get('/api/posts/:postId/comments', async (req, res) => {
       return res.status(500).json({ error: 'Internal server error.' });
     }
   });
+
 // ------------------ 7) Get User Profile (authenticated) ----
 app.get('/api/users/:userId', authenticateJWT, async (req, res) => {
     try {
@@ -379,7 +399,6 @@ app.get('/api/users/:userId', authenticateJWT, async (req, res) => {
       return res.status(500).json({ error: 'Internal server error.' });
     }
   });
-// index.js
 
 // ------------------ 8) Delete Post (Admin Only) -------
 app.delete('/api/posts/:postId', authenticateJWT, async (req, res) => {
@@ -406,7 +425,29 @@ app.delete('/api/posts/:postId', authenticateJWT, async (req, res) => {
       return res.status(500).json({ error: 'Internal server error.' });
     }
   });
-  
+
+// ------------------ 9) Sign Out ------------------------
+app.post('/api/auth/signout', authenticateJWT, async (req, res) => {
+  try {
+    // Since JWTs are stateless, signing out is handled client-side by deleting the token.
+    // If implementing token blacklisting, handle it here.
+    return res.json({ message: 'Sign out successful.' });
+  } catch (err) {
+    console.error('Error in /api/auth/signout:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ------------------ Catch-All 404 Handler ------------------
+app.use((req, res, next) => {
+  res.status(404).json({ error: 'Route not found.' });
+});
+
+// ------------------ Error Handling Middleware ------------------
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ error: 'Something went wrong!' });
+});
 
 // ------------------ Start the Server ------------------
 const PORT = process.env.PORT || 4000;

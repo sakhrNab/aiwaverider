@@ -2,8 +2,10 @@
 
 import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthContext } from '../contexts/AuthContext'; // Import AuthContext
-import { signIn } from '../utils/api'; // Import signIn API function
+import { AuthContext } from '../contexts/AuthContext';
+import { signIn } from '../utils/api';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
 
 const SignIn = () => {
   const [formData, setFormData] = useState({
@@ -110,14 +112,14 @@ const SignIn = () => {
             onClick={handleGoogleSignIn}
             className="w-full py-3 bg-red-600 text-white rounded-md hover:bg-red-700 transition duration-300 mb-4 flex items-center justify-center"
           >
-            <i className="fab fa-google mr-2"></i>
+            <FontAwesomeIcon icon={faGoogle} className="mr-2" />
             Sign In with Google
           </button>
           <button
             onClick={handleMicrosoftSignIn}
             className="w-full py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-300 flex items-center justify-center"
           >
-            <i className="fab fa-microsoft mr-2"></i>
+            <FontAwesomeIcon icon={faMicrosoft} className="mr-2" />
             Sign In with Microsoft
           </button>
         </div>

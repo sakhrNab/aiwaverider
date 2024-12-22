@@ -13,6 +13,7 @@ dist-ssr
 *.local
 .env
 aiwaverider-privatekey.json
+fetch_file_contents.py
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

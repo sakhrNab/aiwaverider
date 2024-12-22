@@ -4,8 +4,11 @@ import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactPhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
+import '../styles/signup.css'; // Import the signup.css
 import { signUp } from '../utils/api'; // Import the signUp API function
 import { AuthContext } from '../contexts/AuthContext'; // Import AuthContext
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
 
 const SignUp = ({ isOpen, onClose }) => {
   const [formData, setFormData] = useState({
@@ -102,21 +105,16 @@ const SignUp = ({ isOpen, onClose }) => {
   // ----- MODAL VIEW LAYOUT -----
   if (isModalView) {
     return (
-      <div className="fixed inset-0 bg-gray-500 bg-opacity-50 z-50 flex justify-center items-center">
+      <div className="modal-overlay">
         <div
           ref={modalRef}
-          className="bg-white shadow-lg p-8 rounded-lg w-full max-w-md sm:max-w-lg md:max-w-xl"
+          className="modal-content"
         >
-          <h2 className="text-3xl font-semibold mb-6 text-center">Sign Up</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <h2 className="modal-title">Sign Up</h2>
+          <form onSubmit={handleSubmit} className="signup-form">
             {/* Username */}
-            <div>
-              <label
-                htmlFor="username"
-                className="block text-lg font-medium mb-2"
-              >
-                Username
-              </label>
+            <div className="form-group">
+              <label htmlFor="username" className="form-label">Username</label>
               <input
                 type="text"
                 id="username"
@@ -124,19 +122,14 @@ const SignUp = ({ isOpen, onClose }) => {
                 required
                 value={formData.username}
                 onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-md"
+                className="form-input"
                 placeholder="Enter your username"
               />
             </div>
 
             {/* First Name */}
-            <div>
-              <label
-                htmlFor="firstName"
-                className="block text-lg font-medium mb-2"
-              >
-                First Name
-              </label>
+            <div className="form-group">
+              <label htmlFor="firstName" className="form-label">First Name</label>
               <input
                 type="text"
                 id="firstName"
@@ -144,19 +137,14 @@ const SignUp = ({ isOpen, onClose }) => {
                 required
                 value={formData.firstName}
                 onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-md"
+                className="form-input"
                 placeholder="Enter your first name"
               />
             </div>
 
             {/* Last Name */}
-            <div>
-              <label
-                htmlFor="lastName"
-                className="block text-lg font-medium mb-2"
-              >
-                Last Name
-              </label>
+            <div className="form-group">
+              <label htmlFor="lastName" className="form-label">Last Name</label>
               <input
                 type="text"
                 id="lastName"
@@ -164,19 +152,14 @@ const SignUp = ({ isOpen, onClose }) => {
                 required
                 value={formData.lastName}
                 onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-md"
+                className="form-input"
                 placeholder="Enter your last name"
               />
             </div>
 
             {/* Email Address */}
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-lg font-medium mb-2"
-              >
-                Email Address
-              </label>
+            <div className="form-group">
+              <label htmlFor="email" className="form-label">Email Address</label>
               <input
                 type="email"
                 id="email"
@@ -184,38 +167,27 @@ const SignUp = ({ isOpen, onClose }) => {
                 required
                 value={formData.email}
                 onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-md"
+                className="form-input"
                 placeholder="Enter your email"
               />
             </div>
 
             {/* Phone Number */}
-            <div>
-              <label
-                htmlFor="phoneNumber"
-                className="block text-lg font-medium mb-2"
-              >
-                Phone Number
-              </label>
+            <div className="form-group">
+              <label htmlFor="phoneNumber" className="form-label">Phone Number</label>
               <ReactPhoneInput
                 country="us"
                 value={formData.phoneNumber}
                 onChange={handlePhoneChange}
-                inputClass="w-full p-3 border border-gray-300 rounded-md"
-                containerClass="w-full"
+                inputClass="phone-input-container"
                 placeholder="Enter your phone number"
                 searchable={true}
               />
             </div>
 
             {/* Password */}
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-lg font-medium mb-2"
-              >
-                Password
-              </label>
+            <div className="form-group">
+              <label htmlFor="password" className="form-label">Password</label>
               <input
                 type="password"
                 id="password"
@@ -223,18 +195,18 @@ const SignUp = ({ isOpen, onClose }) => {
                 required
                 value={formData.password}
                 onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-md"
+                className="form-input"
                 placeholder="Enter your password"
               />
             </div>
 
             {/* Submit Button */}
-            <div>
-              <button
-                type="submit"
-                className="w-full py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-300 mb-4"
-              >
+            <div className="button-group">
+              <button type="submit" className="button primary">
                 Sign Up
+              </button>
+              <button type="button" onClick={onClose} className="button secondary">
+                Cancel
               </button>
             </div>
           </form>
@@ -245,22 +217,15 @@ const SignUp = ({ isOpen, onClose }) => {
               onClick={handleGoogleSignUp}
               className="w-full py-3 bg-red-600 text-white rounded-md hover:bg-red-700 transition duration-300 mb-4 flex items-center justify-center"
             >
-              <i className="fab fa-google mr-2"></i>
+              <FontAwesomeIcon icon={faGoogle} className="mr-2" />
               Sign Up with Google
             </button>
             <button
               onClick={handleOutlookSignUp}
               className="w-full py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-300 flex items-center justify-center"
             >
-              <i className="fab fa-microsoft mr-2"></i>
+              <FontAwesomeIcon icon={faMicrosoft} className="mr-2" />
               Sign Up with Outlook
-            </button>
-          </div>
-
-          {/* Close Modal Button */}
-          <div className="mt-4 text-center">
-            <button onClick={onClose} className="text-blue-500 hover:underline">
-              Close
             </button>
           </div>
         </div>
@@ -273,118 +238,105 @@ const SignUp = ({ isOpen, onClose }) => {
     <div className="flex justify-center items-center min-h-screen bg-gray-100">
       <div className="bg-white shadow-lg p-8 rounded-lg w-full max-w-md">
         <h2 className="text-3xl font-semibold mb-6 text-center">Sign Up</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Username */}
-          <div>
-            <label htmlFor="username" className="block text-lg font-medium mb-2">
-              Username
-            </label>
-            <input
-              type="text"
-              id="username"
-              name="username"
-              required
-              value={formData.username}
-              onChange={handleInputChange}
-              className="w-full p-3 border border-gray-300 rounded-md"
-              placeholder="Enter your username"
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="signup-form">
+            {/* Username */}
+            <div className="form-group">
+              <label htmlFor="username" className="form-label">Username</label>
+              <input
+                type="text"
+                id="username"
+                name="username"
+                required
+                value={formData.username}
+                onChange={handleInputChange}
+                className="form-input"
+                placeholder="Enter your username"
+              />
+            </div>
 
-          {/* First Name */}
-          <div>
-            <label htmlFor="firstName" className="block text-lg font-medium mb-2">
-              First Name
-            </label>
-            <input
-              type="text"
-              id="firstName"
-              name="firstName"
-              required
-              value={formData.firstName}
-              onChange={handleInputChange}
-              className="w-full p-3 border border-gray-300 rounded-md"
-              placeholder="Enter your first name"
-            />
-          </div>
+            {/* First Name */}
+            <div className="form-group">
+              <label htmlFor="firstName" className="form-label">First Name</label>
+              <input
+                type="text"
+                id="firstName"
+                name="firstName"
+                required
+                value={formData.firstName}
+                onChange={handleInputChange}
+                className="form-input"
+                placeholder="Enter your first name"
+              />
+            </div>
 
-          {/* Last Name */}
-          <div>
-            <label htmlFor="lastName" className="block text-lg font-medium mb-2">
-              Last Name
-            </label>
-            <input
-              type="text"
-              id="lastName"
-              name="lastName"
-              required
-              value={formData.lastName}
-              onChange={handleInputChange}
-              className="w-full p-3 border border-gray-300 rounded-md"
-              placeholder="Enter your last name"
-            />
-          </div>
+            {/* Last Name */}
+            <div className="form-group">
+              <label htmlFor="lastName" className="form-label">Last Name</label>
+              <input
+                type="text"
+                id="lastName"
+                name="lastName"
+                required
+                value={formData.lastName}
+                onChange={handleInputChange}
+                className="form-input"
+                placeholder="Enter your last name"
+              />
+            </div>
 
-          {/* Email Address */}
-          <div>
-            <label htmlFor="email" className="block text-lg font-medium mb-2">
-              Email Address
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              required
-              value={formData.email}
-              onChange={handleInputChange}
-              className="w-full p-3 border border-gray-300 rounded-md"
-              placeholder="Enter your email"
-            />
-          </div>
+            {/* Email Address */}
+            <div className="form-group">
+              <label htmlFor="email" className="form-label">Email Address</label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                required
+                value={formData.email}
+                onChange={handleInputChange}
+                className="form-input"
+                placeholder="Enter your email"
+              />
+            </div>
 
-          {/* Phone Number */}
-          <div>
-            <label htmlFor="phoneNumber" className="block text-lg font-medium mb-2">
-              Phone Number
-            </label>
-            <ReactPhoneInput
-              country="us"
-              value={formData.phoneNumber}
-              onChange={handlePhoneChange}
-              inputClass="w-full p-3 border border-gray-300 rounded-md"
-              containerClass="w-full"
-              placeholder="Enter your phone number"
-              searchable={true}
-            />
-          </div>
+            {/* Phone Number */}
+            <div className="form-group">
+              <label htmlFor="phoneNumber" className="form-label">Phone Number</label>
+              <ReactPhoneInput
+                country="us"
+                value={formData.phoneNumber}
+                onChange={handlePhoneChange}
+                inputClass="phone-input-container"
+                placeholder="Enter your phone number"
+                searchable={true}
+              />
+            </div>
 
-          {/* Password */}
-          <div>
-            <label htmlFor="password" className="block text-lg font-medium mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              required
-              value={formData.password}
-              onChange={handleInputChange}
-              className="w-full p-3 border border-gray-300 rounded-md"
-              placeholder="Enter your password"
-            />
-          </div>
+            {/* Password */}
+            <div className="form-group">
+              <label htmlFor="password" className="form-label">Password</label>
+              <input
+                type="password"
+                id="password"
+                name="password"
+                required
+                value={formData.password}
+                onChange={handleInputChange}
+                className="form-input"
+                placeholder="Enter your password"
+              />
+            </div>
 
-          {/* Submit Button */}
-          <div>
-            <button
-              type="submit"
-              className="w-full py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-300 mb-4"
-            >
-              Sign Up
-            </button>
-          </div>
-        </form>
+            {/* Submit Button */}
+            <div className="button-group">
+              <button type="submit" className="button primary">
+                Sign Up
+              </button>
+              <button type="button" onClick={onClose} className="button secondary">
+                Cancel
+              </button>
+            </div>
+          </form>
 
         {/* Google and Outlook Sign Up */}
         <div className="mt-6 text-center">
@@ -392,14 +344,14 @@ const SignUp = ({ isOpen, onClose }) => {
             onClick={handleGoogleSignUp}
             className="w-full py-3 bg-red-600 text-white rounded-md hover:bg-red-700 transition duration-300 mb-4 flex items-center justify-center"
           >
-            <i className="fab fa-google mr-2"></i>
+            <FontAwesomeIcon icon={faGoogle} className="mr-2" />
             Sign Up with Google
           </button>
           <button
             onClick={handleOutlookSignUp}
             className="w-full py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-300 flex items-center justify-center"
           >
-            <i className="fab fa-microsoft mr-2"></i>
+            <FontAwesomeIcon icon={faMicrosoft} className="mr-2" />
             Sign Up with Outlook
           </button>
         </div>
