@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+// src/components/Header.jsx
+
+import React, { useState, useContext } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import logo from '../assets/v2.jpg';
+import { AuthContext } from '../contexts/AuthContext'; // Import AuthContext
 
 const Header = ({ openSignUpModal }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -8,8 +11,14 @@ const Header = ({ openSignUpModal }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Function to determine active route
+  const isActive = (path) => location.pathname === path;
+
   const handleSearch = () => {
-    navigate(`/search?q=${searchTerm}`);
+    if (searchTerm.trim() !== '') {
+      navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
+      setSearchTerm('');
+    }
   };
 
   const handleSignUp = () => {
@@ -21,6 +30,10 @@ const Header = ({ openSignUpModal }) => {
       openSignUpModal();
     }
   };
+
+  // Get user and signOutUser from context
+  const { user, signOutUser } = useContext(AuthContext);
+  const role = user?.role;
 
   return (
     <header className="bg-gray-800 text-white px-4 py-3 shadow-lg">
@@ -41,24 +54,63 @@ const Header = ({ openSignUpModal }) => {
           onClick={() => setIsMenuOpen(!isMenuOpen)}
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
+            <path 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              strokeWidth={2} 
+              d={isMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} 
+            />
           </svg>
         </button>
 
         {/* Navigation Links - Desktop */}
-        <nav className={`${isMenuOpen ? 'flex' : 'hidden'} lg:flex flex-col lg:flex-row w-full lg:w-auto lg:items-center lg:space-x-4 mt-4 lg:mt-0`}>
+        <nav 
+          className={`${isMenuOpen ? 'flex' : 'hidden'} lg:flex flex-col lg:flex-row w-full lg:w-auto lg:items-center lg:space-x-4 mt-4 lg:mt-0`}
+        >
           {/* Auth Buttons */}
-          <div className="flex flex-col lg:flex-row lg:items-center space-y-2 lg:space-y-0 lg:space-x-2">
-            <Link to="/sign-in" className="px-3 py-1.5 text-center bg-transparent hover:bg-blue-600 rounded-md transition-colors duration-200 text-sm sm:text-base">
-              Sign In
-            </Link>
-            <button
-              onClick={handleSignUp}
-              className="px-3 py-1.5 text-center bg-blue-600 hover:bg-blue-700 rounded-md transition-colors duration-200 text-sm sm:text-base font-medium"
-            >
-              Sign Up
-            </button>
-          </div>
+          {/* Show Sign In / Sign Up if NOT authenticated */}
+          {!user && (
+            <div className="flex flex-col lg:flex-row lg:items-center space-y-2 lg:space-y-0 lg:space-x-2">
+              <Link 
+                to="/sign-in" 
+                className={`px-3 py-1.5 text-center bg-transparent hover:bg-blue-600 rounded-md transition-colors duration-200 text-sm sm:text-base
+                  ${isActive('/sign-in') ? 'bg-blue-600' : 'bg-transparent hover:bg-blue-600'}`}
+              >
+                Sign In
+              </Link>
+              <button
+                onClick={handleSignUp}
+                className={`px-3 py-1.5 text-center bg-blue-600 hover:bg-blue-700 rounded-md transition-colors duration-200 text-sm sm:text-base font-medium
+                  ${isActive('/sign-up') ? 'bg-blue-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+              >
+                Sign Up
+              </button>
+            </div>
+          )}
+
+          {/* If authenticated, show Sign Out */}
+          {user && (
+            <div className="flex flex-col lg:flex-row lg:items-center space-y-2 lg:space-y-0 lg:space-x-2">
+              {/* If admin, you can add an Admin link */}
+              {role === 'admin' && (
+                <Link
+                  to="/admin"
+                  className="px-4 py-2 hover:bg-blue-600 rounded text-center"
+                >
+                  Admin Dashboard
+                </Link>
+              )}
+              <button
+                onClick={() => {
+                  signOutUser();
+                  navigate('/');
+                }}
+                className="px-3 py-1.5 text-center bg-red-600 hover:bg-red-700 rounded-md transition-colors duration-200 text-sm sm:text-base font-medium"
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
 
           {/* Main Navigation */}
           <div className="flex flex-col lg:flex-row space-y-2 lg:space-y-0 lg:space-x-4 mt-4 lg:mt-0">

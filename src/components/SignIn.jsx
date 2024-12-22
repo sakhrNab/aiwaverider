@@ -1,13 +1,19 @@
-import React, { useState } from 'react';
+// src/components/SignIn.jsx
+
+import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../contexts/AuthContext'; // Import AuthContext
+import { signIn } from '../utils/api'; // Import signIn API function
 
 const SignIn = () => {
   const [formData, setFormData] = useState({
-    email: '',
+    usernameOrEmail: '',
     password: '',
   });
 
   const navigate = useNavigate();
+  const { signInUser } = useContext(AuthContext); // Get signInUser from context
+  const [error, setError] = useState('');
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -17,19 +23,36 @@ const SignIn = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     // Simulate login action
     console.log('Form Submitted', formData);
-    navigate('/');  // Redirect to homepage after successful login
+
+    try {
+      const data = await signIn(formData);
+      if (data.token && data.user) {
+        // Call signInUser to store user and token
+        signInUser(data.user, data.token);
+        // Redirect to homepage
+        navigate('/');
+      } else {
+        // Handle errors
+        setError(data.error || 'Sign in failed.');
+      }
+    } catch (error) {
+      console.error('Sign In Error:', error);
+      setError('An unexpected error occurred during sign in.');
+    }
   };
 
   const handleGoogleSignIn = () => {
     console.log('Sign in with Google');
+    // Implement Google Sign-In via OAuth if desired
   };
 
   const handleMicrosoftSignIn = () => {
     console.log('Sign in with Microsoft');
+    // Implement Microsoft Sign-In via OAuth if desired
   };
 
   return (
@@ -38,18 +61,18 @@ const SignIn = () => {
         <h2 className="text-3xl font-semibold mb-6 text-center">Sign In</h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Email Address */}
+          {/* Username or Email */}
           <div>
-            <label htmlFor="email" className="block text-lg font-medium mb-2">Email Address</label>
+            <label htmlFor="usernameOrEmail" className="block text-lg font-medium mb-2">Username or Email</label>
             <input
-              type="email"
-              id="email"
-              name="email"
+              type="text"
+              id="usernameOrEmail"
+              name="usernameOrEmail"
               required
-              value={formData.email}
+              value={formData.usernameOrEmail}
               onChange={handleInputChange}
               className="w-full p-3 border border-gray-300 rounded-md"
-              placeholder="Enter your email"
+              placeholder="Enter your username or email"
             />
           </div>
 
@@ -77,6 +100,8 @@ const SignIn = () => {
               Sign In
             </button>
           </div>
+
+          {error && <p className="text-red-500 text-center">{error}</p>}
         </form>
 
         {/* Google and Microsoft Sign In */}

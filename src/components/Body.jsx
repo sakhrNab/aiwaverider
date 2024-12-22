@@ -4,6 +4,7 @@ import "slick-carousel/slick/slick-theme.css";
 import '../styles/carousel.css';
 import Welcome from './Welcome';
 import Carousel from './Carousel';
+import PostsList from '../posts/PostList';
 
 const Body = () => {
   return (
@@ -16,6 +17,8 @@ const Body = () => {
       </p>
       <div className="mt-6">
         <Carousel />
+        <PostsList />
+
       </div>
     </div>
   );
