@@ -8,27 +8,35 @@ const admin = require('firebase-admin');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const Joi = require('joi');
+const authenticateJWT = require('./middleware/auth');
+const { octokit, owner, repo, branch, imagesDir, uploadImageToGitHub } = require('./utils/github');
+const upload = require('./middleware/upload'); // Adjust the path as necessary
 
 const app = express();
 
 const rateLimit = require('express-rate-limit');
 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
-});
+    windowMs: 15 * 60 * 1000,
+    max: 1000, // or 500 or whatever suits your dev environment
+    message: 'Too many requests, please try again in 15 minutes!',
+  });
 
-app.use(limiter);
-
-// CORS configuration
 app.use(cors({
-    origin: 'http://localhost:5173', // Replace with your React app's URL
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true,
-}));
+    origin: 'http://localhost:5173',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    // Removed credentials: true
+  }));
+  
+app.options('*', cors());
+if (process.env.NODE_ENV === 'production') {
+    app.use(limiter);
+}
 
-app.use(express.json());
+
+// Increase JSON body parser limit to handle large payloads (e.g., image uploads)
+app.use(express.json({ limit: '10mb' }));
 
 // ------------- Initialize Firebase Admin -------------
 
@@ -39,13 +47,15 @@ const resolvedServiceAccountPath = path.resolve(serviceAccountPath);
 
 admin.initializeApp({
   credential: admin.credential.cert(resolvedServiceAccountPath),
+  // storageBucket: process.env.FIREBASE_STORAGE_BUCKET, // Add this line if using Firebase Storage
 });
 
 const db = admin.firestore();
+// const bucket = admin.storage().bucket(); // Reference to Firebase Storage bucket
 
 // Collection references
 const usersCollection = db.collection('users');
-const postsCollection = db.collection('posts');
+const postsCollection = admin.firestore().collection('posts');
 const commentsCollection = db.collection('comments');
 
 /*************************************************************************
@@ -63,24 +73,6 @@ const commentsCollection = db.collection('comments');
  *       postId, userId, text, username, userRole, createdAt
  *************************************************************************/
 
-// Middleware to verify JWT
-const authenticateJWT = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader) {
-    const token = authHeader.split(' ')[1];
-
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-      if (err) {
-        console.error('JWT verification error:', err);
-        return res.sendStatus(403); // Forbidden
-      }
-      req.user = user;
-      next();
-    });
-  } else {
-    res.sendStatus(401); // Unauthorized
-  }
-};
 
 const signUpSchema = Joi.object({
     username: Joi.string().max(20).required(),
@@ -226,72 +218,107 @@ app.post('/api/auth/signin', async (req, res) => {
 });
 
 // ------------------ 3) Create Post (Admin only) -------
-app.post('/api/posts', authenticateJWT, async (req, res) => {
-  try {
-    const { title, description } = req.body;
-    const { role, id: userId } = req.user;
-
-    if (!title || !description) {
-      return res
-        .status(400)
-        .json({ error: 'Title and description are required.' });
+app.post('/api/posts', authenticateJWT, upload.single('image'), async (req, res) => {
+    try {
+      const { title, description, category } = req.body;
+      const { role, id: userId } = req.user;
+  
+      if (!title || !description || !category) {
+        return res.status(400).json({ error: 'Title, description, and category are required.' });
+      }
+      if (role !== 'admin') {
+        return res.status(403).json({ error: 'Only admin can create posts.' });
+      }
+  
+      let imageUrl = null;
+  
+      if (req.file) {
+        const filename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
+        try {
+          imageUrl = await uploadImageToGitHub(filename, req.file.buffer);
+        } catch (error) {
+          return res.status(500).json({ error: error.message || 'Image upload failed.' });
+        }
+      }
+  
+      // Get username from users collection
+      const userDoc = await admin.firestore().collection('users').doc(userId).get();
+      const username = userDoc.exists ? userDoc.data().username : 'Unknown User';
+  
+      // Add post to Firestore
+      const newPostRef = await postsCollection.add({
+        title,
+        description,
+        category,
+        imageUrl,
+        createdBy: userId || null,
+        createdByUsername: username,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+  
+      const newPostDoc = await newPostRef.get();
+  
+      return res.json({
+        message: 'Post created successfully.',
+        post: { id: newPostRef.id, ...newPostDoc.data() },
+      });
+    } catch (err) {
+      console.error('Error in /api/posts:', err);
+      return res.status(500).json({ error: 'Internal server error.' });
     }
-    if (role !== 'admin') {
-      return res
-        .status(403)
-        .json({ error: 'Only admin can create posts.' });
-    }
-
-    // Get username from users collection
-    const userDoc = await admin.firestore().collection('users').doc(userId).get();
-    const username = userDoc.exists ? userDoc.data().username : 'Unknown User';
-   
-    // Add post to Firestore
-    const newPostRef = await postsCollection.add({
-      title,
-      description,
-      createdBy: userId || null,
-      createdByUsername: username,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    const newPostDoc = await newPostRef.get();
-
-    return res.json({
-      message: 'Post created successfully.',
-      post: { id: newPostRef.id, ...newPostDoc.data() },
-    });
-  } catch (err) {
-    console.error('Error in /api/posts:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
-  }
-});
+  });
 
 // ------------------ 4) Get All Posts (public) ---------
-// backend/index.js
-
 app.get('/api/posts', async (req, res) => {
     try {
-      const snapshot = await postsCollection
-        .orderBy('createdAt', 'desc')
-        .get();
+      const { category } = req.query;
+      let query = postsCollection.orderBy('createdAt', 'desc');
+
+      if (category && category !== 'All') {
+        query = query.where('category', '==', category);
+      }
+
+      const snapshot = await query.get();
       const allPosts = [];
-      snapshot.forEach((doc) => {
+
+      for (const doc of snapshot.docs) {
         const data = doc.data();
-        allPosts.push({ 
-          id: doc.id, 
-          ...data, 
-          createdAt: data.createdAt?.toDate?.()?.toISOString() || null 
+        const postId = doc.id;
+
+        // Fetch comments for the post
+        const commentsSnapshot = await commentsCollection
+          .where('postId', '==', postId)
+          .orderBy('createdAt', 'desc')
+          .get();
+
+        const comments = [];
+        commentsSnapshot.forEach((commentDoc) => {
+          const commentData = commentDoc.data();
+          comments.push({
+            id: commentDoc.id,
+            ...commentData,
+            createdAt: commentData.createdAt
+              ? commentData.createdAt.toDate().toISOString()
+              : null,
+          });
         });
-      });
+
+        allPosts.push({
+          id: postId,
+          ...data,
+          createdAt: data.createdAt
+            ? data.createdAt.toDate().toISOString()
+            : null,
+          comments, // Include comments here
+        });
+      }
+
       return res.json(allPosts);
     } catch (err) {
       console.error('Error in GET /api/posts:', err);
       return res.status(500).json({ error: 'Internal server error.' });
     }
-  });
-
-  
+});
 
 // ------------------ 5) Add Comment (auth or admin) ----
 app.post('/api/posts/:postId/comments', authenticateJWT, async (req, res) => {

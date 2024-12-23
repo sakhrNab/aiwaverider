@@ -26,20 +26,19 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('user', JSON.stringify(userData));
     localStorage.setItem('token', jwtToken);
   };
-// src/contexts/AuthContext.jsx
-const signOutUser = async () => { // Correctly named
-  try {
-    const data = await apiSignOutUser(token); // Pass the token
-    console.log(data.message);
-  } catch (error) {
-    console.error('Error signing out:', error);
-  }
-  setUser(null);
-  setToken(null);
-  localStorage.removeItem('user');
-  localStorage.removeItem('token');
-};
 
+  const signOutUser = async () => { // Correctly named
+    try {
+      const data = await apiSignOutUser(token); // Pass the token
+      console.log(data.message);
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+  };
 
   return (
     <AuthContext.Provider value={{ user, token, signInUser, signOutUser, loading }}>

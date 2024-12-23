@@ -2,33 +2,62 @@
 
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
-import { getAllPosts, addComment, deletePost } from '../utils/api';
-import ConfirmationModal from '../components/ConfirmationModal'; // For delete confirmations
+import { API_URL, getAllPosts, addComment, deletePost } from '../utils/api';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 const PostsList = () => {
   const { user, role, token } = useContext(AuthContext);
   const [posts, setPosts] = useState([]);
-  const [commentTexts, setCommentTexts] = useState({}); // To handle multiple comment inputs
-  const [postToDelete, setPostToDelete] = useState(null); // State to hold the post to delete
-  const [isModalOpen, setIsModalOpen] = useState(false); // Modal visibility
-  const [loading, setLoading] = useState(true); // Loading state
-  const [error, setError] = useState(''); // Error state
+  const [commentTexts, setCommentTexts] = useState({});
+  const [postToDelete, setPostToDelete] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
 
   useEffect(() => {
-    // Fetch all posts from backend
-    const fetchPosts = async () => {
+    const fetchPostsAndComments = async () => {
       try {
-        const data = await getAllPosts(token); // Pass the token
-        
-        if (!Array.isArray(data)) {
-          throw new Error('Unexpected response format.');
+        let url = `${API_URL}/api/posts`;
+        if (selectedCategory !== 'All') {
+          url += `?category=${encodeURIComponent(selectedCategory)}`;
         }
-        // Ensure each post has a comments array
-        const postsWithComments = data.map((post) => ({
-          ...post,
-          comments: Array.isArray(post.comments) ? post.comments : [], // Defensive check
-        }));
-        
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          // credentials: 'include',
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch posts.');
+        }
+
+        const postsData = await response.json();
+
+        // Fetch comments for each post
+        const postsWithComments = await Promise.all(
+          postsData.map(async (post) => {
+            const commentsResponse = await fetch(`${API_URL}/api/posts/${post.id}/comments`, {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            });
+
+            if (!commentsResponse.ok) {
+              console.error(`Failed to fetch comments for post ${post.id}`);
+              return { ...post, comments: [] };
+            }
+
+            const commentsData = await commentsResponse.json();
+            return { ...post, comments: commentsData };
+          })
+        );
+
         setPosts(postsWithComments);
         setLoading(false);
       } catch (err) {
@@ -38,10 +67,9 @@ const PostsList = () => {
       }
     };
 
-    fetchPosts();
-  }, [token]);
+    fetchPostsAndComments();
+  }, [token, selectedCategory]);
 
-  // Handle input change for comments
   const handleCommentChange = (postId, text) => {
     setCommentTexts({
       ...commentTexts,
@@ -49,7 +77,6 @@ const PostsList = () => {
     });
   };
 
-  // Add a comment to a post
   const handleAddComment = async (postId) => {
     const commentText = commentTexts[postId];
     if (!commentText || commentText.trim() === '') {
@@ -58,7 +85,7 @@ const PostsList = () => {
     }
 
     try {
-      const commentData = { commentText: commentText.trim() }; // Match backend's expected field
+      const commentData = { commentText: commentText.trim() };
       const data = await addComment(postId, commentData, token);
       if (data.comment) {
         setPosts((prevPosts) =>
@@ -81,13 +108,11 @@ const PostsList = () => {
     }
   };
 
-  // Open confirmation modal for deleting a post
   const confirmDeletePost = (post) => {
     setPostToDelete(post);
     setIsModalOpen(true);
   };
 
-  // Handle actual deletion after confirmation
   const handleDeletePost = async () => {
     if (!postToDelete) return;
 
@@ -106,7 +131,6 @@ const PostsList = () => {
     }
   };
 
-  // Helper function to format ISO date strings
   const formatDate = (isoString) => {
     if (!isoString) return 'N/A';
     const date = new Date(isoString);
@@ -132,6 +156,24 @@ const PostsList = () => {
   return (
     <div className="p-8 max-w-5xl mx-auto">
       <h2 className="text-3xl font-bold mb-6 text-center">Community Posts</h2>
+
+      {/* Category Filter */}
+      <div className="mb-6 flex justify-end">
+        <label htmlFor="category" className="mr-2 text-gray-700">Filter by Category:</label>
+        <select
+          id="category"
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="p-2 border border-gray-300 rounded-md"
+        >
+          <option value="All">All</option>
+          <option value="Trends">Trends</option>
+          <option value="Latest Tech">Latest Tech</option>
+          <option value="AI Tools">AI Tools</option>
+          {/* Add more categories as needed */}
+        </select>
+      </div>
+
       {posts.length === 0 && (
         <p className="text-center text-gray-600">No posts available.</p>
       )}
@@ -142,7 +184,11 @@ const PostsList = () => {
               <div>
                 <h3 className="text-2xl font-semibold mb-2">{post.title}</h3>
                 <p className="text-gray-700">{post.description}</p>
-                <p className="text-sm text-gray-500 mt-2">Created By: {post.createdByUsername || 'Unknown'}</p>
+                <p className="text-sm text-gray-500 mt-2">Category: {post.category || 'Uncategorized'}</p>
+                {post.imageUrl && (
+                  <img src={post.imageUrl} alt={post.title} className="mt-2 h-40 w-full object-cover rounded-md" />
+                )}
+                <p className="text-sm text-gray-500">Created By: {post.createdByUsername || 'Unknown'}</p>
                 <p className="text-sm text-gray-500">Created At: {formatDate(post.createdAt)}</p>
               </div>
               {role === 'admin' && (

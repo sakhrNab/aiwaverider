@@ -37,8 +37,7 @@ body {
   font-family: 'Roboto', sans-serif;
 }
 
-/* src/styles/globals.css */
-
+/* Loader Animation */
 @keyframes spinner {
   to {transform: rotate(360deg);}
 }
@@ -47,5 +46,3 @@ body {
   border-top-color: #3490dc;
   animation: spinner 0.6s linear infinite;
 }
-
-

@@ -3,18 +3,22 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { getAllPosts, createPost, deletePost } from '../utils/api';
-import ConfirmationModal from './ConfirmationModal'; // New component for confirmation
+import ConfirmationModal from './ConfirmationModal'; // Existing component
+import { CATEGORIES } from '../constants/categories';
 
 const AdminDashboard = () => {
   const { user, token } = useContext(AuthContext);
   const [posts, setPosts] = useState([]);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    category: 'Trends',
+    image: null,
+  });
   const [error, setError] = useState('');
-  const [postToDelete, setPostToDelete] = useState(null); // State to hold the post to delete
-  const [isModalOpen, setIsModalOpen] = useState(false); // Modal visibility
+  const [postToDelete, setPostToDelete] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // If user is not admin, show unauthorized
   if (user?.role !== 'admin') {
     return (
       <div className="p-4 text-red-600 font-bold">
@@ -24,46 +28,79 @@ const AdminDashboard = () => {
   }
 
   useEffect(() => {
-    // Fetch all posts from backend
     const fetchPosts = async () => {
-      const data = await getAllPosts();
-      setPosts(data);
+      try {
+        const data = await getAllPosts(token);
+        setPosts(data);
+      } catch (err) {
+        setError(err.message || 'Failed to fetch posts.');
+      }
     };
 
     fetchPosts();
-  }, []);
+  }, [token]);
 
-  // Create a new post
-  const handleCreatePost = async (e) => {
-    e.preventDefault();
-    if (!title || !description) {
-      setError('Title and Description are required.');
-      return;
-    }
-
-    const postData = {
-      title,
-      description,
-    };
-
-    const data = await createPost(postData, token);
-    if (data.post) {
-      setPosts([data.post, ...posts]); // Add new post to the top
-      setTitle('');
-      setDescription('');
+  const handleInputChange = (e) => {
+    const { name, value, files } = e.target;
+    if (name === 'image') {
+      const file = files[0];
+      if (file && file.size > 5 * 1024 * 1024) { // 5MB limit
+        setError('Image size should not exceed 5MB.');
+        return;
+      }
+      setFormData({
+        ...formData,
+        image: file,
+      });
       setError('');
     } else {
-      setError(data.error || 'Failed to create post.');
+      setFormData({
+        ...formData,
+        [name]: value,
+      });
     }
   };
 
-  // Open confirmation modal
+  const handleCreatePost = async (e) => {
+    e.preventDefault();
+    if (!formData.title || !formData.description || !formData.category) {
+      setError('Title, Description, and Category are required.');
+      return;
+    }
+
+    const postData = new FormData();
+    postData.append('title', formData.title);
+    postData.append('description', formData.description);
+    postData.append('category', formData.category);
+    if (formData.image) {
+      postData.append('image', formData.image);
+    }
+
+    try {
+      const response = await createPost(postData, token);
+      if (response.post) {
+        setPosts([response.post, ...posts]);
+        setFormData({
+          title: '',
+          description: '',
+          category: 'Trends',
+          image: null,
+        });
+        setError('');
+      } else {
+        setError(response.error || 'Failed to create post.');
+      }
+    } catch (error) {
+      console.error('Error creating post:', error);
+      setError('An unexpected error occurred while creating the post.');
+    }
+  };
+
   const confirmDeletePost = (post) => {
     setPostToDelete(post);
     setIsModalOpen(true);
   };
 
-  // Handle actual deletion after confirmation
   const handleDeletePost = async () => {
     if (!postToDelete) return;
 
@@ -82,7 +119,6 @@ const AdminDashboard = () => {
     }
   };
 
-  // Helper function to format ISO date strings
   const formatDate = (isoString) => {
     if (!isoString) return 'N/A';
     const date = new Date(isoString);
@@ -101,21 +137,55 @@ const AdminDashboard = () => {
             <label className="block text-gray-700">Title</label>
             <input
               type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              name="title"
+              value={formData.title}
+              onChange={handleInputChange}
               className="mt-1 w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Enter post title"
+              required
             />
           </div>
           <div>
             <label className="block text-gray-700">Description</label>
             <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              name="description"
+              value={formData.description}
+              onChange={handleInputChange}
               className="mt-1 w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Enter post description"
               rows="4"
+              required
             ></textarea>
+          </div>
+          <div>
+            <label className="block text-gray-700">Category</label>
+            <select
+              name="category"
+              value={formData.category}
+              onChange={handleInputChange}
+              className="mt-1 w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+                {CATEGORIES.map((category) => (
+                    <option key={category} value={category}>{category}</option>
+                ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-gray-700">Image (Optional)</label>
+            <input
+              type="file"
+              name="image"
+              accept="image/*"
+              onChange={handleInputChange}
+              className="mt-1 w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {formData.image && (
+              <div className="mt-2">
+                <p className="text-gray-700">Image Preview:</p>
+                <img src={URL.createObjectURL(formData.image)} alt="Preview" className="h-40 w-full object-cover rounded-md" />
+              </div>
+            )}
           </div>
           {error && <p className="text-red-500">{error}</p>}
           <button
@@ -138,7 +208,12 @@ const AdminDashboard = () => {
                 <div>
                   <h3 className="text-xl font-bold">{post.title}</h3>
                   <p className="text-gray-700 mt-2">{post.description}</p>
-                  <p className="text-sm text-gray-500 mt-2">Created By: {post.createdBy || 'Unknown'}</p>
+                  <p className="text-sm text-gray-500 mt-2">Category: {post.category || 'Uncategorized'}</p>
+                  {post.imageUrl && (
+                    <img src={post.imageUrl} alt={post.title} className="mt-2 h-40 w-full object-cover rounded-md" loading="lazy"
+    />
+                  )}
+                  <p className="text-sm text-gray-500">Created By: {post.createdByUsername || 'Unknown'}</p>
                   <p className="text-sm text-gray-500">Created At: {formatDate(post.createdAt)}</p>
                 </div>
                 <button
@@ -164,6 +239,5 @@ const AdminDashboard = () => {
       )}
     </div>
   );
-};
-
+}
 export default AdminDashboard;

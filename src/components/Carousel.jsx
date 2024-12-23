@@ -1,13 +1,51 @@
 // src/components/Carousel.jsx
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Slider from 'react-slick';
+import CardBox from './CardBox'; // Ensure this component exists
+import { API_URL, getAllPosts } from '../utils/api';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
-import '../styles/carousel.css';
-import CardBox from './CardBox';
+import '../styles/carousel.css'; // Ensure this CSS file exists
 
 const Carousel = () => {
+  const [carouselData, setCarouselData] = useState([]);
+  const categories = ['Trends', 'Latest Tech', 'AI Tools']; // Predefined categories
+
+  useEffect(() => {
+    const fetchCarouselData = async () => {
+      try {
+        const data = await Promise.all(categories.map(async (category) => {
+          const url = `${API_URL}/api/posts?category=${encodeURIComponent(category)}`;
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          if (!response.ok) {
+            throw new Error(`Failed to fetch posts for category ${category}`);
+          }
+          const posts = await response.json();
+          // Limit the number of posts per category to, say, 5
+          return {
+            title: category,
+            boxes: posts.slice(0, 5).map((post) => ({
+              image: post.imageUrl || '/images/default.jpg', // Fallback image
+              title: post.title,
+              description: post.description,
+            })),
+          };
+        }));
+        setCarouselData(data);
+      } catch (error) {
+        console.error('Error fetching carousel data:', error);
+      }
+    };
+
+    fetchCarouselData();
+  }, [categories]);
+
   const mainSettings = {
     dots: true,
     infinite: true,
@@ -45,44 +83,21 @@ const Carousel = () => {
     ],
   };
 
-  const carouselData = [
-    {
-      title: 'AI Tools',
-      boxes: [
-        { image: '/images/chatgpt.jpg', title: 'ChatGPT', description: 'Advanced language model for conversation.' },
-        { image: '/images/dalle.jpg', title: 'DALL-E', description: 'AI image generation from text.' },
-        { image: '/images/copilot.jpg', title: 'GitHub Copilot', description: 'AI-powered code completion.' },
-      ],
-    },
-    {
-      title: 'Trends',
-      boxes: [
-        { image: '/images/ml.jpg', title: 'Machine Learning', description: 'Latest ML algorithms.' },
-        { image: '/images/nn.jpg', title: 'Neural Networks', description: 'Advanced neural architectures.' },
-        { image: '/images/dl.jpg', title: 'Deep Learning', description: 'Deep learning innovations.' },
-      ],
-    },
-    {
-      title: 'Latest Tech',
-      boxes: [
-        { image: '/images/quantum.jpg', title: 'Quantum AI', description: 'Quantum computing meets AI.' },
-        { image: '/images/edge.jpg', title: 'Edge AI', description: 'AI at the edge.' },
-        { image: '/images/chips.jpg', title: 'AI Chips', description: 'Specialized AI hardware.' },
-      ],
-    },
-  ];
-
   return (
     <div className="carousel-container">
       <Slider {...mainSettings}>
         {carouselData.map((section, index) => (
           <div key={index} className="carousel-slide">
             <h2 className="text-2xl font-bold mb-6 text-center">{section.title}</h2>
-            <Slider {...boxSettings}>
-              {section.boxes.map((box, boxIndex) => (
-                <CardBox key={boxIndex} {...box} />
-              ))}
-            </Slider>
+            {section.boxes.length > 0 ? (
+              <Slider {...boxSettings}>
+                {section.boxes.map((box, boxIndex) => (
+                  <CardBox key={boxIndex} {...box} />
+                ))}
+              </Slider>
+            ) : (
+              <p className="text-center text-gray-500">No posts available in this category.</p>
+            )}
           </div>
         ))}
       </Slider>

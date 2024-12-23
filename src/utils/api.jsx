@@ -1,6 +1,6 @@
 // src/utils/api.jsx
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 // Sign Up
 export const signUp = async (userData) => {
@@ -38,16 +38,16 @@ export const signIn = async (credentials) => {
   }
 };
 
-// Create Post
-export const createPost = async (postData, token) => {
+// Create Post with FormData
+export const createPost = async (formData, token) => {
   try {
     const response = await fetch(`${API_URL}/api/posts`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
+        'Authorization': `Bearer ${token}`,
+        // Do NOT set 'Content-Type' header when sending FormData
       },
-      body: JSON.stringify(postData),
+      body: formData, // FormData instance
     });
     const data = await response.json();
     return data;
@@ -58,38 +58,38 @@ export const createPost = async (postData, token) => {
 };
 
 // Get All Posts
-// src/utils/api.jsx
-
 export const getAllPosts = async (token) => {
   try {
     const response = await fetch(`${API_URL}/api/posts`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`, // Include the JWT token
+        ...(token && { Authorization: `Bearer ${token}` }),
       },
-      credentials: 'include', // Include cookies if using them
+      // credentials: 'include', // Removed
     });
-    
+
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to fetch posts.');
     }
-    
+
     const data = await response.json();
     return data;
   } catch (error) {
     console.error('Error fetching posts:', error);
-    throw error; // Rethrow to be caught in PostList.jsx
+    throw error; // Rethrow to be caught in components
   }
 };
-
 
 // Get Comments for a Post
 export const getComments = async (postId) => {
   try {
     const response = await fetch(`${API_URL}/api/posts/${postId}/comments`, {
       method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
     const data = await response.json();
     return data;
@@ -140,21 +140,16 @@ export const deletePost = async (postId, token) => {
 };
 
 // Sign Out User
-// src/utils/api.jsx
-
-// const API_URL = 'http://localhost:4000'; // Ensure this is correct
-
-// Sign Out User
 export const signOutUser = async (token) => {
   try {
     const response = await fetch(`${API_URL}/api/auth/signout`, {
       method: 'POST',
-      credentials: 'include', // Include cookies if needed
+      // credentials: 'include', // Include cookies if needed
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`, // Include the JWT token
+        ...(token && { Authorization: `Bearer ${token}` }),
       },
-      // body: JSON.stringify({}), // Typically no body is needed for signout
+      // Typically no body is needed for signout
     });
     const data = await response.json();
     return data;
@@ -163,4 +158,3 @@ export const signOutUser = async (token) => {
     return { error: 'An unexpected error occurred during sign out.' };
   }
 };
-
