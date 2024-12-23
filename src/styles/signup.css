@@ -9,6 +9,7 @@
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  padding: 20px;
 }
 
 .modal-content {
@@ -17,7 +18,10 @@
   border-radius: 8px;
   width: 100%;
   max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
   position: relative;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .modal-title {
@@ -81,4 +85,10 @@
 
 .phone-input-container {
   width: 100%;
+}
+@media (max-width: 640px) {
+  .modal-content {
+    padding: 1rem;
+    max-height: 85vh;
+  }
 }
