@@ -28,7 +28,8 @@
     "react-router-dom": "^7.0.2",
     "react-slick": "^0.30.3",
     "react-youtube": "^10.1.0",
-    "slick-carousel": "^1.8.1"
+    "slick-carousel": "^1.8.1",
+    "tiptap-extension-resize-image": "^1.2.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",

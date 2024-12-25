@@ -1,9 +1,9 @@
 // src/posts/PostList.jsx
+
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { API_URL, getAllPosts, addComment, deletePost } from '../utils/api';
 import ConfirmationModal from '../components/ConfirmationModal';
-import { Link } from 'react-router-dom'; // Import Link
 
 const PostsList = () => {
   const { user, role, token } = useContext(AuthContext);
@@ -28,6 +28,7 @@ const PostsList = () => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
           },
+          // credentials: 'include',
         });
 
         if (!response.ok) {
@@ -181,11 +182,8 @@ const PostsList = () => {
           <div key={post.id} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
             <div className="flex justify-between items-start">
               <div>
-                {/* Link to PostDetail */}
-                <Link to={`/posts/${post.id}`}>
-                  <h3 className="text-2xl font-semibold mb-2 hover:text-blue-600 transition-colors">{post.title}</h3>
-                  <p className="text-gray-700">{post.description}</p>
-                </Link>
+                <h3 className="text-2xl font-semibold mb-2">{post.title}</h3>
+                <p className="text-gray-700">{post.description}</p>
                 <p className="text-sm text-gray-500 mt-2">Category: {post.category || 'Uncategorized'}</p>
                 {post.imageUrl && (
                   <img src={post.imageUrl} alt={post.title} className="mt-2 h-40 w-full object-cover rounded-md" />
@@ -213,7 +211,7 @@ const PostsList = () => {
                   <ul className="space-y-2 mt-2">
                     {post.comments.map((comment) => (
                       <li key={comment.id} className="border-t pt-2">
-                        <strong>{comment.username} ({comment.userRole}):</strong> {comment.text}
+                        <strong className="text-gray-800">{comment.username} ({comment.userRole}):</strong> {comment.text}
                       </li>
                     ))}
                   </ul>

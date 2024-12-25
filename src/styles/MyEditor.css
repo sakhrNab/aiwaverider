@@ -1,9 +1,27 @@
-/* src/components/MyEditor.css (optional) */
+/* src/styles/MyEditor.css */
 
 .my-tiptap-editor .ProseMirror {
-    border: 1px solid #ccc;
-    padding: 10px;
-    border-radius: 4px;
-    min-height: 150px;
-  }
-  
+  border: 1px solid #ccc;
+  padding: 10px;
+  border-radius: 4px;
+  min-height: 150px;
+}
+
+.my-tiptap-editor img {
+max-width: 100%; /* Ensures that the image doesn't overflow the container */
+height: auto;
+}
+
+.my-tiptap-editor .toolbar {
+margin-bottom: 10px;
+}
+
+.my-tiptap-editor figure {
+margin: 0;
+}
+
+.my-tiptap-editor .ProseMirror img {
+max-width: 100%;
+display: block;
+margin: 0 auto;
+}

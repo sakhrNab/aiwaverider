@@ -1,13 +1,12 @@
-// src/posts/PostDetail.jsx
 import React, { useEffect, useState, useContext } from 'react';
 import { useParams } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 import { getPostById } from '../utils/api';
 import CommentsSection from './CommentsSection';
-import DOMPurify from 'dompurify'; // Import DOMPurify
+import DOMPurify from 'dompurify';
 
 const PostDetail = () => {
-  const { postId } = useParams();  
+  const { postId } = useParams();
   const { user, token } = useContext(AuthContext);
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -47,7 +46,12 @@ const PostDetail = () => {
       {post.additionalHTML && (
         <div
           className="additional-content mb-6"
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.additionalHTML) }}
+          dangerouslySetInnerHTML={{
+            __html: DOMPurify.sanitize(post.additionalHTML, {
+              ALLOWED_TAGS: ['img', 'a', 'p', 'figure'], // Allow figure tags with inline styles
+              ALLOWED_ATTR: ['src', 'alt', 'style', 'href'],
+            }),
+          }}
         />
       )}
 
@@ -56,20 +60,22 @@ const PostDetail = () => {
 
       {/* Display Image if available */}
       {post.imageUrl && (
-        <img 
+        <img
           src={post.imageUrl}
           alt={post.title}
           className="my-4 max-h-96 object-cover w-full rounded"
         />
       )}
 
-       {/* Render Graph HTML */}
-       {post.graphHTML && (
+      {/* Render Graph HTML */}
+      {post.graphHTML && (
         <div
           className="graph-content mb-6"
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.graphHTML) }}
+          dangerouslySetInnerHTML={{
+            __html: DOMPurify.sanitize(post.graphHTML),
+          }}
         />
-        )}
+      )}
 
       {/* Comments Section */}
       <CommentsSection postId={postId} />

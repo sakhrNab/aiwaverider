@@ -1,30 +1,32 @@
-// src/components/MyEditor.jsx
-
 import React, { useCallback } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
-// ... add more TipTap extensions if needed
-import '../styles/MyEditor.css'; // optional CSS, if you'd like to style the editor
+import { ImageResize } from 'tiptap-extension-resize-image'; // Resize image extension
+import '../styles/MyEditor.css'; // Optional: Add any necessary CSS for your editor
 
 const MyEditor = ({ content = '', onChange }) => {
   const editor = useEditor({
     extensions: [
       StarterKit,
       Link,
-      Image,
-      // ... add more TipTap extensions here
+      Image.configure({
+        inline: false, // Make the image a block element
+        allowBase64: true, // Allow base64 encoding of the image
+        HTMLAttributes: {
+          style: 'max-width: 100%; height: auto;', // Make sure image is responsive
+        },
+      }),
+      ImageResize, // Add the ImageResize extension here for resizing
     ],
     content,
     onUpdate({ editor }) {
-      // On every update, get HTML and pass it to the parent via onChange
       const html = editor.getHTML();
-      onChange(html);
+      onChange(html); // Pass the HTML content back to the parent component
     },
   });
 
-  // Provide a button example: Insert link
   const setLink = useCallback(() => {
     const url = window.prompt('Enter the URL');
     if (url) {
@@ -32,7 +34,6 @@ const MyEditor = ({ content = '', onChange }) => {
     }
   }, [editor]);
 
-  // Provide a button example: Insert image
   const setImage = useCallback(() => {
     const url = window.prompt('Enter the image URL');
     if (url) {
@@ -41,12 +42,12 @@ const MyEditor = ({ content = '', onChange }) => {
   }, [editor]);
 
   if (!editor) {
-    return null; // Editor not ready yet
+    return null; // Wait for the editor to be ready
   }
 
   return (
     <div className="my-tiptap-editor">
-      {/* Example toolbar */}
+      {/* Toolbar for bold, italic, underline, link, and image */}
       <div className="toolbar" style={{ marginBottom: '8px' }}>
         <button
           className="mr-2 px-2 py-1 bg-gray-200 rounded hover:bg-gray-300"
@@ -80,7 +81,7 @@ const MyEditor = ({ content = '', onChange }) => {
         </button>
       </div>
 
-      {/* Actual editor content */}
+      {/* Actual content of the editor */}
       <EditorContent editor={editor} />
     </div>
   );
