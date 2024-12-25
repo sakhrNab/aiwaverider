@@ -1,34 +1,32 @@
-// src/components/CreatePost.jsx
-
+// src/posts/CreatePost.jsx
 import React, { useState, useContext } from 'react';
 import { createPost } from '../utils/api';
 import { AuthContext } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import PostForm from './PostForm'; // Ensure correct import path
 
 const CreatePost = () => {
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-  });
   const [error, setError] = useState('');
   const { token } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+  const handleSubmit = async (formData) => {
+    const postData = new FormData();
+    postData.append('title', formData.title);
+    postData.append('description', formData.description);
+    postData.append('category', formData.category);
+    postData.append('additionalHTML', formData.additionalHTML);
+    postData.append('graphHTML', formData.graphHTML);
+    if (formData.image) {
+      postData.append('image', formData.image);
+    }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
     try {
-      const data = await createPost(formData, token);
+      const data = await createPost(postData, token);
       if (data.post) {
-        navigate('/');
+        navigate(`/posts/${data.post.id}`);
       } else {
-        setError(data.error);
+        setError(data.error || 'Failed to create post.');
       }
     } catch (err) {
       console.error('Create Post Error:', err);
@@ -37,25 +35,11 @@ const CreatePost = () => {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <input
-        type="text"
-        name="title"
-        value={formData.title}
-        onChange={handleChange}
-        placeholder="Post Title"
-        required
-      />
-      <textarea
-        name="description"
-        value={formData.description}
-        onChange={handleChange}
-        placeholder="Post Description"
-        required
-      />
-      {error && <p>{error}</p>}
-      <button type="submit">Create Post</button>
-    </form>
+    <div className="p-8 max-w-5xl mx-auto">
+      <h2 className="text-3xl font-bold mb-6">Create a New Post</h2>
+      <PostForm onSubmit={handleSubmit} />
+      {error && <p className="text-red-500 mt-4">{error}</p>}
+    </div>
   );
 };
 

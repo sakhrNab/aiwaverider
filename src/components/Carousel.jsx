@@ -1,16 +1,16 @@
 // src/components/Carousel.jsx
-
 import React, { useState, useEffect } from 'react';
 import Slider from 'react-slick';
-import CardBox from './CardBox'; // Ensure this component exists
+import CardBox from './CardBox';
 import { API_URL, getAllPosts } from '../utils/api';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
-import '../styles/carousel.css'; // Ensure this CSS file exists
+import '../styles/carousel.css';
+import { Link } from 'react-router-dom'; // Import Link
 
 const Carousel = () => {
   const [carouselData, setCarouselData] = useState([]);
-  const categories = ['Trends', 'Latest Tech', 'AI Tools']; // Predefined categories
+  const categories = ['Trends', 'Latest Tech', 'AI Tools'];
 
   useEffect(() => {
     const fetchCarouselData = async () => {
@@ -27,11 +27,11 @@ const Carousel = () => {
             throw new Error(`Failed to fetch posts for category ${category}`);
           }
           const posts = await response.json();
-          // Limit the number of posts per category to, say, 5
           return {
             title: category,
             boxes: posts.slice(0, 5).map((post) => ({
-              image: post.imageUrl || '/images/default.jpg', // Fallback image
+              id: post.id, // Ensure each post has a unique ID
+              image: post.imageUrl || '/images/default.jpg',
               title: post.title,
               description: post.description,
             })),
@@ -91,8 +91,12 @@ const Carousel = () => {
             <h2 className="text-2xl font-bold mb-6 text-center">{section.title}</h2>
             {section.boxes.length > 0 ? (
               <Slider {...boxSettings}>
-                {section.boxes.map((box, boxIndex) => (
-                  <CardBox key={boxIndex} {...box} />
+                {section.boxes.map((box) => (
+                  <div key={box.id}>
+                    <Link to={`/posts/${box.id}`}>
+                      <CardBox {...box} />
+                    </Link>
+                  </div>
                 ))}
               </Slider>
             ) : (

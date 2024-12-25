@@ -8,6 +8,7 @@ const admin = require('firebase-admin');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const Joi = require('joi');
+const sanitizeHtml = require('sanitize-html'); // Import sanitize-html for backend sanitization
 const authenticateJWT = require('./middleware/auth');
 const { octokit, owner, repo, branch, imagesDir, uploadImageToGitHub } = require('./utils/github');
 const upload = require('./middleware/upload'); // Adjust the path as necessary
@@ -16,46 +17,49 @@ const app = express();
 
 const rateLimit = require('express-rate-limit');
 
+// ------------------ Rate Limiting ------------------
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 1000, // or 500 or whatever suits your dev environment
-    message: 'Too many requests, please try again in 15 minutes!',
-  });
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // Limit each IP to 1000 requests per windowMs
+  message: 'Too many requests, please try again in 15 minutes!',
+});
 
 app.use(cors({
-    origin: 'http://localhost:5173',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    // Removed credentials: true
-  }));
-  
+  origin: 'http://localhost:5173', // Adjust as per your frontend's URL
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 app.options('*', cors());
+
+// Apply rate limiting only in production
 if (process.env.NODE_ENV === 'production') {
-    app.use(limiter);
+  app.use(limiter);
 }
 
-
+// ------------------ Body Parsing ------------------
 // Increase JSON body parser limit to handle large payloads (e.g., image uploads)
 app.use(express.json({ limit: '10mb' }));
 
-// ------------- Initialize Firebase Admin -------------
-
+// ------------------ Initialize Firebase Admin ------------------
 const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-console.log("ServiceAccountPath: ", serviceAccountPath);
+
 // Resolve the absolute path (ensure it points correctly)
 const resolvedServiceAccountPath = path.resolve(serviceAccountPath);
 
 admin.initializeApp({
   credential: admin.credential.cert(resolvedServiceAccountPath),
-  // storageBucket: process.env.FIREBASE_STORAGE_BUCKET, // Add this line if using Firebase Storage
+  // storageBucket: process.env.FIREBASE_STORAGE_BUCKET, // Uncomment if using Firebase Storage
 });
 
 const db = admin.firestore();
-// const bucket = admin.storage().bucket(); // Reference to Firebase Storage bucket
+db.settings({ ignoreUndefinedProperties: true }); // Enable ignoring undefined properties
 
-// Collection references
+// const bucket = admin.storage().bucket(); // Reference to Firebase Storage bucket if used
+
+// ------------------ Collection References ------------------
 const usersCollection = db.collection('users');
-const postsCollection = admin.firestore().collection('posts');
+const postsCollection = db.collection('posts');
 const commentsCollection = db.collection('comments');
 
 /*************************************************************************
@@ -66,88 +70,95 @@ const commentsCollection = db.collection('comments');
  *
  *   posts (collection)
  *     doc: postId
- *       title, description, createdBy (userId or username), createdAt
+ *       title, description, category, imageUrl, imageSha, additionalHTML, graphHTML, createdBy, createdByUsername, createdAt, updatedAt
  *
  *   comments (collection)
  *     doc: commentId
  *       postId, userId, text, username, userRole, createdAt
  *************************************************************************/
 
-
+// ------------------ Validation Schemas ------------------
 const signUpSchema = Joi.object({
-    username: Joi.string().max(20).required(),
-    firstName: Joi.string().allow('', null),
-    lastName: Joi.string().allow('', null),
-    email: Joi.string().email().required(),
-    phoneNumber: Joi.string().allow('', null),
-    password: Joi.string().min(6).required(),
-  });
+  username: Joi.string().max(20).required(),
+  firstName: Joi.string().allow('', null),
+  lastName: Joi.string().allow('', null),
+  email: Joi.string().email().required(),
+  phoneNumber: Joi.string().allow('', null),
+  password: Joi.string().min(6).required(),
+});
+
+// ------------------ Authentication Middleware ------------------
+
+// authenticateJWT is assumed to be defined in ./middleware/auth
+// It should verify the JWT and attach the user object to req.user
+
+// ------------------ Routes ------------------
 
 // ------------------ 1) Sign Up -----------------------
 app.post('/api/auth/signup', async (req, res) => {
-    try {
-      // Validate the incoming data
-      const { error, value } = signUpSchema.validate(req.body);
-      if (error) {
-        return res.status(400).json({ error: error.details[0].message });
-      }
-  
-      // Destructure the validated data
-      const { username, firstName, lastName, email, phoneNumber, password } = value;
-  
-      // Check if user with same username or email exists
-      const usernameQuery = await usersCollection.where('username', '==', username).get();
-      if (!usernameQuery.empty) {
-        return res.status(400).json({ error: 'Username is already taken.' });
-      }
-  
-      const emailQuery = await usersCollection.where('email', '==', email.toLowerCase()).get();
-      if (!emailQuery.empty) {
-        return res.status(400).json({ error: 'Email is already in use.' });
-      }
-  
-      // Hash the password
-      const hashedPassword = await bcrypt.hash(password, 10);
-  
-      // Add user to Firestore
-      const newUserRef = await usersCollection.add({
-        username,
-        firstName: firstName || '',
-        lastName: lastName || '',
-        email: email.toLowerCase(),
-        phoneNumber: phoneNumber || '',
-        password: hashedPassword,
-        role: 'authenticated', // default role
-      });
-  
-      // Generate a JWT upon sign-up
-      const token = jwt.sign(
-        {
-          id: newUserRef.id,
-          username,
-          email: email.toLowerCase(),
-          role: 'authenticated',
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: '1h' }
-      );
-  
-      return res.json({
-        message: 'User signed up successfully.',
-        userId: newUserRef.id,
-        token,
-        user: {
-          id: newUserRef.id,
-          username,
-          email: email.toLowerCase(),
-          role: 'authenticated',
-        },
-      });
-    } catch (err) {
-      console.error('Error in /api/auth/signup:', err);
-      return res.status(500).json({ error: 'Internal server error.' });
+  try {
+    // Validate the incoming data
+    const { error, value } = signUpSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({ error: error.details[0].message });
     }
-  });
+
+    // Destructure the validated data
+    const { username, firstName, lastName, email, phoneNumber, password } = value;
+
+    // Check if user with same username or email exists
+    const usernameQuery = await usersCollection.where('username', '==', username).get();
+    if (!usernameQuery.empty) {
+      return res.status(400).json({ error: 'Username is already taken.' });
+    }
+
+    const emailQuery = await usersCollection.where('email', '==', email.toLowerCase()).get();
+    if (!emailQuery.empty) {
+      return res.status(400).json({ error: 'Email is already in use.' });
+    }
+
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Add user to Firestore
+    const newUserRef = await usersCollection.add({
+      username,
+      firstName: firstName || '',
+      lastName: lastName || '',
+      email: email.toLowerCase(),
+      phoneNumber: phoneNumber || '',
+      password: hashedPassword,
+      role: 'authenticated', // default role
+    });
+
+    // Generate a JWT upon sign-up
+    const token = jwt.sign(
+      {
+        id: newUserRef.id,
+        username,
+        email: email.toLowerCase(),
+        role: 'authenticated',
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    return res.json({
+      message: 'User signed up successfully.',
+      userId: newUserRef.id,
+      token,
+      user: {
+        id: newUserRef.id,
+        username,
+        email: email.toLowerCase(),
+        role: 'authenticated',
+      },
+    });
+  } catch (err) {
+    console.error('Error in /api/auth/signup:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
 
 // ------------------ 2) Sign In ------------------------
 app.post('/api/auth/signin', async (req, res) => {
@@ -219,105 +230,147 @@ app.post('/api/auth/signin', async (req, res) => {
 
 // ------------------ 3) Create Post (Admin only) -------
 app.post('/api/posts', authenticateJWT, upload.single('image'), async (req, res) => {
-    try {
-      const { title, description, category } = req.body;
-      const { role, id: userId } = req.user;
-  
-      if (!title || !description || !category) {
-        return res.status(400).json({ error: 'Title, description, and category are required.' });
-      }
-      if (role !== 'admin') {
-        return res.status(403).json({ error: 'Only admin can create posts.' });
-      }
-  
-      let imageUrl = null;
-  
-      if (req.file) {
-        const filename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
-        try {
-          imageUrl = await uploadImageToGitHub(filename, req.file.buffer);
-        } catch (error) {
-          return res.status(500).json({ error: error.message || 'Image upload failed.' });
-        }
-      }
-  
-      // Get username from users collection
-      const userDoc = await admin.firestore().collection('users').doc(userId).get();
-      const username = userDoc.exists ? userDoc.data().username : 'Unknown User';
-  
-      // Add post to Firestore
-      const newPostRef = await postsCollection.add({
-        title,
-        description,
-        category,
-        imageUrl,
-        createdBy: userId || null,
-        createdByUsername: username,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-  
-      const newPostDoc = await newPostRef.get();
-  
-      return res.json({
-        message: 'Post created successfully.',
-        post: { id: newPostRef.id, ...newPostDoc.data() },
-      });
-    } catch (err) {
-      console.error('Error in /api/posts:', err);
-      return res.status(500).json({ error: 'Internal server error.' });
+  try {
+    const { title, description, category, additionalHTML, graphHTML } = req.body;
+    const { role, id: userId } = req.user;
+
+    // Validate required fields
+    if (!title || !description || !category) {
+      return res.status(400).json({ error: 'Title, description, and category are required.' });
     }
-  });
+
+    // Check for admin role
+    if (role !== 'admin') {
+      return res.status(403).json({ error: 'Only admin can create posts.' });
+    }
+
+    let imageUrl = null;
+    let imageSha = null; // To track the file's SHA for deletion
+
+    // Handle image upload if provided
+    if (req.file) {
+      const filename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
+      try {
+        const uploadResult = await uploadImageToGitHub(filename, req.file.buffer);
+
+        if (!uploadResult || !uploadResult.url || !uploadResult.sha) {
+          throw new Error('Image upload failed: Missing URL or SHA.');
+        }
+        imageUrl = uploadResult.url;
+        imageSha = uploadResult.sha; // Assuming uploadImageToGitHub returns both URL and SHA
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        return res.status(500).json({ error: error.message || 'Image upload failed.' });
+      }
+    }
+
+    // Get username from users collection
+    const userDoc = await usersCollection.doc(userId).get();
+    const username = userDoc.exists ? userDoc.data().username : 'Unknown User';
+
+    // Sanitize additionalHTML and graphHTML before storing
+    const sanitizedAdditionalHTML = sanitizeHtml(additionalHTML || '', {
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'pre', 'code']),
+      allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        'img': ['src', 'alt'],
+        'a': ['href', 'name', 'target'],
+      },
+      allowedSchemes: ['data', 'http', 'https'],
+    });
+
+    const sanitizedGraphHTML = sanitizeHtml(graphHTML || '', {
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['iframe']),
+      allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        'iframe': ['src', 'width', 'height', 'allow', 'allowfullscreen'],
+      },
+      allowedSchemes: ['http', 'https'],
+    });
+
+    // Add post to Firestore with additional fields
+    const newPostRef = await postsCollection.add({
+      title,
+      description,
+      category,
+      imageUrl,
+      imageSha, // Store SHA for potential future deletions
+      additionalHTML: sanitizedAdditionalHTML,
+      graphHTML: sanitizedGraphHTML,
+      createdBy: userId || null,
+      createdByUsername: username,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const newPostDoc = await newPostRef.get();
+
+    return res.json({
+      message: 'Post created successfully.',
+      post: { id: newPostRef.id, ...newPostDoc.data() },
+    });
+  } catch (err) {
+    console.error('Error in /api/posts:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
 
 // ------------------ 4) Get All Posts (public) ---------
 app.get('/api/posts', async (req, res) => {
-    try {
-      const { category } = req.query;
-      let query = postsCollection.orderBy('createdAt', 'desc');
+  try {
+    const { category } = req.query;
+    let query = postsCollection.orderBy('createdAt', 'desc');
 
-      if (category && category !== 'All') {
-        query = query.where('category', '==', category);
-      }
-
-      const snapshot = await query.get();
-      const allPosts = [];
-
-      for (const doc of snapshot.docs) {
-        const data = doc.data();
-        const postId = doc.id;
-
-        // Fetch comments for the post
-        const commentsSnapshot = await commentsCollection
-          .where('postId', '==', postId)
-          .orderBy('createdAt', 'desc')
-          .get();
-
-        const comments = [];
-        commentsSnapshot.forEach((commentDoc) => {
-          const commentData = commentDoc.data();
-          comments.push({
-            id: commentDoc.id,
-            ...commentData,
-            createdAt: commentData.createdAt
-              ? commentData.createdAt.toDate().toISOString()
-              : null,
-          });
-        });
-
-        allPosts.push({
-          id: postId,
-          ...data,
-          createdAt: data.createdAt
-            ? data.createdAt.toDate().toISOString()
-            : null,
-          comments, // Include comments here
-        });
-      }
-
-      return res.json(allPosts);
-    } catch (err) {
-      console.error('Error in GET /api/posts:', err);
-      return res.status(500).json({ error: 'Internal server error.' });
+    if (category && category !== 'All') {
+      query = query.where('category', '==', category);
     }
+
+    const snapshot = await query.get();
+    const allPosts = [];
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      const postId = doc.id;
+
+      // Ensure additionalHTML and graphHTML are strings
+      const additionalHTML = typeof data.additionalHTML === 'string' ? data.additionalHTML : '';
+      const graphHTML = typeof data.graphHTML === 'string' ? data.graphHTML : '';
+
+      // Fetch comments for the post
+      const commentsSnapshot = await commentsCollection
+        .where('postId', '==', postId)
+        .orderBy('createdAt', 'desc')
+        .get();
+
+      const comments = [];
+      commentsSnapshot.forEach((commentDoc) => {
+        const commentData = commentDoc.data();
+        comments.push({
+          id: commentDoc.id,
+          ...commentData,
+          createdAt: commentData.createdAt
+            ? commentData.createdAt.toDate().toISOString()
+            : null,
+        });
+      });
+
+      allPosts.push({
+        id: postId,
+        ...data,
+        additionalHTML, // Ensure it's a string
+        graphHTML, // Ensure it's a string
+        createdAt: data.createdAt
+          ? data.createdAt.toDate().toISOString()
+          : null,
+        comments, // Include comments here
+      });
+    }
+
+    return res.json(allPosts);
+  } catch (err) {
+    console.error('Error in GET /api/posts:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
 });
 
 // ------------------ 5) Add Comment (auth or admin) ----
@@ -327,9 +380,12 @@ app.post('/api/posts/:postId/comments', authenticateJWT, async (req, res) => {
     const { commentText } = req.body;
     const { role, id: userId } = req.user;
 
+    // Validate user role
     if (!role || (role !== 'admin' && role !== 'authenticated')) {
       return res.status(403).json({ error: 'Not authorized to comment.' });
     }
+
+    // Validate comment text
     if (!commentText) {
       return res.status(400).json({ error: 'Comment text is required.' });
     }
@@ -374,84 +430,113 @@ app.post('/api/posts/:postId/comments', authenticateJWT, async (req, res) => {
 
 // ------------------ 6) Get Comments for a Post (public) ----
 app.get('/api/posts/:postId/comments', async (req, res) => {
-    try {
-      const { postId } = req.params;
-      const snapshot = await commentsCollection
-        .where('postId', '==', postId)
-        .orderBy('createdAt', 'desc')
-        .get();
-      const allComments = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        allComments.push({ 
-          id: doc.id, 
-          ...data, 
-          createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : null 
-        });
+  try {
+    const { postId } = req.params;
+    const snapshot = await commentsCollection
+      .where('postId', '==', postId)
+      .orderBy('createdAt', 'desc')
+      .get();
+    const allComments = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      allComments.push({ 
+        id: doc.id, 
+        ...data, 
+        createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : null 
       });
-      return res.json(allComments);
-    } catch (err) {
-      console.error('Error in GET /api/posts/:postId/comments:', err);
-      return res.status(500).json({ error: 'Internal server error.' });
-    }
-  });
+    });
+    return res.json(allComments);
+  } catch (err) {
+    console.error('Error in GET /api/posts/:postId/comments:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
 
 // ------------------ 7) Get User Profile (authenticated) ----
 app.get('/api/users/:userId', authenticateJWT, async (req, res) => {
-    try {
-      const { userId } = req.params;
-      
-      // Optional: Only allow users to fetch their own profiles or admins to fetch any
-      if (req.user.id !== userId && req.user.role !== 'admin') {
-        return res.status(403).json({ error: 'Forbidden' });
-      }
-      
-      const userDoc = await usersCollection.doc(userId).get();
-      if (!userDoc.exists) {
-        return res.status(404).json({ error: 'User not found.' });
-      }
-      
-      const userData = userDoc.data();
-      return res.json({
-        id: userDoc.id,
-        username: userData.username,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        email: userData.email,
-        phoneNumber: userData.phoneNumber,
-        role: userData.role,
-      });
-    } catch (err) {
-      console.error('Error in GET /api/users/:userId:', err);
-      return res.status(500).json({ error: 'Internal server error.' });
+  try {
+    const { userId } = req.params;
+    
+    // Optional: Only allow users to fetch their own profiles or admins to fetch any
+    if (req.user.id !== userId && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
     }
-  });
+    
+    const userDoc = await usersCollection.doc(userId).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    
+    const userData = userDoc.data();
+    return res.json({
+      id: userDoc.id,
+      username: userData.username,
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      email: userData.email,
+      phoneNumber: userData.phoneNumber,
+      role: userData.role,
+    });
+  } catch (err) {
+    console.error('Error in GET /api/users/:userId:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
 
 // ------------------ 8) Delete Post (Admin Only) -------
 app.delete('/api/posts/:postId', authenticateJWT, async (req, res) => {
-    try {
-      const { role } = req.user;
-      const { postId } = req.params;
-  
-      if (role !== 'admin') {
-        return res.status(403).json({ error: 'Only admins can delete posts.' });
-      }
-  
-      const postRef = postsCollection.doc(postId);
-      const postDoc = await postRef.get();
-  
-      if (!postDoc.exists) {
-        return res.status(404).json({ error: 'Post not found.' });
-      }
-  
-      await postRef.delete();
-  
-      return res.json({ message: 'Post deleted successfully.' });
-    } catch (err) {
-      console.error('Error in DELETE /api/posts/:postId:', err);
-      return res.status(500).json({ error: 'Internal server error.' });
+  try {
+    const { role } = req.user;
+    const { postId } = req.params;
+
+    // Check for admin role
+    if (role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can delete posts.' });
     }
-  });
+
+    const postRef = postsCollection.doc(postId);
+    const postDoc = await postRef.get();
+
+    if (!postDoc.exists) {
+      return res.status(404).json({ error: 'Post not found.' });
+    }
+
+    const postData = postDoc.data();
+
+    // Delete associated image from GitHub if imageUrl and imageSha exist
+    if (postData.imageUrl && postData.imageSha) {
+      try {
+        await octokit.rest.repos.deleteFile({
+          owner,
+          repo,
+          path: path.join(imagesDir, path.basename(postData.imageUrl)),
+          message: `Delete image for post ${postId}`,
+          sha: postData.imageSha, // Requires imageSha to be stored during upload
+          branch,
+        });
+      } catch (error) {
+        console.error('Error deleting image from GitHub:', error);
+        // Continue even if image deletion fails
+      }
+    }
+
+    // Delete post document
+    await postRef.delete();
+
+    // Optionally, delete comments associated with the post
+    const commentsSnapshot = await commentsCollection.where('postId', '==', postId).get();
+    const batch = db.batch();
+    commentsSnapshot.forEach((commentDoc) => {
+      batch.delete(commentDoc.ref);
+    });
+    await batch.commit();
+
+    return res.json({ message: 'Post deleted successfully.' });
+  } catch (err) {
+    console.error('Error in DELETE /api/posts/:postId:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
 
 // ------------------ 9) Sign Out ------------------------
 app.post('/api/auth/signout', authenticateJWT, async (req, res) => {
@@ -465,6 +550,108 @@ app.post('/api/auth/signout', authenticateJWT, async (req, res) => {
   }
 });
 
+// ------------------ 10) Get Post by ID GET /api/posts/:postId
+app.get('/api/posts/:postId', async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const postDoc = await postsCollection.doc(postId).get();
+    if (!postDoc.exists) {
+      return res.status(404).json({ error: 'Post not found.' });
+    }
+
+    const postData = postDoc.data();
+
+    // Ensure additionalHTML and graphHTML are strings
+    const additionalHTML = typeof postData.additionalHTML === 'string' ? postData.additionalHTML : '';
+    const graphHTML = typeof postData.graphHTML === 'string' ? postData.graphHTML : '';
+
+    return res.json({ 
+      id: postId, 
+      ...postData, 
+      additionalHTML, 
+      graphHTML 
+    });
+  } catch (err) {
+    console.error('Error fetching post:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ------------------ 11) Update Post by ID - admin PUT /api/posts/:postId
+app.put('/api/posts/:postId', authenticateJWT, upload.single('image'), async (req, res) => {
+  try {
+    const { role } = req.user;
+    if (role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can update posts.' });
+    }
+    const { postId } = req.params;
+    const { title, description, additionalHTML, graphHTML } = req.body;
+
+    // Handle image if provided
+    let imageUrl = null;
+    let imageSha = null; // To track the file's SHA for deletion
+    if (req.file) {
+      try {
+        const uploadResult = await uploadImageToGitHub(req.file.originalname, req.file.buffer);
+        if (!uploadResult || !uploadResult.url || !uploadResult.sha) {
+          throw new Error('Image upload failed: Missing URL or SHA.');
+        }
+        imageUrl = uploadResult.url;
+        imageSha = uploadResult.sha; // Assuming uploadImageToGitHub returns both URL and SHA
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        return res.status(500).json({ error: error.message || 'Image upload failed.' });
+      }
+    }
+
+    // Validate that the post exists
+    const postRef = postsCollection.doc(postId);
+    const postDoc = await postRef.get();
+    if (!postDoc.exists) {
+      return res.status(404).json({ error: 'Post not found.' });
+    }
+
+    // Sanitize additionalHTML and graphHTML before storing
+    const sanitizedAdditionalHTML = sanitizeHtml(additionalHTML || '', {
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'pre', 'code']),
+      allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        'img': ['src', 'alt'],
+        'a': ['href', 'name', 'target'],
+      },
+      allowedSchemes: ['data', 'http', 'https'],
+    });
+
+    const sanitizedGraphHTML = sanitizeHtml(graphHTML || '', {
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['iframe']),
+      allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        'iframe': ['src', 'width', 'height', 'allow', 'allowfullscreen'],
+      },
+      allowedSchemes: ['http', 'https'],
+    });
+
+    // Update fields
+    const updates = {
+      title,
+      description,
+      additionalHTML: sanitizedAdditionalHTML,
+      graphHTML: sanitizedGraphHTML,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    if (imageUrl !== null) { // Explicitly check for null
+      updates.imageUrl = imageUrl;
+      updates.imageSha = imageSha;
+    }
+
+    await postRef.update(updates);
+    return res.json({ message: 'Post updated successfully.' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // ------------------ Catch-All 404 Handler ------------------
 app.use((req, res, next) => {
   res.status(404).json({ error: 'Route not found.' });
@@ -472,8 +659,8 @@ app.use((req, res, next) => {
 
 // ------------------ Error Handling Middleware ------------------
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ error: 'Something went wrong!' });
+  console.error(err.stack);
+  res.status(500).json({ error: 'Something went wrong!' });
 });
 
 // ------------------ Start the Server ------------------

@@ -1,10 +1,14 @@
 // src/components/AdminDashboard.jsx
+// TipTap-based version, removing anything to do with Slate
 
 import React, { useContext, useState, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
-import { getAllPosts, createPost, deletePost } from '../utils/api';
-import ConfirmationModal from './ConfirmationModal'; // Existing component
+import { getAllPosts, createPost, deletePost, updatePost } from '../utils/api';
+import ConfirmationModal from './ConfirmationModal';
 import { CATEGORIES } from '../constants/categories';
+import DOMPurify from 'dompurify';
+import MyEditor from './TipTapEditor'; // <-- Import your new TipTap editor
+import { Link } from 'react-router-dom';
 
 const AdminDashboard = () => {
   const { user, token } = useContext(AuthContext);
@@ -14,10 +18,16 @@ const AdminDashboard = () => {
     description: '',
     category: 'Trends',
     image: null,
+    // We'll store the TipTap editor content as raw HTML strings
+    additionalHTML: '', 
+    graphHTML: '',
   });
+
   const [error, setError] = useState('');
   const [postToDelete, setPostToDelete] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editPostId, setEditPostId] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(''); // <-- new state
 
   if (user?.role !== 'admin') {
     return (
@@ -36,7 +46,6 @@ const AdminDashboard = () => {
         setError(err.message || 'Failed to fetch posts.');
       }
     };
-
     fetchPosts();
   }, [token]);
 
@@ -48,19 +57,22 @@ const AdminDashboard = () => {
         setError('Image size should not exceed 5MB.');
         return;
       }
-      setFormData({
-        ...formData,
-        image: file,
-      });
+      setFormData((prev) => ({ ...prev, image: file }));
       setError('');
     } else {
-      setFormData({
-        ...formData,
-        [name]: value,
-      });
+      setFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
 
+  // Handles the HTML output from TipTap
+  const handleEditorChange = (field, htmlString) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: htmlString,
+    }));
+  };
+
+  // ------------------ Create Post ------------------
   const handleCreatePost = async (e) => {
     e.preventDefault();
     if (!formData.title || !formData.description || !formData.category) {
@@ -68,10 +80,17 @@ const AdminDashboard = () => {
       return;
     }
 
+    // Sanitize the HTML before sending
+    const sanitizedAdditionalHTML = DOMPurify.sanitize(formData.additionalHTML);
+    const sanitizedGraphHTML = DOMPurify.sanitize(formData.graphHTML);
+
     const postData = new FormData();
     postData.append('title', formData.title);
     postData.append('description', formData.description);
     postData.append('category', formData.category);
+    postData.append('additionalHTML', sanitizedAdditionalHTML);
+    postData.append('graphHTML', sanitizedGraphHTML);
+
     if (formData.image) {
       postData.append('image', formData.image);
     }
@@ -79,23 +98,111 @@ const AdminDashboard = () => {
     try {
       const response = await createPost(postData, token);
       if (response.post) {
-        setPosts([response.post, ...posts]);
+        setPosts((prev) => [response.post, ...prev]);
         setFormData({
           title: '',
           description: '',
           category: 'Trends',
           image: null,
+          additionalHTML: '',
+          graphHTML: '',
         });
         setError('');
+        // Set success message
+        setSuccessMessage('Post created successfully!');
+
+        // Clear the success message after some seconds
+        setTimeout(() => {
+          setSuccessMessage('');
+        }, 3000);
+
       } else {
         setError(response.error || 'Failed to create post.');
       }
-    } catch (error) {
-      console.error('Error creating post:', error);
+    } catch (err) {
+      console.error('Error creating post:', err);
       setError('An unexpected error occurred while creating the post.');
     }
   };
 
+  // ------------------ Edit Post ------------------
+  const handleEditPost = (post) => {
+    setEditPostId(post.id);
+    setFormData({
+      title: post.title || '',
+      description: post.description || '',
+      category: post.category || 'Trends',
+      image: null, // Clear existing image (unless you want to keep it)
+      additionalHTML: post.additionalHTML || '',
+      graphHTML: post.graphHTML || '',
+    });
+    setError('');
+  };
+
+  // ------------------ Update Post ------------------
+  const handleUpdatePost = async (e) => {
+    e.preventDefault();
+    if (!formData.title || !formData.description || !formData.category) {
+      setError('Title, Description, and Category are required.');
+      return;
+    }
+
+    const sanitizedAdditionalHTML = DOMPurify.sanitize(formData.additionalHTML);
+    const sanitizedGraphHTML = DOMPurify.sanitize(formData.graphHTML);
+
+    const updatedData = new FormData();
+    updatedData.append('title', formData.title);
+    updatedData.append('description', formData.description);
+    updatedData.append('category', formData.category);
+    updatedData.append('additionalHTML', sanitizedAdditionalHTML);
+    updatedData.append('graphHTML', sanitizedGraphHTML);
+
+    if (formData.image) {
+      updatedData.append('image', formData.image);
+    }
+
+    try {
+      const response = await updatePost(editPostId, updatedData, token);
+      if (response.message) {
+        // Update local state
+        setPosts((prevPosts) =>
+          prevPosts.map((p) =>
+            p.id === editPostId
+              ? {
+                  ...p,
+                  title: formData.title,
+                  description: formData.description,
+                  category: formData.category,
+                  additionalHTML: sanitizedAdditionalHTML,
+                  graphHTML: sanitizedGraphHTML,
+                  imageUrl: formData.image
+                    ? URL.createObjectURL(formData.image)
+                    : p.imageUrl,
+                }
+              : p
+          )
+        );
+        // Reset
+        setEditPostId(null);
+        setFormData({
+          title: '',
+          description: '',
+          category: 'Trends',
+          image: null,
+          additionalHTML: '',
+          graphHTML: '',
+        });
+        setError('');
+      } else {
+        setError(response.error || 'Failed to update post.');
+      }
+    } catch (err) {
+      console.error('Error updating post:', err);
+      setError('An unexpected error occurred while updating the post.');
+    }
+  };
+
+  // ------------------ Delete Post ------------------
   const confirmDeletePost = (post) => {
     setPostToDelete(post);
     setIsModalOpen(true);
@@ -103,22 +210,22 @@ const AdminDashboard = () => {
 
   const handleDeletePost = async () => {
     if (!postToDelete) return;
-
     try {
       const data = await deletePost(postToDelete.id, token);
       if (data.success) {
-        setPosts(posts.filter((post) => post.id !== postToDelete.id));
+        setPosts((prev) => prev.filter((p) => p.id !== postToDelete.id));
         setIsModalOpen(false);
         setPostToDelete(null);
       } else {
         alert(data.error || 'Failed to delete post.');
       }
-    } catch (error) {
-      console.error('Error deleting post:', error);
+    } catch (err) {
+      console.error('Error deleting post:', err);
       alert('An unexpected error occurred while deleting the post.');
     }
   };
 
+  // Helper to format ISO date
   const formatDate = (isoString) => {
     if (!isoString) return 'N/A';
     const date = new Date(isoString);
@@ -128,11 +235,21 @@ const AdminDashboard = () => {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <h1 className="text-3xl font-bold mb-6 text-center">Admin Dashboard</h1>
+      
+      {successMessage && (
+      <p className="text-green-600 text-center font-semibold mb-4">{successMessage}</p>
+      )}
 
-      {/* Create Post Section */}
+      {/* Create or Edit Post */}
       <div className="mb-8">
-        <h2 className="text-2xl font-semibold mb-4">Create a New Post</h2>
-        <form onSubmit={handleCreatePost} className="space-y-4">
+        <h2 className="text-2xl font-semibold mb-4">
+          {editPostId ? 'Edit Post' : 'Create a New Post'}
+        </h2>
+        <form
+          onSubmit={editPostId ? handleUpdatePost : handleCreatePost}
+          className="space-y-4"
+        >
+          {/* Title */}
           <div>
             <label className="block text-gray-700">Title</label>
             <input
@@ -140,60 +257,118 @@ const AdminDashboard = () => {
               name="title"
               value={formData.title}
               onChange={handleInputChange}
-              className="mt-1 w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-1 w-full p-2 border border-gray-300 rounded-md"
               placeholder="Enter post title"
               required
             />
           </div>
+
+          {/* Description */}
           <div>
             <label className="block text-gray-700">Description</label>
             <textarea
               name="description"
               value={formData.description}
               onChange={handleInputChange}
-              className="mt-1 w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-1 w-full p-2 border border-gray-300 rounded-md"
               placeholder="Enter post description"
               rows="4"
               required
-            ></textarea>
+            />
           </div>
+
+          {/* Category */}
           <div>
             <label className="block text-gray-700">Category</label>
             <select
               name="category"
               value={formData.category}
               onChange={handleInputChange}
-              className="mt-1 w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-1 w-full p-2 border border-gray-300 rounded-md"
               required
             >
-                {CATEGORIES.map((category) => (
-                    <option key={category} value={category}>{category}</option>
-                ))}
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
             </select>
           </div>
+
+          {/* Image */}
           <div>
-            <label className="block text-gray-700">Image (Optional)</label>
+            <label className="block text-gray-700">
+              Image {editPostId ? '(Leave blank to keep existing)' : '(Optional)'}
+            </label>
             <input
               type="file"
               name="image"
               accept="image/*"
               onChange={handleInputChange}
-              className="mt-1 w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-1 w-full p-2 border border-gray-300 rounded-md"
             />
             {formData.image && (
               <div className="mt-2">
                 <p className="text-gray-700">Image Preview:</p>
-                <img src={URL.createObjectURL(formData.image)} alt="Preview" className="h-40 w-full object-cover rounded-md" />
+                <img
+                  src={URL.createObjectURL(formData.image)}
+                  alt="Preview"
+                  className="h-40 w-full object-cover rounded-md"
+                />
               </div>
             )}
           </div>
+
+          {/* Additional HTML - now using TipTap */}
+          <div>
+            <label className="block text-gray-700">Additional HTML (Optional)</label>
+            <MyEditor
+              content={formData.additionalHTML}
+              onChange={(html) => handleEditorChange('additionalHTML', html)}
+            />
+          </div>
+
+          {/* Graph HTML - now using TipTap */}
+          <div>
+            <label className="block text-gray-700">Graph HTML (Optional)</label>
+            <MyEditor
+              content={formData.graphHTML}
+              onChange={(html) => handleEditorChange('graphHTML', html)}
+            />
+          </div>
+
+          {/* Error Message */}
           {error && <p className="text-red-500">{error}</p>}
+
+          {/* Submit Button */}
           <button
             type="submit"
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
-            Create Post
+            {editPostId ? 'Update Post' : 'Create Post'}
           </button>
+
+          {/* Cancel Edit Button */}
+          {editPostId && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditPostId(null);
+                setFormData({
+                  title: '',
+                  description: '',
+                  category: 'Trends',
+                  image: null,
+                  additionalHTML: '',
+                  graphHTML: '',
+                });
+                setError('');
+              }}
+              className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+            >
+              Cancel
+            </button>
+          )}
         </form>
       </div>
 
@@ -203,25 +378,48 @@ const AdminDashboard = () => {
         {posts.length === 0 && <p className="text-gray-600">No posts available.</p>}
         <div className="space-y-4">
           {posts.map((post) => (
-            <div key={post.id} className="p-4 border border-gray-200 rounded-md shadow-sm hover:shadow-md transition-shadow">
+            <div
+              key={post.id}
+              className="p-4 border border-gray-200 rounded-md shadow-sm hover:shadow-md"
+            >
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="text-xl font-bold">{post.title}</h3>
-                  <p className="text-gray-700 mt-2">{post.description}</p>
-                  <p className="text-sm text-gray-500 mt-2">Category: {post.category || 'Uncategorized'}</p>
+                  {/* Link to PostDetail */}
+                  <Link to={`/posts/${post.id}`}>
+                    <h3 className="text-xl font-bold hover:text-blue-600">{post.title}</h3>
+                    <p className="text-gray-700 mt-2">{post.description}</p>
+                  </Link>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Category: {post.category || 'Uncategorized'}
+                  </p>
                   {post.imageUrl && (
-                    <img src={post.imageUrl} alt={post.title} className="mt-2 h-40 w-full object-cover rounded-md" loading="lazy"
-    />
+                    <img
+                      src={post.imageUrl}
+                      alt={post.title}
+                      className="mt-2 h-40 w-full object-cover rounded-md"
+                    />
                   )}
-                  <p className="text-sm text-gray-500">Created By: {post.createdByUsername || 'Unknown'}</p>
-                  <p className="text-sm text-gray-500">Created At: {formatDate(post.createdAt)}</p>
+                  <p className="text-sm text-gray-500">
+                    Created By: {post.createdByUsername || 'Unknown'}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Created At: {formatDate(post.createdAt)}
+                  </p>
                 </div>
-                <button
-                  onClick={() => confirmDeletePost(post)}
-                  className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-                >
-                  Delete
-                </button>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleEditPost(post)}
+                    className="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => confirmDeletePost(post)}
+                    className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -239,5 +437,6 @@ const AdminDashboard = () => {
       )}
     </div>
   );
-}
+};
+
 export default AdminDashboard;

@@ -10,7 +10,7 @@ import SignUp from '../components/SignUp'; // SignUp component
 import SignIn from '../components/SignIn'; // SignIn component
 import AdminDashboard from '../components/AdminDashboard';
 import ProtectedRoute from '../components/ProtectedRoute'; // Import ProtectedRoute
-
+import PostDetail from '../posts/PostDetail'; // Import PostDetail
 const AppContent = () => {
   const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
   const location = useLocation();
@@ -42,6 +42,10 @@ const AppContent = () => {
                 <AdminDashboard />
               </ProtectedRoute>
             } 
+          />
+          <Route 
+            path="/posts/:postId" 
+            element={<PostDetail />} 
           />
           {/* Add more routes as needed */}
         </Routes>

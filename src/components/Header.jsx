@@ -2,7 +2,7 @@
 
 import React, { useState, useContext } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import logo from '../assets/v2.jpg';
+import logo from '../assets/v6.webp';
 import { AuthContext } from '../contexts/AuthContext'; // Import AuthContext
 
 const Header = ({ openSignUpModal }) => {

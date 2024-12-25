@@ -1,4 +1,4 @@
-// backend/utils/github.js
+// backend/github.js
 
 const { Octokit } = require('@octokit/rest');
 require('dotenv').config();
@@ -15,11 +15,11 @@ const imagesDir = process.env.GITHUB_DIR || 'images';
  * Uploads an image to GitHub.
  * @param {string} filename - The name of the file.
  * @param {Buffer} content - The file content as a buffer.
- * @returns {string} - The URL of the uploaded image.
+ * @returns {Object} - An object containing the URL and SHA of the uploaded image.
  */
 const uploadImageToGitHub = async (filename, content) => {
   try {
-    // Check if the file already exists to avoid conflicts
+    // 1) Check if the file already exists to determine if it's an update
     let sha;
     try {
       const { data: existingFile } = await octokit.repos.getContent({
@@ -28,16 +28,18 @@ const uploadImageToGitHub = async (filename, content) => {
         path: `${imagesDir}/${filename}`,
         ref: branch,
       });
-      sha = existingFile.sha;
+      sha = existingFile.sha; // Existing file's SHA for update
     } catch (error) {
       if (error.status === 404) {
-        // File does not exist, proceed to create
+        // File does not exist; proceed to create
         sha = undefined;
       } else {
-        throw error;
+        console.error('Error checking existing file:', error);
+        throw new Error(`Error checking existing file: ${error.message}`);
       }
     }
 
+    // 2) Create or Update the file in GitHub
     const response = await octokit.repos.createOrUpdateFileContents({
       owner,
       repo,
@@ -48,11 +50,25 @@ const uploadImageToGitHub = async (filename, content) => {
       sha, // Required for updates; omit for new files
     });
 
-    // Construct the raw file URL
-    return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${imagesDir}/${filename}`;
+    // 3) Extract necessary information from the response
+    const downloadUrl = response.data.content.download_url;
+    const fileSha = response.data.content.sha;
+
+    if (!downloadUrl || !fileSha) {
+      throw new Error('GitHub API did not return download_url or sha.');
+    }
+
+    return { url: downloadUrl, sha: fileSha };
   } catch (error) {
     console.error('Error uploading image to GitHub:', error);
-    throw new Error('Failed to upload image.');
+    // Enhance error message based on error type
+    if (error.status === 401) {
+      throw new Error('Unauthorized: Invalid GitHub token.');
+    } else if (error.status === 403) {
+      throw new Error('Forbidden: Insufficient permissions to upload to the repository.');
+    } else {
+      throw new Error(error.message || 'Failed to upload image to GitHub.');
+    }
   }
 };
 

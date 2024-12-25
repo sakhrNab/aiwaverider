@@ -8,6 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+package-lock.json
 dist
 dist-ssr
 *.local
@@ -15,7 +16,7 @@ dist-ssr
 aiwaverider-privatekey.json
 fetch_file_contents.py
 file_contents.txt
-package-lock.json
+deleteFiles.ps1
 
 # Editor directories and files
 .vscode/*

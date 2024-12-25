@@ -56,7 +56,6 @@ export const createPost = async (formData, token) => {
     return { error: 'An unexpected error occurred while creating the post.' };
   }
 };
-
 // Get All Posts
 export const getAllPosts = async (token) => {
   try {
@@ -66,7 +65,6 @@ export const getAllPosts = async (token) => {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
       },
-      // credentials: 'include', // Removed
     });
 
     if (!response.ok) {
@@ -144,17 +142,58 @@ export const signOutUser = async (token) => {
   try {
     const response = await fetch(`${API_URL}/api/auth/signout`, {
       method: 'POST',
-      // credentials: 'include', // Include cookies if needed
       headers: {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
       },
-      // Typically no body is needed for signout
     });
     const data = await response.json();
     return data;
   } catch (error) {
     console.error('Error during sign out:', error);
     return { error: 'An unexpected error occurred during sign out.' };
+  }
+};
+
+// Update Post
+export const updatePost = async (postId, formData, token) => {
+  try {
+    const response = await fetch(`${API_URL}/api/posts/${postId}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        // Do NOT set 'Content-Type' header when sending FormData
+      },
+      body: formData, // FormData instance
+    });
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error updating post:', error);
+    return { error: 'An unexpected error occurred while updating the post.' };
+  }
+};
+
+// Get Post by ID
+export const getPostById = async (postId) => {
+  try {
+    const response = await fetch(`${API_URL}/api/posts/${postId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        // Add Authorization header if the endpoint requires authentication
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch the post.');
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching post by ID:', error);
+    throw error;
   }
 };
