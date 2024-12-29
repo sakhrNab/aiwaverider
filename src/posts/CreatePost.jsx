@@ -4,9 +4,10 @@ import React, { useState, useContext } from 'react';
 import { createPost } from '../utils/api';
 import { AuthContext } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import PostDetail from '../posts/PostDetail'; // Use TipTapEditor directly
+// import PostDetail from '../posts/PostDetail'; // REMOVE this import
+import RichTextEditor from '../components/RichTextEditor'; // NEW import
 import DOMPurify from 'dompurify';
-import { CATEGORIES } from '../constants/categories'; // Ensure this exists
+import { CATEGORIES } from '../constants/categories';
 
 const CreatePost = () => {
   const [formData, setFormData] = useState({
@@ -52,7 +53,7 @@ const CreatePost = () => {
       return;
     }
 
-    // Sanitize the HTML before sending
+    // Sanitize HTML
     const sanitizedAdditionalHTML = DOMPurify.sanitize(formData.additionalHTML);
     const sanitizedGraphHTML = DOMPurify.sanitize(formData.graphHTML);
 
@@ -69,7 +70,7 @@ const CreatePost = () => {
 
     try {
       const response = await createPost(postData, token);
-      console.log('Create Post Response:', response); // Debugging statement
+      console.log('Create Post Response:', response);
       if (response.post) {
         setSuccessMessage('Post created successfully!');
         setFormData({
@@ -82,9 +83,8 @@ const CreatePost = () => {
         });
         setError('');
 
-        // Redirect to the created post's detail page after a short delay
         setTimeout(() => {
-          navigate(`/posts/${response.post.id}`); // Ensure 'id' matches your backend response
+          navigate(`/posts/${response.post.id}`);
         }, 1500);
       } else {
         setError(response.error || 'Failed to create post.');
@@ -172,19 +172,19 @@ const CreatePost = () => {
           )}
         </div>
 
-        {/* Additional HTML - TipTap */}
+        {/* Additional HTML - RichTextEditor */}
         <div>
           <label className="block text-gray-700">Additional Content (Optional)</label>
-          <PostDetail
+          <RichTextEditor
             content={formData.additionalHTML}
             onChange={(html) => handleEditorChange('additionalHTML', html)}
           />
         </div>
 
-        {/* Graph HTML - TipTap */}
+        {/* Graph HTML - Another RichTextEditor? */}
         <div>
           <label className="block text-gray-700">Graph Content (Optional)</label>
-          <PostDetail
+          <RichTextEditor
             content={formData.graphHTML}
             onChange={(html) => handleEditorChange('graphHTML', html)}
           />
@@ -193,7 +193,7 @@ const CreatePost = () => {
         {/* Error Message */}
         {error && <p className="text-red-500">{error}</p>}
 
-        {/* Submit Button */}
+        {/* Submit */}
         <button
           type="submit"
           className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
@@ -203,6 +203,6 @@ const CreatePost = () => {
       </form>
     </div>
   );
-}
+};
 
-  export default CreatePost;
+export default CreatePost;

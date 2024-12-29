@@ -1,5 +1,4 @@
-// src/posts/PostList.jsx
-
+// src/posts/PostsList.jsx
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { getAllPosts, addComment, deletePost } from '../utils/api';
@@ -16,9 +15,9 @@ const PostsList = () => {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [lastPostCreatedAt, setLastPostCreatedAt] = useState(null);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true); // To determine if more posts are available
+  const [hasMore, setHasMore] = useState(true);
 
-  // Fetch posts
+  // Fetch posts once per selectedCategory
   useEffect(() => {
     const fetchInitialPosts = async () => {
       setLoading(true);
@@ -26,7 +25,9 @@ const PostsList = () => {
       setPosts([]);
       setLastPostCreatedAt(null);
       setHasMore(true);
+
       try {
+        // Single call
         const data = await getAllPosts(selectedCategory, 10, null, token);
         setPosts(data.posts);
         setLastPostCreatedAt(data.lastPostCreatedAt);
@@ -42,13 +43,13 @@ const PostsList = () => {
     fetchInitialPosts();
   }, [token, selectedCategory]);
 
-  // Handle "Load more" action
+  // Load more posts
   const handleLoadMore = async () => {
     if (!hasMore) return;
     setIsFetchingMore(true);
     try {
       const data = await getAllPosts(selectedCategory, 10, lastPostCreatedAt, token);
-      setPosts(prevPosts => [...prevPosts, ...data.posts]);
+      setPosts((prev) => [...prev, ...data.posts]);
       setLastPostCreatedAt(data.lastPostCreatedAt);
       if (data.posts.length < 10) {
         setHasMore(false);
@@ -61,25 +62,20 @@ const PostsList = () => {
     }
   };
 
-  // Handle input changes for comments
+  // Handle comment input
   const handleCommentChange = (postId, text) => {
-    setCommentTexts({
-      ...commentTexts,
-      [postId]: text,
-    });
+    setCommentTexts((prev) => ({ ...prev, [postId]: text }));
   };
 
-  // Handle adding a comment
+  // Add comment
   const handleAddComment = async (postId) => {
     const commentText = commentTexts[postId];
     if (!commentText || commentText.trim() === '') {
       alert('Comment cannot be empty.');
       return;
     }
-
     try {
-      const commentData = { commentText: commentText.trim() };
-      const data = await addComment(postId, commentData, token);
+      const data = await addComment(postId, { commentText: commentText.trim() }, token);
       if (data.comment) {
         setPosts((prevPosts) =>
           prevPosts.map((post) =>
@@ -88,10 +84,7 @@ const PostsList = () => {
               : post
           )
         );
-        setCommentTexts({
-          ...commentTexts,
-          [postId]: '',
-        });
+        setCommentTexts((prev) => ({ ...prev, [postId]: '' }));
       } else {
         alert(data.error || 'Failed to add comment.');
       }
@@ -101,7 +94,7 @@ const PostsList = () => {
     }
   };
 
-  // Handle deleting a post
+  // Delete post
   const confirmDeletePost = (post) => {
     setPostToDelete(post);
     setIsModalOpen(true);
@@ -109,11 +102,10 @@ const PostsList = () => {
 
   const handleDeletePost = async () => {
     if (!postToDelete) return;
-
     try {
       const data = await deletePost(postToDelete.id, token);
       if (data.success) {
-        setPosts(posts.filter((post) => post.id !== postToDelete.id));
+        setPosts((prev) => prev.filter((p) => p.id !== postToDelete.id));
         setIsModalOpen(false);
         setPostToDelete(null);
       } else {
@@ -125,27 +117,22 @@ const PostsList = () => {
     }
   };
 
-  // Format ISO date
+  // Format date
   const formatDate = (isoString) => {
     if (!isoString) return 'N/A';
-    const date = new Date(isoString);
-    return date.toLocaleString();
+    return new Date(isoString).toLocaleString();
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-16 w-16"></div>
+        <div className="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-16 w-16" />
       </div>
     );
   }
 
   if (error) {
-    return (
-      <div className="p-4 text-red-500 text-center">
-        {error}
-      </div>
-    );
+    return <div className="p-4 text-red-500 text-center">{error}</div>;
   }
 
   return (
@@ -154,7 +141,9 @@ const PostsList = () => {
 
       {/* Category Filter */}
       <div className="mb-6 flex justify-end">
-        <label htmlFor="category" className="mr-2 text-gray-700">Filter by Category:</label>
+        <label htmlFor="category" className="mr-2 text-gray-700">
+          Filter by Category:
+        </label>
         <select
           id="category"
           value={selectedCategory}
@@ -165,26 +154,40 @@ const PostsList = () => {
           <option value="Trends">Trends</option>
           <option value="Latest Tech">Latest Tech</option>
           <option value="AI Tools">AI Tools</option>
-          {/* Add more categories as needed */}
+          {/* Add more categories if needed */}
         </select>
       </div>
 
       {posts.length === 0 && (
         <p className="text-center text-gray-600">No posts available.</p>
       )}
+
       <div className="space-y-6">
         {posts.map((post) => (
-          <div key={post.id} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+          <div
+            key={post.id}
+            className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
+          >
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="text-2xl font-semibold mb-2">{post.title}</h3>
                 <p className="text-gray-700">{post.description}</p>
-                <p className="text-sm text-gray-500 mt-2">Category: {post.category || 'Uncategorized'}</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Category: {post.category || 'Uncategorized'}
+                </p>
                 {post.imageUrl && (
-                  <img src={post.imageUrl} alt={post.title} className="mt-2 h-40 w-full object-cover rounded-md" />
+                  <img
+                    src={post.imageUrl}
+                    alt={post.title}
+                    className="mt-2 h-40 w-full object-cover rounded-md"
+                  />
                 )}
-                <p className="text-sm text-gray-500">Created By: {post.createdByUsername || 'Unknown'}</p>
-                <p className="text-sm text-gray-500">Created At: {formatDate(post.createdAt)}</p>
+                <p className="text-sm text-gray-500">
+                  Created By: {post.createdByUsername || 'Unknown'}
+                </p>
+                <p className="text-sm text-gray-500">
+                  Created At: {formatDate(post.createdAt)}
+                </p>
               </div>
               {role === 'admin' && (
                 <button
@@ -196,7 +199,7 @@ const PostsList = () => {
               )}
             </div>
 
-            {/* Comments Section */}
+            {/* Comments */}
             <div className="mt-4">
               <h4 className="font-semibold">Comments:</h4>
               {Array.isArray(post.comments) && post.comments.length === 0 ? (
@@ -206,7 +209,10 @@ const PostsList = () => {
                   <ul className="space-y-2 mt-2">
                     {post.comments.map((comment) => (
                       <li key={comment.id} className="border-t pt-2">
-                        <strong className="text-gray-800">{comment.username} ({comment.userRole}):</strong> {comment.text}
+                        <strong className="text-gray-800">
+                          {comment.username} ({comment.userRole}):
+                        </strong>{' '}
+                        {comment.text}
                       </li>
                     ))}
                   </ul>
@@ -214,7 +220,7 @@ const PostsList = () => {
               )}
             </div>
 
-            {/* Add Comment Section */}
+            {/* Add Comment if logged in */}
             {user && (
               <div className="mt-4">
                 <input
@@ -255,16 +261,15 @@ const PostsList = () => {
       {isModalOpen && postToDelete && (
         <ConfirmationModal
           title="Confirm Deletion"
-          message={`Are you sure you want to delete the post titled "${postToDelete.title}"? This action cannot be undone.`}
+          message={`Are you sure you want to delete "${postToDelete.title}"?`}
           onConfirm={handleDeletePost}
           onCancel={() => setIsModalOpen(false)}
         />
       )}
 
-      {/* Display Error if Exists */}
       {error && <div className="p-4 text-red-500 text-center">{error}</div>}
     </div>
   );
-    };
+};
 
-    export default PostsList;
+export default PostsList;

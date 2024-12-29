@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { getComments, addComment } from '../utils/api';
-import DOMPurify from 'dompurify'; // Import DOMPurify
+import DOMPurify from 'dompurify';
 
 const CommentsSection = ({ postId }) => {
   const { user, token } = useContext(AuthContext);
@@ -10,6 +10,7 @@ const CommentsSection = ({ postId }) => {
   const [newComment, setNewComment] = useState('');
   const [error, setError] = useState('');
 
+  // Single call to fetch comments
   const fetchComments = async () => {
     try {
       const data = await getComments(postId);
@@ -22,6 +23,7 @@ const CommentsSection = ({ postId }) => {
 
   useEffect(() => {
     fetchComments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId]);
 
   const handleAddComment = async () => {
@@ -49,13 +51,15 @@ const CommentsSection = ({ postId }) => {
         <ul className="space-y-2">
           {comments.map((comment) => (
             <li key={comment.id} className="border-b border-gray-200 pb-2">
-              <strong>{comment.username} ({comment.userRole}):</strong> {DOMPurify.sanitize(comment.text)}
+              <strong>
+                {comment.username} ({comment.userRole}):
+              </strong>{' '}
+              {DOMPurify.sanitize(comment.text)}
             </li>
           ))}
         </ul>
       )}
 
-      {/* Only show comment box if user is authenticated */}
       {user ? (
         <div className="mt-4">
           <textarea

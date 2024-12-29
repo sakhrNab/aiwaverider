@@ -1,5 +1,6 @@
-// src/components/Carousel.jsx
-
+// CLIENT CODE EXAMPLE
+// File: src/components/Carousel.jsx
+// --------------------------------
 import React, { useState, useEffect } from 'react';
 import Slider from 'react-slick';
 import CardBox from './CardBox';
@@ -7,50 +8,60 @@ import { API_URL } from '../utils/api';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 import '../styles/carousel.css';
-import { Link } from 'react-router-dom'; // Import Link
+import { Link } from 'react-router-dom';
 
-// Define categories outside the component to stabilize the reference
-const categories = ['Trends', 'Latest Tech', 'AI Tools'];
+// If you want to fetch multiple categories dynamically, define them here
+// If you have more categories, just add them to this array
+import { CATEGORIES } from '../constants/categories'
 
 const Carousel = () => {
-  const [carouselData, setCarouselData] = useState([]);
+  const [carouselData, setCarouselData] = useState([]); 
   const [error, setError] = useState('');
 
   useEffect(() => {
+    // Turn array into comma-separated string for the new endpoint
+    const joinedCategories = CATEGORIES.join(',');
+
     const fetchCarouselData = async () => {
       try {
-        const data = await Promise.all(categories.map(async (category) => {
-          const url = `${API_URL}/api/posts?category=${encodeURIComponent(category)}&limit=5`; // Added limit=5
-          const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          });
-          if (!response.ok) {
-            throw new Error(`Failed to fetch posts for category ${category}`);
-          }
-          const posts = await response.json();
-          return {
-            title: category,
-            boxes: posts.posts.map((post) => ({
-              id: post.id, // Ensure each post has a unique ID
-              image: post.imageUrl || '/images/default.jpg',
-              title: post.title,
-              description: post.description,
-            })),
-          };
+        // Hit the single "multi" endpoint
+        const url = `${API_URL}/api/posts/multi?categories=${encodeURIComponent(joinedCategories)}&limit=5`;
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch posts (status ${response.status})`);
+        }
+
+        const json = await response.json();
+        // json.data is shaped like { "Trends": [...], "Latest Tech": [...], "AI Tools": [...] }
+
+        // Convert the returned object into an array of sections for the slider
+        // e.g. [ { title: 'Trends', boxes: [...] }, { title: 'Latest Tech', boxes: [...] }, ... ]
+        const builtSections = Object.entries(json.data).map(([categoryName, postsArray]) => ({
+          title: categoryName,
+          boxes: postsArray.map((post) => ({
+            id: post.id,
+            image: post.imageUrl || '/images/default.jpg',
+            title: post.title,
+            description: post.description,
+          })),
         }));
-        setCarouselData(data);
-      } catch (error) {
-        console.error('Error fetching carousel data:', error);
-        setError(error.message || 'Failed to fetch carousel data.');
+
+        setCarouselData(builtSections);
+      } catch (err) {
+        console.error('Error fetching carousel data:', err);
+        setError(err.message || 'Failed to fetch carousel data.');
       }
     };
 
     fetchCarouselData();
-  }, []); // Empty dependency array since categories is now stable
+  }, []);
 
+  // Slider configs
   const mainSettings = {
     dots: true,
     infinite: true,
@@ -98,6 +109,7 @@ const Carousel = () => {
 
   return (
     <div className="carousel-container">
+      {/* Render one main slide per category */}
       <Slider {...mainSettings}>
         {carouselData.map((section, index) => (
           <div key={index} className="carousel-slide">
@@ -106,7 +118,6 @@ const Carousel = () => {
               <Slider {...boxSettings}>
                 {section.boxes.map((box) => (
                   <div key={box.id}>
-                    {console.log(box.id)}
                     <Link to={`/posts/${box.id}`}>
                       <CardBox {...box} />
                     </Link>
@@ -114,7 +125,9 @@ const Carousel = () => {
                 ))}
               </Slider>
             ) : (
-              <p className="text-center text-gray-500">No posts available in this category.</p>
+              <p className="text-center text-gray-500">
+                No posts available in this category.
+              </p>
             )}
           </div>
         ))}

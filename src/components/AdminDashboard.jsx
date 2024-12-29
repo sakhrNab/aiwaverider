@@ -1,18 +1,36 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
-import { getAllPosts, createPost, deletePost, updatePost } from '../utils/api';
-import ConfirmationModal from './ConfirmationModal'; // Ensure this exists
+// 1) Import our new PostsContext
+import { PostsContext } from '../contexts/PostsContext';
+
+import { createPost, deletePost, updatePost, getPostById } from '../utils/api';
+import ConfirmationModal from './ConfirmationModal';
 import { Link } from 'react-router-dom';
 import DOMPurify from 'dompurify';
-import { CATEGORIES } from '../constants/categories'; // Ensure this exists
+import { CATEGORIES } from '../constants/categories';
 
 const AdminDashboard = () => {
   const { user, token } = useContext(AuthContext);
-  const [posts, setPosts] = useState([]); // Initialize as empty array
-  const [error, setError] = useState('');
+
+  // 2) We’ll read and write posts from PostsContext
+  //    fetchAllPosts(...) is how we initially load them if not already loaded
+  //    setPosts(...) is how we modify the global array after create/update/delete
+  const {
+    posts,
+    loadingPosts,
+    postsError,
+    fetchAllPosts,
+    setPosts,
+  } = useContext(PostsContext);
+
+  // Post to delete modal
   const [postToDelete, setPostToDelete] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // For editing a post
   const [editPostId, setEditPostId] = useState(null);
+
+  // The form data for create or update
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -21,8 +39,12 @@ const AdminDashboard = () => {
     additionalHTML: '',
     graphHTML: '',
   });
-  const [successMessage, setSuccessMessage] = useState('');
 
+  // Local messages
+  const [successMessage, setSuccessMessage] = useState('');
+  const [error, setError] = useState('');
+
+  // 3) Ensure only Admin can see this page
   if (user?.role !== 'admin') {
     return (
       <div className="p-4 text-red-600 font-bold">
@@ -31,25 +53,20 @@ const AdminDashboard = () => {
     );
   }
 
+  // 4) On mount, if we have no posts loaded and not currently fetching, do so
   useEffect(() => {
-    const fetchPosts = async () => {
-      try {
-        // Correctly call getAllPosts with category, limit, startAfter, and token
-        const data = await getAllPosts('All', 50, null, token);
-        console.log('Fetched Posts Data:', data); // Debugging statement
-        setPosts(Array.isArray(data.posts) ? data.posts : []);
-      } catch (err) {
-        setError(err.message || 'Failed to fetch posts.');
-      }
-    };
-    fetchPosts();
-  }, [token]);
+    if (!token) return; // Need token to fetch
+    if (posts.length === 0 && !loadingPosts) {
+      fetchAllPosts('All', 50); // e.g. fetch 50 posts from "All" category
+    }
+  }, [posts, loadingPosts, token, fetchAllPosts]);
 
+  // Handles input fields (title, description, etc.)
   const handleInputChange = (e) => {
     const { name, value, files } = e.target;
     if (name === 'image') {
       const file = files[0];
-      if (file && file.size > 5 * 1024 * 1024) { // 5MB limit
+      if (file && file.size > 5 * 1024 * 1024) {
         setError('Image size should not exceed 5MB.');
         return;
       }
@@ -60,23 +77,15 @@ const AdminDashboard = () => {
     }
   };
 
-  // Handles the HTML output from TipTap
-  const handleEditorChange = (field, htmlString) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: htmlString,
-    }));
-  };
-
-  // ------------------ Create Post ------------------
+  // ------------- CREATE Post -------------
   const handleCreatePost = async (e) => {
     e.preventDefault();
+
     if (!formData.title || !formData.description || !formData.category) {
       setError('Title, Description, and Category are required.');
       return;
     }
 
-    // Sanitize the HTML before sending
     const sanitizedAdditionalHTML = DOMPurify.sanitize(formData.additionalHTML);
     const sanitizedGraphHTML = DOMPurify.sanitize(formData.graphHTML);
 
@@ -86,16 +95,16 @@ const AdminDashboard = () => {
     postData.append('category', formData.category);
     postData.append('additionalHTML', sanitizedAdditionalHTML);
     postData.append('graphHTML', sanitizedGraphHTML);
-
     if (formData.image) {
       postData.append('image', formData.image);
     }
 
     try {
       const response = await createPost(postData, token);
-      console.log('Create Post Response:', response); // Debugging statement
       if (response.post) {
+        // 5) Add the new post to the global array
         setPosts((prev) => [response.post, ...prev]);
+        // Reset
         setFormData({
           title: '',
           description: '',
@@ -105,14 +114,8 @@ const AdminDashboard = () => {
           graphHTML: '',
         });
         setError('');
-        // Set success message
         setSuccessMessage('Post created successfully!');
-
-        // Clear the success message after some seconds
-        setTimeout(() => {
-          setSuccessMessage('');
-        }, 3000);
-
+        setTimeout(() => setSuccessMessage(''), 3000);
       } else {
         setError(response.error || 'Failed to create post.');
       }
@@ -122,23 +125,24 @@ const AdminDashboard = () => {
     }
   };
 
-  // ------------------ Edit Post ------------------
+  // ------------- EDIT Post -------------
   const handleEditPost = (post) => {
     setEditPostId(post.id);
     setFormData({
       title: post.title || '',
       description: post.description || '',
       category: post.category || 'Trends',
-      image: null, // Clear existing image (unless you want to keep it)
+      image: null,
       additionalHTML: post.additionalHTML || '',
       graphHTML: post.graphHTML || '',
     });
     setError('');
   };
 
-  // ------------------ Update Post ------------------
+  // ------------- UPDATE Post -------------
   const handleUpdatePost = async (e) => {
     e.preventDefault();
+
     if (!formData.title || !formData.description || !formData.category) {
       setError('Title, Description, and Category are required.');
       return;
@@ -153,35 +157,23 @@ const AdminDashboard = () => {
     updatedData.append('category', formData.category);
     updatedData.append('additionalHTML', sanitizedAdditionalHTML);
     updatedData.append('graphHTML', sanitizedGraphHTML);
-
     if (formData.image) {
       updatedData.append('image', formData.image);
     }
 
     try {
       const response = await updatePost(editPostId, updatedData, token);
-      console.log('Update Post Response:', response); // Debugging statement
       if (response.message) {
-        // Re-fetch updated post
+        // 6) Optionally re-fetch that single post
+        //    then update the global posts array with the new data
         const refreshed = await getPostById(editPostId);
-        setPost(refreshed);
-        setPosts((prevPosts) =>
-          prevPosts.map((p) =>
-            p.id === editPostId
-              ? {
-                  ...p,
-                  title: formData.title,
-                  description: formData.description,
-                  category: formData.category,
-                  additionalHTML: sanitizedAdditionalHTML,
-                  graphHTML: sanitizedGraphHTML,
-                  imageUrl: formData.image
-                    ? URL.createObjectURL(formData.image)
-                    : p.imageUrl,
-                }
-              : p
-          )
-        );
+        if (refreshed) {
+          setPosts((prevPosts) =>
+            prevPosts.map((p) => (p.id === editPostId ? refreshed : p))
+          );
+        }
+
+        // Reset form
         setEditPostId(null);
         setFormData({
           title: '',
@@ -192,11 +184,8 @@ const AdminDashboard = () => {
           graphHTML: '',
         });
         setError('');
-        // Set success message
         setSuccessMessage('Post updated successfully!');
-        setTimeout(() => {
-          setSuccessMessage('');
-        }, 3000);
+        setTimeout(() => setSuccessMessage(''), 3000);
       } else {
         setError(response.error || 'Failed to update post.');
       }
@@ -206,7 +195,7 @@ const AdminDashboard = () => {
     }
   };
 
-  // ------------------ Delete Post ------------------
+  // ------------- DELETE Post -------------
   const confirmDeletePost = (post) => {
     setPostToDelete(post);
     setIsModalOpen(true);
@@ -216,15 +205,13 @@ const AdminDashboard = () => {
     if (!postToDelete) return;
     try {
       const data = await deletePost(postToDelete.id, token);
-      console.log('Delete Post Response:', data); // Debugging statement
       if (data.success) {
+        // 7) Remove from global posts array
         setPosts((prev) => prev.filter((p) => p.id !== postToDelete.id));
         setIsModalOpen(false);
         setPostToDelete(null);
         setSuccessMessage('Post deleted successfully!');
-        setTimeout(() => {
-          setSuccessMessage('');
-        }, 3000);
+        setTimeout(() => setSuccessMessage(''), 3000);
       } else {
         alert(data.error || 'Failed to delete post.');
       }
@@ -234,7 +221,7 @@ const AdminDashboard = () => {
     }
   };
 
-  // Helper to format ISO date
+  // Helper to format date
   const formatDate = (isoString) => {
     if (!isoString) return 'N/A';
     const date = new Date(isoString);
@@ -244,9 +231,11 @@ const AdminDashboard = () => {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <h1 className="text-3xl font-bold mb-6 text-center">Admin Dashboard</h1>
-      
+
       {successMessage && (
-        <p className="text-green-600 text-center font-semibold mb-4">{successMessage}</p>
+        <p className="text-green-600 text-center font-semibold mb-4">
+          {successMessage}
+        </p>
       )}
 
       {/* Create or Edit Post */}
@@ -326,21 +315,8 @@ const AdminDashboard = () => {
                 />
               </div>
             )}
-            {/* If editing, show existing image */}
-            {editPostId && postToDelete?.imageUrl && !formData.image && (
-              <div className="mt-2">
-                <p className="text-gray-700">Current Image:</p>
-                <img
-                  src={postToDelete.imageUrl}
-                  alt={postToDelete.title}
-                  className="h-40 w-full object-cover rounded-md"
-                />
-              </div>
-            )}
           </div>
 
-
-          {/* Error Message */}
           {error && <p className="text-red-500">{error}</p>}
 
           {/* Submit Button */}
@@ -350,8 +326,6 @@ const AdminDashboard = () => {
           >
             {editPostId ? 'Update Post' : 'Create Post'}
           </button>
-
-          {/* Cancel Edit Button */}
           {editPostId && (
             <button
               type="button"
@@ -367,7 +341,7 @@ const AdminDashboard = () => {
                 });
                 setError('');
               }}
-              className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+              className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 ml-2"
             >
               Cancel
             </button>
@@ -378,7 +352,9 @@ const AdminDashboard = () => {
       {/* Posts List */}
       <div>
         <h2 className="text-2xl font-semibold mb-4">Manage Posts</h2>
-        {posts.length === 0 ? (
+        {loadingPosts ? (
+          <p className="text-gray-600">Loading posts...</p>
+        ) : posts.length === 0 ? (
           <p className="text-gray-600">No posts available.</p>
         ) : (
           <div className="space-y-6">
@@ -414,7 +390,7 @@ const AdminDashboard = () => {
                   </p>
                 </div>
 
-                {/* Delete button (admin only) */}
+                {/* Delete button */}
                 <div className="mt-4 flex space-x-2">
                   <button
                     onClick={() => confirmDeletePost(post)}
