@@ -1,33 +1,27 @@
-// src/components/AdminDashboard.jsx
-// TipTap-based version, removing anything to do with Slate
-
 import React, { useContext, useState, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { getAllPosts, createPost, deletePost, updatePost } from '../utils/api';
-import ConfirmationModal from './ConfirmationModal';
-import { CATEGORIES } from '../constants/categories';
-import DOMPurify from 'dompurify';
-import MyEditor from './TipTapEditor'; // <-- Import your new TipTap editor
+import ConfirmationModal from './ConfirmationModal'; // Ensure this exists
 import { Link } from 'react-router-dom';
+import DOMPurify from 'dompurify';
+import { CATEGORIES } from '../constants/categories'; // Ensure this exists
 
 const AdminDashboard = () => {
   const { user, token } = useContext(AuthContext);
-  const [posts, setPosts] = useState([]);
+  const [posts, setPosts] = useState([]); // Initialize as empty array
+  const [error, setError] = useState('');
+  const [postToDelete, setPostToDelete] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editPostId, setEditPostId] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     category: 'Trends',
     image: null,
-    // We'll store the TipTap editor content as raw HTML strings
-    additionalHTML: '', 
+    additionalHTML: '',
     graphHTML: '',
   });
-
-  const [error, setError] = useState('');
-  const [postToDelete, setPostToDelete] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editPostId, setEditPostId] = useState(null);
-  const [successMessage, setSuccessMessage] = useState(''); // <-- new state
+  const [successMessage, setSuccessMessage] = useState('');
 
   if (user?.role !== 'admin') {
     return (
@@ -40,8 +34,10 @@ const AdminDashboard = () => {
   useEffect(() => {
     const fetchPosts = async () => {
       try {
-        const data = await getAllPosts(token);
-        setPosts(data);
+        // Correctly call getAllPosts with category, limit, startAfter, and token
+        const data = await getAllPosts('All', 50, null, token);
+        console.log('Fetched Posts Data:', data); // Debugging statement
+        setPosts(Array.isArray(data.posts) ? data.posts : []);
       } catch (err) {
         setError(err.message || 'Failed to fetch posts.');
       }
@@ -97,6 +93,7 @@ const AdminDashboard = () => {
 
     try {
       const response = await createPost(postData, token);
+      console.log('Create Post Response:', response); // Debugging statement
       if (response.post) {
         setPosts((prev) => [response.post, ...prev]);
         setFormData({
@@ -163,8 +160,11 @@ const AdminDashboard = () => {
 
     try {
       const response = await updatePost(editPostId, updatedData, token);
+      console.log('Update Post Response:', response); // Debugging statement
       if (response.message) {
-        // Update local state
+        // Re-fetch updated post
+        const refreshed = await getPostById(editPostId);
+        setPost(refreshed);
         setPosts((prevPosts) =>
           prevPosts.map((p) =>
             p.id === editPostId
@@ -182,7 +182,6 @@ const AdminDashboard = () => {
               : p
           )
         );
-        // Reset
         setEditPostId(null);
         setFormData({
           title: '',
@@ -193,6 +192,11 @@ const AdminDashboard = () => {
           graphHTML: '',
         });
         setError('');
+        // Set success message
+        setSuccessMessage('Post updated successfully!');
+        setTimeout(() => {
+          setSuccessMessage('');
+        }, 3000);
       } else {
         setError(response.error || 'Failed to update post.');
       }
@@ -212,10 +216,15 @@ const AdminDashboard = () => {
     if (!postToDelete) return;
     try {
       const data = await deletePost(postToDelete.id, token);
+      console.log('Delete Post Response:', data); // Debugging statement
       if (data.success) {
         setPosts((prev) => prev.filter((p) => p.id !== postToDelete.id));
         setIsModalOpen(false);
         setPostToDelete(null);
+        setSuccessMessage('Post deleted successfully!');
+        setTimeout(() => {
+          setSuccessMessage('');
+        }, 3000);
       } else {
         alert(data.error || 'Failed to delete post.');
       }
@@ -233,11 +242,11 @@ const AdminDashboard = () => {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto">
       <h1 className="text-3xl font-bold mb-6 text-center">Admin Dashboard</h1>
       
       {successMessage && (
-      <p className="text-green-600 text-center font-semibold mb-4">{successMessage}</p>
+        <p className="text-green-600 text-center font-semibold mb-4">{successMessage}</p>
       )}
 
       {/* Create or Edit Post */}
@@ -317,25 +326,19 @@ const AdminDashboard = () => {
                 />
               </div>
             )}
+            {/* If editing, show existing image */}
+            {editPostId && postToDelete?.imageUrl && !formData.image && (
+              <div className="mt-2">
+                <p className="text-gray-700">Current Image:</p>
+                <img
+                  src={postToDelete.imageUrl}
+                  alt={postToDelete.title}
+                  className="h-40 w-full object-cover rounded-md"
+                />
+              </div>
+            )}
           </div>
 
-          {/* Additional HTML - now using TipTap */}
-          <div>
-            <label className="block text-gray-700">Additional HTML (Optional)</label>
-            <MyEditor
-              content={formData.additionalHTML}
-              onChange={(html) => handleEditorChange('additionalHTML', html)}
-            />
-          </div>
-
-          {/* Graph HTML - now using TipTap */}
-          <div>
-            <label className="block text-gray-700">Graph HTML (Optional)</label>
-            <MyEditor
-              content={formData.graphHTML}
-              onChange={(html) => handleEditorChange('graphHTML', html)}
-            />
-          </div>
 
           {/* Error Message */}
           {error && <p className="text-red-500">{error}</p>}
@@ -375,20 +378,24 @@ const AdminDashboard = () => {
       {/* Posts List */}
       <div>
         <h2 className="text-2xl font-semibold mb-4">Manage Posts</h2>
-        {posts.length === 0 && <p className="text-gray-600">No posts available.</p>}
-        <div className="space-y-4">
-          {posts.map((post) => (
-            <div
-              key={post.id}
-              className="p-4 border border-gray-200 rounded-md shadow-sm hover:shadow-md"
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  {/* Link to PostDetail */}
+        {posts.length === 0 ? (
+          <p className="text-gray-600">No posts available.</p>
+        ) : (
+          <div className="space-y-6">
+            {posts.map((post) => (
+              <div
+                key={post.id}
+                className="p-4 border border-gray-200 rounded-md shadow-sm hover:shadow-md flex flex-col"
+              >
+                <div className="flex-1">
                   <Link to={`/posts/${post.id}`}>
-                    <h3 className="text-xl font-bold hover:text-blue-600">{post.title}</h3>
-                    <p className="text-gray-700 mt-2">{post.description}</p>
+                    <h3 className="text-xl font-bold hover:text-blue-600">
+                      {post.title}
+                    </h3>
                   </Link>
+                  <p className="text-gray-700 mt-2 line-clamp-3">
+                    {post.description}
+                  </p>
                   <p className="text-sm text-gray-500 mt-2">
                     Category: {post.category || 'Uncategorized'}
                   </p>
@@ -406,13 +413,9 @@ const AdminDashboard = () => {
                     Created At: {formatDate(post.createdAt)}
                   </p>
                 </div>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => handleEditPost(post)}
-                    className="px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600"
-                  >
-                    Edit
-                  </button>
+
+                {/* Delete button (admin only) */}
+                <div className="mt-4 flex space-x-2">
                   <button
                     onClick={() => confirmDeletePost(post)}
                     className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600"
@@ -421,9 +424,9 @@ const AdminDashboard = () => {
                   </button>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Confirmation Modal */}

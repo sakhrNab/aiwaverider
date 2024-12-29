@@ -14,9 +14,12 @@ dist-ssr
 *.local
 .env
 aiwaverider-privatekey.json
+aiwaverider8-privatekey.json
 fetch_file_contents.py
 file_contents.txt
 deleteFiles.ps1
+classes_found.txt
+fetch_classes.py
 
 # Editor directories and files
 .vscode/*

@@ -1,7 +1,7 @@
 // src/posts/CommentsSection.jsx
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
-import { getComments } from '../utils/api';
+import { getComments, addComment } from '../utils/api';
 import DOMPurify from 'dompurify'; // Import DOMPurify
 
 const CommentsSection = ({ postId }) => {

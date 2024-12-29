@@ -2,7 +2,7 @@
 
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
-import { API_URL, getAllPosts, addComment, deletePost } from '../utils/api';
+import { getAllPosts, addComment, deletePost } from '../utils/api';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 const PostsList = () => {
@@ -14,62 +14,54 @@ const PostsList = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [lastPostCreatedAt, setLastPostCreatedAt] = useState(null);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true); // To determine if more posts are available
 
+  // Fetch posts
   useEffect(() => {
-    const fetchPostsAndComments = async () => {
+    const fetchInitialPosts = async () => {
+      setLoading(true);
+      setError('');
+      setPosts([]);
+      setLastPostCreatedAt(null);
+      setHasMore(true);
       try {
-        let url = `${API_URL}/api/posts`;
-        if (selectedCategory !== 'All') {
-          url += `?category=${encodeURIComponent(selectedCategory)}`;
+        const data = await getAllPosts(selectedCategory, 10, null, token);
+        setPosts(data.posts);
+        setLastPostCreatedAt(data.lastPostCreatedAt);
+        if (data.posts.length < 10) {
+          setHasMore(false);
         }
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          // credentials: 'include',
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to fetch posts.');
-        }
-
-        const postsData = await response.json();
-
-        // Fetch comments for each post
-        const postsWithComments = await Promise.all(
-          postsData.map(async (post) => {
-            const commentsResponse = await fetch(`${API_URL}/api/posts/${post.id}/comments`, {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-            });
-
-            if (!commentsResponse.ok) {
-              console.error(`Failed to fetch comments for post ${post.id}`);
-              return { ...post, comments: [] };
-            }
-
-            const commentsData = await commentsResponse.json();
-            return { ...post, comments: commentsData };
-          })
-        );
-
-        setPosts(postsWithComments);
-        setLoading(false);
       } catch (err) {
-        console.error('Error fetching posts:', err);
-        setError(err.message || 'Failed to load posts. Please try again later.');
+        setError(err.message || 'Failed to fetch posts.');
+      } finally {
         setLoading(false);
       }
     };
-
-    fetchPostsAndComments();
+    fetchInitialPosts();
   }, [token, selectedCategory]);
 
+  // Handle "Load more" action
+  const handleLoadMore = async () => {
+    if (!hasMore) return;
+    setIsFetchingMore(true);
+    try {
+      const data = await getAllPosts(selectedCategory, 10, lastPostCreatedAt, token);
+      setPosts(prevPosts => [...prevPosts, ...data.posts]);
+      setLastPostCreatedAt(data.lastPostCreatedAt);
+      if (data.posts.length < 10) {
+        setHasMore(false);
+      }
+    } catch (err) {
+      console.error('Error fetching more posts:', err);
+      setError(err.message || 'Failed to load more posts.');
+    } finally {
+      setIsFetchingMore(false);
+    }
+  };
+
+  // Handle input changes for comments
   const handleCommentChange = (postId, text) => {
     setCommentTexts({
       ...commentTexts,
@@ -77,6 +69,7 @@ const PostsList = () => {
     });
   };
 
+  // Handle adding a comment
   const handleAddComment = async (postId) => {
     const commentText = commentTexts[postId];
     if (!commentText || commentText.trim() === '') {
@@ -108,6 +101,7 @@ const PostsList = () => {
     }
   };
 
+  // Handle deleting a post
   const confirmDeletePost = (post) => {
     setPostToDelete(post);
     setIsModalOpen(true);
@@ -131,6 +125,7 @@ const PostsList = () => {
     }
   };
 
+  // Format ISO date
   const formatDate = (isoString) => {
     if (!isoString) return 'N/A';
     const date = new Date(isoString);
@@ -241,6 +236,21 @@ const PostsList = () => {
         ))}
       </div>
 
+      {/* Load More Button */}
+      {hasMore && (
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={handleLoadMore}
+            disabled={isFetchingMore}
+            className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors ${
+              isFetchingMore ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {isFetchingMore ? 'Loading...' : 'Load More'}
+          </button>
+        </div>
+      )}
+
       {/* Confirmation Modal */}
       {isModalOpen && postToDelete && (
         <ConfirmationModal
@@ -250,8 +260,11 @@ const PostsList = () => {
           onCancel={() => setIsModalOpen(false)}
         />
       )}
+
+      {/* Display Error if Exists */}
+      {error && <div className="p-4 text-red-500 text-center">{error}</div>}
     </div>
   );
-};
+    };
 
-export default PostsList;
+    export default PostsList;

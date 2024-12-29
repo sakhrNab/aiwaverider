@@ -1,6 +1,7 @@
 // backend/github.js
 
 const { Octokit } = require('@octokit/rest');
+const path = require('path'); // Import the path module
 require('dotenv').config();
 
 const octokit = new Octokit({
@@ -72,4 +73,38 @@ const uploadImageToGitHub = async (filename, content) => {
   }
 };
 
-module.exports = { octokit, owner, repo, branch, imagesDir, uploadImageToGitHub };
+/**
+ * Deletes an image from GitHub.
+ * @param {string} filename - The name of the file to delete.
+ * @param {string} sha - The SHA of the file to delete.
+ * @returns {boolean} - Returns true if deletion is successful.
+ */
+const deleteImageFromGitHub = async (filename, sha) => {
+  try {
+    const filePath = path.join(imagesDir, filename);
+
+    await octokit.repos.deleteFile({
+      owner,
+      repo,
+      path: filePath,
+      message: `Delete image ${filename}`,
+      sha,
+      branch,
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Error deleting image from GitHub:', error);
+    throw new Error('Failed to delete image from GitHub.');
+  }
+};
+
+module.exports = {
+  octokit,
+  owner,
+  repo,
+  branch,
+  imagesDir,
+  uploadImageToGitHub,
+  deleteImageFromGitHub, // Export the delete function
+};

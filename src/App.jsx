@@ -10,9 +10,9 @@ import ErrorBoundary from './components/ErrorBoundary'; // Import ErrorBoundary
 const App = () => (
   <Router>
     <AuthProvider>
-    <ErrorBoundary>
-      <AppContent />
-    </ErrorBoundary>
+      <ErrorBoundary>
+        <AppContent />
+      </ErrorBoundary>
     </AuthProvider>
   </Router>
 );

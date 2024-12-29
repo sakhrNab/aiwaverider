@@ -8,54 +8,88 @@ const admin = require('firebase-admin');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const Joi = require('joi');
-const sanitizeHtml = require('sanitize-html'); // Import sanitize-html for backend sanitization
-const authenticateJWT = require('./middleware/auth');
-const { octokit, owner, repo, branch, imagesDir, uploadImageToGitHub } = require('./utils/github');
-const upload = require('./middleware/upload'); // Adjust the path as necessary
+const sanitizeHtml = require('./utils/sanitize'); // Import sanitize function
+const authenticateJWT = require('./middleware/auth'); // Import auth middleware
+const {
+  octokit,
+  owner,
+  repo,
+  branch,
+  imagesDir,
+  uploadImageToGitHub,
+  deleteImageFromGitHub,
+} = require('./utils/github'); // Import GitHub utils
+const upload = require('./middleware/upload'); // Import upload middleware
 
 const app = express();
 
+// ------------------ Rate Limiting ------------------
 const rateLimit = require('express-rate-limit');
 
-// ------------------ Rate Limiting ------------------
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 1000, // Limit each IP to 1000 requests per windowMs
   message: 'Too many requests, please try again in 15 minutes!',
 });
 
+// Apply rate limiting only in production or development
+const isProduction = process.env.NODE_ENV === 'production';
+const isDevelopment = process.env.NODE_ENV === 'development';
+if (isProduction || isDevelopment) {
+  app.use(limiter);
+}
+
+// ------------------ CORS Configuration ------------------
+const allowedOrigins = isProduction
+  ? (process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim())
+  : ['http://localhost:5173']; // Frontend origin
+
 app.use(cors({
-  origin: 'http://localhost:5173', // Adjust as per your frontend's URL
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
 }));
 
 app.options('*', cors());
 
-// Apply rate limiting only in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(limiter);
-}
-
 // ------------------ Body Parsing ------------------
-// Increase JSON body parser limit to handle large payloads (e.g., image uploads)
 app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ------------------ Initialize Firebase Admin ------------------
-const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+let serviceAccount;
 
-// Resolve the absolute path (ensure it points correctly)
-const resolvedServiceAccountPath = path.resolve(serviceAccountPath);
+if (isProduction) {
+  // In production, use environment variables or Secret Manager
+  // Assuming you have set FIREBASE_SERVICE_ACCOUNT_JSON as a base64 string
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!serviceAccountJson) {
+    console.error('FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
+    process.exit(1);
+  }
+  serviceAccount = JSON.parse(Buffer.from(serviceAccountJson, 'base64').toString('utf-8'));
+} else {
+  // In development, use a local service account JSON file
+  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || 'path/to/local/serviceAccountKey.json';
+  serviceAccount = require(path.resolve(serviceAccountPath));
+}
 
 admin.initializeApp({
-  credential: admin.credential.cert(resolvedServiceAccountPath),
+  credential: admin.credential.cert(serviceAccount),
   // storageBucket: process.env.FIREBASE_STORAGE_BUCKET, // Uncomment if using Firebase Storage
 });
 
 const db = admin.firestore();
 db.settings({ ignoreUndefinedProperties: true }); // Enable ignoring undefined properties
-
-// const bucket = admin.storage().bucket(); // Reference to Firebase Storage bucket if used
 
 // ------------------ Collection References ------------------
 const usersCollection = db.collection('users');
@@ -86,11 +120,6 @@ const signUpSchema = Joi.object({
   phoneNumber: Joi.string().allow('', null),
   password: Joi.string().min(6).required(),
 });
-
-// ------------------ Authentication Middleware ------------------
-
-// authenticateJWT is assumed to be defined in ./middleware/auth
-// It should verify the JWT and attach the user object to req.user
 
 // ------------------ Routes ------------------
 
@@ -269,24 +298,8 @@ app.post('/api/posts', authenticateJWT, upload.single('image'), async (req, res)
     const username = userDoc.exists ? userDoc.data().username : 'Unknown User';
 
     // Sanitize additionalHTML and graphHTML before storing
-    const sanitizedAdditionalHTML = sanitizeHtml(additionalHTML || '', {
-      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'pre', 'code']),
-      allowedAttributes: {
-        ...sanitizeHtml.defaults.allowedAttributes,
-        'img': ['src', 'alt'],
-        'a': ['href', 'name', 'target'],
-      },
-      allowedSchemes: ['data', 'http', 'https'],
-    });
-
-    const sanitizedGraphHTML = sanitizeHtml(graphHTML || '', {
-      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['iframe']),
-      allowedAttributes: {
-        ...sanitizeHtml.defaults.allowedAttributes,
-        'iframe': ['src', 'width', 'height', 'allow', 'allowfullscreen'],
-      },
-      allowedSchemes: ['http', 'https'],
-    });
+    const sanitizedAdditionalHTML = sanitizeHtml(additionalHTML || '');
+    const sanitizedGraphHTML = sanitizeHtml(graphHTML || '');
 
     // Add post to Firestore with additional fields
     const newPostRef = await postsCollection.add({
@@ -318,41 +331,74 @@ app.post('/api/posts', authenticateJWT, upload.single('image'), async (req, res)
 // ------------------ 4) Get All Posts (public) ---------
 app.get('/api/posts', async (req, res) => {
   try {
-    const { category } = req.query;
-    let query = postsCollection.orderBy('createdAt', 'desc');
+    const { category, limit, startAfter } = req.query;
+    const limitNumber = parseInt(limit, 10) || 10; // Default to 10 posts per page
+
+    let query = postsCollection.orderBy('createdAt', 'desc').limit(limitNumber);
 
     if (category && category !== 'All') {
       query = query.where('category', '==', category);
     }
 
+    if (startAfter) {
+      // Parse startAfter as ISO string to Firestore Timestamp
+      const startAfterDate = new Date(startAfter);
+      if (!isNaN(startAfterDate)) {
+        const firestoreTimestamp = admin.firestore.Timestamp.fromDate(startAfterDate);
+        query = query.startAfter(firestoreTimestamp);
+      }
+    }
+
     const snapshot = await query.get();
     const allPosts = [];
 
-    for (const doc of snapshot.docs) {
+    const postIds = snapshot.docs.map(doc => doc.id);
+    let comments = [];
+
+    if (postIds.length > 0) {
+      // Firestore 'in' queries support up to 10 items per query
+      const chunkSize = 10;
+      const chunks = [];
+
+      for (let i = 0; i < postIds.length; i += chunkSize) {
+        chunks.push(postIds.slice(i, i + chunkSize));
+      }
+
+      const commentsPromises = chunks.map(chunk => 
+        commentsCollection.where('postId', 'in', chunk).orderBy('createdAt', 'desc').get()
+      );
+
+      const commentsSnapshots = await Promise.all(commentsPromises);
+      commentsSnapshots.forEach(commentsSnap => {
+        commentsSnap.forEach(commentDoc => {
+          const commentData = commentDoc.data();
+          comments.push({
+            id: commentDoc.id,
+            ...commentData,
+            createdAt: commentData.createdAt
+              ? commentData.createdAt.toDate().toISOString()
+              : null,
+          });
+        });
+      });
+    }
+
+    // Organize comments by postId
+    const commentsByPostId = {};
+    comments.forEach(comment => {
+      if (!commentsByPostId[comment.postId]) {
+        commentsByPostId[comment.postId] = [];
+      }
+      commentsByPostId[comment.postId].push(comment);
+    });
+
+    snapshot.forEach(doc => {
       const data = doc.data();
       const postId = doc.id;
 
       // Ensure additionalHTML and graphHTML are strings
       const additionalHTML = typeof data.additionalHTML === 'string' ? data.additionalHTML : '';
       const graphHTML = typeof data.graphHTML === 'string' ? data.graphHTML : '';
-
-      // Fetch comments for the post
-      const commentsSnapshot = await commentsCollection
-        .where('postId', '==', postId)
-        .orderBy('createdAt', 'desc')
-        .get();
-
-      const comments = [];
-      commentsSnapshot.forEach((commentDoc) => {
-        const commentData = commentDoc.data();
-        comments.push({
-          id: commentDoc.id,
-          ...commentData,
-          createdAt: commentData.createdAt
-            ? commentData.createdAt.toDate().toISOString()
-            : null,
-        });
-      });
 
       allPosts.push({
         id: postId,
@@ -362,14 +408,23 @@ app.get('/api/posts', async (req, res) => {
         createdAt: data.createdAt
           ? data.createdAt.toDate().toISOString()
           : null,
-        comments, // Include comments here
+        comments: commentsByPostId[postId] || [],
       });
+    });
+
+    // Determine if there is a next page
+    let lastPostCreatedAt = null;
+    if (snapshot.docs.length > 0) {
+      lastPostCreatedAt = snapshot.docs[snapshot.docs.length - 1].data().createdAt.toDate().toISOString();
     }
 
-    return res.json(allPosts);
+    return res.json({
+      posts: allPosts,
+      lastPostCreatedAt, // Cursor for next page
+    });
   } catch (err) {
     console.error('Error in GET /api/posts:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+    return res.status(500).json({ error: 'Internal server error.', details: err.message });
   }
 });
 
@@ -506,14 +561,8 @@ app.delete('/api/posts/:postId', authenticateJWT, async (req, res) => {
     // Delete associated image from GitHub if imageUrl and imageSha exist
     if (postData.imageUrl && postData.imageSha) {
       try {
-        await octokit.rest.repos.deleteFile({
-          owner,
-          repo,
-          path: path.join(imagesDir, path.basename(postData.imageUrl)),
-          message: `Delete image for post ${postId}`,
-          sha: postData.imageSha, // Requires imageSha to be stored during upload
-          branch,
-        });
+        const filename = path.basename(postData.imageUrl);
+        await deleteImageFromGitHub(filename, postData.imageSha);
       } catch (error) {
         console.error('Error deleting image from GitHub:', error);
         // Continue even if image deletion fails
@@ -585,14 +634,15 @@ app.put('/api/posts/:postId', authenticateJWT, upload.single('image'), async (re
       return res.status(403).json({ error: 'Only admins can update posts.' });
     }
     const { postId } = req.params;
-    const { title, description, additionalHTML, graphHTML } = req.body;
+    const { title, description, category, additionalHTML, graphHTML } = req.body;
 
     // Handle image if provided
     let imageUrl = null;
     let imageSha = null; // To track the file's SHA for deletion
     if (req.file) {
       try {
-        const uploadResult = await uploadImageToGitHub(req.file.originalname, req.file.buffer);
+        const filename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
+        const uploadResult = await uploadImageToGitHub(filename, req.file.buffer);
         if (!uploadResult || !uploadResult.url || !uploadResult.sha) {
           throw new Error('Image upload failed: Missing URL or SHA.');
         }
@@ -611,30 +661,27 @@ app.put('/api/posts/:postId', authenticateJWT, upload.single('image'), async (re
       return res.status(404).json({ error: 'Post not found.' });
     }
 
-    // Sanitize additionalHTML and graphHTML before storing
-    const sanitizedAdditionalHTML = sanitizeHtml(additionalHTML || '', {
-      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'pre', 'code']),
-      allowedAttributes: {
-        ...sanitizeHtml.defaults.allowedAttributes,
-        'img': ['src', 'alt'],
-        'a': ['href', 'name', 'target'],
-      },
-      allowedSchemes: ['data', 'http', 'https'],
-    });
+    // If new image is uploaded and previous image exists, delete previous image
+    const postData = postDoc.data();
+    if (imageUrl && postData.imageUrl && postData.imageSha) {
+      try {
+        const oldFilename = path.basename(postData.imageUrl);
+        await deleteImageFromGitHub(oldFilename, postData.imageSha);
+      } catch (error) {
+        console.error('Error deleting old image from GitHub:', error);
+        // Continue even if deletion fails
+      }
+    }
 
-    const sanitizedGraphHTML = sanitizeHtml(graphHTML || '', {
-      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['iframe']),
-      allowedAttributes: {
-        ...sanitizeHtml.defaults.allowedAttributes,
-        'iframe': ['src', 'width', 'height', 'allow', 'allowfullscreen'],
-      },
-      allowedSchemes: ['http', 'https'],
-    });
+    // Sanitize additionalHTML and graphHTML before storing
+    const sanitizedAdditionalHTML = sanitizeHtml(additionalHTML || '');
+    const sanitizedGraphHTML = sanitizeHtml(graphHTML || '');
 
     // Update fields
     const updates = {
       title,
       description,
+      category,
       additionalHTML: sanitizedAdditionalHTML,
       graphHTML: sanitizedGraphHTML,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -664,7 +711,7 @@ app.use((err, req, res, next) => {
 });
 
 // ------------------ Start the Server ------------------
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || (isProduction ? 8080 : 4000);
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

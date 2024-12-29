@@ -1,16 +1,19 @@
-// src/AppContent.jsx
+// src\components\AppContent.jsx
+// src/components/AppContent.jsx
 
 import React, { useState } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
-import '../styles/globals.css';  // Tailwind global styles
-import Header from '../components/Header';
-import Body from '../components/Body';
-import Footer from '../components/Footer';
-import SignUp from '../components/SignUp'; // SignUp component
-import SignIn from '../components/SignIn'; // SignIn component
-import AdminDashboard from '../components/AdminDashboard';
-import ProtectedRoute from '../components/ProtectedRoute'; // Import ProtectedRoute
-import PostDetail from '../posts/PostDetail'; // Import PostDetail
+import '../styles/globals.css'; // Tailwind global styles
+import Header from './Header';
+import Body from './Body';
+import Footer from './Footer';
+import SignUp from './SignUp'; // SignUp component
+import SignIn from './SignIn'; // SignIn component
+import AdminDashboard from './AdminDashboard';
+import ProtectedRoute from './ProtectedRoute'; // For admin-protected routes
+import PostDetail from '../posts/PostDetail'; // Our post detail page
+import CreatePost from '../posts/CreatePost'; // CreatePost component
+
 const AppContent = () => {
   const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
   const location = useLocation();
@@ -31,30 +34,38 @@ const AppContent = () => {
       <div className="flex-grow">
         {/* Routes */}
         <Routes>
+          {/* Public Routes */}
           <Route path="/" element={<Body />} />
           <Route path="/sign-in" element={<SignIn />} />
           <Route path="/sign-up" element={<SignUp />} />
+          <Route path="/admin/create-post" element={
+            <ProtectedRoute roles={['admin']}>
+              <CreatePost />
+            </ProtectedRoute>
+          } />
+
           {/* Protected Route: Admin only */}
-          <Route 
-            path="/admin" 
+          <Route
+            path="/admin"
             element={
               <ProtectedRoute roles={['admin']}>
                 <AdminDashboard />
               </ProtectedRoute>
-            } 
+            }
           />
-          <Route 
-            path="/posts/:postId" 
-            element={<PostDetail />} 
-          />
-          {/* Add more routes as needed */}
+
+          {/* Post Detail Page (includes inline editing if admin) */}
+          <Route path="/posts/:postId" element={<PostDetail />} />
+            
+          {/* (Optional) Fallback Route */}
+          <Route path="*" element={<Body />} />
         </Routes>
       </div>
 
       {/* Footer */}
       <Footer />
 
-      {/* SignUp Modal: Only render if we are not on '/sign-up' route */}
+      {/* SignUp Modal: Only render if we're not on '/sign-up' */}
       {location.pathname !== '/sign-up' && (
         <SignUp isOpen={isSignUpModalOpen} onClose={closeSignUpModal} />
       )}
@@ -63,3 +74,4 @@ const AppContent = () => {
 };
 
 export default AppContent;
+
