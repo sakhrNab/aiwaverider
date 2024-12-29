@@ -31,6 +31,17 @@ const AppContent = () => {
           <Route path="/sign-up" element={<SignUp />} />
 
           {/* Protected: Admin only */}
+        {/* Create Post route */}
+        <Route
+            path="/posts/create" // or /admin/create
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <CreatePost />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Admin Dash */}
           <Route
             path="/admin"
             element={
@@ -39,14 +50,7 @@ const AppContent = () => {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/admin/create-post"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <CreatePost />
-              </ProtectedRoute>
-            }
-          />
+
 
           {/* Post Detail */}
           <Route path="/posts/:postId" element={<PostDetail />} />

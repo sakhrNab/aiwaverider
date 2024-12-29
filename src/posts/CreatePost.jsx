@@ -181,15 +181,6 @@ const CreatePost = () => {
           />
         </div>
 
-        {/* Graph HTML - Another RichTextEditor? */}
-        <div>
-          <label className="block text-gray-700">Graph Content (Optional)</label>
-          <RichTextEditor
-            content={formData.graphHTML}
-            onChange={(html) => handleEditorChange('graphHTML', html)}
-          />
-        </div>
-
         {/* Error Message */}
         {error && <p className="text-red-500">{error}</p>}
 

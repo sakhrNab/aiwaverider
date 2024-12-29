@@ -10,7 +10,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 const App = () => (
   <Router>
     <AuthProvider>
-      <PostsProvider> {/* WRAP HERE */}
+      <PostsProvider>
         <ErrorBoundary>
           <AppContent />
         </ErrorBoundary>

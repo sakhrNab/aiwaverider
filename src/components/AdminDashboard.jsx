@@ -1,50 +1,17 @@
+// src/components/AdminDashboard.jsx
+
 import React, { useContext, useState, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
-// 1) Import our new PostsContext
-import { PostsContext } from '../contexts/PostsContext';
-
-import { createPost, deletePost, updatePost, getPostById } from '../utils/api';
-import ConfirmationModal from './ConfirmationModal';
-import { Link } from 'react-router-dom';
-import DOMPurify from 'dompurify';
+import { getAllPosts, deletePost } from '../utils/api'; // Only need these calls
+import ConfirmationModal from './ConfirmationModal'; 
+import { Link, useNavigate } from 'react-router-dom';
 import { CATEGORIES } from '../constants/categories';
 
 const AdminDashboard = () => {
   const { user, token } = useContext(AuthContext);
+  const navigate = useNavigate();
 
-  // 2) We’ll read and write posts from PostsContext
-  //    fetchAllPosts(...) is how we initially load them if not already loaded
-  //    setPosts(...) is how we modify the global array after create/update/delete
-  const {
-    posts,
-    loadingPosts,
-    postsError,
-    fetchAllPosts,
-    setPosts,
-  } = useContext(PostsContext);
-
-  // Post to delete modal
-  const [postToDelete, setPostToDelete] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // For editing a post
-  const [editPostId, setEditPostId] = useState(null);
-
-  // The form data for create or update
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    category: 'Trends',
-    image: null,
-    additionalHTML: '',
-    graphHTML: '',
-  });
-
-  // Local messages
-  const [successMessage, setSuccessMessage] = useState('');
-  const [error, setError] = useState('');
-
-  // 3) Ensure only Admin can see this page
+  // Only admin can access
   if (user?.role !== 'admin') {
     return (
       <div className="p-4 text-red-600 font-bold">
@@ -53,149 +20,57 @@ const AdminDashboard = () => {
     );
   }
 
-  // 4) On mount, if we have no posts loaded and not currently fetching, do so
+  // State for posts
+  const [posts, setPosts] = useState([]);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [postToDelete, setPostToDelete] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // For toggling "Show Posts" vs. "Show Users"
+  const [viewMode, setViewMode] = useState('posts'); // "posts" or "users"
+
+  // For local searching / filtering
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All');
+
+  // -------------- Fetch 10 Posts Initially --------------
   useEffect(() => {
-    if (!token) return; // Need token to fetch
-    if (posts.length === 0 && !loadingPosts) {
-      fetchAllPosts('All', 50); // e.g. fetch 50 posts from "All" category
-    }
-  }, [posts, loadingPosts, token, fetchAllPosts]);
-
-  // Handles input fields (title, description, etc.)
-  const handleInputChange = (e) => {
-    const { name, value, files } = e.target;
-    if (name === 'image') {
-      const file = files[0];
-      if (file && file.size > 5 * 1024 * 1024) {
-        setError('Image size should not exceed 5MB.');
-        return;
+    const fetchPosts = async () => {
+      try {
+        // Only fetch 10 posts, category "All"
+        const data = await getAllPosts('All', 10, null, token);
+        setPosts(Array.isArray(data.posts) ? data.posts : []);
+      } catch (err) {
+        setError(err.message || 'Failed to fetch posts.');
       }
-      setFormData((prev) => ({ ...prev, image: file }));
-      setError('');
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
+    };
+    fetchPosts();
+  }, [token]);
+
+  // -------------- Local Filter + Search --------------
+  // Filter the posts by category and search term
+  const displayedPosts = posts.filter((p) => {
+    // Category filter
+    if (categoryFilter !== 'All' && p.category !== categoryFilter) {
+      return false;
     }
+    // Search by title or ID
+    const lowerSearch = searchTerm.toLowerCase();
+    const inTitle = p.title?.toLowerCase().includes(lowerSearch);
+    const inId = p.id?.toLowerCase().includes(lowerSearch);
+    return inTitle || inId;
+  });
+
+  // -------------- Create New Post (No DB Call) --------------
+  const handleCreateNewPost = () => {
+    // Just navigate to an empty PostDetail or a separate route
+    // E.g. /posts/create or /admin/create-post
+    // We'll do /posts/create if your PostDetail handles "create" mode
+    navigate('/posts/create');
   };
 
-  // ------------- CREATE Post -------------
-  const handleCreatePost = async (e) => {
-    e.preventDefault();
-
-    if (!formData.title || !formData.description || !formData.category) {
-      setError('Title, Description, and Category are required.');
-      return;
-    }
-
-    const sanitizedAdditionalHTML = DOMPurify.sanitize(formData.additionalHTML);
-    const sanitizedGraphHTML = DOMPurify.sanitize(formData.graphHTML);
-
-    const postData = new FormData();
-    postData.append('title', formData.title);
-    postData.append('description', formData.description);
-    postData.append('category', formData.category);
-    postData.append('additionalHTML', sanitizedAdditionalHTML);
-    postData.append('graphHTML', sanitizedGraphHTML);
-    if (formData.image) {
-      postData.append('image', formData.image);
-    }
-
-    try {
-      const response = await createPost(postData, token);
-      if (response.post) {
-        // 5) Add the new post to the global array
-        setPosts((prev) => [response.post, ...prev]);
-        // Reset
-        setFormData({
-          title: '',
-          description: '',
-          category: 'Trends',
-          image: null,
-          additionalHTML: '',
-          graphHTML: '',
-        });
-        setError('');
-        setSuccessMessage('Post created successfully!');
-        setTimeout(() => setSuccessMessage(''), 3000);
-      } else {
-        setError(response.error || 'Failed to create post.');
-      }
-    } catch (err) {
-      console.error('Error creating post:', err);
-      setError('An unexpected error occurred while creating the post.');
-    }
-  };
-
-  // ------------- EDIT Post -------------
-  const handleEditPost = (post) => {
-    setEditPostId(post.id);
-    setFormData({
-      title: post.title || '',
-      description: post.description || '',
-      category: post.category || 'Trends',
-      image: null,
-      additionalHTML: post.additionalHTML || '',
-      graphHTML: post.graphHTML || '',
-    });
-    setError('');
-  };
-
-  // ------------- UPDATE Post -------------
-  const handleUpdatePost = async (e) => {
-    e.preventDefault();
-
-    if (!formData.title || !formData.description || !formData.category) {
-      setError('Title, Description, and Category are required.');
-      return;
-    }
-
-    const sanitizedAdditionalHTML = DOMPurify.sanitize(formData.additionalHTML);
-    const sanitizedGraphHTML = DOMPurify.sanitize(formData.graphHTML);
-
-    const updatedData = new FormData();
-    updatedData.append('title', formData.title);
-    updatedData.append('description', formData.description);
-    updatedData.append('category', formData.category);
-    updatedData.append('additionalHTML', sanitizedAdditionalHTML);
-    updatedData.append('graphHTML', sanitizedGraphHTML);
-    if (formData.image) {
-      updatedData.append('image', formData.image);
-    }
-
-    try {
-      const response = await updatePost(editPostId, updatedData, token);
-      if (response.message) {
-        // 6) Optionally re-fetch that single post
-        //    then update the global posts array with the new data
-        const refreshed = await getPostById(editPostId);
-        if (refreshed) {
-          setPosts((prevPosts) =>
-            prevPosts.map((p) => (p.id === editPostId ? refreshed : p))
-          );
-        }
-
-        // Reset form
-        setEditPostId(null);
-        setFormData({
-          title: '',
-          description: '',
-          category: 'Trends',
-          image: null,
-          additionalHTML: '',
-          graphHTML: '',
-        });
-        setError('');
-        setSuccessMessage('Post updated successfully!');
-        setTimeout(() => setSuccessMessage(''), 3000);
-      } else {
-        setError(response.error || 'Failed to update post.');
-      }
-    } catch (err) {
-      console.error('Error updating post:', err);
-      setError('An unexpected error occurred while updating the post.');
-    }
-  };
-
-  // ------------- DELETE Post -------------
+  // -------------- Delete Post --------------
   const confirmDeletePost = (post) => {
     setPostToDelete(post);
     setIsModalOpen(true);
@@ -206,7 +81,6 @@ const AdminDashboard = () => {
     try {
       const data = await deletePost(postToDelete.id, token);
       if (data.success) {
-        // 7) Remove from global posts array
         setPosts((prev) => prev.filter((p) => p.id !== postToDelete.id));
         setIsModalOpen(false);
         setPostToDelete(null);
@@ -221,11 +95,11 @@ const AdminDashboard = () => {
     }
   };
 
-  // Helper to format date
+  // -------------- Format Date --------------
   const formatDate = (isoString) => {
     if (!isoString) return 'N/A';
-    const date = new Date(isoString);
-    return date.toLocaleString();
+    const d = new Date(isoString);
+    return d.toLocaleString();
   };
 
   return (
@@ -237,54 +111,65 @@ const AdminDashboard = () => {
           {successMessage}
         </p>
       )}
+      {error && <p className="text-red-500 text-center">{error}</p>}
 
-      {/* Create or Edit Post */}
-      <div className="mb-8">
-        <h2 className="text-2xl font-semibold mb-4">
-          {editPostId ? 'Edit Post' : 'Create a New Post'}
-        </h2>
-        <form
-          onSubmit={editPostId ? handleUpdatePost : handleCreatePost}
-          className="space-y-4"
+      {/* Top Buttons to Toggle Between "Users" and "Posts" */}
+      <div className="flex justify-center gap-4 mb-6">
+        <button
+          onClick={() => setViewMode('posts')}
+          className={`px-4 py-2 rounded-md ${
+            viewMode === 'posts' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
+          }`}
         >
-          {/* Title */}
-          <div>
-            <label className="block text-gray-700">Title</label>
+          Show Posts
+        </button>
+        <button
+          onClick={() => setViewMode('users')}
+          className={`px-4 py-2 rounded-md ${
+            viewMode === 'users' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
+          }`}
+        >
+          Show Users
+        </button>
+      </div>
+
+      {/* If "users" is selected, just show a placeholder */}
+      {viewMode === 'users' && (
+        <div className="text-center p-4">
+          <h2 className="text-xl font-semibold mb-2">Users List</h2>
+          <p className="text-gray-600">Placeholder for now. (No DB calls.)</p>
+        </div>
+      )}
+
+      {/* If "posts" is selected, show the posts interface */}
+      {viewMode === 'posts' && (
+        <div>
+          {/* Row with "Create Post" plus local search + category filter */}
+          <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
+            {/* Create button */}
+            <button
+              onClick={handleCreateNewPost}
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+            >
+              Create New Post
+            </button>
+
+            {/* Search Input */}
             <input
               type="text"
-              name="title"
-              value={formData.title}
-              onChange={handleInputChange}
-              className="mt-1 w-full p-2 border border-gray-300 rounded-md"
-              placeholder="Enter post title"
-              required
+              placeholder="Search by title or ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-1 p-2 border border-gray-300 rounded-md"
             />
-          </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-gray-700">Description</label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleInputChange}
-              className="mt-1 w-full p-2 border border-gray-300 rounded-md"
-              placeholder="Enter post description"
-              rows="4"
-              required
-            />
-          </div>
-
-          {/* Category */}
-          <div>
-            <label className="block text-gray-700">Category</label>
+            {/* Category Filter */}
             <select
-              name="category"
-              value={formData.category}
-              onChange={handleInputChange}
-              className="mt-1 w-full p-2 border border-gray-300 rounded-md"
-              required
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="p-2 border border-gray-300 rounded-md"
             >
+              <option value="All">All</option>
               {CATEGORIES.map((cat) => (
                 <option key={cat} value={cat}>
                   {cat}
@@ -293,117 +178,66 @@ const AdminDashboard = () => {
             </select>
           </div>
 
-          {/* Image */}
-          <div>
-            <label className="block text-gray-700">
-              Image {editPostId ? '(Leave blank to keep existing)' : '(Optional)'}
-            </label>
-            <input
-              type="file"
-              name="image"
-              accept="image/*"
-              onChange={handleInputChange}
-              className="mt-1 w-full p-2 border border-gray-300 rounded-md"
-            />
-            {formData.image && (
-              <div className="mt-2">
-                <p className="text-gray-700">Image Preview:</p>
-                <img
-                  src={URL.createObjectURL(formData.image)}
-                  alt="Preview"
-                  className="h-40 w-full object-cover rounded-md"
-                />
-              </div>
-            )}
-          </div>
-
-          {error && <p className="text-red-500">{error}</p>}
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            {editPostId ? 'Update Post' : 'Create Post'}
-          </button>
-          {editPostId && (
-            <button
-              type="button"
-              onClick={() => {
-                setEditPostId(null);
-                setFormData({
-                  title: '',
-                  description: '',
-                  category: 'Trends',
-                  image: null,
-                  additionalHTML: '',
-                  graphHTML: '',
-                });
-                setError('');
-              }}
-              className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 ml-2"
-            >
-              Cancel
-            </button>
-          )}
-        </form>
-      </div>
-
-      {/* Posts List */}
-      <div>
-        <h2 className="text-2xl font-semibold mb-4">Manage Posts</h2>
-        {loadingPosts ? (
-          <p className="text-gray-600">Loading posts...</p>
-        ) : posts.length === 0 ? (
-          <p className="text-gray-600">No posts available.</p>
-        ) : (
-          <div className="space-y-6">
-            {posts.map((post) => (
-              <div
-                key={post.id}
-                className="p-4 border border-gray-200 rounded-md shadow-sm hover:shadow-md flex flex-col"
-              >
-                <div className="flex-1">
-                  <Link to={`/posts/${post.id}`}>
-                    <h3 className="text-xl font-bold hover:text-blue-600">
+          {/* Posts List in 3-column grid */}
+          {displayedPosts.length === 0 ? (
+            <p className="text-gray-600 text-center">
+              No posts match your filter/search.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {displayedPosts.map((post) => (
+                <div
+                  key={post.id}
+                  className="p-4 border border-gray-200 rounded-md shadow-sm hover:shadow-md flex flex-col"
+                >
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-blue-700 mb-1 line-clamp-1">
                       {post.title}
                     </h3>
-                  </Link>
-                  <p className="text-gray-700 mt-2 line-clamp-3">
-                    {post.description}
-                  </p>
-                  <p className="text-sm text-gray-500 mt-2">
-                    Category: {post.category || 'Uncategorized'}
-                  </p>
-                  {post.imageUrl && (
-                    <img
-                      src={post.imageUrl}
-                      alt={post.title}
-                      className="mt-2 h-40 w-full object-cover rounded-md"
-                    />
-                  )}
-                  <p className="text-sm text-gray-500">
-                    Created By: {post.createdByUsername || 'Unknown'}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Created At: {formatDate(post.createdAt)}
-                  </p>
-                </div>
+                    <p className="text-sm text-gray-500 mb-2 line-clamp-2">
+                      {post.description}
+                    </p>
+                    {post.imageUrl && (
+                      <img
+                        src={post.imageUrl}
+                        alt={post.title}
+                        className="mt-2 h-32 w-full object-cover rounded-md"
+                      />
+                    )}
+                    <p className="text-xs text-gray-400 mt-2">
+                      Category: {post.category || 'Uncategorized'}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Created By: {post.createdByUsername || 'Unknown'}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Created At: {formatDate(post.createdAt)}
+                    </p>
+                  </div>
 
-                {/* Delete button */}
-                <div className="mt-4 flex space-x-2">
-                  <button
-                    onClick={() => confirmDeletePost(post)}
-                    className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600"
-                  >
-                    Delete
-                  </button>
+                  {/* Buttons row */}
+                  <div className="mt-4 flex justify-between">
+                    {/* Edit navigates to PostDetail */}
+                    <button
+                      onClick={() => navigate(`/posts/${post.id}`)}
+                      className="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      onClick={() => confirmDeletePost(post)}
+                      className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Confirmation Modal */}
       {isModalOpen && postToDelete && (
