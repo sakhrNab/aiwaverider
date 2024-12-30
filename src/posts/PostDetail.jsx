@@ -6,6 +6,7 @@ import { AuthContext } from '../contexts/AuthContext';
 import { getPostById, updatePost } from '../utils/api';
 import CommentsSection from './CommentsSection';
 import DOMPurify from 'dompurify';
+import { PostsContext } from '../contexts/PostsContext';
 
 // TipTap + EditorProvider
 import { EditorProvider } from '@tiptap/react';
@@ -116,6 +117,7 @@ const PostDetail = () => {
   const navigate = useNavigate();
   const { user, token } = useContext(AuthContext);
   const isAdmin = user?.role === 'admin';
+  const { getPostById, updatePostInCache, getComments } = useContext(PostsContext);
 
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -128,33 +130,21 @@ const PostDetail = () => {
 
   // Fetch the post by ID
   useEffect(() => {
-    const fetchPost = async () => {
-      setLoading(true);
+    const loadPost = async () => {
       try {
-        const data = await getPostById(postId);
-        if (!data) {
-          setError('Post not found.');
-        } else {
-          setPost(data);
-          // We'll keep a local copy of the additionalHTML for editing
-          setAdditionalHTML(data.additionalHTML || '');
-        }
+        const post = await getPostById(postId);
+        setPost(post);
+        setAdditionalHTML(post.additionalHTML || '');
       } catch (err) {
-        console.error(err);
-        setError(err.message || 'Failed to fetch post.');
+        setError(err.message);
       } finally {
         setLoading(false);
       }
     };
-
     if (postId !== 'create') {
-      fetchPost();
-    } else {
-      // If your route has 'create', you might want to navigate away or handle differently
-      setError('Invalid post ID.'); 
-      setLoading(false);
+      loadPost();
     }
-  }, [postId]);
+  }, [postId, getPostById]);
 
   // Called when saving admin edits to additionalHTML
   const handleSave = async (e) => {
@@ -181,8 +171,9 @@ const PostDetail = () => {
     try {
       const response = await updatePost(postId, formData, token);
       if (response.message) {
-        // Re-fetch to see the updated post
-        const refreshed = await getPostById(postId);
+        const refreshed = await getPostById(postId, true); // force refresh
+        updatePostInCache(refreshed); // Update cache
+        await getComments(postId, true); // Force refresh comments
         setPost(refreshed);
         setAdditionalHTML(refreshed.additionalHTML || '');
         setEditMode(false);

@@ -32,7 +32,7 @@ const Header = ({ openSignUpModal }) => {
   };
 
   // Get user and signOutUser from context
-  const { user, signOutUser, token } = useContext(AuthContext); // Include token if needed
+  const { user, signOutUser } = useContext(AuthContext);
   const role = user?.role;
   return (
     <header className="bg-gray-800 text-white px-4 py-3 shadow-lg">
@@ -101,7 +101,7 @@ const Header = ({ openSignUpModal }) => {
               )}
               <button
                 onClick={() => {
-                  signOutUser(); // Updated from signOutUser to signOut
+                  signOutUser();
                   navigate('/');
                 }}
                 className="px-3 py-1.5 text-center bg-red-600 hover:bg-red-700 rounded-md transition-colors duration-200 text-sm sm:text-base font-medium"

@@ -1,47 +1,34 @@
 // src/posts/PostsList.jsx
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
-import { getAllPosts, addComment, deletePost } from '../utils/api';
+import { PostsContext } from '../contexts/PostsContext';
+import { addComment, deletePost } from '../utils/api';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 const PostsList = () => {
+  const { posts, fetchAllPosts, loadingPosts, errorPosts } = useContext(PostsContext);
   const { user, role, token } = useContext(AuthContext);
-  const [posts, setPosts] = useState([]);
+  
+  // Add error state
+  const [error, setError] = useState('');
   const [commentTexts, setCommentTexts] = useState({});
   const [postToDelete, setPostToDelete] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [lastPostCreatedAt, setLastPostCreatedAt] = useState(null);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
 
-  // Fetch posts once per selectedCategory
   useEffect(() => {
-    const fetchInitialPosts = async () => {
-      setLoading(true);
-      setError('');
-      setPosts([]);
-      setLastPostCreatedAt(null);
-      setHasMore(true);
-
+    const loadPosts = async () => {
       try {
-        // Single call
-        const data = await getAllPosts(selectedCategory, 10, null, token);
-        setPosts(data.posts);
-        setLastPostCreatedAt(data.lastPostCreatedAt);
-        if (data.posts.length < 10) {
-          setHasMore(false);
-        }
+        await fetchAllPosts(selectedCategory, 10);
       } catch (err) {
-        setError(err.message || 'Failed to fetch posts.');
-      } finally {
-        setLoading(false);
+        setError(err.message);
       }
     };
-    fetchInitialPosts();
-  }, [token, selectedCategory]);
+    loadPosts();
+  }, [selectedCategory, fetchAllPosts]);
 
   // Load more posts
   const handleLoadMore = async () => {
@@ -123,7 +110,8 @@ const PostsList = () => {
     return new Date(isoString).toLocaleString();
   };
 
-  if (loading) {
+  // Use loadingPosts instead of local loading state
+  if (loadingPosts) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-16 w-16" />
@@ -131,8 +119,9 @@ const PostsList = () => {
     );
   }
 
-  if (error) {
-    return <div className="p-4 text-red-500 text-center">{error}</div>;
+  // Use either local error or context error
+  if (error || errorPosts) {
+    return <div className="p-4 text-red-500 text-center">{error || errorPosts}</div>;
   }
 
   return (

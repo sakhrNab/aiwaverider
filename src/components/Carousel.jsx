@@ -1,7 +1,7 @@
 // CLIENT CODE EXAMPLE
 // File: src/components/Carousel.jsx
 // --------------------------------
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import Slider from 'react-slick';
 import CardBox from './CardBox';
 import { API_URL } from '../utils/api';
@@ -9,57 +9,50 @@ import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 import '../styles/carousel.css';
 import { Link } from 'react-router-dom';
+import { PostsContext } from '../contexts/PostsContext';
 
 // If you want to fetch multiple categories dynamically, define them here
 // If you have more categories, just add them to this array
 import { CATEGORIES } from '../constants/categories'
 
 const Carousel = () => {
-  const [carouselData, setCarouselData] = useState([]); 
+  const { carouselData, fetchCarouselData, loadingPosts } = useContext(PostsContext);
   const [error, setError] = useState('');
+  const [sections, setSections] = useState([]);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    // Turn array into comma-separated string for the new endpoint
-    const joinedCategories = CATEGORIES.join(',');
+    const loadCarouselData = async () => {
+      // Skip if we already loaded
+      if (isLoaded && Object.keys(carouselData).length > 0) {
+        console.log('Using cached carousel data');
+        return;
+      }
 
-    const fetchCarouselData = async () => {
       try {
-        // Hit the single "multi" endpoint
-        const url = `${API_URL}/api/posts/multi?categories=${encodeURIComponent(joinedCategories)}&limit=5`;
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch posts (status ${response.status})`);
-        }
-
-        const json = await response.json();
-        // json.data is shaped like { "Trends": [...], "Latest Tech": [...], "AI Tools": [...] }
-
-        // Convert the returned object into an array of sections for the slider
-        // e.g. [ { title: 'Trends', boxes: [...] }, { title: 'Latest Tech', boxes: [...] }, ... ]
-        const builtSections = Object.entries(json.data).map(([categoryName, postsArray]) => ({
+        console.log('Fetching carousel data');
+        const data = await fetchCarouselData(CATEGORIES);
+        
+        const builtSections = Object.entries(data).map(([categoryName, postsArray]) => ({
           title: categoryName,
-          boxes: postsArray.map((post) => ({
+          boxes: postsArray.map(post => ({
             id: post.id,
             image: post.imageUrl || '/images/default.jpg',
             title: post.title,
             description: post.description,
           })),
         }));
-
-        setCarouselData(builtSections);
+        
+        setSections(builtSections);
+        setIsLoaded(true);
       } catch (err) {
-        console.error('Error fetching carousel data:', err);
-        setError(err.message || 'Failed to fetch carousel data.');
+        console.error('Error loading carousel data:', err);
+        setError(err.message || 'Failed to load carousel data');
       }
     };
 
-    fetchCarouselData();
-  }, []);
+    loadCarouselData();
+  }, [carouselData, fetchCarouselData, isLoaded]);
 
   // Slider configs
   const mainSettings = {
@@ -99,6 +92,14 @@ const Carousel = () => {
     ],
   };
 
+  if (loadingPosts) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <div className="loader">Loading...</div>
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="p-4 text-red-500 text-center">
@@ -111,7 +112,7 @@ const Carousel = () => {
     <div className="carousel-container">
       {/* Render one main slide per category */}
       <Slider {...mainSettings}>
-        {carouselData.map((section, index) => (
+        {sections.map((section, index) => (
           <div key={index} className="carousel-slide">
             <h2 className="text-2xl font-bold mb-6 text-center">{section.title}</h2>
             {section.boxes.length > 0 ? (

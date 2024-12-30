@@ -3,25 +3,23 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { getAllPosts, deletePost } from '../utils/api'; // Only need these calls
-import ConfirmationModal from './ConfirmationModal'; 
+import ConfirmationModal from './ConfirmationModal';
 import { Link, useNavigate } from 'react-router-dom';
 import { CATEGORIES } from '../constants/categories';
+import { PostsContext } from '../contexts/PostsContext';
 
 const AdminDashboard = () => {
+  // 1. Declare all Hooks at the top, in the same order
   const { user, token } = useContext(AuthContext);
+  const {
+    posts,
+    fetchAllPosts,
+    loadingPosts,
+    errorPosts,
+    removePostFromCache,
+  } = useContext(PostsContext);
   const navigate = useNavigate();
 
-  // Only admin can access
-  if (user?.role !== 'admin') {
-    return (
-      <div className="p-4 text-red-600 font-bold">
-        Unauthorized – Only Admins Can Access This Page
-      </div>
-    );
-  }
-
-  // State for posts
-  const [posts, setPosts] = useState([]);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [postToDelete, setPostToDelete] = useState(null);
@@ -34,22 +32,29 @@ const AdminDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
 
-  // -------------- Fetch 10 Posts Initially --------------
+  // 2. useEffect Hooks after all Hook declarations
   useEffect(() => {
-    const fetchPosts = async () => {
+    const loadPosts = async () => {
       try {
-        // Only fetch 10 posts, category "All"
-        const data = await getAllPosts('All', 10, null, token);
-        setPosts(Array.isArray(data.posts) ? data.posts : []);
+        await fetchAllPosts('All', 10);
       } catch (err) {
-        setError(err.message || 'Failed to fetch posts.');
+        setError(err.message);
       }
     };
-    fetchPosts();
-  }, [token]);
+    loadPosts();
+  }, [fetchAllPosts]);
 
-  // -------------- Local Filter + Search --------------
-  // Filter the posts by category and search term
+  // 3. Conditional Rendering after Hooks
+  // Only admin can access
+  if (user?.role !== 'admin') {
+    return (
+      <div className="p-4 text-red-600 font-bold">
+        Unauthorized – Only Admins Can Access This Page
+      </div>
+    );
+  }
+
+  // 4. Filter the posts by category and search term
   const displayedPosts = posts.filter((p) => {
     // Category filter
     if (categoryFilter !== 'All' && p.category !== categoryFilter) {
@@ -81,7 +86,7 @@ const AdminDashboard = () => {
     try {
       const data = await deletePost(postToDelete.id, token);
       if (data.success) {
-        setPosts((prev) => prev.filter((p) => p.id !== postToDelete.id));
+        removePostFromCache(postToDelete.id);
         setIsModalOpen(false);
         setPostToDelete(null);
         setSuccessMessage('Post deleted successfully!');
@@ -118,7 +123,9 @@ const AdminDashboard = () => {
         <button
           onClick={() => setViewMode('posts')}
           className={`px-4 py-2 rounded-md ${
-            viewMode === 'posts' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
+            viewMode === 'posts'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-300 text-gray-700'
           }`}
         >
           Show Posts
@@ -126,7 +133,9 @@ const AdminDashboard = () => {
         <button
           onClick={() => setViewMode('users')}
           className={`px-4 py-2 rounded-md ${
-            viewMode === 'users' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
+            viewMode === 'users'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-300 text-gray-700'
           }`}
         >
           Show Users

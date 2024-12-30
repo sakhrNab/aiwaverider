@@ -22,6 +22,7 @@ const CreatePost = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const { token } = useContext(AuthContext);
   const navigate = useNavigate();
+  const { addPostToCache } = useContext(PostsContext);
 
   const handleInputChange = (e) => {
     const { name, value, files } = e.target;
@@ -72,6 +73,7 @@ const CreatePost = () => {
       const response = await createPost(postData, token);
       console.log('Create Post Response:', response);
       if (response.post) {
+        addPostToCache(response.post);
         setSuccessMessage('Post created successfully!');
         setFormData({
           title: '',
