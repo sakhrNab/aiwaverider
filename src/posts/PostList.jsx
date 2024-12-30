@@ -2,7 +2,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { PostsContext } from '../contexts/PostsContext';
-import { addComment, deletePost } from '../utils/api';
+import { addComment, deletePost, getAllPosts } from '../utils/api';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 const PostsList = () => {

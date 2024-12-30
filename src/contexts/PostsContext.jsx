@@ -14,6 +14,7 @@ import {
   API_URL,
 } from '../utils/api';
 import { AuthContext } from './AuthContext';
+import { fetchWithRetry } from '../utils/apiUtils.jsx';
 
 export const PostsContext = createContext();
 
@@ -144,8 +145,8 @@ export const PostsProvider = ({ children }) => {
       // 4. Fetch new data
       try {
         setLoadingComments((prev) => ({ ...prev, [postId]: true }));
-
-        const response = await fetch(
+        
+        const response = await fetchWithRetry(
           `${API_URL}/api/posts/${postId}/comments`,
           {
             headers: {
@@ -154,8 +155,6 @@ export const PostsProvider = ({ children }) => {
             },
           }
         );
-
-        if (!response.ok) throw new Error('Failed to fetch comments');
 
         const data = await response.json();
         const newComments = data.comments || [];
@@ -222,7 +221,8 @@ export const PostsProvider = ({ children }) => {
       try {
         setLoadingPosts(true);
         const joinedCategories = categories.join(',');
-        const response = await fetch(
+        
+        const response = await fetchWithRetry(
           `${API_URL}/api/posts/multi?categories=${encodeURIComponent(
             joinedCategories
           )}&limit=5`,
@@ -234,10 +234,6 @@ export const PostsProvider = ({ children }) => {
             },
           }
         );
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch posts (status ${response.status})`);
-        }
 
         const json = await response.json();
         if (!json.data) {
