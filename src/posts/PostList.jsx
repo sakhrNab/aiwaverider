@@ -6,7 +6,7 @@ import { addComment, deletePost, getAllPosts } from '../utils/api';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 const PostsList = () => {
-  const { posts, fetchAllPosts, loadingPosts, errorPosts } = useContext(PostsContext);
+  const { posts, setPosts, fetchAllPosts, loadingPosts, errorPosts } = useContext(PostsContext);
   const { user, role, token } = useContext(AuthContext);
   
   // Add error state
