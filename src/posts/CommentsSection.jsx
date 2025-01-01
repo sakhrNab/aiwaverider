@@ -1,28 +1,60 @@
 // src/posts/CommentsSection.jsx
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
-import { getComments } from '../utils/api';
-import DOMPurify from 'dompurify'; // Import DOMPurify
+import { PostsContext } from '../contexts/PostsContext';
+import { addComment } from '../utils/api';
+import DOMPurify from 'dompurify';
 
 const CommentsSection = ({ postId }) => {
   const { user, token } = useContext(AuthContext);
-  const [comments, setComments] = useState([]);
+  const { getComments, addCommentToCache, commentsCache } = useContext(PostsContext);
+  const [comments, setComments] = useState(() => commentsCache[postId] || []);
   const [newComment, setNewComment] = useState('');
   const [error, setError] = useState('');
-
-  const fetchComments = async () => {
-    try {
-      const data = await getComments(postId);
-      setComments(data);
-    } catch (err) {
-      console.error(err);
-      setError(err.message);
-    }
-  };
+  const [isLoading, setIsLoading] = useState(!commentsCache[postId]);
 
   useEffect(() => {
-    fetchComments();
-  }, [postId]);
+    let mounted = true;
+    
+    const loadComments = async () => {
+      // Skip if we already have cached comments
+      if (commentsCache[postId]) {
+        console.log('Using cached comments');
+        setComments(commentsCache[postId]);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        console.log('Fetching comments');
+        const data = await getComments(postId);
+        if (mounted && data) {
+          setComments(data);
+        }
+      } catch (err) {
+        if (mounted) {
+          setError(err.message);
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadComments();
+
+    return () => {
+      mounted = false;
+    };
+  }, [postId, commentsCache]);
+
+  // Update local comments when cache changes
+  useEffect(() => {
+    if (commentsCache[postId]) {
+      setComments(commentsCache[postId]);
+    }
+  }, [commentsCache, postId]);
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
@@ -43,19 +75,23 @@ const CommentsSection = ({ postId }) => {
   return (
     <div className="mt-6">
       <h2 className="text-xl font-semibold mb-2">Comments</h2>
-      {comments.length === 0 ? (
+      {isLoading ? (
+        <p className="text-gray-600">Loading comments...</p>
+      ) : comments.length === 0 ? (
         <p className="text-gray-600">No comments yet. Be the first to comment!</p>
       ) : (
         <ul className="space-y-2">
           {comments.map((comment) => (
             <li key={comment.id} className="border-b border-gray-200 pb-2">
-              <strong>{comment.username} ({comment.userRole}):</strong> {DOMPurify.sanitize(comment.text)}
+              <strong>
+                {comment.username} ({comment.userRole}):
+              </strong>{' '}
+              {DOMPurify.sanitize(comment.text)}
             </li>
           ))}
         </ul>
       )}
 
-      {/* Only show comment box if user is authenticated */}
       {user ? (
         <div className="mt-4">
           <textarea

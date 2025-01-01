@@ -1,92 +1,68 @@
-// src/posts/PostList.jsx
-
+// src/posts/PostsList.jsx
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
-import { API_URL, getAllPosts, addComment, deletePost } from '../utils/api';
+import { PostsContext } from '../contexts/PostsContext';
+import { addComment, deletePost, getAllPosts } from '../utils/api';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 const PostsList = () => {
+  const { posts, setPosts, fetchAllPosts, loadingPosts, errorPosts } = useContext(PostsContext);
   const { user, role, token } = useContext(AuthContext);
-  const [posts, setPosts] = useState([]);
+  
+  // Add error state
+  const [error, setError] = useState('');
   const [commentTexts, setCommentTexts] = useState({});
   const [postToDelete, setPostToDelete] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [lastPostCreatedAt, setLastPostCreatedAt] = useState(null);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => {
-    const fetchPostsAndComments = async () => {
+    const loadPosts = async () => {
       try {
-        let url = `${API_URL}/api/posts`;
-        if (selectedCategory !== 'All') {
-          url += `?category=${encodeURIComponent(selectedCategory)}`;
-        }
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          // credentials: 'include',
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to fetch posts.');
-        }
-
-        const postsData = await response.json();
-
-        // Fetch comments for each post
-        const postsWithComments = await Promise.all(
-          postsData.map(async (post) => {
-            const commentsResponse = await fetch(`${API_URL}/api/posts/${post.id}/comments`, {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-            });
-
-            if (!commentsResponse.ok) {
-              console.error(`Failed to fetch comments for post ${post.id}`);
-              return { ...post, comments: [] };
-            }
-
-            const commentsData = await commentsResponse.json();
-            return { ...post, comments: commentsData };
-          })
-        );
-
-        setPosts(postsWithComments);
-        setLoading(false);
+        await fetchAllPosts(selectedCategory, 10);
       } catch (err) {
-        console.error('Error fetching posts:', err);
-        setError(err.message || 'Failed to load posts. Please try again later.');
-        setLoading(false);
+        setError(err.message);
       }
     };
+    loadPosts();
+  }, [selectedCategory, fetchAllPosts]);
 
-    fetchPostsAndComments();
-  }, [token, selectedCategory]);
-
-  const handleCommentChange = (postId, text) => {
-    setCommentTexts({
-      ...commentTexts,
-      [postId]: text,
-    });
+  // Load more posts
+  const handleLoadMore = async () => {
+    if (!hasMore) return;
+    setIsFetchingMore(true);
+    try {
+      const data = await getAllPosts(selectedCategory, 10, lastPostCreatedAt, token);
+      setPosts((prev) => [...prev, ...data.posts]);
+      setLastPostCreatedAt(data.lastPostCreatedAt);
+      if (data.posts.length < 10) {
+        setHasMore(false);
+      }
+    } catch (err) {
+      console.error('Error fetching more posts:', err);
+      setError(err.message || 'Failed to load more posts.');
+    } finally {
+      setIsFetchingMore(false);
+    }
   };
 
+  // Handle comment input
+  const handleCommentChange = (postId, text) => {
+    setCommentTexts((prev) => ({ ...prev, [postId]: text }));
+  };
+
+  // Add comment
   const handleAddComment = async (postId) => {
     const commentText = commentTexts[postId];
     if (!commentText || commentText.trim() === '') {
       alert('Comment cannot be empty.');
       return;
     }
-
     try {
-      const commentData = { commentText: commentText.trim() };
-      const data = await addComment(postId, commentData, token);
+      const data = await addComment(postId, { commentText: commentText.trim() }, token);
       if (data.comment) {
         setPosts((prevPosts) =>
           prevPosts.map((post) =>
@@ -95,10 +71,7 @@ const PostsList = () => {
               : post
           )
         );
-        setCommentTexts({
-          ...commentTexts,
-          [postId]: '',
-        });
+        setCommentTexts((prev) => ({ ...prev, [postId]: '' }));
       } else {
         alert(data.error || 'Failed to add comment.');
       }
@@ -108,6 +81,7 @@ const PostsList = () => {
     }
   };
 
+  // Delete post
   const confirmDeletePost = (post) => {
     setPostToDelete(post);
     setIsModalOpen(true);
@@ -115,11 +89,10 @@ const PostsList = () => {
 
   const handleDeletePost = async () => {
     if (!postToDelete) return;
-
     try {
       const data = await deletePost(postToDelete.id, token);
       if (data.success) {
-        setPosts(posts.filter((post) => post.id !== postToDelete.id));
+        setPosts((prev) => prev.filter((p) => p.id !== postToDelete.id));
         setIsModalOpen(false);
         setPostToDelete(null);
       } else {
@@ -131,26 +104,24 @@ const PostsList = () => {
     }
   };
 
+  // Format date
   const formatDate = (isoString) => {
     if (!isoString) return 'N/A';
-    const date = new Date(isoString);
-    return date.toLocaleString();
+    return new Date(isoString).toLocaleString();
   };
 
-  if (loading) {
+  // Use loadingPosts instead of local loading state
+  if (loadingPosts) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-16 w-16"></div>
+        <div className="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-16 w-16" />
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <div className="p-4 text-red-500 text-center">
-        {error}
-      </div>
-    );
+  // Use either local error or context error
+  if (error || errorPosts) {
+    return <div className="p-4 text-red-500 text-center">{error || errorPosts}</div>;
   }
 
   return (
@@ -159,7 +130,9 @@ const PostsList = () => {
 
       {/* Category Filter */}
       <div className="mb-6 flex justify-end">
-        <label htmlFor="category" className="mr-2 text-gray-700">Filter by Category:</label>
+        <label htmlFor="category" className="mr-2 text-gray-700">
+          Filter by Category:
+        </label>
         <select
           id="category"
           value={selectedCategory}
@@ -170,26 +143,40 @@ const PostsList = () => {
           <option value="Trends">Trends</option>
           <option value="Latest Tech">Latest Tech</option>
           <option value="AI Tools">AI Tools</option>
-          {/* Add more categories as needed */}
+          {/* Add more categories if needed */}
         </select>
       </div>
 
       {posts.length === 0 && (
         <p className="text-center text-gray-600">No posts available.</p>
       )}
+
       <div className="space-y-6">
         {posts.map((post) => (
-          <div key={post.id} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+          <div
+            key={post.id}
+            className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
+          >
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="text-2xl font-semibold mb-2">{post.title}</h3>
                 <p className="text-gray-700">{post.description}</p>
-                <p className="text-sm text-gray-500 mt-2">Category: {post.category || 'Uncategorized'}</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Category: {post.category || 'Uncategorized'}
+                </p>
                 {post.imageUrl && (
-                  <img src={post.imageUrl} alt={post.title} className="mt-2 h-40 w-full object-cover rounded-md" />
+                  <img
+                    src={post.imageUrl}
+                    alt={post.title}
+                    className="mt-2 h-40 w-full object-cover rounded-md"
+                  />
                 )}
-                <p className="text-sm text-gray-500">Created By: {post.createdByUsername || 'Unknown'}</p>
-                <p className="text-sm text-gray-500">Created At: {formatDate(post.createdAt)}</p>
+                <p className="text-sm text-gray-500">
+                  Created By: {post.createdByUsername || 'Unknown'}
+                </p>
+                <p className="text-sm text-gray-500">
+                  Created At: {formatDate(post.createdAt)}
+                </p>
               </div>
               {role === 'admin' && (
                 <button
@@ -201,7 +188,7 @@ const PostsList = () => {
               )}
             </div>
 
-            {/* Comments Section */}
+            {/* Comments */}
             <div className="mt-4">
               <h4 className="font-semibold">Comments:</h4>
               {Array.isArray(post.comments) && post.comments.length === 0 ? (
@@ -211,7 +198,10 @@ const PostsList = () => {
                   <ul className="space-y-2 mt-2">
                     {post.comments.map((comment) => (
                       <li key={comment.id} className="border-t pt-2">
-                        <strong className="text-gray-800">{comment.username} ({comment.userRole}):</strong> {comment.text}
+                        <strong className="text-gray-800">
+                          {comment.username} ({comment.userRole}):
+                        </strong>{' '}
+                        {comment.text}
                       </li>
                     ))}
                   </ul>
@@ -219,7 +209,7 @@ const PostsList = () => {
               )}
             </div>
 
-            {/* Add Comment Section */}
+            {/* Add Comment if logged in */}
             {user && (
               <div className="mt-4">
                 <input
@@ -241,15 +231,32 @@ const PostsList = () => {
         ))}
       </div>
 
+      {/* Load More Button */}
+      {hasMore && (
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={handleLoadMore}
+            disabled={isFetchingMore}
+            className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors ${
+              isFetchingMore ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {isFetchingMore ? 'Loading...' : 'Load More'}
+          </button>
+        </div>
+      )}
+
       {/* Confirmation Modal */}
       {isModalOpen && postToDelete && (
         <ConfirmationModal
           title="Confirm Deletion"
-          message={`Are you sure you want to delete the post titled "${postToDelete.title}"? This action cannot be undone.`}
+          message={`Are you sure you want to delete "${postToDelete.title}"?`}
           onConfirm={handleDeletePost}
           onCancel={() => setIsModalOpen(false)}
         />
       )}
+
+      {error && <div className="p-4 text-red-500 text-center">{error}</div>}
     </div>
   );
 };

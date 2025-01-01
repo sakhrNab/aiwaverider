@@ -1,0 +1,424 @@
+/* src/styles/TipTapEditor.module.scss */
+
+/* Container for the entire editor */
+.tiptapEditor {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 10px;
+  background-color: #fff; /* Ensures a white background for the editor */
+  position: relative; /* For positioning bubble menu */
+  
+  /* Editor Content Area */
+  .editorContent {
+    min-height: 200px;
+    /* Additional styles for the editor content can be added here */
+    font-size: 1rem;
+    line-height: 1.6;
+    
+    /* Example: Styling paragraphs */
+    p {
+      margin-bottom: 1em;
+    }
+    
+    /* Example: Styling headings */
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.5em;
+      margin-bottom: 0.5em;
+    }
+  }
+}
+
+/* Bubble Menu Styles */
+.bubbleMenu {
+  display: flex;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: absolute; /* Positioned relative to .tiptapEditor */
+  top: -50px; /* Adjust as needed */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10; /* Ensure it appears above other elements */
+}
+
+/* Button Styles within Bubble Menu */
+.bubbleMenuButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s, transform 0.2s;
+
+  &:hover {
+    background-color: #f0f0f0;
+    transform: scale(1.05);
+  }
+
+  &.isActive {
+    background-color: #e0e0e0;
+    transform: scale(1.05);
+  }
+
+  /* Icon Styling (if using icons inside buttons) */
+  svg {
+    width: 20px;
+    height: 20px;
+    fill: #333;
+  }
+}
+
+/* Color Picker Input */
+.colorInput {
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .bubbleMenu {
+    flex-direction: column;
+    gap: 4px;
+    top: -60px; /* Adjust based on design */
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .tiptapEditor {
+    background-color: #2d2d2d;
+    border-color: #555;
+  }
+
+  .bubbleMenu {
+    background: #3a3a3a;
+    border-color: #555;
+    box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
+  }
+
+  .bubbleMenuButton {
+    color: #fff;
+
+    &:hover {
+      background-color: #444;
+    }
+
+    &.isActive {
+      background-color: #555;
+    }
+
+    svg {
+      fill: #fff;
+    }
+  }
+
+  /* Adjust editor content colors for dark mode */
+  .editorContent {
+    color: #e0e0e0;
+
+    a {
+      color: #9ca3af; /* Tailwind gray-400 */
+      &:hover {
+        color: #a3a3a3; /* Tailwind gray-500 */
+      }
+    }
+
+    blockquote {
+      border-left: 4px solid #555;
+      padding-left: 1em;
+      color: #ccc;
+    }
+
+    /* Add more adjustments as needed */
+  }
+}
+// /* src/styles/MyEditor.scss */
+
+// /* Editor Container */
+.my-tiptap-editor .ProseMirror {
+  border: 1px solid #ccc;
+  padding: 10px;
+  border-radius: 4px;
+  min-height: 150px;
+  font-family: inherit; /* Ensures consistency with parent font */
+  line-height: 1.6;
+}
+
+/* Toolbar Styles */
+.my-tiptap-editor .toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 10px;
+}
+
+/* Toolbar Buttons */
+.my-tiptap-editor .toolbar button {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background-color: #f3f4f6; /* Gray-100 */
+  border: 1px solid #d1d5db; /* Gray-300 */
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+
+  &:hover {
+    background-color: #e5e7eb; /* Gray-200 */
+  }
+
+  &.active {
+    background-color: #d1d5db; /* Gray-300 */
+  }
+}
+
+/* Image Styling within ProseMirror */
+.my-tiptap-editor .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  border-radius: 4px;
+}
+
+/* Aligned Images */
+.aligned-image {
+  max-width: 100%;
+  height: auto;
+  margin: 0.5rem 0;
+}
+
+.aligned-image.left {
+  float: left;
+  margin-right: 1rem;
+}
+
+.aligned-image.right {
+  float: right;
+  margin-left: 1rem;
+}
+
+.aligned-image.center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Clearfix to Clear Floats */
+.clearfix::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+/* Responsive Adjustments for Image Alignment */
+@media (max-width: 768px) {
+  .aligned-image.left,
+  .aligned-image.right {
+    float: none;
+    display: block;
+    margin: 0.5rem auto;
+  }
+}
+
+/* Responsive Video Styling */
+.responsive-video {
+  position: relative;
+  padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+  padding-top: 25px;
+  height: 0;
+  margin: 1rem 0;
+}
+
+.responsive-video iframe,
+.responsive-video video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Additional Styling for Figure Elements */
+.my-tiptap-editor figure {
+  margin: 0;
+  position: relative;
+}
+
+/* Optional: Style for Captions */
+.my-tiptap-editor figcaption {
+  text-align: center;
+  font-size: 0.875rem;
+  color: #6b7280; /* Gray-500 */
+  margin-top: 0.5rem;
+}
+
+/* General Reset for Lists */
+ul, ol {
+  margin: 0;
+  padding: 0;
+  list-style-position: outside; /* Ensure bullets/numbers are outside */
+}
+
+/* Styling for Bullet Lists (Unordered) */
+ul {
+  list-style-type: disc; /* Default bullet style */
+  margin-left: 20px; /* Indentation for bullets */
+  padding-left: 20px; /* Additional padding for alignment */
+}
+
+ul li::marker {
+  color: black; /* Bullet color */
+  font-size: 1em; /* Adjust bullet size if needed */
+}
+
+/* Styling for Ordered Lists */
+ol {
+  list-style-type: decimal; /* Default to numbers */
+  margin-left: 20px; /* Indentation for numbers */
+  padding-left: 20px; /* Additional padding for alignment */
+}
+
+ol li::marker {
+  color: black; /* Number color */
+  font-size: 1em; /* Adjust number size if needed */
+}
+
+/* Target Specific ProseMirror or Tiptap Editor Lists (if applicable) */
+.tiptap.ProseMirror ul {
+  list-style-type: disc; /* Explicitly set bullets for Tiptap lists */
+}
+
+.tiptap.ProseMirror ol {
+  list-style-type: decimal; /* Explicitly set numbers for Tiptap lists */
+}
+
+.tiptap.ProseMirror li::marker {
+  color: black; /* Ensure markers are visible */
+}
+
+/* Reset for Edge Cases */
+li {
+  list-style: inherit; /* Ensure list items inherit styles from parent */
+}
+
+ul[data-type='taskList'] {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    align-items: center;
+
+    input[type='checkbox'] {
+      margin-right: 0.5rem;
+      cursor: pointer;
+    }
+  }
+}
+.view-only {
+  .ProseMirror {
+    border: none !important;
+    padding: 0 !important;
+    
+    &:focus {
+      outline: none !important;
+      box-shadow: none !important;
+    }
+  }
+}
+.ProseMirror {
+  img.aligned-image {
+    &[data-align="left"] {
+      float: left;
+      margin: 0.5em 1em 0.5em 0;
+    }
+    
+    &[data-align="right"] {
+      float: right;
+      margin: 0.5em 0 0.5em 1em;
+    }
+    
+    &[data-align="center"] {
+      display: block;
+      margin: 0.5em auto;
+    }
+    
+    &[style*="width"] {
+      height: auto !important;
+    }
+  }
+
+  p[style*="text-align"] {
+    text-align: inherit !important;
+  }
+}
+// .toolbar-btn {
+//   display: flex;
+//   align-items: center;
+//   padding: 0.5rem 1rem;
+//   border: 1px solid #d1d5db;
+//   background-color: #f3f4f6;
+//   border-radius: 4px;
+//   cursor: pointer;
+//   font-size: 0.875rem;
+//   transition: all 0.2s ease;
+//   color: #374151;
+//   margin: 0.25rem;
+
+//   &:hover {
+//     background-color: #e5e7eb;
+//     transform: translateY(-1px);
+//     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+//   }
+
+//   &.active {
+//     background-color: #d1d5db;
+//     color: #1f2937;
+//     border-color: #9ca3af;
+//   }
+
+//   // Alignment buttons specific styles
+//   &[data-align="left"],
+//   &[data-align="center"],
+//   &[data-align="right"],
+//   &[data-align="justify"] {
+//     min-width: 60px;
+//     justify-content: center;
+
+//     &.active {
+//       background-color: #60a5fa;
+//       color: white;
+//       border-color: #3b82f6;
+//     }
+//   }
+
+//   // Group buttons together
+//   &:not(:last-child) {
+//     margin-right: 0.25rem;
+//   }
+
+//   .ml-1 {
+//     margin-left: 0.25rem;
+//   }
+// }
+
+// Button group container
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 0.5rem;
+}
+

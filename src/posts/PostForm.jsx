@@ -1,154 +1,161 @@
-// src/posts/PostForm.jsx
-import React, { useState } from 'react';
-import MyEditor from '../components/MyEditor'; // Import your TipTap editor
+// // src/posts/PostForm.jsx
 
-const PostForm = ({ onSubmit, initialData }) => {
-  const [formData, setFormData] = useState(initialData || {
-    title: '',
-    description: '',
-    category: 'Trends',
-    additionalHTML: '',
-    graphHTML: '',
-    image: null,
-  });
+// import React, { useState } from 'react';
+// import TipTapEditor from '../components/TipTapEditor'; // Import the updated TipTapEditor
+// import { CATEGORIES } from '../constants/categories'; // Ensure this exists
 
-  const [error, setError] = useState('');
+// const PostForm = ({ onSubmit, initialData = {} }) => {
+//   const [formData, setFormData] = useState({
+//     title: initialData.title || '',
+//     description: initialData.description || '',
+//     category: initialData.category || 'Trends',
+//     image: initialData.image || null,
+//     additionalHTML: initialData.additionalHTML || '',
+//     graphHTML: initialData.graphHTML || '',
+//   });
 
-  const handleChange = (e) => {
-    const { name, value, files } = e.target;
-    if (name === 'image') {
-      setFormData({
-        ...formData,
-        image: files[0],
-      });
-    } else {
-      setFormData({
-        ...formData,
-        [name]: value,
-      });
-    }
-  };
+//   const [error, setError] = useState('');
 
-  const handleEditorChange = (field, html) => {
-    setFormData({
-      ...formData,
-      [field]: html,
-    });
-  };
+//   const handleInputChange = (e) => {
+//     const { name, value, files } = e.target;
+//     if (name === 'image') {
+//       const file = files[0];
+//       if (file && file.size > 5 * 1024 * 1024) { // 5MB limit
+//         setError('Image size should not exceed 5MB.');
+//         return;
+//       }
+//       setFormData((prev) => ({ ...prev, image: file }));
+//       setError('');
+//     } else {
+//       setFormData((prev) => ({ ...prev, [name]: value }));
+//     }
+//   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    // Validate required fields
-    if (!formData.title || !formData.description || !formData.category) {
-      setError('Title, Description, and Category are required.');
-      return;
-    }
-    setError('');
-    onSubmit(formData);
-  };
+//   const handleEditorChange = (field, htmlString) => {
+//     setFormData((prev) => ({
+//       ...prev,
+//       [field]: htmlString,
+//     }));
+//   };
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Title */}
-      <div>
-        <label className="block text-gray-700">Title</label>
-        <input
-          type="text"
-          name="title"
-          value={formData.title}
-          onChange={handleChange}
-          className="mt-1 w-full p-2 border border-gray-300 rounded-md"
-          placeholder="Enter post title"
-          required
-        />
-      </div>
+//   const handleSubmit = (e) => {
+//     e.preventDefault();
+//     onSubmit(formData);
+//   };
 
-      {/* Description */}
-      <div>
-        <label className="block text-gray-700">Description</label>
-        <textarea
-          name="description"
-          value={formData.description}
-          onChange={handleChange}
-          className="mt-1 w-full p-2 border border-gray-300 rounded-md"
-          placeholder="Enter post description"
-          rows="4"
-          required
-        />
-      </div>
+//   return (
+//     <form onSubmit={handleSubmit} className="space-y-4">
+//       {/* Title */}
+//       <div>
+//         <label className="block text-gray-700">Title</label>
+//         <input
+//           type="text"
+//           name="title"
+//           value={formData.title}
+//           onChange={handleInputChange}
+//           className="mt-1 w-full p-2 border border-gray-300 rounded-md"
+//           placeholder="Enter post title"
+//           required
+//         />
+//       </div>
 
-      {/* Category */}
-      <div>
-        <label className="block text-gray-700">Category</label>
-        <select
-          name="category"
-          value={formData.category}
-          onChange={handleChange}
-          className="mt-1 w-full p-2 border border-gray-300 rounded-md"
-          required
-        >
-          {/* Populate categories dynamically or statically */}
-          <option value="Trends">Trends</option>
-          <option value="Latest Tech">Latest Tech</option>
-          <option value="AI Tools">AI Tools</option>
-          {/* Add more categories as needed */}
-        </select>
-      </div>
+//       {/* Description */}
+//       <div>
+//         <label className="block text-gray-700">Description</label>
+//         <textarea
+//           name="description"
+//           value={formData.description}
+//           onChange={handleInputChange}
+//           className="mt-1 w-full p-2 border border-gray-300 rounded-md"
+//           placeholder="Enter post description"
+//           rows="4"
+//           required
+//         />
+//       </div>
 
-      {/* Image */}
-      <div>
-        <label className="block text-gray-700">
-          Image {initialData ? '(Leave blank to keep existing)' : '(Optional)'}
-        </label>
-        <input
-          type="file"
-          name="image"
-          accept="image/*"
-          onChange={handleChange}
-          className="mt-1 w-full p-2 border border-gray-300 rounded-md"
-        />
-        {formData.image && (
-          <div className="mt-2">
-            <p className="text-gray-700">Image Preview:</p>
-            <img
-              src={URL.createObjectURL(formData.image)}
-              alt="Preview"
-              className="h-40 w-full object-cover rounded-md"
-            />
-          </div>
-        )}
-      </div>
+//       {/* Category */}
+//       <div>
+//         <label className="block text-gray-700">Category</label>
+//         <select
+//           name="category"
+//           value={formData.category}
+//           onChange={handleInputChange}
+//           className="mt-1 w-full p-2 border border-gray-300 rounded-md"
+//           required
+//         >
+//           {CATEGORIES.map((cat) => (
+//             <option key={cat} value={cat}>
+//               {cat}
+//             </option>
+//           ))}
+//         </select>
+//       </div>
 
-      {/* Additional HTML */}
-      <div>
-        <label className="block text-gray-700">Additional HTML (Optional)</label>
-        <MyEditor 
-          content={formData.additionalHTML}
-          onChange={(html) => handleEditorChange('additionalHTML', html)}
-        />
-      </div>
+//       {/* Image */}
+//       <div>
+//         <label className="block text-gray-700">
+//           Image {initialData.id ? '(Leave blank to keep existing)' : '(Optional)'}
+//         </label>
+//         <input
+//           type="file"
+//           name="image"
+//           accept="image/*"
+//           onChange={handleInputChange}
+//           className="mt-1 w-full p-2 border border-gray-300 rounded-md"
+//         />
+//         {formData.image && (
+//           <div className="mt-2">
+//             <p className="text-gray-700">Image Preview:</p>
+//             <img
+//               src={URL.createObjectURL(formData.image)}
+//               alt="Preview"
+//               className="h-40 w-full object-cover rounded-md"
+//             />
+//           </div>
+//         )}
+//         {/* If editing, show existing image */}
+//         {initialData.imageUrl && !formData.image && (
+//           <div className="mt-2">
+//             <p className="text-gray-700">Current Image:</p>
+//             <img
+//               src={initialData.imageUrl}
+//               alt={initialData.title}
+//               className="h-40 w-full object-cover rounded-md"
+//             />
+//           </div>
+//         )}
+//       </div>
 
-      {/* Graph HTML */}
-      <div>
-        <label className="block text-gray-700">Graph HTML (Optional)</label>
-        <MyEditor 
-          content={formData.graphHTML}
-          onChange={(html) => handleEditorChange('graphHTML', html)}
-        />
-      </div>
+//       {/* Additional HTML - TipTap */}
+//       <div>
+//         <label className="block text-gray-700">Additional Content (Optional)</label>
+//         <TipTapEditor
+//           content={formData.additionalHTML}
+//           onChange={(html) => handleEditorChange('additionalHTML', html)}
+//         />
+//       </div>
 
-      {/* Error Message */}
-      {error && <p className="text-red-500">{error}</p>}
+//       {/* Graph HTML - TipTap */}
+//       <div>
+//         <label className="block text-gray-700">Graph Content (Optional)</label>
+//         <TipTapEditor
+//           content={formData.graphHTML}
+//           onChange={(html) => handleEditorChange('graphHTML', html)}
+//         />
+//       </div>
 
-      {/* Submit Button */}
-      <button
-        type="submit"
-        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-      >
-        {initialData ? 'Update Post' : 'Create Post'}
-      </button>
-    </form>
-  );
-};
+//       {/* Error Message */}
+//       {error && <p className="text-red-500">{error}</p>}
 
-export default PostForm;
+//       {/* Submit Button */}
+//       <button
+//         type="submit"
+//         className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+//       >
+//         {initialData.id ? 'Update Post' : 'Create Post'}
+//       </button>
+//     </form>
+//   );
+// };
+
+// export default PostForm;

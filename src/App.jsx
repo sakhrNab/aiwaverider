@@ -1,18 +1,20 @@
 // src/App.jsx
-
 import React from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
-import './styles/globals.css';  // Tailwind global styles
-import AppContent from './components/AppContent'; // Import AppContent
-import { AuthProvider } from './contexts/AuthContext'; // Import AuthProvider
-import ErrorBoundary from './components/ErrorBoundary'; // Import ErrorBoundary
+import './styles/globals.css';
+import AppContent from './components/AppContent';
+import { AuthProvider } from './contexts/AuthContext';
+import { PostsProvider } from './contexts/PostsContext';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const App = () => (
   <Router>
     <AuthProvider>
-    <ErrorBoundary>
-      <AppContent />
-    </ErrorBoundary>
+      <PostsProvider>
+        <ErrorBoundary>
+          <AppContent />
+        </ErrorBoundary>
+      </PostsProvider>
     </AuthProvider>
   </Router>
 );

@@ -56,10 +56,19 @@ export const createPost = async (formData, token) => {
     return { error: 'An unexpected error occurred while creating the post.' };
   }
 };
-// Get All Posts
-export const getAllPosts = async (token) => {
+
+// Get All Posts with Optional Parameters
+export const getAllPosts = async (category = 'All', limit = 10, startAfter = null, token) => {
   try {
-    const response = await fetch(`${API_URL}/api/posts`, {
+    let url = `${API_URL}/api/posts?limit=${limit}`;
+    if (category && category !== 'All') {
+      url += `&category=${encodeURIComponent(category)}`;
+    }
+    if (startAfter) {
+      url += `&startAfter=${encodeURIComponent(startAfter)}`;
+    }
+
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -73,7 +82,7 @@ export const getAllPosts = async (token) => {
     }
 
     const data = await response.json();
-    return data;
+    return data; // Expected to be { posts: [...], lastPostCreatedAt: '...' }
   } catch (error) {
     console.error('Error fetching posts:', error);
     throw error; // Rethrow to be caught in components
