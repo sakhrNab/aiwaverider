@@ -472,24 +472,32 @@ app.post('/api/auth/refresh', async (req, res) => {
     return res.status(401).json({ error: 'Invalid refresh token.' });
   }
 });
-
+const cookieParser = require('cookie-parser');
+app.use(cookieParser());
 // ------------------ 3) Create Post (Admin only) -------
 app.post('/api/posts', authenticateJWT, upload.single('image'), async (req, res) => {
   try {
     const { title, description, category, additionalHTML, graphHTML } = req.body;
     const { role, id: userId } = req.user;
 
+    // 1. Validate required fields
     if (!title || !description || !category) {
-      return res.status(400).json({ error: 'Title, description, and category are required.' });
+      return res.status(400).json({ 
+        error: 'Title, description, and category are required.' 
+      });
     }
+
+    // 2. Check admin role
     if (role !== 'admin') {
-      return res.status(403).json({ error: 'Only admin can create posts.' });
+      return res.status(403).json({ 
+        error: 'Only admin can create posts.' 
+      });
     }
 
     let imageUrl = null;
     let imageSha = null;
 
-    // Handle image
+    // 3. Handle image upload if provided
     if (req.file) {
       const filename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
       try {
@@ -501,19 +509,24 @@ app.post('/api/posts', authenticateJWT, upload.single('image'), async (req, res)
         imageSha = uploadResult.sha;
       } catch (error) {
         console.error('Error uploading image:', error);
-        return res.status(500).json({ error: error.message || 'Image upload failed.' });
+        return res.status(500).json({ 
+          error: error.message || 'Image upload failed.' 
+        });
       }
     }
 
-    // Username
+    // 4. Get username from users collection
     const userDoc = await usersCollection.doc(userId).get();
-    const username = userDoc.exists ? userDoc.data().username : 'Unknown User';
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    const username = userDoc.data().username;
 
-    // Sanitize HTML
+    // 5. Sanitize HTML content
     const sanitizedAdditionalHTML = sanitizeHtml(additionalHTML || '');
     const sanitizedGraphHTML = sanitizeHtml(graphHTML || '');
 
-    // Add post
+    // 6. Create post document
     const newPostRef = await postsCollection.add({
       title,
       description,
@@ -522,21 +535,33 @@ app.post('/api/posts', authenticateJWT, upload.single('image'), async (req, res)
       imageSha,
       additionalHTML: sanitizedAdditionalHTML,
       graphHTML: sanitizedGraphHTML,
-      createdBy: userId || null,
+      createdBy: userId,
       createdByUsername: username,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    // 7. Get the created post
     const newPostDoc = await newPostRef.get();
+    const postData = newPostDoc.data();
 
+    // 8. Send response
     return res.json({
       message: 'Post created successfully.',
-      post: { id: newPostRef.id, ...newPostDoc.data() },
+      post: {
+        id: newPostRef.id,
+        ...postData,
+        createdAt: postData.createdAt.toDate().toISOString(),
+        updatedAt: postData.updatedAt.toDate().toISOString(),
+      }
     });
+
   } catch (err) {
-    console.error('Error in /api/posts:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+    logger.error('Error creating post:', err);
+    return res.status(500).json({ 
+      error: 'Internal server error.',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 

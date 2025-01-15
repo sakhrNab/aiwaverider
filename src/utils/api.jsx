@@ -63,22 +63,33 @@ export const signIn = async (credentials) => {
 };
 
 // Create Post with FormData
-export const createPost = async (formData, token) => {
+export const createPost = async (formData) => {
   try {
     const response = await fetch(`${API_URL}/api/posts`, {
       method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        // Do NOT set 'Content-Type' header when sending FormData
-      },
-      body: formData, // FormData instance
+      credentials: 'include', // Important for sending cookies
+      body: formData,
     });
+
+    // First check the response type
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error('Non-JSON response:', text);
+      throw new Error('Server returned non-JSON response');
+    }
+
     const data = await response.json();
+
+    if (!response.ok) {
+      console.error('Error response:', data);
+      throw new Error(data.error || data.details || 'Failed to create post');
+    }
+
     return data;
   } catch (error) {
     console.error('Error creating post:', error);
-    return { error: 'An unexpected error occurred while creating the post.' };
+    throw error;
   }
 };
 

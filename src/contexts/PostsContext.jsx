@@ -254,7 +254,14 @@ export const PostsProvider = ({ children }) => {
     [carouselLastFetch, carouselData, token, CACHE_DURATION]
   );
 
-  // 8. Memoize context value using useMemo
+  // 8. Memoize addPostToCache using useCallback
+  const addPostToCache = useCallback((newPost) => {
+    setPosts((prev) => [newPost, ...prev]);
+    setPostDetails((prev) => ({ ...prev, [newPost.id]: newPost }));
+  }, []);
+  
+
+  // 9. Memoize context value using useMemo
   const contextValue = useMemo(
     () => ({
       // Basic states
@@ -279,7 +286,7 @@ export const PostsProvider = ({ children }) => {
       commentsCache,
       addCommentToCache,
       loadingComments,
-
+      addPostToCache,
       // Additional functions can be added here
     }),
     [

@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import RichTextEditor from '../components/RichTextEditor'; // NEW import
 import DOMPurify from 'dompurify';
 import { CATEGORIES } from '../constants/categories';
+import { PostsContext } from '../contexts/PostsContext';
 
 const CreatePost = () => {
   const [formData, setFormData] = useState({
