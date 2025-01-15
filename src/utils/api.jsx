@@ -5,18 +5,28 @@ export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 // Sign Up
 export const signUp = async (userData) => {
   try {
+    console.log('Attempting signup with:', { ...userData, password: '[REDACTED]' });
+    
     const response = await fetch(`${API_URL}/api/auth/signup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(userData),
+      credentials: 'include', // Important for cookies
     });
+
     const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('Signup error response:', data);
+      throw new Error(data.error || data.details || 'Sign up failed');
+    }
+
     return data;
   } catch (error) {
     console.error('Error during sign up:', error);
-    return { error: 'An unexpected error occurred during sign up.' };
+    throw error;
   }
 };
 
@@ -29,12 +39,16 @@ export const signIn = async (credentials) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(credentials),
+      credentials: 'include', // Important for cookies
     });
     const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Sign in failed');
+    }
     return data;
   } catch (error) {
     console.error('Error during sign in:', error);
-    return { error: 'An unexpected error occurred during sign in.' };
+    throw error;
   }
 };
 
@@ -147,20 +161,19 @@ export const deletePost = async (postId, token) => {
 };
 
 // Sign Out User
-export const signOutUser = async (token) => {
+export const signOutUser = async () => {
   try {
     const response = await fetch(`${API_URL}/api/auth/signout`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
+      credentials: 'include',
     });
-    const data = await response.json();
-    return data;
+    if (!response.ok) {
+      throw new Error('Sign out failed');
+    }
+    return await response.json();
   } catch (error) {
     console.error('Error during sign out:', error);
-    return { error: 'An unexpected error occurred during sign out.' };
+    throw error;
   }
 };
 
@@ -203,6 +216,24 @@ export const getPostById = async (postId) => {
     return data;
   } catch (error) {
     console.error('Error fetching post by ID:', error);
+    throw error;
+  }
+};
+
+// Add Refresh Token
+export const refreshToken = async () => {
+  try {
+    const response = await fetch(`${API_URL}/api/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      throw new Error('Token refresh failed');
+    }
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error refreshing token:', error);
     throw error;
   }
 };

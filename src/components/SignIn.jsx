@@ -12,10 +12,10 @@ const SignIn = () => {
     usernameOrEmail: '',
     password: '',
   });
+  const [error, setError] = useState('');
 
   const navigate = useNavigate();
   const { signInUser } = useContext(AuthContext); // Get signInUser from context
-  const [error, setError] = useState('');
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -27,23 +27,24 @@ const SignIn = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Simulate login action
-    console.log('Form Submitted', formData);
-
+    setError(''); // Clear previous errors
     try {
       const data = await signIn(formData);
-      if (data.token && data.user) {
-        // Call signInUser to store user and token
-        signInUser(data.user, data.token);
-        // Redirect to homepage
+      if (data.user) {
+        signInUser(data.user);
         navigate('/');
-      } else {
-        // Handle errors
-        setError(data.error || 'Sign in failed.');
       }
     } catch (error) {
-      console.error('Sign In Error:', error);
-      setError('An unexpected error occurred during sign in.');
+      // Handle specific error messages
+      if (error.message.includes('Invalid credentials')) {
+        setError('Invalid username/email or password');
+      } else if (error.message.includes('Account locked')) {
+        setError('Account temporarily locked due to too many attempts. Please try again in 15 minutes.');
+      } else if (error.message.includes('Too many requests')) {
+        setError('Too many login attempts. Please try again later.');
+      } else {
+        setError('An error occurred during sign in. Please try again.');
+      }
     }
   };
 
@@ -57,11 +58,24 @@ const SignIn = () => {
     // Implement Microsoft Sign-In via OAuth if desired
   };
 
+  // Add password requirements hint
+  const PasswordHint = () => (
+    <div className="text-xs text-gray-500 mt-1">
+      Password must contain at least 8 characters, including uppercase, lowercase, number and special character (@$!%*?&)
+    </div>
+  );
+
   return (
     <div className="flex justify-center items-center min-h-screen bg-gray-100">
       <div className="bg-white shadow-lg p-8 rounded-lg w-full max-w-md">
         <h2 className="text-3xl font-semibold mb-6 text-center">Sign In</h2>
         
+        {error && (
+          <div className="text-red-500 text-center mb-4 p-2 bg-red-50 rounded">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Username or Email */}
           <div>
@@ -91,6 +105,7 @@ const SignIn = () => {
               className="w-full p-3 border border-gray-300 rounded-md"
               placeholder="Enter your password"
             />
+            <PasswordHint />
           </div>
 
           {/* Submit Button */}
@@ -102,8 +117,6 @@ const SignIn = () => {
               Sign In
             </button>
           </div>
-
-          {error && <p className="text-red-500 text-center">{error}</p>}
         </form>
 
         {/* Google and Microsoft Sign In */}

@@ -1,6 +1,7 @@
 // src/components/SignUp.jsx
 
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import { useNavigate } from 'react-router-dom';
 import ReactPhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
@@ -9,8 +10,92 @@ import { signUp } from '../utils/api'; // Import the signUp API function
 import { AuthContext } from '../contexts/AuthContext'; // Import AuthContext
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
+import debounce from 'lodash.debounce';
+
+// Define PasswordRequirements outside of SignUp for effective memoization
+const PasswordRequirements = React.memo(({ validation }) => (
+  <div className="text-sm text-gray-600 mt-2">
+    <p>
+      <span className={validation.hasLength ? 'text-green-600' : 'text-red-600'}>
+        {validation.hasLength ? '✓' : '✗'}
+      </span>{' '}
+      At least 8 characters
+    </p>
+    <p>
+      <span className={validation.hasUpper ? 'text-green-600' : 'text-red-600'}>
+        {validation.hasUpper ? '✓' : '✗'}
+      </span>{' '}
+      At least one uppercase letter
+    </p>
+    <p>
+      <span className={validation.hasLower ? 'text-green-600' : 'text-red-600'}>
+        {validation.hasLower ? '✓' : '✗'}
+      </span>{' '}
+      At least one lowercase letter
+    </p>
+    <p>
+      <span className={validation.hasNumber ? 'text-green-600' : 'text-red-600'}>
+        {validation.hasNumber ? '✓' : '✗'}
+      </span>{' '}
+      At least one number
+    </p>
+    <p>
+      <span className={validation.hasSpecial ? 'text-green-600' : 'text-red-600'}>
+        {validation.hasSpecial ? '✓' : '✗'}
+      </span>{' '}
+      At least one special character (@$!%*?&)
+    </p>
+  </div>
+));
+
+PasswordRequirements.propTypes = {
+  validation: PropTypes.shape({
+    hasLength: PropTypes.bool.isRequired,
+    hasUpper: PropTypes.bool.isRequired,
+    hasLower: PropTypes.bool.isRequired,
+    hasNumber: PropTypes.bool.isRequired,
+    hasSpecial: PropTypes.bool.isRequired,
+    // Removed isValid as it's not used in the component
+  }).isRequired,
+};
+
+// Define PasswordInput outside of SignUp and memoize it
+const PasswordInput = React.memo(({ password, onChange, validation }) => (
+  <div className="form-group">
+    <label htmlFor="password" className="form-label">Password</label>
+    <input
+      type="password"
+      id="password"
+      name="password"
+      required
+      aria-required="true"
+      value={password}
+      onChange={onChange}
+      className={`form-input ${validation.isValid ? 'border-green-500' : ''}`}
+      placeholder="Enter your password"
+    />
+    <PasswordRequirements validation={validation} />
+  </div>
+));
+
+PasswordInput.propTypes = {
+  password: PropTypes.string.isRequired,
+  onChange: PropTypes.func.isRequired,
+  validation: PropTypes.shape({
+    hasLength: PropTypes.bool.isRequired,
+    hasUpper: PropTypes.bool.isRequired,
+    hasLower: PropTypes.bool.isRequired,
+    hasNumber: PropTypes.bool.isRequired,
+    hasSpecial: PropTypes.bool.isRequired,
+  }).isRequired,
+};
 
 const SignUp = ({ isOpen, onClose }) => {
+  // Define a default no-op function to prevent errors when onClose is undefined
+  const noop = () => {};
+
+  const handleClose = isOpen !== undefined ? onClose : noop;
+
   const [formData, setFormData] = useState({
     username: '',
     firstName: '',
@@ -18,6 +103,15 @@ const SignUp = ({ isOpen, onClose }) => {
     email: '',
     phoneNumber: '',
     password: '',
+  });
+  const [error, setError] = useState('');
+  const [passwordValidation, setPasswordValidation] = useState({
+    isValid: false,
+    hasLength: false,
+    hasUpper: false,
+    hasLower: false,
+    hasNumber: false,
+    hasSpecial: false,
   });
   const navigate = useNavigate();
   const modalRef = useRef(null);
@@ -37,7 +131,7 @@ const SignUp = ({ isOpen, onClose }) => {
     // Close the modal if clicking outside
     const handleClickOutside = (event) => {
       if (modalRef.current && !modalRef.current.contains(event.target)) {
-        onClose();
+        handleClose();
       }
     };
 
@@ -45,45 +139,75 @@ const SignUp = ({ isOpen, onClose }) => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [onClose, isModalView]);
+  }, [handleClose, isModalView]);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
+  // Update the validatePassword function to not trigger re-renders
+  const validatePassword = useCallback((password) => {
+    setPasswordValidation({
+      hasLength: password.length >= 8,
+      hasUpper: /[A-Z]/.test(password),
+      hasLower: /[a-z]/.test(password),
+      hasNumber: /\d/.test(password),
+      hasSpecial: /[@$!%*?&]/.test(password),
+      isValid: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(password),
     });
-  };
+  }, []);
+
+  // Use debounce for password validation
+  const debouncedValidatePassword = useCallback(
+    debounce((value) => validatePassword(value), 100),
+    [validatePassword]
+  );
+
+  // Clean up debounce on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      debouncedValidatePassword.cancel();
+    };
+  }, [debouncedValidatePassword]);
+
+  const handleInputChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+    
+    if (name === 'password') {
+      debouncedValidatePassword(value);
+    }
+  }, [debouncedValidatePassword]);
 
   const handlePhoneChange = (value) => {
-    setFormData({
-      ...formData,
+    setFormData((prevFormData) => ({
+      ...prevFormData,
       phoneNumber: value,
-    });
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Form Submitted', formData);
-
+    setError(''); // Clear previous errors
+    
     try {
+      if (!passwordValidation.isValid) {
+        setError('Please ensure your password meets all requirements');
+        return;
+      }
+
+      console.log('Submitting form data:', { ...formData, password: '[REDACTED]' });
       const data = await signUp(formData);
-      if (data.token) {
-        // Call signInUser to store user and token
-        signInUser(data.user, data.token);
-        // Navigate to homepage
+      
+      if (data.user) {
+        signInUser(data.user);
         navigate('/');
-        // Close modal if it was a modal scenario
         if (isModalView) {
-          onClose();
+          handleClose();
         }
-      } else {
-        // Handle errors
-        alert(data.error || 'Sign up failed.');
       }
     } catch (error) {
-      console.error('Sign Up Error:', error);
-      alert('An unexpected error occurred during sign up.');
+      console.error('Signup error:', error);
+      setError(error.message || 'An unexpected error occurred during sign up.');
     }
   };
 
@@ -102,6 +226,13 @@ const SignUp = ({ isOpen, onClose }) => {
     return null;
   }
 
+  // Add error display to both modal and page layouts
+  const errorDisplay = error && (
+    <div className="text-red-500 text-center mb-4 p-2 bg-red-50 rounded">
+      {error}
+    </div>
+  );
+
   // ----- MODAL VIEW LAYOUT -----
   if (isModalView) {
     return (
@@ -111,6 +242,7 @@ const SignUp = ({ isOpen, onClose }) => {
           className="modal-content"
         >
           <h2 className="modal-title">Sign Up</h2>
+          {errorDisplay}
           <form onSubmit={handleSubmit} className="signup-form">
             {/* Username */}
             <div className="form-group">
@@ -120,6 +252,7 @@ const SignUp = ({ isOpen, onClose }) => {
                 id="username"
                 name="username"
                 required
+                aria-required="true"
                 value={formData.username}
                 onChange={handleInputChange}
                 className="form-input"
@@ -135,6 +268,7 @@ const SignUp = ({ isOpen, onClose }) => {
                 id="firstName"
                 name="firstName"
                 required
+                aria-required="true"
                 value={formData.firstName}
                 onChange={handleInputChange}
                 className="form-input"
@@ -150,6 +284,7 @@ const SignUp = ({ isOpen, onClose }) => {
                 id="lastName"
                 name="lastName"
                 required
+                aria-required="true"
                 value={formData.lastName}
                 onChange={handleInputChange}
                 className="form-input"
@@ -165,6 +300,7 @@ const SignUp = ({ isOpen, onClose }) => {
                 id="email"
                 name="email"
                 required
+                aria-required="true"
                 value={formData.email}
                 onChange={handleInputChange}
                 className="form-input"
@@ -186,26 +322,23 @@ const SignUp = ({ isOpen, onClose }) => {
             </div>
 
             {/* Password */}
-            <div className="form-group">
-              <label htmlFor="password" className="form-label">Password</label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                required
-                value={formData.password}
-                onChange={handleInputChange}
-                className="form-input"
-                placeholder="Enter your password"
-              />
-            </div>
+            <PasswordInput
+              password={formData.password}
+              onChange={handleInputChange}
+              validation={passwordValidation}
+            />
 
             {/* Submit Button */}
             <div className="button-group">
               <button type="submit" className="button primary">
                 Sign Up
               </button>
-              <button type="button" onClick={onClose} className="button secondary">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="button secondary"
+                aria-label="Cancel sign up"
+              >
                 Cancel
               </button>
             </div>
@@ -238,6 +371,7 @@ const SignUp = ({ isOpen, onClose }) => {
     <div className="flex justify-center items-center min-h-screen bg-gray-100">
       <div className="bg-white shadow-lg p-8 rounded-lg w-full max-w-md">
         <h2 className="text-3xl font-semibold mb-6 text-center">Sign Up</h2>
+        {errorDisplay}
         <form onSubmit={handleSubmit} className="signup-form">
             {/* Username */}
             <div className="form-group">
@@ -247,6 +381,7 @@ const SignUp = ({ isOpen, onClose }) => {
                 id="username"
                 name="username"
                 required
+                aria-required="true"
                 value={formData.username}
                 onChange={handleInputChange}
                 className="form-input"
@@ -262,6 +397,7 @@ const SignUp = ({ isOpen, onClose }) => {
                 id="firstName"
                 name="firstName"
                 required
+                aria-required="true"
                 value={formData.firstName}
                 onChange={handleInputChange}
                 className="form-input"
@@ -277,6 +413,7 @@ const SignUp = ({ isOpen, onClose }) => {
                 id="lastName"
                 name="lastName"
                 required
+                aria-required="true"
                 value={formData.lastName}
                 onChange={handleInputChange}
                 className="form-input"
@@ -292,6 +429,7 @@ const SignUp = ({ isOpen, onClose }) => {
                 id="email"
                 name="email"
                 required
+                aria-required="true"
                 value={formData.email}
                 onChange={handleInputChange}
                 className="form-input"
@@ -313,30 +451,30 @@ const SignUp = ({ isOpen, onClose }) => {
             </div>
 
             {/* Password */}
-            <div className="form-group">
-              <label htmlFor="password" className="form-label">Password</label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                required
-                value={formData.password}
-                onChange={handleInputChange}
-                className="form-input"
-                placeholder="Enter your password"
-              />
-            </div>
+            <PasswordInput
+              password={formData.password}
+              onChange={handleInputChange}
+              validation={passwordValidation}
+            />
 
             {/* Submit Button */}
             <div className="button-group">
               <button type="submit" className="button primary">
                 Sign Up
               </button>
-              <button type="button" onClick={onClose} className="button secondary">
-                Cancel
-              </button>
+              {/* Cancel button is only rendered if it's a modal view */}
+              {isModalView && (
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="button secondary"
+                  aria-label="Cancel sign up"
+                >
+                  Cancel
+                </button>
+              )}
             </div>
-          </form>
+        </form>
 
         {/* Google and Outlook Sign Up */}
         <div className="mt-6 text-center">
@@ -358,6 +496,16 @@ const SignUp = ({ isOpen, onClose }) => {
       </div>
     </div>
   );
+};
+
+SignUp.propTypes = {
+  isOpen: PropTypes.bool,
+  onClose: PropTypes.func,
+};
+
+SignUp.defaultProps = {
+  isOpen: undefined,
+  onClose: () => {}, // Default to no-op function
 };
 
 export default SignUp;

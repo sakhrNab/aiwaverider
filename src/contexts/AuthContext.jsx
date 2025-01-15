@@ -1,70 +1,78 @@
 // src/contexts/AuthContext.jsx
 
 import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { signOutUser as apiSignOutUser } from '../utils/api';
+import { signOutUser as apiSignOutUser, refreshToken } from '../utils/api';
 
 export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    const storedUser = localStorage.getItem('user');
-    return storedUser ? JSON.parse(storedUser) : null;
-  });
-  const [token, setToken] = useState(() => {
-    return localStorage.getItem('token') || null;
-  });
-  const [loading, setLoading] = useState(true); // Loading state
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Remove token-related state and storage
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const storedToken = localStorage.getItem('token');
-    if (storedUser && storedToken) {
-      setUser(JSON.parse(storedUser));
-      setToken(storedToken);
-    }
-    setLoading(false);
+    const initAuth = async () => {
+      try {
+        // Try to refresh the token on initial load
+        const response = await refreshToken();
+        if (response.user) {
+          setUser(response.user);
+        }
+      } catch (error) {
+        console.error('Auth initialization failed:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initAuth();
   }, []);
 
-  // Memoize signInUser using useCallback
-  const signInUser = useCallback((userData, jwtToken) => {
+  // Set up token refresh interval
+  useEffect(() => {
+    const refreshInterval = setInterval(async () => {
+      if (user) {
+        try {
+          await refreshToken();
+        } catch (error) {
+          console.error('Token refresh failed:', error);
+          // If refresh fails, log out the user
+          logout();
+        }
+      }
+    }, 23 * 60 * 60 * 1000); // Refresh every 23 hours
+
+    return () => clearInterval(refreshInterval);
+  }, [user]);
+
+  const signInUser = useCallback((userData) => {
     setUser(userData);
-    setToken(jwtToken);
-    localStorage.setItem('user', JSON.stringify(userData));
-    localStorage.setItem('token', jwtToken);
+    // No need to handle token - it's in HTTP-only cookie
   }, []);
 
-  // Memoize signOutUser using useCallback
   const signOutUser = useCallback(async () => {
     try {
-      const data = await apiSignOutUser(token); // Pass the token
-      console.log(data.message);
+      await apiSignOutUser();
+      logout();
     } catch (error) {
       console.error('Error signing out:', error);
     }
-    logout();
-  }, [token]);
-
-  // Logout function
-  const logout = useCallback(() => {
-    // Clear auth data
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-
-    // Optionally, clear other caches or reset contexts here
   }, []);
 
-  // Memoize context value using useMemo
+  const logout = useCallback(() => {
+    setUser(null);
+    // No need to handle token - it's in HTTP-only cookie
+  }, []);
+
   const contextValue = useMemo(
     () => ({
       user,
-      token,
       signInUser,
       signOutUser,
       loading,
     }),
-    [user, token, signInUser, signOutUser, loading]
+    [user, signInUser, signOutUser, loading]
   );
 
   return (

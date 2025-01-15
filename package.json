@@ -41,6 +41,7 @@
     "axios": "^1.7.9",
     "dompurify": "^3.2.3",
     "googleapis": "^144.0.0",
+    "helmet": "^8.0.0",
     "highlight.js": "^11.11.1",
     "is-hotkey": "^0.2.0",
     "lodash.debounce": "^4.0.8",
@@ -53,7 +54,8 @@
     "react-youtube": "^10.1.0",
     "slick-carousel": "^1.8.1",
     "tiptap-extension-resize-image": "^1.2.1",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",

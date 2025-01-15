@@ -18,6 +18,7 @@ const {
   deleteImageFromGitHub,
 } = require('./utils/github'); // GitHub utils
 const upload = require('./middleware/upload'); // Multer upload
+const logger = require('./utils/logger'); // Add this import
 
 const app = express();
 
@@ -36,6 +37,25 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 if (isProduction || isDevelopment) {
   app.use(limiter);
 }
+
+// Add rate limiting specifically for auth routes
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per window
+  message: 'Too many login attempts, please try again later.',
+});
+
+// Add security headers
+const helmet = require('helmet');
+app.use(helmet());
+
+// Track login attempts
+const loginAttempts = new Map();
+
+// Clear login attempts every 15 minutes
+setInterval(() => {
+  loginAttempts.clear();
+}, 15 * 60 * 1000);
 
 // ------------------ CORS Configuration ------------------
 const allowedOrigins = isProduction
@@ -112,18 +132,28 @@ const commentsCollection = db.collection('comments');
  *************************************************************************/
 
 // ------------------ Validation Schemas ------------------
+
+
+const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
+// Update sign-up schema with stronger password validation
 const signUpSchema = Joi.object({
   username: Joi.string().max(20).required(),
   firstName: Joi.string().allow('', null),
   lastName: Joi.string().allow('', null),
   email: Joi.string().email().required(),
   phoneNumber: Joi.string().allow('', null),
-  password: Joi.string().min(6).required(),
+  password: Joi.string().pattern(strongPasswordRegex).required()
+    .messages({
+      'string.pattern.base': 'Password must be at least 8 characters long and contain uppercase, lowercase, number and special character'
+    }),
 });
 
 // ------------------ 1) Sign Up -----------------------
-app.post('/api/auth/signup', async (req, res) => {
+app.post('/api/auth/signup', authLimiter, async (req, res) => {
   try {
+    logger.info('Signup attempt:', { ...req.body, password: '[REDACTED]' });
+    
     // Validate
     const { error, value } = signUpSchema.validate(req.body);
     if (error) {
@@ -169,10 +199,31 @@ app.post('/api/auth/signup', async (req, res) => {
       { expiresIn: '1h' }
     );
 
+    const refreshToken = jwt.sign(
+      { id: newUserRef.id },
+      process.env.REFRESH_TOKEN_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Set secure cookies
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    logger.info(`New user registered: ${email}`);
+
     return res.json({
       message: 'User signed up successfully.',
-      userId: newUserRef.id,
-      token,
       user: {
         id: newUserRef.id,
         username,
@@ -181,14 +232,29 @@ app.post('/api/auth/signup', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('Error in /api/auth/signup:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+    logger.error('Error in /api/auth/signup:', {
+      error: err.message,
+      stack: err.stack,
+      body: { ...req.body, password: '[REDACTED]' }
+    });
+    return res.status(500).json({ 
+      error: 'Internal server error.',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
 // ------------------ 2) Sign In ------------------------
-app.post('/api/auth/signin', async (req, res) => {
+app.post('/api/auth/signin', authLimiter, async (req, res) => {
   try {
+    // Check login attempts
+    const attempts = loginAttempts.get(email) || 0;
+    if (attempts >= 5) {
+      logger.warn(`Account locked: ${email}`);
+      return res.status(429).json({ 
+        error: 'Account locked. Please try again in 15 minutes.' 
+      });
+    }
     const { usernameOrEmail, password } = req.body;
     if (!usernameOrEmail || !password) {
       return res.status(400).json({ error: 'Username/Email and password are required.' });
@@ -196,7 +262,7 @@ app.post('/api/auth/signin', async (req, res) => {
 
     // Find user by username or email
     let userDoc;
-    const usernameQuery = await usersCollection.where('username', '==', usernameOrEmail).get();
+    const usernameQuery = await usersCollection.where('username', '==', usernameOrEmail).limit(1).get().then(snapshot => snapshot.docs[0]);
     if (!usernameQuery.empty) {
       userDoc = usernameQuery.docs[0];
     } else {
@@ -210,6 +276,8 @@ app.post('/api/auth/signin', async (req, res) => {
     }
 
     if (!userDoc) {
+      loginAttempts.set(email, attempts + 1);
+      logger.info(`Login failed for: ${usernameOrEmail}`);
       return res.status(401).json({ error: 'Invalid credentials (not found).' });
     }
 
@@ -217,10 +285,15 @@ app.post('/api/auth/signin', async (req, res) => {
     // Compare password
     const isMatch = await bcrypt.compare(password, userData.password);
     if (!isMatch) {
+      loginAttempts.set(email, attempts + 1);
+      logger.info(`Login failed for: ${usernameOrEmail}`);
       return res.status(401).json({ error: 'Invalid credentials (bad password).' });
     }
 
-    // JWT
+    // Reset login attempts on success
+    loginAttempts.delete(email);
+
+    // JWT with longer expiration
     const token = jwt.sign(
       {
         id: userDoc.id,
@@ -229,9 +302,32 @@ app.post('/api/auth/signin', async (req, res) => {
         role: userData.role,
       },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '24h' }  // Extended to 24 hours
     );
 
+    const refreshToken = jwt.sign(
+      { id: userDoc.id },
+      process.env.REFRESH_TOKEN_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Set cookies for both production and development
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',  // Only true in production
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax', // More permissive in development
+      maxAge: 24 * 60 * 60 * 1000  // 24 hours in milliseconds
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',  // Only true in production
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax', // More permissive in development
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    logger.info(`Successful login: ${email}`);
+ 
     // Return user + token
     return res.json({
       message: 'Sign in successful.',
@@ -252,11 +348,65 @@ app.post('/api/auth/signin', async (req, res) => {
 // ------------------ 9) Sign Out (stateless) -----------
 app.post('/api/auth/signout', authenticateJWT, async (req, res) => {
   try {
-    // For stateless JWT, just remove token on client side
+    // Clear cookies
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict'
+    });
+    
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict'
+    });
+
+    logger.info(`User signed out: ${req.user.email}`);
     return res.json({ message: 'Sign out successful.' });
   } catch (err) {
     console.error('Error in /api/auth/signout:', err);
     return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// Add refresh token route
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.cookies;
+    if (!refreshToken) {
+      return res.status(401).json({ error: 'Refresh token required.' });
+    }
+
+    const payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+    const userDoc = await usersCollection.doc(payload.id).get();
+    
+    if (!userDoc.exists) {
+      return res.status(401).json({ error: 'User not found.' });
+    }
+
+    const userData = userDoc.data();
+    const newToken = jwt.sign(
+      {
+        id: userDoc.id,
+        username: userData.username,
+        email: userData.email,
+        role: userData.role,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.cookie('token', newToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000
+    });
+
+    return res.json({ message: 'Token refreshed successfully.' });
+  } catch (err) {
+    console.error('Error in /api/auth/refresh:', err);
+    return res.status(401).json({ error: 'Invalid refresh token.' });
   }
 });
 
