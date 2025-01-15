@@ -112,13 +112,13 @@ const Carousel = () => {
     <div className="carousel-container">
       {/* Render one main slide per category */}
       <Slider {...mainSettings}>
-        {sections.map((section, index) => (
-          <div key={index} className="carousel-slide">
+        {sections.map((section, sectionIndex) => (
+          <div key={`section-${sectionIndex}`} className="carousel-slide">
             <h2 className="text-2xl font-bold mb-6 text-center">{section.title}</h2>
             {section.boxes.length > 0 ? (
               <Slider {...boxSettings}>
-                {section.boxes.map((box) => (
-                  <div key={box.id}>
+                {section.boxes.map((box, boxIndex) => (
+                  <div key={`${section.title}-${box.id}-${boxIndex}`}>
                     <Link to={`/posts/${box.id}`}>
                       <CardBox {...box} />
                     </Link>

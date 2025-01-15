@@ -39,6 +39,7 @@
     "@tiptap/react": "^2.10.4",
     "@tiptap/starter-kit": "^2.10.4",
     "axios": "^1.7.9",
+    "cookie-parser": "^1.4.7",
     "dompurify": "^3.2.3",
     "googleapis": "^144.0.0",
     "helmet": "^8.0.0",

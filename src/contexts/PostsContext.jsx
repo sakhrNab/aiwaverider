@@ -84,7 +84,14 @@ export const PostsProvider = ({ children }) => {
         setLoadingPosts(true);
         setErrorPosts('');
         const data = await apiGetAllPosts(category, limit, lastPostDate, token);
-        setPosts(Array.isArray(data.posts) ? data.posts : []);
+        // Ensure each post has a comments array
+        const postsWithComments = Array.isArray(data.posts) 
+          ? data.posts.map(post => ({
+              ...post,
+              comments: Array.isArray(post.comments) ? post.comments : []
+            }))
+          : [];
+        setPosts(postsWithComments);
         setLastFetchTime(Date.now());
       } catch (err) {
         console.error('Error fetching all posts (cached):', err);

@@ -81,8 +81,8 @@ const CommentsSection = ({ postId }) => {
         <p className="text-gray-600">No comments yet. Be the first to comment!</p>
       ) : (
         <ul className="space-y-2">
-          {comments.map((comment) => (
-            <li key={comment.id} className="border-b border-gray-200 pb-2">
+          {comments.map((comment, index) => (
+            <li key={`comment-${comment.id}-${index}`} className="border-b border-gray-200 pb-2">
               <strong>
                 {comment.username} ({comment.userRole}):
               </strong>{' '}

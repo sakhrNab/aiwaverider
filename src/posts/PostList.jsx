@@ -67,7 +67,12 @@ const PostsList = () => {
         setPosts((prevPosts) =>
           prevPosts.map((post) =>
             post.id === postId
-              ? { ...post, comments: [...post.comments, data.comment] }
+              ? { 
+                  ...post, 
+                  comments: Array.isArray(post.comments) 
+                    ? [...post.comments, data.comment]
+                    : [data.comment]
+                }
               : post
           )
         );
@@ -152,9 +157,9 @@ const PostsList = () => {
       )}
 
       <div className="space-y-6">
-        {posts.map((post) => (
+        {posts.map((post, index) => (
           <div
-            key={post.id}
+            key={`post-${post.id}-${index}`}
             className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
           >
             <div className="flex justify-between items-start">
@@ -191,21 +196,23 @@ const PostsList = () => {
             {/* Comments */}
             <div className="mt-4">
               <h4 className="font-semibold">Comments:</h4>
-              {Array.isArray(post.comments) && post.comments.length === 0 ? (
+              {!post.comments ? (
+                <p className="text-gray-600">Loading comments...</p>
+              ) : Array.isArray(post.comments) && post.comments.length === 0 ? (
                 <p className="text-gray-600">No comments yet.</p>
+              ) : Array.isArray(post.comments) ? (
+                <ul className="space-y-2 mt-2">
+                  {post.comments.map((comment, commentIndex) => (
+                    <li key={`comment-${comment.id}-${commentIndex}`} className="border-t pt-2">
+                      <strong className="text-gray-800">
+                        {comment.username} ({comment.userRole}):
+                      </strong>{' '}
+                      {comment.text}
+                    </li>
+                  ))}
+                </ul>
               ) : (
-                Array.isArray(post.comments) && (
-                  <ul className="space-y-2 mt-2">
-                    {post.comments.map((comment) => (
-                      <li key={comment.id} className="border-t pt-2">
-                        <strong className="text-gray-800">
-                          {comment.username} ({comment.userRole}):
-                        </strong>{' '}
-                        {comment.text}
-                      </li>
-                    ))}
-                  </ul>
-                )
+                <p className="text-gray-600">Error loading comments.</p>
               )}
             </div>
 
