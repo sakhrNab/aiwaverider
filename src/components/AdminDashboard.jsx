@@ -9,44 +9,11 @@ import { CATEGORIES } from '../constants/categories';
 import { PostsContext } from '../contexts/PostsContext';
 
 const AdminDashboard = () => {
-  // 1. Declare all Hooks at the top, in the same order
+  // Move auth check before any hooks or effects
   const { user, token } = useContext(AuthContext);
-  const {
-    posts,
-    fetchAllPosts,
-    loadingPosts,
-    errorPosts,
-    removePostFromCache,
-  } = useContext(PostsContext);
-  const navigate = useNavigate();
-
-  const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [postToDelete, setPostToDelete] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // For toggling "Show Posts" vs. "Show Users"
-  const [viewMode, setViewMode] = useState('posts'); // "posts" or "users"
-
-  // For local searching / filtering
-  const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('All');
-
-  // 2. useEffect Hooks after all Hook declarations
-  useEffect(() => {
-    const loadPosts = async () => {
-      try {
-        await fetchAllPosts('All', 10);
-      } catch (err) {
-        setError(err.message);
-      }
-    };
-    loadPosts();
-  }, [fetchAllPosts]);
-
-  // 3. Conditional Rendering after Hooks
-  // Only admin can access
-  if (user?.role !== 'admin') {
+  
+  // Immediate return if not admin
+  if (!user?.role === 'admin') {
     return (
       <div className="p-4 text-red-600 font-bold">
         Unauthorized – Only Admins Can Access This Page
@@ -54,18 +21,72 @@ const AdminDashboard = () => {
     );
   }
 
-  // 4. Filter the posts by category and search term
-  const displayedPosts = posts.filter((p) => {
-    // Category filter
-    if (categoryFilter !== 'All' && p.category !== categoryFilter) {
-      return false;
-    }
-    // Search by title or ID
-    const lowerSearch = searchTerm.toLowerCase();
-    const inTitle = p.title?.toLowerCase().includes(lowerSearch);
-    const inId = p.id?.toLowerCase().includes(lowerSearch);
-    return inTitle || inId;
-  });
+  const {
+    posts,
+    fetchAllPosts,
+    loadingPosts,
+    errorPosts,
+    removePostFromCache,
+  } = useContext(PostsContext);
+
+  // State declarations
+  const [viewMode, setViewMode] = useState('posts');
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [postToDelete, setPostToDelete] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All');
+  const navigate = useNavigate();
+
+  // Single useEffect for initial load
+  useEffect(() => {
+    let mounted = true;
+
+    const loadData = async () => {
+      try {
+        await fetchAllPosts('All', 10);
+      } catch (err) {
+        if (mounted) {
+          setError(err.message);
+        }
+      }
+    };
+
+    loadData();
+
+    return () => {
+      mounted = false;
+    };
+  }, [fetchAllPosts]);
+
+  // Create a function to deduplicate posts
+  const getUniquePosts = (posts) => {
+    const seen = new Set();
+    return posts.filter(post => {
+      const duplicate = seen.has(post.id);
+      seen.add(post.id);
+      return !duplicate;
+    });
+  };
+
+  // Filter posts and ensure uniqueness
+  const getFilteredPosts = () => {
+    const filtered = posts.filter((post) => {
+      if (categoryFilter !== 'All' && post.category !== categoryFilter) {
+        return false;
+      }
+      const lowerSearch = searchTerm.toLowerCase();
+      const inTitle = post.title?.toLowerCase().includes(lowerSearch);
+      const inId = post.id?.toLowerCase().includes(lowerSearch);
+      return inTitle || inId;
+    });
+
+    return getUniquePosts(filtered);
+  };
+
+  // Get unique posts once
+  const uniqueFilteredPosts = getFilteredPosts();
 
   // -------------- Create New Post (No DB Call) --------------
   const handleCreateNewPost = () => {
@@ -188,15 +209,15 @@ const AdminDashboard = () => {
           </div>
 
           {/* Posts List in 3-column grid */}
-          {displayedPosts.length === 0 ? (
+          {uniqueFilteredPosts.length === 0 ? (
             <p className="text-gray-600 text-center">
               No posts match your filter/search.
             </p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {displayedPosts.map((post) => (
+              {uniqueFilteredPosts.map((post, index) => (
                 <div
-                  key={post.id}
+                  key={`${post.id}-${index}`}
                   className="p-4 border border-gray-200 rounded-md shadow-sm hover:shadow-md flex flex-col"
                 >
                   <div className="flex-1">

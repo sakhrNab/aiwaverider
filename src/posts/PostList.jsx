@@ -157,87 +157,89 @@ const PostsList = () => {
       )}
 
       <div className="space-y-6">
-        {posts.map((post, index) => (
-          <div
-            key={`post-${post.id}-${index}`}
-            className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow"
-          >
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-2xl font-semibold mb-2">{post.title}</h3>
-                <p className="text-gray-700">{post.description}</p>
-                <p className="text-sm text-gray-500 mt-2">
-                  Category: {post.category || 'Uncategorized'}
-                </p>
-                {post.imageUrl && (
-                  <img
-                    src={post.imageUrl}
-                    alt={post.title}
-                    className="mt-2 h-40 w-full object-cover rounded-md"
-                  />
+        {Array.from(new Set(posts.map(p => p.id))).map((postId) => {
+          const post = posts.find(p => p.id === postId);
+          if (!post) return null;
+          
+          return (
+            <div key={`post-${postId}`} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-2xl font-semibold mb-2">{post.title}</h3>
+                  <p className="text-gray-700">{post.description}</p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Category: {post.category || 'Uncategorized'}
+                  </p>
+                  {post.imageUrl && (
+                    <img
+                      src={post.imageUrl}
+                      alt={post.title}
+                      className="mt-2 h-40 w-full object-cover rounded-md"
+                    />
+                  )}
+                  <p className="text-sm text-gray-500">
+                    Created By: {post.createdByUsername || 'Unknown'}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Created At: {formatDate(post.createdAt)}
+                  </p>
+                </div>
+                {role === 'admin' && (
+                  <button
+                    onClick={() => confirmDeletePost(post)}
+                    className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                  >
+                    Delete
+                  </button>
                 )}
-                <p className="text-sm text-gray-500">
-                  Created By: {post.createdByUsername || 'Unknown'}
-                </p>
-                <p className="text-sm text-gray-500">
-                  Created At: {formatDate(post.createdAt)}
-                </p>
               </div>
-              {role === 'admin' && (
-                <button
-                  onClick={() => confirmDeletePost(post)}
-                  className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-                >
-                  Delete
-                </button>
-              )}
-            </div>
 
-            {/* Comments */}
-            <div className="mt-4">
-              <h4 className="font-semibold">Comments:</h4>
-              {Array.isArray(post.comments) ? (
-                post.comments.length === 0 ? (
-                  <p className="text-gray-600">No comments yet.</p>
-                ) : (
-                  <ul className="space-y-2 mt-2">
-                    {post.comments.map((comment, commentIndex) => (
-                      <li key={`comment-${comment.id}-${commentIndex}`} className="border-t pt-2">
-                        <strong className="text-gray-800">
-                          {comment.username} ({comment.userRole}):
-                        </strong>{' '}
-                        {comment.text}
-                      </li>
-                    ))}
-                  </ul>
-                )
-              ) : post.comments === undefined  ? (
-                <p className="text-gray-600">{post.comments}Loading comments...</p>
-              ) : (
-                <p className="text-gray-600">Error loading comments.</p>
-              )}
-            </div>
-
-            {/* Add Comment if logged in */}
-            {user && (
+              {/* Comments */}
               <div className="mt-4">
-                <input
-                  type="text"
-                  value={commentTexts[post.id] || ''}
-                  onChange={(e) => handleCommentChange(post.id, e.target.value)}
-                  placeholder="Add a comment..."
-                  className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  onClick={() => handleAddComment(post.id)}
-                  className="mt-2 w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  Comment
-                </button>
+                <h4 className="font-semibold">Comments:</h4>
+                {Array.isArray(post.comments) ? (
+                  post.comments.length === 0 ? (
+                    <p className="text-gray-600">No comments yet.</p>
+                  ) : (
+                    <ul className="space-y-2 mt-2">
+                      {post.comments.map((comment, commentIndex) => (
+                        <li key={`comment-${comment.id}-${commentIndex}`} className="border-t pt-2">
+                          <strong className="text-gray-800">
+                            {comment.username} ({comment.userRole}):
+                          </strong>{' '}
+                          {comment.text}
+                        </li>
+                      ))}
+                    </ul>
+                  )
+                ) : post.comments === undefined  ? (
+                  <p className="text-gray-600">{post.comments}Loading comments...</p>
+                ) : (
+                  <p className="text-gray-600">Error loading comments.</p>
+                )}
               </div>
-            )}
-          </div>
-        ))}
+
+              {/* Add Comment if logged in */}
+              {user && (
+                <div className="mt-4">
+                  <input
+                    type="text"
+                    value={commentTexts[post.id] || ''}
+                    onChange={(e) => handleCommentChange(post.id, e.target.value)}
+                    placeholder="Add a comment..."
+                    className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={() => handleAddComment(post.id)}
+                    className="mt-2 w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    Comment
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Load More Button */}

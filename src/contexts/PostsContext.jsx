@@ -73,9 +73,16 @@ export const PostsProvider = ({ children }) => {
     async (category = 'All', limit = 10, lastPostDate = null, force = false) => {
       // If cache is valid and not forcing, return cached posts
       if (!force && isCacheValid()) {
-        return posts
+        const filteredPosts = posts
           .filter((post) => category === 'All' || post.category === category)
           .slice(0, limit);
+        
+        // Deduplicate posts by ID
+        const uniquePosts = Array.from(
+          new Map(filteredPosts.map(post => [post.id, post])).values()
+        );
+        
+        return uniquePosts;
       }
 
       if (!token) return;

@@ -10,6 +10,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const hasAttemptedInitialAuth = useRef(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -27,22 +28,25 @@ export const AuthProvider = ({ children }) => {
         } else {
           // Clear user state and any cached data
           setUser(null);
+          localStorage.clear();
         }
       } catch (err) {
         console.error('Auth initialization error:', err);
         setUser(null);
+        localStorage.clear();
       } finally {
         hasAttemptedInitialAuth.current = true;
         setLoading(false);
+        setIsInitialized(true);
       }
     };
 
     initAuth();
   }, []);
 
-  // Set up auto-refresh of token
+  // Prevent token refresh if not initialized
   useEffect(() => {
-    if (!user) return;
+    if (!isInitialized || !user) return;
 
     const refreshInterval = setInterval(async () => {
       try {
@@ -63,7 +67,7 @@ export const AuthProvider = ({ children }) => {
     }, 23 * 60 * 60 * 1000); // refresh every 24 hrs Refresh every 14 minutes (well before token expiry)14 * 60 * 1000
 
     return () => clearInterval(refreshInterval);
-  }, [user]);
+  }, [user, isInitialized]);
 
   const signInUser = useCallback((userData) => {
     setUser(userData);

@@ -87,6 +87,75 @@ app.options('*', cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Add cookie parser before routes
+const cookieParser = require('cookie-parser');
+app.use(cookieParser());
+
+// Move this route before other routes
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    
+    if (!refreshToken) {
+      return res.status(401).json({ 
+        error: 'No refresh token found',
+        user: null 
+      });
+    }
+
+    try {
+      const payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+      const userDoc = await usersCollection.doc(payload.id).get();
+      
+      if (!userDoc.exists) {
+        return res.status(401).json({ 
+          error: 'User not found',
+          user: null 
+        });
+      }
+
+      const userData = userDoc.data();
+      const token = jwt.sign(
+        {
+          id: userDoc.id,
+          username: userData.username,
+          email: userData.email,
+          role: userData.role,
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+
+      // Set new access token cookie
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+        path: '/',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      });
+
+      return res.json({
+        message: 'Token refreshed successfully',
+        user: {
+          id: userDoc.id,
+          username: userData.username,
+          email: userData.email,
+          role: userData.role,
+        }
+      });
+    } catch (tokenError) {
+      // Clear invalid tokens
+      res.clearCookie('token');
+      res.clearCookie('refreshToken');
+      return res.status(401).json({ error: 'Invalid refresh token', user: null });
+    }
+  } catch (err) {
+    console.error('Error in /api/auth/refresh:', err);
+    return res.status(401).json({ error: 'Invalid refresh token', user: null });
+  }
+});
+
 // ------------------ Initialize Firebase Admin ------------------
 let serviceAccount;
 
@@ -394,95 +463,26 @@ app.post('/api/auth/signin', authLimiter, async (req, res) => {
 // ------------------ 9) Sign Out (stateless) -----------
 app.post('/api/auth/signout', async (req, res) => {
   try {
-    // Always clear cookies regardless of auth state
+    // Clear cookies with the same options they were set with
     res.clearCookie('token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      path: '/'  // Add path to ensure cookie is removed
+      path: '/'
     });
     
     res.clearCookie('refreshToken', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      path: '/'  // Add path to ensure cookie is removed
+      path: '/'
     });
 
-    logger.info('User signed out');
+    // Return immediately after clearing cookies
     return res.status(200).json({ message: 'Sign out successful' });
   } catch (err) {
     logger.error('Error in /api/auth/signout:', err);
     return res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Add cookie parser before routes
-const cookieParser = require('cookie-parser');
-app.use(cookieParser());
-
-// Move this route before other routes
-app.post('/api/auth/refresh', async (req, res) => {
-  try {
-    const refreshToken = req.cookies.refreshToken;
-    
-    if (!refreshToken) {
-      return res.status(401).json({ 
-        error: 'No refresh token found',
-        user: null 
-      });
-    }
-
-    try {
-      const payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-      const userDoc = await usersCollection.doc(payload.id).get();
-      
-      if (!userDoc.exists) {
-        return res.status(401).json({ 
-          error: 'User not found',
-          user: null 
-        });
-      }
-
-      const userData = userDoc.data();
-      const token = jwt.sign(
-        {
-          id: userDoc.id,
-          username: userData.username,
-          email: userData.email,
-          role: userData.role,
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: '1h' }
-      );
-
-      // Set new access token cookie
-      res.cookie('token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-        path: '/',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-      });
-
-      return res.json({
-        message: 'Token refreshed successfully',
-        user: {
-          id: userDoc.id,
-          username: userData.username,
-          email: userData.email,
-          role: userData.role,
-        }
-      });
-    } catch (tokenError) {
-      // Clear invalid tokens
-      res.clearCookie('token');
-      res.clearCookie('refreshToken');
-      return res.status(401).json({ error: 'Invalid refresh token', user: null });
-    }
-  } catch (err) {
-    console.error('Error in /api/auth/refresh:', err);
-    return res.status(401).json({ error: 'Invalid refresh token', user: null });
   }
 });
 
