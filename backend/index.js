@@ -19,6 +19,9 @@ const {
 } = require('./utils/github'); // GitHub utils
 const upload = require('./middleware/upload'); // Multer upload
 const logger = require('./utils/logger'); // Add this import
+const dns = require('dns');
+const { promisify } = require('util');
+const resolveMx = promisify(dns.resolveMx);
 
 const app = express();
 
@@ -42,7 +45,9 @@ if (isProduction || isDevelopment) {
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 attempts per window
-  message: 'Too many login attempts, please try again later.',
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Too many login attempts, please try again later.' });
+  }
 });
 
 // Add security headers
@@ -154,13 +159,39 @@ app.post('/api/auth/signup', authLimiter, async (req, res) => {
   try {
     logger.info('Signup attempt:', { ...req.body, password: '[REDACTED]' });
     
+    // Fix the email reference
+    const { email } = req.body;
+    
+    // Check MX records for email domain
+    try {
+      const domain = email.split('@')[1];
+      if (!domain) {
+        return res.status(400).json({ 
+          error: 'Invalid email format' 
+        });
+      }
+
+      const mxRecords = await resolveMx(domain);
+      
+      if (!mxRecords || mxRecords.length === 0) {
+        return res.status(400).json({ 
+          error: 'Invalid email domain - no mail server found' 
+        });
+      }
+    } catch (error) {
+      console.error('Email domain validation error:', error);
+      return res.status(400).json({ 
+        error: 'Invalid email domain' 
+      });
+    }
+
     // Validate
     const { error, value } = signUpSchema.validate(req.body);
     if (error) {
       return res.status(400).json({ error: error.details[0].message });
     }
 
-    const { username, firstName, lastName, email, phoneNumber, password } = value;
+    const { username, firstName, lastName, phoneNumber, password } = value;
 
     // Check duplicates
     const usernameQuery = await usersCollection.where('username', '==', username).get();
@@ -257,9 +288,12 @@ app.post('/api/auth/signin', authLimiter, async (req, res) => {
     // Check login attempts using usernameOrEmail as the key instead of undefined email
     const attempts = loginAttempts.get(usernameOrEmail) || 0;
     if (attempts >= 5) {
+      const lockoutEndTime = new Date(Date.now() + 15 * 60 * 1000);
       logger.warn(`Account locked: ${usernameOrEmail}`);
       return res.status(429).json({ 
-        error: 'Account locked. Please try again in 15 minutes.' 
+        error: 'Too many login attempts. Account locked.',
+        lockoutTime: lockoutEndTime.toISOString(),
+        attemptsLeft: 0
       });
     }
 
@@ -283,27 +317,59 @@ app.post('/api/auth/signin', authLimiter, async (req, res) => {
       }
     }
 
-    if (!userDoc) {
+    const isMatch = userDoc ? await bcrypt.compare(password, userDoc.data().password) : false;
+
+    // Update failed attempt response
+    if (!userDoc || !isMatch) {
       loginAttempts.set(usernameOrEmail, attempts + 1);
-      logger.info(`Login failed for: ${usernameOrEmail}`);
-      return res.status(401).json({ error: 'Invalid credentials.' });
+      const remainingAttempts = 5 - (attempts + 1);
+      const message = remainingAttempts > 0
+        ? `Invalid credentials. ${remainingAttempts} attempts remaining.`
+        : 'Invalid credentials. Last attempt before account lockout.';
+      
+      return res.status(401).json({ 
+        error: message,
+        attemptsLeft: remainingAttempts
+      });
     }
 
     const userData = userDoc.data();
     
-    // Compare password
-    const isMatch = await bcrypt.compare(password, userData.password);
-    if (!isMatch) {
-      loginAttempts.set(usernameOrEmail, attempts + 1);
-      logger.info(`Login failed for: ${usernameOrEmail}`);
-      return res.status(401).json({ error: 'Invalid credentials.' });
-    }
-
     // Reset login attempts on success
     loginAttempts.delete(usernameOrEmail);
 
-    // Rest of the signin logic remains the same...
-    // ...existing JWT and cookie setting code...
+    // Create tokens
+    const token = jwt.sign(
+      {
+        id: userDoc.id,
+        username: userData.username,
+        email: userData.email,
+        role: userData.role,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    const refreshToken = jwt.sign(
+      { id: userDoc.id },
+      process.env.REFRESH_TOKEN_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Set cookies
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
 
     logger.info(`Successful login: ${usernameOrEmail}`);
     
@@ -319,7 +385,7 @@ app.post('/api/auth/signin', authLimiter, async (req, res) => {
   } catch (err) {
     logger.error('Error in /api/auth/signin:', err);
     return res.status(500).json({ 
-      error: 'Internal server error.',
+      error: 'An unexpected error occurred during sign in. Please try again or contact support.',
       details: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }

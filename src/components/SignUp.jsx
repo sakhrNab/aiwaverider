@@ -11,6 +11,7 @@ import { AuthContext } from '../contexts/AuthContext'; // Import AuthContext
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
 import debounce from 'lodash.debounce';
+import { validateEmail } from '../utils/emailValidator';
 
 // Define PasswordRequirements outside of SignUp for effective memoization
 const PasswordRequirements = React.memo(({ validation }) => (
@@ -113,6 +114,8 @@ const SignUp = ({ isOpen, onClose }) => {
     hasNumber: false,
     hasSpecial: false,
   });
+  const [emailError, setEmailError] = useState('');
+  const [emailWarning, setEmailWarning] = useState('');
   const navigate = useNavigate();
   const modalRef = useRef(null);
   const { signInUser } = useContext(AuthContext); // Get signInUser from context
@@ -185,9 +188,33 @@ const SignUp = ({ isOpen, onClose }) => {
     }));
   };
 
+  const handleEmailChange = (e) => {
+    const { value } = e.target;
+    const validation = validateEmail(value);
+    
+    setEmailError(validation.isValid ? '' : validation.message);
+    setEmailWarning(validation.warning || '');
+    
+    handleInputChange(e);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(''); // Clear previous errors
+
+    // Validate email before submission
+    const emailValidation = validateEmail(formData.email);
+    if (!emailValidation.isValid) {
+      setError(emailValidation.message);
+      return;
+    }
+
+    // Additional email domain validation
+    const domain = formData.email.split('@')[1];
+    if (!domain) {
+      setError('Invalid email format');
+      return;
+    }
     
     try {
       if (!passwordValidation.isValid) {
@@ -207,7 +234,11 @@ const SignUp = ({ isOpen, onClose }) => {
       }
     } catch (error) {
       console.error('Signup error:', error);
-      setError(error.message || 'An unexpected error occurred during sign up.');
+      // Handle specific error messages from the server
+      const errorMessage = error.message || 'An unexpected error occurred during sign up.';
+      setError(errorMessage.includes('Invalid email domain') 
+        ? 'Please enter a valid email domain' 
+        : errorMessage);
     }
   };
 
@@ -302,10 +333,16 @@ const SignUp = ({ isOpen, onClose }) => {
                 required
                 aria-required="true"
                 value={formData.email}
-                onChange={handleInputChange}
-                className="form-input"
+                onChange={handleEmailChange}
+                className={`form-input ${emailError ? 'border-red-500' : emailWarning ? 'border-yellow-500' : ''}`}
                 placeholder="Enter your email"
               />
+              {emailError && (
+                <p className="text-red-500 text-sm mt-1">{emailError}</p>
+              )}
+              {emailWarning && !emailError && (
+                <p className="text-yellow-500 text-sm mt-1">{emailWarning}</p>
+              )}
             </div>
 
             {/* Phone Number */}
@@ -431,10 +468,16 @@ const SignUp = ({ isOpen, onClose }) => {
                 required
                 aria-required="true"
                 value={formData.email}
-                onChange={handleInputChange}
-                className="form-input"
+                onChange={handleEmailChange}
+                className={`form-input ${emailError ? 'border-red-500' : emailWarning ? 'border-yellow-500' : ''}`}
                 placeholder="Enter your email"
               />
+              {emailError && (
+                <p className="text-red-500 text-sm mt-1">{emailError}</p>
+              )}
+              {emailWarning && !emailError && (
+                <p className="text-yellow-500 text-sm mt-1">{emailWarning}</p>
+              )}
             </div>
 
             {/* Phone Number */}

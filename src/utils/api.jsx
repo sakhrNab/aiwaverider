@@ -39,15 +39,25 @@ export const signIn = async (credentials) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(credentials),
-      credentials: 'include', // Important for cookies
+      credentials: 'include',
     });
+
     const data = await response.json();
+    
     if (!response.ok) {
-      throw new Error(data.error || 'Sign in failed');
+      const error = new Error(data.error || 'Sign in failed');
+      error.response = { data }; // Include the full response data
+      error.attemptsLeft = data.attemptsLeft;
+      error.lockoutTime = data.lockoutTime;
+      throw error;
     }
+
     return data;
   } catch (error) {
-    console.error('Error during sign in:', error);
+    // Ensure error has response property even if fetch fails
+    if (!error.response) {
+      error.response = { data: { attemptsLeft: undefined } };
+    }
     throw error;
   }
 };
