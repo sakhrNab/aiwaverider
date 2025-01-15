@@ -57,6 +57,7 @@ export const createPost = async (formData, token) => {
   try {
     const response = await fetch(`${API_URL}/api/posts`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Authorization': `Bearer ${token}`,
         // Do NOT set 'Content-Type' header when sending FormData
@@ -84,6 +85,7 @@ export const getAllPosts = async (category = 'All', limit = 10, startAfter = nul
 
     const response = await fetch(url, {
       method: 'GET',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
@@ -108,6 +110,7 @@ export const getComments = async (postId) => {
   try {
     const response = await fetch(`${API_URL}/api/posts/${postId}/comments`, {
       method: 'GET',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
       },
@@ -125,6 +128,7 @@ export const addComment = async (postId, commentData, token) => {
   try {
     const response = await fetch(`${API_URL}/api/posts/${postId}/comments`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
@@ -144,6 +148,7 @@ export const deletePost = async (postId, token) => {
   try {
     const response = await fetch(`${API_URL}/api/posts/${postId}`, {
       method: 'DELETE',
+      credentials: 'include',
       headers: {
         ...(token && { Authorization: `Bearer ${token}` }),
       },
@@ -166,14 +171,27 @@ export const signOutUser = async () => {
     const response = await fetch(`${API_URL}/api/auth/signout`, {
       method: 'POST',
       credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      }
     });
-    if (!response.ok) {
-      throw new Error('Sign out failed');
+
+    // First try to parse the response as JSON
+    let data;
+    try {
+      data = await response.json();
+    } catch (e) {
+      // If parsing fails, create a default response
+      data = { message: response.statusText };
     }
-    return await response.json();
+
+    // Always consider signout successful even if server returns error
+    // This ensures client-side cleanup happens
+    return { success: true, message: data.message || 'Signed out successfully' };
   } catch (error) {
     console.error('Error during sign out:', error);
-    throw error;
+    // Still return success to ensure client-side cleanup
+    return { success: true, message: 'Signed out locally' };
   }
 };
 
@@ -182,6 +200,7 @@ export const updatePost = async (postId, formData, token) => {
   try {
     const response = await fetch(`${API_URL}/api/posts/${postId}`, {
       method: 'PUT',
+      credentials: 'include',
       headers: {
         'Authorization': `Bearer ${token}`,
         // Do NOT set 'Content-Type' header when sending FormData
@@ -201,6 +220,7 @@ export const getPostById = async (postId) => {
   try {
     const response = await fetch(`${API_URL}/api/posts/${postId}`, {
       method: 'GET',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         // Add Authorization header if the endpoint requires authentication
@@ -220,20 +240,30 @@ export const getPostById = async (postId) => {
   }
 };
 
-// Add Refresh Token
+// Update Refresh Token
 export const refreshToken = async () => {
   try {
     const response = await fetch(`${API_URL}/api/auth/refresh`, {
       method: 'POST',
       credentials: 'include',
     });
+
+    // If unauthorized, just return null without logging an error
+    if (response.status === 401) {
+      return { user: null };
+    }
+
     if (!response.ok) {
       throw new Error('Token refresh failed');
     }
+
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error('Error refreshing token:', error);
-    throw error;
+    // Only log error if it's not an unauthorized error
+    if (!error.message.includes('Unauthorized')) {
+      console.error('Error refreshing token:', error);
+    }
+    return { user: null };
   }
 };

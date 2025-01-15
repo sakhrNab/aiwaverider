@@ -1,6 +1,6 @@
 // src/contexts/AuthContext.jsx
 
-import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { signOutUser as apiSignOutUser, refreshToken } from '../utils/api';
 
 export const AuthContext = createContext(null);
@@ -8,20 +8,39 @@ export const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  // Remove token-related state and storage
+  const [error, setError] = useState(null);
+  const hasAttemptedInitialAuth = useRef(false);
 
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // Try to refresh the token on initial load
+        // Skip if we've already attempted initial auth
+        if (hasAttemptedInitialAuth.current) {
+          setLoading(false);
+          return;
+        }
+
+        // Only attempt refresh if we find user data
+        const hasRefreshCookie = document.cookie.includes('refreshToken=');
+        
+        if (!hasRefreshCookie) {
+          hasAttemptedInitialAuth.current = true;
+          setLoading(false);
+          return;
+        }
+
+        // Try to refresh token
         const response = await refreshToken();
         if (response.user) {
           setUser(response.user);
         }
       } catch (error) {
-        console.error('Auth initialization failed:', error);
+        if (!error.message.includes('Unauthorized')) {
+          setError(error.message);
+        }
+        setUser(null);
       } finally {
+        hasAttemptedInitialAuth.current = true;
         setLoading(false);
       }
     };
@@ -29,17 +48,19 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  // Set up token refresh interval
+  // Only set up refresh interval if user is logged in
   useEffect(() => {
+    if (!user) return;
+
     const refreshInterval = setInterval(async () => {
-      if (user) {
-        try {
-          await refreshToken();
-        } catch (error) {
-          console.error('Token refresh failed:', error);
-          // If refresh fails, log out the user
+      try {
+        const response = await refreshToken();
+        if (!response.user) {
           logout();
         }
+      } catch (error) {
+        console.error('Token refresh failed:', error);
+        logout();
       }
     }, 23 * 60 * 60 * 1000); // Refresh every 23 hours
 
@@ -48,22 +69,21 @@ export const AuthProvider = ({ children }) => {
 
   const signInUser = useCallback((userData) => {
     setUser(userData);
-    // No need to handle token - it's in HTTP-only cookie
+  }, []);
+
+  const logout = useCallback(() => {
+    setUser(null);
   }, []);
 
   const signOutUser = useCallback(async () => {
     try {
       await apiSignOutUser();
-      logout();
     } catch (error) {
       console.error('Error signing out:', error);
+    } finally {
+      logout();
     }
-  }, []);
-
-  const logout = useCallback(() => {
-    setUser(null);
-    // No need to handle token - it's in HTTP-only cookie
-  }, []);
+  }, [logout]);
 
   const contextValue = useMemo(
     () => ({
@@ -71,8 +91,9 @@ export const AuthProvider = ({ children }) => {
       signInUser,
       signOutUser,
       loading,
+      error,
     }),
-    [user, signInUser, signOutUser, loading]
+    [user, signInUser, signOutUser, loading, error]
   );
 
   return (
