@@ -196,21 +196,23 @@ const PostsList = () => {
             {/* Comments */}
             <div className="mt-4">
               <h4 className="font-semibold">Comments:</h4>
-              {!post.comments ? (
-                <p className="text-gray-600">Loading comments...</p>
-              ) : Array.isArray(post.comments) && post.comments.length === 0 ? (
-                <p className="text-gray-600">No comments yet.</p>
-              ) : Array.isArray(post.comments) ? (
-                <ul className="space-y-2 mt-2">
-                  {post.comments.map((comment, commentIndex) => (
-                    <li key={`comment-${comment.id}-${commentIndex}`} className="border-t pt-2">
-                      <strong className="text-gray-800">
-                        {comment.username} ({comment.userRole}):
-                      </strong>{' '}
-                      {comment.text}
-                    </li>
-                  ))}
-                </ul>
+              {Array.isArray(post.comments) ? (
+                post.comments.length === 0 ? (
+                  <p className="text-gray-600">No comments yet.</p>
+                ) : (
+                  <ul className="space-y-2 mt-2">
+                    {post.comments.map((comment, commentIndex) => (
+                      <li key={`comment-${comment.id}-${commentIndex}`} className="border-t pt-2">
+                        <strong className="text-gray-800">
+                          {comment.username} ({comment.userRole}):
+                        </strong>{' '}
+                        {comment.text}
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : post.comments === undefined  ? (
+                <p className="text-gray-600">{post.comments}Loading comments...</p>
               ) : (
                 <p className="text-gray-600">Error loading comments.</p>
               )}

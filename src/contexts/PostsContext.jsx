@@ -84,11 +84,12 @@ export const PostsProvider = ({ children }) => {
         setLoadingPosts(true);
         setErrorPosts('');
         const data = await apiGetAllPosts(category, limit, lastPostDate, token);
-        // Ensure each post has a comments array
+        // Initialize posts with comments only if they exist
         const postsWithComments = Array.isArray(data.posts) 
           ? data.posts.map(post => ({
               ...post,
-              comments: Array.isArray(post.comments) ? post.comments : []
+              // Only initialize comments array if post has comments
+              comments: post.comments ? Array.isArray(post.comments) ? post.comments : [] : undefined
             }))
           : [];
         setPosts(postsWithComments);

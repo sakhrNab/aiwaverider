@@ -20,24 +20,16 @@ export const AuthProvider = ({ children }) => {
           return;
         }
 
-        // Only attempt refresh if we find user data
-        const hasRefreshCookie = document.cookie.includes('refreshToken=');
-        
-        if (!hasRefreshCookie) {
-          hasAttemptedInitialAuth.current = true;
-          setLoading(false);
-          return;
-        }
-
-        // Try to refresh token
+        // Attempt to refresh token
         const response = await refreshToken();
         if (response.user) {
           setUser(response.user);
+        } else {
+          // Clear user state and any cached data
+          setUser(null);
         }
-      } catch (error) {
-        if (!error.message.includes('Unauthorized')) {
-          setError(error.message);
-        }
+      } catch (err) {
+        console.error('Auth initialization error:', err);
         setUser(null);
       } finally {
         hasAttemptedInitialAuth.current = true;
@@ -48,7 +40,7 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  // Only set up refresh interval if user is logged in
+  // Set up auto-refresh of token
   useEffect(() => {
     if (!user) return;
 
@@ -56,13 +48,19 @@ export const AuthProvider = ({ children }) => {
       try {
         const response = await refreshToken();
         if (!response.user) {
-          logout();
+          // If refresh fails, log out
+          await signOutUser();
+        } else {
+          // Update user data if it changed
+          setUser(response.user);
         }
       } catch (error) {
-        console.error('Token refresh failed:', error);
-        logout();
+        if (!error.message?.includes('401')) {
+          console.error('Token refresh failed:', error);
+        }
+        await signOutUser();
       }
-    }, 23 * 60 * 60 * 1000); // Refresh every 23 hours
+    }, 23 * 60 * 60 * 1000); // refresh every 24 hrs Refresh every 14 minutes (well before token expiry)14 * 60 * 1000
 
     return () => clearInterval(refreshInterval);
   }, [user]);
@@ -82,12 +80,15 @@ export const AuthProvider = ({ children }) => {
       console.error('Error signing out:', error);
     } finally {
       logout();
+      // Force a page reload to clear any remaining state
+      window.location.href = '/';
     }
   }, [logout]);
 
   const contextValue = useMemo(
     () => ({
       user,
+      role: user?.role || null, // Add role explicitly
       signInUser,
       signOutUser,
       loading,

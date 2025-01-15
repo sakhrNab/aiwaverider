@@ -267,22 +267,30 @@ export const refreshToken = async () => {
     const response = await fetch(`${API_URL}/api/auth/refresh`, {
       method: 'POST',
       credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      }
     });
 
-    // If unauthorized, just return null without logging an error
+    // Handle 401s quietly
     if (response.status === 401) {
       return { user: null };
     }
 
     if (!response.ok) {
-      throw new Error('Token refresh failed');
+      const error = new Error('Token refresh failed');
+      error.status = response.status;
+      throw error;
     }
 
     const data = await response.json();
-    return data;
+    return {
+      user: data.user,
+      message: data.message
+    };
   } catch (error) {
-    // Only log error if it's not an unauthorized error
-    if (!error.message.includes('Unauthorized')) {
+    // Only log non-401 errors
+    if (error.status !== 401) {
       console.error('Error refreshing token:', error);
     }
     return { user: null };
