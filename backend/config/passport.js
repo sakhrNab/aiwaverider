@@ -31,11 +31,29 @@ const initializePassport = (passport) => {
   },
   async (req, accessToken, refreshToken, profile, done) => {
     try {
+      const isSignUp = req.query.state === 'signup';
       const userSnapshot = await usersCollection
         .where('email', '==', profile.emails[0].value.toLowerCase())
         .limit(1)
         .get();
 
+      // If user exists and trying to sign up, return error
+      if (!userSnapshot.empty && isSignUp) {
+        return done(null, false, { 
+          message: 'Account already exists. Please sign in instead.',
+          errorType: 'EXISTING_ACCOUNT'
+        });
+      }
+
+      // If user doesn't exist and trying to sign in, return error
+      if (userSnapshot.empty && !isSignUp) {
+        return done(null, false, { 
+          message: 'No account found. Please sign up first.',
+          errorType: 'NO_ACCOUNT'
+        });
+      }
+
+      // Existing user signing in
       if (!userSnapshot.empty) {
         const userDoc = userSnapshot.docs[0];
         const userData = userDoc.data();
@@ -47,6 +65,7 @@ const initializePassport = (passport) => {
         });
       }
 
+      // New user signing up
       const username = profile.emails[0].value.split('@')[0];
       const newUserData = {
         username,

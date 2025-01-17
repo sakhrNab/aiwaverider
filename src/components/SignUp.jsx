@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import ReactPhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import '../styles/signup.css'; // Import the signup.css
-import { signUp, signInWithGoogle } from '../utils/api'; // Import the signUp API function and signInWithGoogle
+import { signUp, signUpWithGoogle } from '../utils/api'; // Import the signUp API function and signUpWithGoogle
 import { AuthContext } from '../contexts/AuthContext'; // Import AuthContext
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
@@ -243,7 +243,7 @@ const SignUp = ({ isOpen, onClose }) => {
   };
 
   const handleGoogleSignUp = () => {
-    signInWithGoogle();
+    signUpWithGoogle();
   };
 
   const handleOutlookSignUp = () => {

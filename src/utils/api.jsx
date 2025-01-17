@@ -64,7 +64,13 @@ export const signIn = async (credentials) => {
 
 export const signInWithGoogle = () => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-  window.location.href = `${apiUrl}/api/auth/google`;
+  window.location.href = `${apiUrl}/api/auth/google/signin`;
+};
+
+export const signUpWithGoogle = () => {
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  // Add prompt=select_account to force Google account selection
+  window.location.href = `${apiUrl}/api/auth/google/signup?prompt=select_account`;
 };
 
 // Create Post with FormData

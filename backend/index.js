@@ -190,55 +190,80 @@ app.post('/api/auth/refresh', async (req, res) => {
   }
 });
 
-// Add Google auth routes
-app.get('/api/auth/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] })
+// Google Sign In
+app.get('/api/auth/google/signin',
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    state: 'signin'
+  })
 );
 
-app.get('/api/auth/google/callback', 
+// Google Sign Up
+app.get('/api/auth/google/signup',
   passport.authenticate('google', { 
-    session: false,
-    failureRedirect: `${process.env.FRONTEND_URL}/login?error=true`
-  }),
-  (req, res) => {
-    try {
-      const token = jwt.sign(
-        {
-          id: req.user.id,
-          username: req.user.username,
-          email: req.user.email,
-          role: req.user.role,
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: '1h' }
-      );
+    scope: ['profile', 'email'],
+    state: 'signup',
+    prompt: 'select_account' // Add this to force account selection
+  })
+);
 
-      const refreshToken = jwt.sign(
-        { id: req.user.id },
-        process.env.REFRESH_TOKEN_SECRET,
-        { expiresIn: '7d' }
-      );
+// Single callback handler for both sign-in and sign-up
+app.get('/api/auth/google/callback',
+  (req, res, next) => {
+    passport.authenticate('google', { session: false }, (err, user, info) => {
+      if (err) {
+        return res.redirect(`${process.env.FRONTEND_URL}/sign-in?error=true&message=${encodeURIComponent(err.message)}`);
+      }
 
-      res.cookie('token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/'
-      });
+      if (!user) {
+        // Handle specific error types
+        if (info && info.errorType === 'EXISTING_ACCOUNT') {
+          return res.redirect(`${process.env.FRONTEND_URL}/sign-in?error=exists&message=${encodeURIComponent(info.message)}`);
+        }
+        if (info && info.errorType === 'NO_ACCOUNT') {
+          return res.redirect(`${process.env.FRONTEND_URL}/sign-up?error=noaccount&message=${encodeURIComponent(info.message)}`);
+        }
+        return res.redirect(`${process.env.FRONTEND_URL}/sign-in?error=true`);
+      }
 
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/'
-      });
+      try {
+        const token = jwt.sign(
+          {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: '1h' }
+        );
 
-      // Redirect to frontend with success
-      res.redirect(`${process.env.FRONTEND_URL}?auth=success`);
-    } catch (error) {
-      console.error('Google auth callback error:', error);
-      res.redirect(`${process.env.FRONTEND_URL}?auth=error`);
-    }
+        const refreshToken = jwt.sign(
+          { id: user.id },
+          process.env.REFRESH_TOKEN_SECRET,
+          { expiresIn: '7d' }
+        );
+
+        res.cookie('token', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/'
+        });
+
+        res.cookie('refreshToken', refreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/'
+        });
+
+        res.redirect(`${process.env.FRONTEND_URL}?auth=success`);
+      } catch (error) {
+        console.error('Token creation error:', error);
+        res.redirect(`${process.env.FRONTEND_URL}/login?error=true&message=${encodeURIComponent('Authentication failed')}`);
+      }
+    })(req, res, next);
   }
 );
 
