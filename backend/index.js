@@ -2,12 +2,13 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
-const admin = require('firebase-admin');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const Joi = require('joi');
 const sanitizeHtml = require('./utils/sanitize'); // Import sanitize function
 const authenticateJWT = require('./middleware/auth'); // Import auth middleware
+const passport = require('passport');
+
 const {
   octokit,
   owner,
@@ -22,8 +23,42 @@ const logger = require('./utils/logger'); // Add this import
 const dns = require('dns');
 const { promisify } = require('util');
 const resolveMx = promisify(dns.resolveMx);
+const cookieParser = require('cookie-parser');
+const session = require('express-session');
+const { admin, db } = require('./config/firebase');
+const { initializePassport } = require('./config/passport');
 
+// Initialize express
 const app = express();
+
+// Basic middleware setup
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production'
+    ? process.env.CORS_ORIGINS?.split(',').map(origin => origin.trim())
+    : ['http://localhost:5173'],
+  credentials: true
+}));
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
+
+// Session configuration - required for Passport
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Initialize Passport and restore authentication state from session
+initializePassport(passport);
+app.use(passport.initialize());
+app.use(passport.session());
 
 // ------------------ Rate Limiting ------------------
 const rateLimit = require('express-rate-limit');
@@ -87,9 +122,8 @@ app.options('*', cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Add cookie parser before routes
-const cookieParser = require('cookie-parser');
-app.use(cookieParser());
+// Add passport middleware
+app.use(passport.initialize());
 
 // Move this route before other routes
 app.post('/api/auth/refresh', async (req, res) => {
@@ -156,33 +190,57 @@ app.post('/api/auth/refresh', async (req, res) => {
   }
 });
 
-// ------------------ Initialize Firebase Admin ------------------
-let serviceAccount;
+// Add Google auth routes
+app.get('/api/auth/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] })
+);
 
-if (isProduction) {
-  // In production, load from environment variable
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!serviceAccountJson) {
-    console.error('FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
-    process.exit(1);
+app.get('/api/auth/google/callback', 
+  passport.authenticate('google', { 
+    session: false,
+    failureRedirect: `${process.env.FRONTEND_URL}/login?error=true`
+  }),
+  (req, res) => {
+    try {
+      const token = jwt.sign(
+        {
+          id: req.user.id,
+          username: req.user.username,
+          email: req.user.email,
+          role: req.user.role,
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+
+      const refreshToken = jwt.sign(
+        { id: req.user.id },
+        process.env.REFRESH_TOKEN_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/'
+      });
+
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/'
+      });
+
+      // Redirect to frontend with success
+      res.redirect(`${process.env.FRONTEND_URL}?auth=success`);
+    } catch (error) {
+      console.error('Google auth callback error:', error);
+      res.redirect(`${process.env.FRONTEND_URL}?auth=error`);
+    }
   }
-  serviceAccount = JSON.parse(
-    Buffer.from(serviceAccountJson, 'base64').toString('utf-8')
-  );
-} else {
-  // In development, use local JSON file
-  const serviceAccountPath =
-    process.env.FIREBASE_SERVICE_ACCOUNT_PATH || 'path/to/local/serviceAccountKey.json';
-  serviceAccount = require(path.resolve(serviceAccountPath));
-}
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  // storageBucket: process.env.FIREBASE_STORAGE_BUCKET, // Uncomment if you use Firebase Storage
-});
-
-const db = admin.firestore();
-db.settings({ ignoreUndefinedProperties: true }); // Enable ignoring undefined properties
+);
 
 // ------------------ Collection References ------------------
 const usersCollection = db.collection('users');

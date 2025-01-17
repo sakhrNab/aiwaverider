@@ -62,6 +62,11 @@ export const signIn = async (credentials) => {
   }
 };
 
+export const signInWithGoogle = () => {
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  window.location.href = `${apiUrl}/api/auth/google`;
+};
+
 // Create Post with FormData
 export const createPost = async (formData) => {
   try {

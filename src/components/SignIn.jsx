@@ -3,7 +3,7 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
-import { signIn } from '../utils/api';
+import { signIn, signInWithGoogle } from '../utils/api';  // Make sure signInWithGoogle is imported
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
 import { toast } from 'react-toastify';  // Add this import
@@ -150,8 +150,7 @@ const SignIn = () => {
   };
 
   const handleGoogleSignIn = () => {
-    console.log('Sign in with Google');
-    // Implement Google Sign-In via OAuth if desired
+    signInWithGoogle();  // This should now be defined
   };
 
   const handleMicrosoftSignIn = () => {
