@@ -12,6 +12,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
 import debounce from 'lodash.debounce';
 import { validateEmail } from '../utils/emailValidator';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 // Define PasswordRequirements outside of SignUp for effective memoization
 const PasswordRequirements = React.memo(({ validation }) => (
@@ -243,6 +245,10 @@ const SignUp = ({ isOpen, onClose }) => {
   };
 
   const handleGoogleSignUp = () => {
+    toast.info('Checking Google account...', {
+      autoClose: 2000,
+      position: "top-center"
+    });
     signUpWithGoogle();
   };
 

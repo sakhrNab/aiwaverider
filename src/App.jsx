@@ -19,8 +19,10 @@ const AuthCallback = () => {
     const message = params.get('message');
 
     if (error === 'exists') {
-      toast.error(message || 'Account already exists. Please sign in instead.');
-      navigate('/sign-in');
+      toast.warn(message || 'An account already exists with this email. Redirecting to sign in...', {
+        autoClose: 5000,
+        onClose: () => navigate('/sign-in')
+      });
     } else if (error === 'noaccount') {
       toast.error(message || 'No account found. Please sign up first.');
       navigate('/sign-up');
