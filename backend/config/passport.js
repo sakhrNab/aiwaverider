@@ -28,6 +28,7 @@ const initializePassport = (passport) => {
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackURL: process.env.GOOGLE_CALLBACK_URL, // Use the environment variable
     passReqToCallback: true,
+    prompt: 'select_account'  // Add this line
   },
   async (req, accessToken, refreshToken, profile, done) => {
     try {

@@ -64,7 +64,12 @@ export const signIn = async (credentials) => {
 
 export const signInWithGoogle = () => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-  window.location.href = `${apiUrl}/api/auth/google/signin`;
+  window.location.href = `${apiUrl}/api/auth/google/signin?prompt=select_account`;
+};
+
+export const signInWithMicrosoft = () => {
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  window.location.href = `${apiUrl}/api/auth/microsoft/signin?prompt=select_account`;
 };
 
 export const signUpWithGoogle = () => {

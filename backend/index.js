@@ -194,7 +194,8 @@ app.post('/api/auth/refresh', async (req, res) => {
 app.get('/api/auth/google/signin',
   passport.authenticate('google', { 
     scope: ['profile', 'email'],
-    state: 'signin'
+    state: 'signin',
+    prompt: 'select_account'  // Add this line
   })
 );
 
