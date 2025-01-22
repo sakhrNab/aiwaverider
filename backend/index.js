@@ -8,6 +8,7 @@ const Joi = require('joi');
 const sanitizeHtml = require('./utils/sanitize'); // Import sanitize function
 const authenticateJWT = require('./middleware/auth'); // Import auth middleware
 const passport = require('passport');
+// const admin = require('firebase-admin');
 
 const {
   octokit,
@@ -30,6 +31,41 @@ const { initializePassport } = require('./config/passport');
 
 // Initialize express
 const app = express();
+
+// ================== Updated Firebase Token Middleware ==================
+const validateFirebaseToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  // 1. Check for Authorization header (changed from cookie-based)
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized - Missing token' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  
+  try {
+    // 2. Verify Firebase ID Token
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    
+    // 3. Attach essential user information to request
+    req.user = {
+      uid: decodedToken.uid, // Firebase UID (changed from 'id' to 'uid')
+      email: decodedToken.email,
+      email_verified: decodedToken.email_verified
+    };
+    
+    next();
+  } catch (error) {
+    console.error('Token verification failed:', error);
+    
+    // Enhanced error handling
+    if (error.code === 'auth/id-token-expired') {
+      return res.status(401).json({ error: 'Session expired - Please reauthenticate' });
+    }
+    
+    return res.status(401).json({ error: 'Unauthorized - Invalid token' });
+  }
+};
 
 // Basic middleware setup
 app.use(cors({
@@ -292,286 +328,109 @@ const commentsCollection = db.collection('comments');
 // ------------------ Validation Schemas ------------------
 
 
-const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-
-// Update sign-up schema with stronger password validation
-const signUpSchema = Joi.object({
-  username: Joi.string().max(20).required(),
-  firstName: Joi.string().allow('', null),
-  lastName: Joi.string().allow('', null),
-  email: Joi.string().email().required(),
-  phoneNumber: Joi.string().allow('', null),
-  password: Joi.string().pattern(strongPasswordRegex).required()
-    .messages({
-      'string.pattern.base': 'Password must be at least 8 characters long and contain uppercase, lowercase, number and special character'
-    }),
-});
-
-// ------------------ 1) Sign Up -----------------------
-app.post('/api/auth/signup', authLimiter, async (req, res) => {
+// Update the signup endpoint to handle both regular and OAuth signups
+app.post('/api/auth/signup', async (req, res) => {
   try {
-    logger.info('Signup attempt:', { ...req.body, password: '[REDACTED]' });
-    
-    // Fix the email reference
-    const { email } = req.body;
-    
-    // Check MX records for email domain
-    try {
-      const domain = email.split('@')[1];
-      if (!domain) {
-        return res.status(400).json({ 
-          error: 'Invalid email format' 
-        });
-      }
+    const { uid, email, username, firstName, lastName, phoneNumber, displayName, photoURL } = req.body;
 
-      const mxRecords = await resolveMx(domain);
-      
-      if (!mxRecords || mxRecords.length === 0) {
-        return res.status(400).json({ 
-          error: 'Invalid email domain - no mail server found' 
-        });
-      }
-    } catch (error) {
-      console.error('Email domain validation error:', error);
-      return res.status(400).json({ 
-        error: 'Invalid email domain' 
+    // Verify the user exists in Firebase
+    const firebaseUser = await admin.auth().getUser(uid);
+    if (!firebaseUser) {
+      return res.status(404).json({ error: 'Firebase user not found' });
+    }
+
+    // Check if user already exists in Firestore
+    const userDoc = await usersCollection.doc(uid).get();
+    if (userDoc.exists) {
+      return res.json({
+        message: 'User already exists',
+        user: {
+          uid,
+          ...userDoc.data()
+        }
       });
     }
 
-    // Validate
-    const { error, value } = signUpSchema.validate(req.body);
-    if (error) {
-      return res.status(400).json({ error: error.details[0].message });
-    }
-
-    const { username, firstName, lastName, phoneNumber, password } = value;
-
-    // Check duplicates
+    // Check if username already exists
     const usernameQuery = await usersCollection.where('username', '==', username).get();
     if (!usernameQuery.empty) {
       return res.status(400).json({ error: 'Username is already taken.' });
     }
 
-    const emailQuery = await usersCollection.where('email', '==', email.toLowerCase()).get();
-    if (!emailQuery.empty) {
-      return res.status(400).json({ error: 'Email is already in use.' });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Add user
-    const newUserRef = await usersCollection.add({
+    // Create user document in Firestore
+    const userData = {
+      uid,
       username,
       firstName: firstName || '',
       lastName: lastName || '',
       email: email.toLowerCase(),
       phoneNumber: phoneNumber || '',
-      password: hashedPassword,
       role: 'authenticated',
-    });
+      displayName: displayName || '',
+      photoURL: photoURL || '',
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
 
-    // JWT
-    const token = jwt.sign(
-      {
-        id: newUserRef.id,
-        username,
-        email: email.toLowerCase(),
-        role: 'authenticated',
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
-
-    const refreshToken = jwt.sign(
-      { id: newUserRef.id },
-      process.env.REFRESH_TOKEN_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    // Set secure cookies
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    });
-
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
-
-    logger.info(`New user registered: ${email}`);
+    await usersCollection.doc(uid).set(userData);
 
     return res.json({
-      message: 'User signed up successfully.',
-      user: {
-        id: newUserRef.id,
-        username,
-        email: email.toLowerCase(),
-        role: 'authenticated',
-      },
+      message: 'User created successfully',
+      user: userData
     });
   } catch (err) {
-    logger.error('Error in /api/auth/signup:', {
-      error: err.message,
-      stack: err.stack,
-      body: { ...req.body, password: '[REDACTED]' }
-    });
+    console.error('Error in /api/auth/signup:', err);
     return res.status(500).json({ 
-      error: 'Internal server error.',
+      error: 'Internal server error',
       details: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
 });
 
-// ------------------ 2) Sign In ------------------------
-app.post('/api/auth/signin', authLimiter, async (req, res) => {
+// Remove old sign-in endpoint as it's handled by Firebase
+// Keep only the session management part
+app.post('/api/auth/session', async (req, res) => {
   try {
-    const { usernameOrEmail, password } = req.body;
+    const { idToken } = req.body;
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
     
-    // Validate required fields first
-    if (!usernameOrEmail || !password) {
-      return res.status(400).json({ error: 'Username/Email and password are required.' });
-    }
+    // Set session cookie
+    res.cookie('firebaseToken', idToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
 
-    // Check login attempts using usernameOrEmail as the key instead of undefined email
-    const attempts = loginAttempts.get(usernameOrEmail) || 0;
-    if (attempts >= 5) {
-      const lockoutEndTime = new Date(Date.now() + 15 * 60 * 1000);
-      logger.warn(`Account locked: ${usernameOrEmail}`);
-      return res.status(429).json({ 
-        error: 'Too many login attempts. Account locked.',
-        lockoutTime: lockoutEndTime.toISOString(),
-        attemptsLeft: 0
-      });
-    }
-
-    // Find user by username or email
-    let userDoc = null;
-    const usernameSnapshot = await usersCollection
-      .where('username', '==', usernameOrEmail)
-      .limit(1)
-      .get();
-
-    if (!usernameSnapshot.empty) {
-      userDoc = usernameSnapshot.docs[0];
-    } else {
-      const emailSnapshot = await usersCollection
-        .where('email', '==', usernameOrEmail.toLowerCase())
-        .limit(1)
-        .get();
-      
-      if (!emailSnapshot.empty) {
-        userDoc = emailSnapshot.docs[0];
-      }
-    }
-
-    const isMatch = userDoc ? await bcrypt.compare(password, userDoc.data().password) : false;
-
-    // Update failed attempt response
-    if (!userDoc || !isMatch) {
-      loginAttempts.set(usernameOrEmail, attempts + 1);
-      const remainingAttempts = 5 - (attempts + 1);
-      const message = remainingAttempts > 0
-        ? `Invalid credentials. ${remainingAttempts} attempts remaining.`
-        : 'Invalid credentials. Last attempt before account lockout.';
-      
-      return res.status(401).json({ 
-        error: message,
-        attemptsLeft: remainingAttempts
-      });
-    }
-
+    const userDoc = await usersCollection.doc(decodedToken.uid).get();
     const userData = userDoc.data();
-    
-    // Reset login attempts on success
-    loginAttempts.delete(usernameOrEmail);
 
-    // Create tokens
-    const token = jwt.sign(
-      {
-        id: userDoc.id,
-        username: userData.username,
-        email: userData.email,
-        role: userData.role,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
-
-    const refreshToken = jwt.sign(
-      { id: userDoc.id },
-      process.env.REFRESH_TOKEN_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    // Set cookies
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    });
-
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
-
-    logger.info(`Successful login: ${usernameOrEmail}`);
-    
     return res.json({
-      message: 'Sign in successful.',
+      message: 'Session created successfully',
       user: {
-        id: userDoc.id,
+        uid: decodedToken.uid,
         username: userData.username,
         email: userData.email,
-        role: userData.role,
+        role: userData.role
       }
     });
   } catch (err) {
-    logger.error('Error in /api/auth/signin:', err);
-    return res.status(500).json({ 
-      error: 'An unexpected error occurred during sign in. Please try again or contact support.',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
+    console.error('Error in /api/auth/session:', err);
+    return res.status(500).json({ error: 'Failed to create session' });
   }
 });
 
-// ------------------ 9) Sign Out (stateless) -----------
-app.post('/api/auth/signout', async (req, res) => {
-  try {
-    // Clear cookies with the same options they were set with
-    res.clearCookie('token', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      path: '/'
-    });
-    
-    res.clearCookie('refreshToken', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      path: '/'
-    });
-
-    // Return immediately after clearing cookies
-    return res.status(200).json({ message: 'Sign out successful' });
-  } catch (err) {
-    logger.error('Error in /api/auth/signout:', err);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
+// Update sign out endpoint
+app.post('/api/auth/signout', (req, res) => {
+  res.clearCookie('firebaseToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict'
+  });
+  return res.json({ message: 'Signed out successfully' });
 });
 
 // ------------------ 3) Create Post (Admin only) -------
-app.post('/api/posts', authenticateJWT, upload.single('image'), async (req, res) => {
+app.post('/api/posts', validateFirebaseToken, upload.single('image'), async (req, res) => {
   try {
     const { title, description, category, additionalHTML, graphHTML } = req.body;
     const { role, id: userId } = req.user;
@@ -664,6 +523,7 @@ app.post('/api/posts', authenticateJWT, upload.single('image'), async (req, res)
 // ------------------ 4) Get All Posts (public) ---------
 app.get('/api/posts', async (req, res) => {
   try {
+    const user = req.user;
     const { category, limit, startAfter } = req.query;
     const limitNumber = parseInt(limit, 10) || 10;
 
@@ -724,6 +584,8 @@ app.get('/api/posts', async (req, res) => {
 
     snapshot.forEach(doc => {
       const data = doc.data();
+      const isOwner = user?.uid === data.createdBy;
+      
       const postId = doc.id;
 
       // Ensure strings
@@ -735,6 +597,7 @@ app.get('/api/posts', async (req, res) => {
       allPosts.push({
         id: postId,
         ...data,
+        isOwner,
         additionalHTML,
         graphHTML,
         createdAt: data.createdAt
@@ -759,84 +622,6 @@ app.get('/api/posts', async (req, res) => {
   } catch (err) {
     console.error('Error in GET /api/posts:', err);
     return res.status(500).json({ error: 'Internal server error.', details: err.message });
-  }
-});
-
-// ------------------ 5) Add Comment (auth or admin) ----
-app.post('/api/posts/:postId/comments', authenticateJWT, async (req, res) => {
-  try {
-    const { postId } = req.params;
-    const { commentText } = req.body;
-    const { role, id: userId } = req.user;
-
-    if (!role || (role !== 'admin' && role !== 'authenticated')) {
-      return res.status(403).json({ error: 'Not authorized to comment.' });
-    }
-    if (!commentText) {
-      return res.status(400).json({ error: 'Comment text is required.' });
-    }
-
-    // Validate post
-    const postDoc = await postsCollection.doc(postId).get();
-    if (!postDoc.exists) {
-      return res.status(404).json({ error: 'Post not found.' });
-    }
-
-    // Fetch user data
-    let username = 'Anonymous';
-    let userRole = 'User';
-    if (userId) {
-      const userDoc = await usersCollection.doc(userId).get();
-      if (userDoc.exists) {
-        const userData = userDoc.data();
-        username = userData.username || 'Anonymous';
-        userRole = userData.role || 'User';
-      }
-    }
-
-    // Add comment
-    const newCommentRef = await commentsCollection.add({
-      postId,
-      userId: userId || null,
-      text: commentText,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      username,
-      userRole,
-    });
-
-    return res.json({
-      message: 'Comment added successfully.',
-      comment: { id: newCommentRef.id, text: commentText, username, userRole },
-    });
-  } catch (err) {
-    console.error('Error in POST /api/posts/:postId/comments:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
-  }
-});
-
-// ------------------ 6) Get Comments for a Post (public) ----
-app.get('/api/posts/:postId/comments', async (req, res) => {
-  try {
-    const { postId } = req.params;
-    const snapshot = await commentsCollection
-      .where('postId', '==', postId)
-      .orderBy('createdAt', 'desc')
-      .get();
-    const allComments = [];
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      allComments.push({
-        id: doc.id,
-        ...data,
-        createdAt: data.createdAt
-          ? data.createdAt.toDate().toISOString()
-          : null,
-      });
-    });
-    return res.json(allComments);
-  } catch (err) {
-    console.error('Error in GET /api/posts/:postId/comments:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -939,7 +724,7 @@ app.get('/api/posts/multi', async (req, res) => {
 });
 
 // ------------------ 7) Get User Profile (authenticated) ----
-app.get('/api/users/:userId', authenticateJWT, async (req, res) => {
+app.get('/api/users/:userId', validateFirebaseToken, async (req, res) => {
   try {
     const { userId } = req.params;
     // Only allow self or admin
@@ -969,7 +754,7 @@ app.get('/api/users/:userId', authenticateJWT, async (req, res) => {
 });
 
 // ------------------ 8) Delete Post (Admin Only) -------
-app.delete('/api/posts/:postId', authenticateJWT, async (req, res) => {
+app.delete('/api/posts/:postId', validateFirebaseToken, async (req, res) => {
   try {
     const { role } = req.user;
     const { postId } = req.params;
@@ -1044,7 +829,7 @@ app.get('/api/posts/:postId', async (req, res) => {
 });
 
 // ------------------ 11) Update Post by ID (Admin only) ----
-app.put('/api/posts/:postId', authenticateJWT, upload.single('image'), async (req, res) => {
+app.put('/api/posts/:postId', validateFirebaseToken, upload.single('image'), async (req, res) => {
   try {
     const { role } = req.user;
     if (role !== 'admin') {
@@ -1112,6 +897,97 @@ app.put('/api/posts/:postId', authenticateJWT, upload.single('image'), async (re
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ------------------ 5) Add Comment (auth or admin) ----
+// ------------------ 5) Add Comment (authenticated users) ------------------
+app.post('/api/posts/:postId/comments', validateFirebaseToken, async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const { commentText } = req.body;
+    
+    // Get user info from Firebase token validation
+    const uid = req.user.uid; // Changed from req.user.id to req.user.uid
+
+    if (!uid) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    if (!commentText) {
+      return res.status(400).json({ error: 'Comment text is required.' });
+    }
+
+    // Validate post exists
+    const postDoc = await postsCollection.doc(postId).get();
+    if (!postDoc.exists) {
+      return res.status(404).json({ error: 'Post not found.' });
+    }
+
+    // Get user data from Firestore using uid
+    const userDoc = await usersCollection.doc(uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const userData = userDoc.data();
+    const username = userData.username || 'Anonymous';
+    const userRole = userData.role || 'authenticated';
+
+    // Create comment
+    const newCommentRef = await commentsCollection.add({
+      postId,
+      userId: uid,
+      text: commentText,
+      username,
+      userRole,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Get the created comment
+    const newCommentDoc = await newCommentRef.get();
+    const commentData = newCommentDoc.data();
+
+    return res.json({
+      message: 'Comment added successfully.',
+      comment: {
+        id: newCommentRef.id,
+        ...commentData,
+        createdAt: commentData.createdAt.toDate().toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error('Error in POST /api/posts/:postId/comments:', err);
+    return res.status(500).json({ 
+      error: 'Internal server error.',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// ------------------ 6) Get Comments for a Post (public) ----
+app.get('/api/posts/:postId/comments', async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const snapshot = await commentsCollection
+      .where('postId', '==', postId)
+      .orderBy('createdAt', 'desc')
+      .get();
+    const allComments = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      allComments.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt
+          ? data.createdAt.toDate().toISOString()
+          : null,
+      });
+    });
+    return res.json(allComments);
+  } catch (err) {
+    console.error('Error in GET /api/posts/:postId/comments:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 

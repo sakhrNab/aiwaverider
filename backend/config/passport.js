@@ -1,6 +1,6 @@
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const { db } = require('./firebase');
+const { admin, db } = require('./firebase');
 
 const initializePassport = (passport) => {
   const usersCollection = db.collection('users');
@@ -32,57 +32,54 @@ const initializePassport = (passport) => {
   },
   async (req, accessToken, refreshToken, profile, done) => {
     try {
-      const isSignUp = req.query.state === 'signup';
-      const userSnapshot = await usersCollection
-        .where('email', '==', profile.emails[0].value.toLowerCase())
-        .limit(1)
-        .get();
-
-      // If user exists and trying to sign up, return error
-      if (!userSnapshot.empty && isSignUp) {
-        return done(null, false, { 
-          message: 'Account already exists. Please sign in instead.',
-          errorType: 'EXISTING_ACCOUNT'
-        });
+      const email = profile.emails[0].value.toLowerCase();
+      
+      // Create Firebase user if doesn't exist
+      let firebaseUser;
+      try {
+        firebaseUser = await admin.auth().getUserByEmail(email);
+      } catch (error) {
+        if (error.code === 'auth/user-not-found') {
+          firebaseUser = await admin.auth().createUser({
+            email: email,
+            emailVerified: true,
+            displayName: profile.displayName,
+            photoURL: profile.photos[0]?.value
+          });
+        } else {
+          throw error;
+        }
       }
 
-      // If user doesn't exist and trying to sign in, return error
-      if (userSnapshot.empty && !isSignUp) {
-        return done(null, false, { 
-          message: 'No account found. Please sign up first.',
-          errorType: 'NO_ACCOUNT'
-        });
+      // Check if user exists in Firestore
+      let userDoc = await usersCollection.doc(firebaseUser.uid).get();
+      
+      if (!userDoc.exists) {
+        // Create new user in Firestore
+        const userData = {
+          uid: firebaseUser.uid,
+          email: email,
+          username: email.split('@')[0],
+          firstName: profile.name?.givenName || '',
+          lastName: profile.name?.familyName || '',
+          displayName: profile.displayName,
+          photoURL: profile.photos[0]?.value,
+          role: 'authenticated',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          provider: 'google'
+        };
+
+        await usersCollection.doc(firebaseUser.uid).set(userData);
+        userDoc = await usersCollection.doc(firebaseUser.uid).get();
       }
 
-      // Existing user signing in
-      if (!userSnapshot.empty) {
-        const userDoc = userSnapshot.docs[0];
-        const userData = userDoc.data();
-        return done(null, {
-          id: userDoc.id,
-          username: userData.username,
-          email: userData.email,
-          role: userData.role
-        });
-      }
-
-      // New user signing up
-      const username = profile.emails[0].value.split('@')[0];
-      const newUserData = {
-        username,
-        email: profile.emails[0].value.toLowerCase(),
-        firstName: profile.name.givenName || '',
-        lastName: profile.name.familyName || '',
-        role: 'authenticated',
-        googleId: profile.id
-      };
-
-      const newUserRef = await usersCollection.add(newUserData);
+      const userData = userDoc.data();
       return done(null, {
-        id: newUserRef.id,
-        ...newUserData
+        uid: firebaseUser.uid,
+        ...userData
       });
     } catch (error) {
+      console.error('Error in Google Strategy:', error);
       return done(error);
     }
   }));

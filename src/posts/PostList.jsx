@@ -4,6 +4,7 @@ import { AuthContext } from '../contexts/AuthContext';
 import { PostsContext } from '../contexts/PostsContext';
 import { addComment, deletePost, getAllPosts } from '../utils/api';
 import ConfirmationModal from '../components/ConfirmationModal';
+import { auth } from '../utils/firebase';
 
 const PostsList = () => {
   const { posts, setPosts, fetchAllPosts, loadingPosts, errorPosts } = useContext(PostsContext);
@@ -62,23 +63,26 @@ const PostsList = () => {
       return;
     }
     try {
-      const data = await addComment(postId, { commentText: commentText.trim() }, token);
+    // 2. Check authentication state
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      const shouldLogin = confirm('You need to sign in to comment. Sign in now?');
+      if (shouldLogin) {
+        await signInWithRedirect(auth, yourAuthProvider); // Update with your auth provider
+      }
+      return;
+    }
+      const data = await addComment(postId, { commentText: commentText.trim() });
+
+  
       if (data.comment) {
-        setPosts((prevPosts) =>
-          prevPosts.map((post) =>
-            post.id === postId
-              ? { 
-                  ...post, 
-                  comments: Array.isArray(post.comments) 
-                    ? [...post.comments, data.comment]
-                    : [data.comment]
-                }
-              : post
-          )
-        );
-        setCommentTexts((prev) => ({ ...prev, [postId]: '' }));
-      } else {
-        alert(data.error || 'Failed to add comment.');
+        setPosts(prevPosts => prevPosts.map(post => 
+          post.id === postId ? {
+            ...post,
+            comments: [...(post.comments || []), data.comment]
+          } : post
+        ));
+        setCommentTexts(prev => ({ ...prev, [postId]: '' }));
       }
     } catch (err) {
       console.error('Error adding comment:', err);

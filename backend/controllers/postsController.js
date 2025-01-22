@@ -15,6 +15,10 @@ const createPost = async (req, res, user) => {
   try {
     const { title, description, category, additionalHTML, graphHTML } = req.body;
 
+    // Add validation for authenticated users
+    if (!user?.uid) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
     // Validate required fields
     if (!title || !description || !category) {
       return res.status(400).json({ error: 'Title, description, and category are required.' });
@@ -34,7 +38,7 @@ const createPost = async (req, res, user) => {
     }
 
     // Get username from users collection
-    const userDoc = await usersCollection.doc(user.id).get();
+    const userDoc = await usersCollection.doc(user.uid).get();
     const username = userDoc.exists ? userDoc.data().username : 'Unknown User';
 
     // Sanitize inputs
@@ -50,7 +54,7 @@ const createPost = async (req, res, user) => {
       imageSha,
       additionalHTML: sanitizedAdditionalHTML,
       graphHTML: sanitizedGraphHTML,
-      createdBy: user.id || null,
+      createdBy: user.uid || null,
       createdByUsername: username,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),

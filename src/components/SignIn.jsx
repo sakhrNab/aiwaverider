@@ -112,48 +112,63 @@ const SignIn = () => {
         await signInUser(data.user);
         toast.success('Successfully signed in!');
         setTimeout(() => navigate('/', { replace: true }), 100);
-        return;
       }
     } catch (error) {
-      // Extract error details
-      const errorData = error.response?.data || {};
-      const attemptsLeft = errorData.attemptsLeft;
+      console.error('Sign-in error:', error);
       
-      if (typeof attemptsLeft === 'number') {
-        setAttempts(5 - attemptsLeft);
+      // Handle Firebase specific errors
+      switch (error.code) {
+        case 'auth/user-not-found':
+        case 'auth/wrong-password':
+          const newAttempts = attempts + 1;
+          setAttempts(newAttempts);
+          const remaining = 5 - newAttempts;
 
-        if (attemptsLeft <= 0 || error.message.includes('Account locked')) {
+          if (remaining <= 0) {
+            setIsLocked(true);
+            const lockDuration = 15 * 60;
+            startLockoutTimer(lockDuration);
+            setLockInfo(formData.usernameOrEmail, new Date(Date.now() + lockDuration * 1000), 5);
+            toast.error('Account locked. Please try again in 15 minutes.');
+          } else {
+            toast.error(`Invalid credentials. ${remaining} attempts remaining.`);
+            setShowTips(remaining <= 3);
+          }
+          break;
+        case 'auth/too-many-requests':
           setIsLocked(true);
           const lockDuration = 15 * 60;
           startLockoutTimer(lockDuration);
           setLockInfo(formData.usernameOrEmail, new Date(Date.now() + lockDuration * 1000), 5);
-          toast.error('Account locked. Please try again in 15 minutes.');
-        } else {
-          toast.error(`Invalid credentials. ${attemptsLeft} attempts remaining.`);
-          setShowTips(attemptsLeft <= 3); // Show tips when 3 or fewer attempts remain
-        }
-      } else {
-        // Handle case where attemptsLeft is not in response
-        const newAttempts = attempts + 1;
-        setAttempts(newAttempts);
-        const remaining = 5 - newAttempts;
-
-        if (remaining <= 0) {
-          setIsLocked(true);
-          const lockDuration = 15 * 60;
-          startLockoutTimer(lockDuration);
-          setLockInfo(formData.usernameOrEmail, new Date(Date.now() + lockDuration * 1000), 5);
-          toast.error('Account locked. Please try again in 15 minutes.');
-        } else {
-          toast.error(`Invalid credentials. ${remaining} attempts remaining.`);
-          setShowTips(remaining <= 3);
-        }
+          toast.error('Too many failed attempts. Account temporarily locked.');
+          break;
+        default:
+          toast.error(error.message || 'An error occurred during sign in');
       }
     }
   };
 
-  const handleGoogleSignIn = () => {
-    signInWithGoogle();  // This should now be defined
+  const handleGoogleSignIn = async () => {
+    try {
+      const result = await signInWithGoogle();
+      if (result.user) {
+        clearLockInfo();
+        setAttempts(0);
+        setIsLocked(false);
+        setLockoutEndTime(null);
+        setShowTips(false);
+        await signInUser(result.user);
+        toast.success('Successfully signed in with Google!');
+        setTimeout(() => navigate('/', { replace: true }), 100);
+      }
+    } catch (error) {
+      console.error("Google Sign-in Error:", error);
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast.error('Sign-in popup was closed before completion');
+      } else {
+        toast.error(`Google Sign-in failed: ${error.message}`);
+      }
+    }
   };
 
   const handleMicrosoftSignIn = async () => {

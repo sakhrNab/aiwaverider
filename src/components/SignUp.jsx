@@ -204,33 +204,28 @@ const SignUp = ({ isOpen, onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(''); // Clear previous errors
+    setError('');
 
-    // Validate email before submission
-    const emailValidation = validateEmail(formData.email);
-    if (!emailValidation.isValid) {
-      setError(emailValidation.message);
-      return;
-    }
-
-    // Additional email domain validation
-    const domain = formData.email.split('@')[1];
-    if (!domain) {
-      setError('Invalid email format');
-      return;
-    }
-    
     try {
+      // Validate email
+      const emailValidation = validateEmail(formData.email);
+      if (!emailValidation.isValid) {
+        setError(emailValidation.message);
+        return;
+      }
+
+      // Validate password
       if (!passwordValidation.isValid) {
         setError('Please ensure your password meets all requirements');
         return;
       }
 
-      console.log('Submitting form data:', { ...formData, password: '[REDACTED]' });
-      const data = await signUp(formData);
+      // Attempt signup
+      const { user } = await signUp(formData);
       
-      if (data.user) {
-        signInUser(data.user);
+      if (user) {
+        await signInUser(user);
+        toast.success('Account created successfully!');
         navigate('/');
         if (isModalView) {
           handleClose();
@@ -238,20 +233,41 @@ const SignUp = ({ isOpen, onClose }) => {
       }
     } catch (error) {
       console.error('Signup error:', error);
-      // Handle specific error messages from the server
-      const errorMessage = error.message || 'An unexpected error occurred during sign up.';
-      setError(errorMessage.includes('Invalid email domain') 
-        ? 'Please enter a valid email domain' 
-        : errorMessage);
+      
+      // Handle Firebase specific errors
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          setError('An account with this email already exists');
+          break;
+        case 'auth/invalid-email':
+          setError('Please enter a valid email address');
+          break;
+        case 'auth/weak-password':
+          setError('Password is too weak. Please follow the password requirements');
+          break;
+        default:
+          setError(error.message || 'An unexpected error occurred during sign up');
+      }
     }
   };
 
-  const handleGoogleSignUp = () => {
-    toast.info('Checking Google account...', {
-      autoClose: 2000,
-      position: "top-center"
-    });
-    signUpWithGoogle();
+  const handleGoogleSignUp = async () => {
+    try {
+      const result = await signUpWithGoogle();
+      if (result.user) {
+        await signInUser(result.user);
+        toast.success('Successfully signed up with Google!');
+        navigate('/', { replace: true });
+        if (isModalView) handleClose();
+      }
+    } catch (error) {
+      console.error("Google Sign-up Error:", error);
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast.error('Sign-up popup was closed before completion');
+      } else {
+        toast.error(`Google Sign-up failed: ${error.message}`);
+      }
+    }
   };
 
   // Replace handleOutlookSignUp with this Microsoft handler

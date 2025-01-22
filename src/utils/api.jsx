@@ -1,81 +1,191 @@
 // src/utils/api.jsx
-
+import firebase from 'firebase/compat/app';
+import { auth } from '../utils/firebase';
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-// Sign Up
+// Update regular sign up to use Firebase
 export const signUp = async (userData) => {
   try {
-    console.log('Attempting signup with:', { ...userData, password: '[REDACTED]' });
+    // Extract password and create user in Firebase first
+    const { email, password } = userData;
+    const firebaseResult = await auth.createUserWithEmailAndPassword(email, password);
     
+    // Get the Firebase user
+    const firebaseUser = firebaseResult.user;
+
+    // Update Firebase profile with display name
+    await firebaseUser.updateProfile({
+      displayName: `${userData.firstName} ${userData.lastName}`
+    });
+
+    // Prepare user data for backend (excluding password and including Firebase UID)
+    const backendUserData = {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email,
+      username: userData.username,
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      phoneNumber: userData.phoneNumber,
+      displayName: firebaseUser.displayName
+    };
+
+    // Create user in backend database
     const response = await fetch(`${API_URL}/api/auth/signup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(userData),
-      credentials: 'include', // Important for cookies
-    });
-
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('Signup error response:', data);
-      throw new Error(data.error || data.details || 'Sign up failed');
-    }
-
-    return data;
-  } catch (error) {
-    console.error('Error during sign up:', error);
-    throw error;
-  }
-};
-
-// Sign In
-export const signIn = async (credentials) => {
-  try {
-    const response = await fetch(`${API_URL}/api/auth/signin`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(credentials),
+      body: JSON.stringify(backendUserData),
       credentials: 'include',
     });
 
     const data = await response.json();
     
     if (!response.ok) {
-      const error = new Error(data.error || 'Sign in failed');
-      error.response = { data }; // Include the full response data
-      error.attemptsLeft = data.attemptsLeft;
-      error.lockoutTime = data.lockoutTime;
-      throw error;
+      // If backend fails, delete Firebase user and throw error
+      await firebaseUser.delete();
+      throw new Error(data.error || 'Failed to create user in database');
     }
 
-    return data;
+    return { user: firebaseUser };
   } catch (error) {
-    // Ensure error has response property even if fetch fails
-    if (!error.response) {
-      error.response = { data: { attemptsLeft: undefined } };
-    }
+    console.error('Error during sign up:', error);
     throw error;
   }
 };
 
-export const signInWithGoogle = () => {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-  window.location.href = `${apiUrl}/api/auth/google/signin?prompt=select_account`;
+// Update regular sign in to use Firebase
+export const signIn = async (credentials) => {
+  try {
+    const { usernameOrEmail, password } = credentials;
+    // Determine if input is email or username
+    const isEmail = usernameOrEmail.includes('@');
+    let email = usernameOrEmail;
+
+    // If it's not an email, we need to fetch the email from your backend
+    if (!isEmail) {
+      const response = await fetch(`${API_URL}/api/auth/get-email/${usernameOrEmail}`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Username not found');
+      email = data.email;
+    }
+
+    // Sign in with Firebase
+    const result = await auth.signInWithEmailAndPassword(email, password);
+    return { user: result.user };
+  } catch (error) {
+    console.error('Error signing in:', error);
+    throw error;
+  }
+};
+
+// Replace signInWithGoogle function
+export const signInWithGoogle = async () => {
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({
+      prompt: 'select_account'
+    });
+    const result = await auth.signInWithPopup(provider);
+    return { user: result.user };
+  } catch (error) {
+    console.error('Error signing in with Google:', error);
+    throw error;
+  }
+};
+
+// Update signUpWithGoogle function
+export const signUpWithGoogle = async () => {
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({
+      prompt: 'select_account'
+    });
+    
+    const result = await auth.signInWithPopup(provider);
+    const user = result.user;
+    
+    // Prepare user data for backend
+    const userData = {
+      uid: user.uid,
+      email: user.email,
+      username: user.email.split('@')[0], // Create username from email
+      firstName: user.displayName?.split(' ')[0] || '',
+      lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
+      displayName: user.displayName,
+      photoURL: user.photoURL
+    };
+
+    // Create user in backend/Firestore
+    const response = await fetch(`${API_URL}/api/auth/signup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${await user.getIdToken()}`
+      },
+      body: JSON.stringify(userData),
+      credentials: 'include',
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to create user in database');
+
+    return { user: { ...user, ...data.user } };
+  } catch (error) {
+    console.error('Error in Google sign up:', error);
+    throw error;
+  }
+};
+
+// Update Microsoft sign-up
+export const signUpWithMicrosoft = async () => {
+  try {
+    const provider = new firebase.auth.OAuthProvider('microsoft.com');
+    provider.setCustomParameters({
+      prompt: 'select_account'
+    });
+    
+    const result = await auth.signInWithPopup(provider);
+    const user = result.user;
+    
+    // Prepare user data for backend
+    const userData = {
+      uid: user.uid,
+      email: user.email,
+      username: user.email.split('@')[0],
+      firstName: user.displayName?.split(' ')[0] || '',
+      lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
+      displayName: user.displayName,
+      photoURL: user.photoURL
+    };
+
+    // Create user in backend/Firestore
+    const response = await fetch(`${API_URL}/api/auth/signup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${await user.getIdToken()}`
+      },
+      body: JSON.stringify(userData),
+      credentials: 'include',
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to create user in database');
+
+    return { user: { ...user, ...data.user } };
+  } catch (error) {
+    console.error('Error in Microsoft sign up:', error);
+    throw error;
+  }
 };
 
 export const signInWithMicrosoft = () => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
   window.location.href = `${apiUrl}/api/auth/microsoft/signin?prompt=select_account`;
-};
-
-export const signUpWithGoogle = () => {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-  // Add prompt=select_account to force Google account selection
-  window.location.href = `${apiUrl}/api/auth/google/signup?prompt=select_account`;
 };
 
 // Create Post with FormData
@@ -110,8 +220,13 @@ export const createPost = async (formData) => {
 };
 
 // Get All Posts with Optional Parameters
-export const getAllPosts = async (category = 'All', limit = 10, startAfter = null, token) => {
+// Update getAllPosts to always include token
+export const getAllPosts = async (category = 'All', limit = 10, startAfter = null) => {
   try {
+    // Get current user's token
+    const currentUser = auth.currentUser;
+    const token = currentUser ? await currentUser.getIdToken() : null;
+
     let url = `${API_URL}/api/posts?limit=${limit}`;
     if (category && category !== 'All') {
       url += `&category=${encodeURIComponent(category)}`;
@@ -129,6 +244,7 @@ export const getAllPosts = async (category = 'All', limit = 10, startAfter = nul
       },
     });
 
+    // ... rest remains the same
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to fetch posts.');
@@ -161,22 +277,38 @@ export const getComments = async (postId) => {
 };
 
 // Add Comment to a Post
-export const addComment = async (postId, commentData, token) => {
+export const addComment = async (postId, commentData) => {
   try {
+    // Get current user's token
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('User not authenticated');
+    }
+    
+    const token = await currentUser.getIdToken();
+
     const response = await fetch(`${API_URL}/api/posts/${postId}/comments`, {
       method: 'POST',
-      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
+        'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify(commentData),
+      body: JSON.stringify({
+        commentText: commentData.commentText
+      }),
+      credentials: 'include'
     });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to add comment');
+    }
+
     const data = await response.json();
     return data;
   } catch (error) {
     console.error('Error adding comment:', error);
-    return { error: 'An unexpected error occurred while adding the comment.' };
+    throw error;
   }
 };
 
@@ -205,6 +337,10 @@ export const deletePost = async (postId, token) => {
 // Sign Out User
 export const signOutUser = async () => {
   try {
+    // Sign out from Firebase first
+    await auth.signOut();
+
+    // Then sign out from your backend
     const response = await fetch(`${API_URL}/api/auth/signout`, {
       method: 'POST',
       credentials: 'include',
@@ -213,17 +349,13 @@ export const signOutUser = async () => {
       }
     });
 
-    // First try to parse the response as JSON
     let data;
     try {
       data = await response.json();
     } catch (e) {
-      // If parsing fails, create a default response
       data = { message: response.statusText };
     }
 
-    // Always consider signout successful even if server returns error
-    // This ensures client-side cleanup happens
     return { success: true, message: data.message || 'Signed out successfully' };
   } catch (error) {
     console.error('Error during sign out:', error);
