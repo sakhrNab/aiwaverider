@@ -10,9 +10,13 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-let app;
+// Initialize Firebase if not already initialized
 if (!firebase.apps.length) {
-  app = firebase.initializeApp(firebaseConfig);
+  firebase.initializeApp(firebaseConfig);
 }
 
+// Set persistence to LOCAL - this will maintain the auth state across page refreshes
+firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+
 export const auth = firebase.auth();
+export default firebase;
