@@ -3,11 +3,14 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
-import { signIn, signInWithGoogle } from '../utils/api';  // Make sure signInWithGoogle is imported
+import { signIn, signInWithGoogle } from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
-import { toast } from 'react-toastify';  // Add this import
+import { toast } from 'react-toastify';
 import { getLockInfo, setLockInfo, clearLockInfo } from '../utils/lockManager';
+// Add firebase import and remove duplicate auth import
+import firebase from 'firebase/compat/app';
+import { auth } from '../utils/firebase';
 
 const SignIn = () => {
   const [formData, setFormData] = useState({
@@ -153,9 +156,35 @@ const SignIn = () => {
     signInWithGoogle();  // This should now be defined
   };
 
-  const handleMicrosoftSignIn = () => {
-    console.log('Sign in with Microsoft');
-    // Implement Microsoft Sign-In via OAuth if desired
+  const handleMicrosoftSignIn = async () => {
+    try {
+      const provider = new firebase.auth.OAuthProvider('microsoft.com');
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+      
+      const result = await auth.signInWithPopup(provider);
+      const user = result.user;
+  
+      if (user) {
+        clearLockInfo();
+        setAttempts(0);
+        setIsLocked(false);
+        setLockoutEndTime(null);
+        setShowTips(false);
+        await signInUser(user);
+        toast.success('Successfully signed in with Microsoft!');
+        setTimeout(() => navigate('/', { replace: true }), 100);
+      }
+    } catch (error) {
+      console.error("Microsoft Sign-in Error:", error);
+      // Handle specific error cases
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast.error('Sign-in popup was closed before completion');
+      } else {
+        toast.error(`Microsoft Sign-in failed: ${error.message}`);
+      }
+    }
   };
 
   // Add password requirements hint

@@ -14,7 +14,9 @@ import debounce from 'lodash.debounce';
 import { validateEmail } from '../utils/emailValidator';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-
+// Add firebase import
+import firebase from 'firebase/compat/app';
+import { auth } from '../utils/firebase';
 // Define PasswordRequirements outside of SignUp for effective memoization
 const PasswordRequirements = React.memo(({ validation }) => (
   <div className="text-sm text-gray-600 mt-2">
@@ -252,9 +254,27 @@ const SignUp = ({ isOpen, onClose }) => {
     signUpWithGoogle();
   };
 
-  const handleOutlookSignUp = () => {
-    console.log('Sign up with Outlook');
-    // Implement Outlook Sign-Up via OAuth if desired
+  // Replace handleOutlookSignUp with this Microsoft handler
+  const handleMicrosoftSignUp = async () => {
+    try {
+      const provider = new firebase.auth.OAuthProvider('microsoft.com');
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+      
+      const result = await auth.signInWithPopup(provider);
+      const user = result.user;
+
+      if (user) {
+        await signInUser(user);
+        toast.success('Successfully signed up with Microsoft!');
+        navigate('/', { replace: true });
+        if (isModalView) handleClose();
+      }
+    } catch (error) {
+      console.error("Microsoft Sign-up Error:", error);
+      toast.error(`Microsoft Sign-up failed: ${error.message}`);
+    }
   };
 
   // If we shouldn't render at all, return null
@@ -396,7 +416,7 @@ const SignUp = ({ isOpen, onClose }) => {
               Sign Up with Google
             </button>
             <button
-              onClick={handleOutlookSignUp}
+              onClick={handleMicrosoftSignUp}
               className="w-full py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-300 flex items-center justify-center"
             >
               <FontAwesomeIcon icon={faMicrosoft} className="mr-2" />
@@ -534,7 +554,7 @@ const SignUp = ({ isOpen, onClose }) => {
             Sign Up with Google
           </button>
           <button
-            onClick={handleOutlookSignUp}
+            onClick={handleMicrosoftSignUp}
             className="w-full py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-300 flex items-center justify-center"
           >
             <FontAwesomeIcon icon={faMicrosoft} className="mr-2" />
