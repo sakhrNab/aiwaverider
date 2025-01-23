@@ -32,6 +32,12 @@ const { initializePassport } = require('./config/passport');
 // Initialize express
 const app = express();
 
+
+// ------------------ Collection References ------------------
+const usersCollection = db.collection('users');
+const postsCollection = db.collection('posts');
+const commentsCollection = db.collection('comments');
+
 // ================== Updated Firebase Token Middleware ==================
 const validateFirebaseToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -307,10 +313,6 @@ app.get('/api/auth/google/callback',
   }
 );
 
-// ------------------ Collection References ------------------
-const usersCollection = db.collection('users');
-const postsCollection = db.collection('posts');
-const commentsCollection = db.collection('comments');
 
 /*************************************************************************
  * Data structure:

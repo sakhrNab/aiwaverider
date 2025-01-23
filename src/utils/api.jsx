@@ -151,13 +151,6 @@ export const signInWithGoogle = async () => {
     });
     const result = await auth.signInWithPopup(provider);
     
-    // Try to create session but don't fail if it doesn't work
-    try {
-      await createSession(result.user);
-    } catch (error) {
-      console.warn('Failed to create session:', error);
-    }
-    
     return { user: result.user };
   } catch (error) {
     console.error('Error signing in with Google:', error);
