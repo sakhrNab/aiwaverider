@@ -2,7 +2,9 @@
 
 import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { auth } from '../utils/firebase';
-
+import {
+  API_URL,
+} from '../utils/api';
 export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
@@ -51,8 +53,32 @@ export const AuthProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  const signInUser = useCallback((userData) => {
-    setUser(userData);
+  const signInUser = useCallback(async (userData) => {
+    try {
+      // Get the ID token from Firebase
+      const idToken = await userData.getIdToken();
+      
+      // Verify session with backend
+      const response = await fetch(`${API_URL}/api/auth/session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        credentials: 'include',
+        body: JSON.stringify({ idToken })
+      });
+  
+      if (!response.ok) {
+        throw new Error('Failed to create session');
+      }
+  
+      const data = await response.json();
+      setUser({ ...userData, ...data.user });
+    } catch (error) {
+      console.error('Error creating session:', error);
+      throw error;
+    }
   }, []);
 
   const signOutUser = useCallback(async () => {

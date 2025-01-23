@@ -3,7 +3,7 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
-import { signIn, signInWithGoogle } from '../utils/api';
+import { signIn, signInWithGoogle, signInWithMicrosoft } from '../utils/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
 import { toast } from 'react-toastify';
@@ -173,27 +173,19 @@ const SignIn = () => {
 
   const handleMicrosoftSignIn = async () => {
     try {
-      const provider = new firebase.auth.OAuthProvider('microsoft.com');
-      provider.setCustomParameters({
-        prompt: 'select_account'
-      });
-      
-      const result = await auth.signInWithPopup(provider);
-      const user = result.user;
-  
-      if (user) {
+      const result = await signInWithMicrosoft();
+      if (result.user) {
         clearLockInfo();
         setAttempts(0);
         setIsLocked(false);
         setLockoutEndTime(null);
         setShowTips(false);
-        await signInUser(user);
+        await signInUser(result.user);
         toast.success('Successfully signed in with Microsoft!');
         setTimeout(() => navigate('/', { replace: true }), 100);
       }
     } catch (error) {
       console.error("Microsoft Sign-in Error:", error);
-      // Handle specific error cases
       if (error.code === 'auth/popup-closed-by-user') {
         toast.error('Sign-in popup was closed before completion');
       } else {

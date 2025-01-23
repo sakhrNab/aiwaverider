@@ -36,7 +36,6 @@ const app = express();
 const validateFirebaseToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   
-  // 1. Check for Authorization header (changed from cookie-based)
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized - Missing token' });
   }
@@ -44,26 +43,30 @@ const validateFirebaseToken = async (req, res, next) => {
   const token = authHeader.split(' ')[1];
   
   try {
-    // 2. Verify Firebase ID Token
     const decodedToken = await admin.auth().verifyIdToken(token);
     
-    // 3. Attach essential user information to request
+    // Get user data from Firestore
+    const userDoc = await usersCollection.doc(decodedToken.uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found in database' });
+    }
+
+    const userData = userDoc.data();
+    
     req.user = {
-      uid: decodedToken.uid, // Firebase UID (changed from 'id' to 'uid')
+      uid: decodedToken.uid,
       email: decodedToken.email,
-      email_verified: decodedToken.email_verified
+      role: userData.role || 'authenticated',
+      username: userData.username
     };
     
     next();
   } catch (error) {
     console.error('Token verification failed:', error);
-    
-    // Enhanced error handling
-    if (error.code === 'auth/id-token-expired') {
-      return res.status(401).json({ error: 'Session expired - Please reauthenticate' });
-    }
-    
-    return res.status(401).json({ error: 'Unauthorized - Invalid token' });
+    return res.status(401).json({ 
+      error: 'Unauthorized - Invalid token',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
@@ -328,10 +331,9 @@ const commentsCollection = db.collection('comments');
 // ------------------ Validation Schemas ------------------
 
 
-// Update the signup endpoint to handle both regular and OAuth signups
 app.post('/api/auth/signup', async (req, res) => {
   try {
-    const { uid, email, username, firstName, lastName, phoneNumber, displayName, photoURL } = req.body;
+    const { uid, email, username, firstName, lastName, phoneNumber, displayName } = req.body;
 
     // Verify the user exists in Firebase
     const firebaseUser = await admin.auth().getUser(uid);
@@ -358,8 +360,7 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 
     // Create user document in Firestore
-    const userData = {
-      uid,
+    await usersCollection.doc(uid).set({
       username,
       firstName: firstName || '',
       lastName: lastName || '',
@@ -367,15 +368,26 @@ app.post('/api/auth/signup', async (req, res) => {
       phoneNumber: phoneNumber || '',
       role: 'authenticated',
       displayName: displayName || '',
-      photoURL: photoURL || '',
       createdAt: admin.firestore.FieldValue.serverTimestamp()
-    };
+    });
 
-    await usersCollection.doc(uid).set(userData);
+    // Set session cookie
+    const idToken = await admin.auth().createCustomToken(uid);
+    res.cookie('firebaseToken', idToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
 
     return res.json({
       message: 'User created successfully',
-      user: userData
+      user: {
+        uid,
+        username,
+        email: email.toLowerCase(),
+        role: 'authenticated'
+      }
     });
   } catch (err) {
     console.error('Error in /api/auth/signup:', err);
@@ -391,21 +403,19 @@ app.post('/api/auth/signup', async (req, res) => {
 app.post('/api/auth/session', async (req, res) => {
   try {
     const { idToken } = req.body;
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
     
-    // Set session cookie
-    res.cookie('firebaseToken', idToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
-
+    // Verify the ID token first
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
     const userDoc = await usersCollection.doc(decodedToken.uid).get();
     const userData = userDoc.data();
 
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found in database' });
+    }
+
+    // Return user data without setting a session cookie
     return res.json({
-      message: 'Session created successfully',
+      message: 'Session verified successfully',
       user: {
         uid: decodedToken.uid,
         username: userData.username,
@@ -415,7 +425,7 @@ app.post('/api/auth/session', async (req, res) => {
     });
   } catch (err) {
     console.error('Error in /api/auth/session:', err);
-    return res.status(500).json({ error: 'Failed to create session' });
+    return res.status(500).json({ error: 'Failed to verify session' });
   }
 });
 

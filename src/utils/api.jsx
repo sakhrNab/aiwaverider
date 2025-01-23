@@ -3,6 +3,19 @@ import firebase from 'firebase/compat/app';
 import { auth } from '../utils/firebase';
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+// Add this helper function at the top
+const getAuthHeaders = async () => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    return {};
+  }
+  const token = await currentUser.getIdToken(true);
+  return {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
+};
+
 // Update regular sign up to use Firebase
 export const signUp = async (userData) => {
   try {
@@ -107,32 +120,37 @@ export const signUpWithGoogle = async () => {
     
     const result = await auth.signInWithPopup(provider);
     const user = result.user;
+    const token = await user.getIdToken();
     
     // Prepare user data for backend
     const userData = {
       uid: user.uid,
       email: user.email,
-      username: user.email.split('@')[0], // Create username from email
+      username: `user_${user.uid.slice(0, 8)}`,
       firstName: user.displayName?.split(' ')[0] || '',
       lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
       displayName: user.displayName,
-      photoURL: user.photoURL
+      photoURL: user.photoURL,
+      provider: 'google'
     };
 
-    // Create user in backend/Firestore
+    // Create/Update user in backend
     const response = await fetch(`${API_URL}/api/auth/signup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${await user.getIdToken()}`
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify(userData),
-      credentials: 'include',
+      credentials: 'include'
     });
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to create user in database');
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || 'Failed to create user in database');
+    }
 
+    const data = await response.json();
     return { user: { ...user, ...data.user } };
   } catch (error) {
     console.error('Error in Google sign up:', error);
@@ -150,32 +168,37 @@ export const signUpWithMicrosoft = async () => {
     
     const result = await auth.signInWithPopup(provider);
     const user = result.user;
+    const token = await user.getIdToken();
     
-    // Prepare user data for backend
+    // Prepare user data
     const userData = {
       uid: user.uid,
       email: user.email,
-      username: user.email.split('@')[0],
+      username: `user_${user.uid.slice(0, 8)}`,
       firstName: user.displayName?.split(' ')[0] || '',
       lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
       displayName: user.displayName,
-      photoURL: user.photoURL
+      photoURL: user.photoURL,
+      provider: 'microsoft'
     };
 
-    // Create user in backend/Firestore
+    // Create/Update user in backend
     const response = await fetch(`${API_URL}/api/auth/signup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${await user.getIdToken()}`
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify(userData),
-      credentials: 'include',
+      credentials: 'include'
     });
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to create user in database');
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || 'Failed to create user in database');
+    }
 
+    const data = await response.json();
     return { user: { ...user, ...data.user } };
   } catch (error) {
     console.error('Error in Microsoft sign up:', error);
@@ -279,20 +302,16 @@ export const getComments = async (postId) => {
 // Add Comment to a Post
 export const addComment = async (postId, commentData) => {
   try {
-    // Get current user's token
     const currentUser = auth.currentUser;
     if (!currentUser) {
-      throw new Error('User not authenticated');
+      throw new Error('Please sign in to comment');
     }
-    
-    const token = await currentUser.getIdToken();
 
+    const headers = await getAuthHeaders();
+    
     const response = await fetch(`${API_URL}/api/posts/${postId}/comments`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
+      headers,
       body: JSON.stringify({
         commentText: commentData.commentText
       }),

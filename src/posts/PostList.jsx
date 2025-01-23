@@ -75,15 +75,15 @@ const PostsList = () => {
       const data = await addComment(postId, { commentText: commentText.trim() });
 
   
-      if (data.comment) {
-        setPosts(prevPosts => prevPosts.map(post => 
-          post.id === postId ? {
-            ...post,
-            comments: [...(post.comments || []), data.comment]
-          } : post
-        ));
-        setCommentTexts(prev => ({ ...prev, [postId]: '' }));
-      }
+    if (data.comment) {
+      setPosts(prevPosts => prevPosts.map(post => 
+        post.id === postId ? {
+          ...post,
+          comments: [...(post.comments || []), data.comment]
+        } : post
+      ));
+      setCommentTexts(prev => ({ ...prev, [postId]: '' }));
+    }
     } catch (err) {
       console.error('Error adding comment:', err);
       alert('An unexpected error occurred while adding the comment.');
