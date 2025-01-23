@@ -101,7 +101,7 @@ export const signIn = async (credentials) => {
     const isEmail = usernameOrEmail.includes('@');
     let email = usernameOrEmail;
 
-    // If it's not an email, we need to fetch the email from your backend
+    // If it's not an email, fetch the email from your backend
     if (!isEmail) {
       const response = await fetch(`${API_URL}/api/auth/get-email/${usernameOrEmail}`, {
         method: 'GET',
@@ -114,33 +114,20 @@ export const signIn = async (credentials) => {
 
     // Sign in with Firebase
     const result = await auth.signInWithEmailAndPassword(email, password);
-    
-    // Get fresh token
-    const token = await result.user.getIdToken(true);
-    
-    // Create/Verify session with backend
-    const response = await fetch(`${API_URL}/api/auth/session`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      credentials: 'include',
-      body: JSON.stringify({ idToken: token })
-    });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to create session');
+    if (!result.user) {
+      throw new Error('No user data returned from Firebase');
     }
 
-    const data = await response.json();
-    return { user: { ...result.user, ...data.user } };
+    // No need to call createSession here; AuthContext handles it via onAuthStateChanged
+
+    return { firebaseUser: result.user };
   } catch (error) {
     console.error('Error signing in:', error);
     throw error;
   }
 };
+
 
 // Replace signInWithGoogle function
 export const signInWithGoogle = async () => {
@@ -150,8 +137,14 @@ export const signInWithGoogle = async () => {
       prompt: 'select_account'
     });
     const result = await auth.signInWithPopup(provider);
-    
-    return { user: result.user };
+
+    if (!result.user) {
+      throw new Error('No user data returned from Google Sign-In');
+    }
+
+    // No need to call createSession here; AuthContext handles it via onAuthStateChanged
+
+    return { firebaseUser: result.user };
   } catch (error) {
     console.error('Error signing in with Google:', error);
     throw error;
@@ -404,10 +397,7 @@ export const deletePost = async (postId, token) => {
 // Sign Out User
 export const signOutUser = async () => {
   try {
-    // Sign out from Firebase first
-    await auth.signOut();
-
-    // Then sign out from your backend
+    // Only sign out from your backend
     const response = await fetch(`${API_URL}/api/auth/signout`, {
       method: 'POST',
       credentials: 'include',

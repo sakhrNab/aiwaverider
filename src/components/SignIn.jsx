@@ -9,8 +9,8 @@ import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
 import { toast } from 'react-toastify';
 import { getLockInfo, setLockInfo, clearLockInfo } from '../utils/lockManager';
 // Add firebase import and remove duplicate auth import
-import firebase from 'firebase/compat/app';
-import { auth } from '../utils/firebase';
+// import firebase from 'firebase/compat/app';
+// import { auth } from '../utils/firebase';
 
 const SignIn = () => {
   const [formData, setFormData] = useState({
@@ -89,13 +89,14 @@ const SignIn = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     const existingLock = getLockInfo();
     if (existingLock) {
       const now = new Date();
       const lockEnd = new Date(existingLock.endTime);
       if (now < lockEnd) {
-        toast.error(`Account is locked. Please try again in ${timeLeft}`);
+        const timeLeft = Math.ceil((lockEnd - now) / 1000 / 60); // Minutes left
+        toast.error(`Account is locked. Please try again in ${timeLeft} minutes.`);
         return;
       }
       clearLockInfo();
@@ -103,19 +104,19 @@ const SignIn = () => {
 
     try {
       const data = await signIn(formData);
-      if (data.user) {
+      if (data.firebaseUser) { // Updated condition
         clearLockInfo();
         setAttempts(0);
         setIsLocked(false);
         setLockoutEndTime(null);
         setShowTips(false);
-        await signInUser(data.user);
+        await signInUser(data.firebaseUser); // Pass only the Firebase User
         toast.success('Successfully signed in!');
         setTimeout(() => navigate('/', { replace: true }), 100);
       }
     } catch (error) {
       console.error('Sign-in error:', error);
-      
+
       // Handle Firebase specific errors
       switch (error.code) {
         case 'auth/user-not-found':
@@ -128,7 +129,7 @@ const SignIn = () => {
 
           if (remaining <= 0) {
             setIsLocked(true);
-            const lockDuration = 15 * 60;
+            const lockDuration = 15 * 60; // 15 minutes in seconds
             startLockoutTimer(lockDuration);
             setLockInfo(formData.usernameOrEmail, new Date(Date.now() + lockDuration * 1000), 5);
             toast.error('Account locked. Please try again in 15 minutes.');
@@ -156,13 +157,13 @@ const SignIn = () => {
   const handleGoogleSignIn = async () => {
     try {
       const result = await signInWithGoogle();
-      if (result.user) {
+      if (result.firebaseUser) { // Updated condition
         clearLockInfo();
         setAttempts(0);
         setIsLocked(false);
         setLockoutEndTime(null);
         setShowTips(false);
-        await signInUser(result.user);
+        await signInUser(result.firebaseUser); // Pass only the Firebase User
         toast.success('Successfully signed in with Google!');
         setTimeout(() => navigate('/', { replace: true }), 100);
       }

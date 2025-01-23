@@ -1,3 +1,5 @@
+// backend/config/firebase.js
+
 const admin = require('firebase-admin');
 const path = require('path');
 
@@ -19,7 +21,12 @@ const initializeFirebase = () => {
     );
   } else {
     const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || 'path/to/local/serviceAccountKey.json';
-    serviceAccount = require(path.resolve(serviceAccountPath));
+    try {
+      serviceAccount = require(path.resolve(serviceAccountPath));
+    } catch (error) {
+      console.error('Failed to load service account key:', error);
+      process.exit(1);
+    }
   }
 
   admin.initializeApp({

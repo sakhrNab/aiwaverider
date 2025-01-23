@@ -65,7 +65,6 @@ const validateFirebaseToken = async (req, res, next) => {
       role: userData.role || 'authenticated',
       username: userData.username
     };
-    
     next();
   } catch (error) {
     console.error('Token verification failed:', error);
@@ -405,6 +404,10 @@ app.post('/api/auth/signup', async (req, res) => {
 app.post('/api/auth/session', async (req, res) => {
   try {
     const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({ error: 'ID token is required' });
+    }
     
     // Verify the ID token first
     const decodedToken = await admin.auth().verifyIdToken(idToken);
@@ -430,7 +433,6 @@ app.post('/api/auth/session', async (req, res) => {
     return res.status(500).json({ error: 'Failed to verify session' });
   }
 });
-
 // Update sign out endpoint
 app.post('/api/auth/signout', (req, res) => {
   res.clearCookie('firebaseToken', {
