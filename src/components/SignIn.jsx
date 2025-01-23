@@ -119,6 +119,8 @@ const SignIn = () => {
       // Handle Firebase specific errors
       switch (error.code) {
         case 'auth/user-not-found':
+          toast.error('No account found with this email address');
+          break;
         case 'auth/wrong-password':
           const newAttempts = attempts + 1;
           setAttempts(newAttempts);
@@ -131,7 +133,7 @@ const SignIn = () => {
             setLockInfo(formData.usernameOrEmail, new Date(Date.now() + lockDuration * 1000), 5);
             toast.error('Account locked. Please try again in 15 minutes.');
           } else {
-            toast.error(`Invalid credentials. ${remaining} attempts remaining.`);
+            toast.error(`Invalid password. ${remaining} attempts remaining.`);
             setShowTips(remaining <= 3);
           }
           break;
@@ -141,6 +143,9 @@ const SignIn = () => {
           startLockoutTimer(lockDuration);
           setLockInfo(formData.usernameOrEmail, new Date(Date.now() + lockDuration * 1000), 5);
           toast.error('Too many failed attempts. Account temporarily locked.');
+          break;
+        case 'auth/invalid-email':
+          toast.error('Please enter a valid email address');
           break;
         default:
           toast.error(error.message || 'An error occurred during sign in');

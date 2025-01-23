@@ -114,7 +114,28 @@ export const signIn = async (credentials) => {
 
     // Sign in with Firebase
     const result = await auth.signInWithEmailAndPassword(email, password);
-    return { user: result.user };
+    
+    // Get fresh token
+    const token = await result.user.getIdToken(true);
+    
+    // Create/Verify session with backend
+    const response = await fetch(`${API_URL}/api/auth/session`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      credentials: 'include',
+      body: JSON.stringify({ idToken: token })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to create session');
+    }
+
+    const data = await response.json();
+    return { user: { ...result.user, ...data.user } };
   } catch (error) {
     console.error('Error signing in:', error);
     throw error;
