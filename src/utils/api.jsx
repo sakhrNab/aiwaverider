@@ -16,6 +16,32 @@ const getAuthHeaders = async () => {
   };
 };
 
+// Add this helper function
+export const createSession = async (user) => {
+  try {
+    const token = await user.getIdToken(true);
+    const response = await fetch(`${API_URL}/api/auth/session`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      credentials: 'include',
+      body: JSON.stringify({ idToken: token })
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || 'Failed to create session');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error creating session:', error);
+    throw error;
+  }
+};
+
 // Update regular sign up to use Firebase
 export const signUp = async (userData) => {
   try {
@@ -103,6 +129,14 @@ export const signInWithGoogle = async () => {
       prompt: 'select_account'
     });
     const result = await auth.signInWithPopup(provider);
+    
+    // Try to create session but don't fail if it doesn't work
+    try {
+      await createSession(result.user);
+    } catch (error) {
+      console.warn('Failed to create session:', error);
+    }
+    
     return { user: result.user };
   } catch (error) {
     console.error('Error signing in with Google:', error);

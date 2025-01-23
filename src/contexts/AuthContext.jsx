@@ -2,9 +2,8 @@
 
 import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { auth } from '../utils/firebase';
-import {
-  API_URL,
-} from '../utils/api';
+import { API_URL } from '../utils/api';
+
 export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
@@ -18,10 +17,10 @@ export const AuthProvider = ({ children }) => {
       try {
         if (firebaseUser) {
           // Get the user's ID token
-          const token = await firebaseUser.getIdToken();
+          const token = await firebaseUser.getIdToken(true);
           
-          // Optionally fetch additional user data from your backend
-          const response = await fetch('/api/auth/session', {
+          // Fetch additional user data from backend
+          const response = await fetch(`${API_URL}/api/auth/session`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -35,7 +34,7 @@ export const AuthProvider = ({ children }) => {
             const data = await response.json();
             setUser({ ...firebaseUser, ...data.user });
           } else {
-            // Handle error but keep the basic Firebase user info
+            console.warn('Failed to fetch user data from backend, using Firebase user data');
             setUser(firebaseUser);
           }
         } else {
@@ -55,29 +54,32 @@ export const AuthProvider = ({ children }) => {
 
   const signInUser = useCallback(async (userData) => {
     try {
-      // Get the ID token from Firebase
-      const idToken = await userData.getIdToken();
+      // Get fresh token
+      const token = await userData.getIdToken(true);
       
-      // Verify session with backend
+      // Create session in backend
       const response = await fetch(`${API_URL}/api/auth/session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
+          'Authorization': `Bearer ${token}`
         },
         credentials: 'include',
-        body: JSON.stringify({ idToken })
+        body: JSON.stringify({ idToken: token })
       });
-  
+
       if (!response.ok) {
-        throw new Error('Failed to create session');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create session');
       }
-  
+
       const data = await response.json();
       setUser({ ...userData, ...data.user });
     } catch (error) {
       console.error('Error creating session:', error);
-      throw error;
+      // Still set the Firebase user data if backend fails
+      setUser(userData);
+      // Don't throw error to prevent login failure
     }
   }, []);
 
