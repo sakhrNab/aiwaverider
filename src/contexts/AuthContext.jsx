@@ -11,61 +11,16 @@ export const AuthProvider = ({ children }) => {
   const [userData, setUserData] = useState(null); // Backend user data
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [sessionInitialized, setSessionInitialized] = useState(false);
+  const [isSigningUp, setIsSigningUp] = useState(false);
+  const [isNewUser, setIsNewUser] = useState(false);
 
-  // Listen to Firebase auth state changes
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      setLoading(true);
-      try {
-        if (user) {
-          setFirebaseUser(user);
-          const token = await user.getIdToken(true);
-
-          // Fetch additional user data from backend
-          const response = await fetch(`${API_URL}/api/auth/session`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            credentials: 'include',
-            body: JSON.stringify({ idToken: token })
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            setUserData(data.user);
-          } else {
-            console.warn('Failed to fetch user data from backend, using Firebase user data');
-            setUserData(null);
-          }
-        } else {
-          setFirebaseUser(null);
-          setUserData(null);
-        }
-      } catch (err) {
-        console.error('Auth state change error:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    });
-
-    // Cleanup subscription on unmount
-    return () => unsubscribe();
-  }, []);
-
-  const signInUser = useCallback(async (firebaseUserObj) => {
+  const createSession = useCallback(async (user) => {
+    if (!user || isNewUser) return null;
+    
     try {
-      // Ensure firebaseUserObj is a Firebase User
-      if (!firebaseUserObj || typeof firebaseUserObj.getIdToken !== 'function') {
-        throw new Error('Invalid Firebase user object');
-      }
-
-      // Get fresh token
-      const token = await firebaseUserObj.getIdToken(true);
-
-      // Create session in backend
+      const token = await user.getIdToken(true);
+      
       const response = await fetch(`${API_URL}/api/auth/session`, {
         method: 'POST',
         headers: {
@@ -82,35 +37,119 @@ export const AuthProvider = ({ children }) => {
       }
 
       const data = await response.json();
-      setUserData(data.user);
-      setFirebaseUser(firebaseUserObj);
+      return data.user;
     } catch (error) {
-      console.error('Error creating session:', error);
-      // Still set the Firebase user data if backend fails
-      setFirebaseUser(firebaseUserObj);
-      setUserData(null);
-      // Don't throw error to prevent login failure
+      console.error('Session creation error:', error);
+      return null;
     }
-  }, []);
+  }, [isNewUser]);
+
+  // Auth state change handler
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      try {
+        setLoading(true);
+        if (user) {
+          console.log('Auth state changed:', { isSigningUp, isNewUser, sessionInitialized });
+          setFirebaseUser(user);
+          
+          // Skip session creation if we're signing up or it's a new user
+          if (!isSigningUp && !isNewUser && !sessionInitialized) {
+            const backendUser = await createSession(user);
+            if (backendUser) {
+              setUserData(backendUser);
+              setSessionInitialized(true);
+            }
+          }
+        } else {
+          setFirebaseUser(null);
+          setUserData(null);
+          setSessionInitialized(false);
+          setIsNewUser(false);
+        }
+      } catch (err) {
+        console.error('Auth state change error:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [sessionInitialized, createSession, isSigningUp, isNewUser]);
+
+  const signInUser = useCallback(async (firebaseUserObj, isSignup = false) => {
+    try {
+      if (!firebaseUserObj || typeof firebaseUserObj.getIdToken !== 'function') {
+        throw new Error('Invalid Firebase user object');
+      }
+
+      setFirebaseUser(firebaseUserObj);
+      
+      if (isSignup) {
+        setIsSigningUp(true);
+        setIsNewUser(true);
+        const token = await firebaseUserObj.getIdToken(true);
+        const response = await fetch(`${API_URL}/api/auth/signup`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            uid: firebaseUserObj.uid,
+            email: firebaseUserObj.email,
+            displayName: firebaseUserObj.displayName,
+            username: firebaseUserObj.email.split('@')[0],
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create user account');
+        }
+
+        const data = await response.json();
+        setUserData(data.user);
+        setSessionInitialized(true);
+        
+        // Reset flags after successful signup
+        setIsSigningUp(false);
+        // Keep isNewUser true until next sign in
+      } else {
+        setIsNewUser(false);
+        const backendUser = await createSession(firebaseUserObj);
+        if (backendUser) {
+          setUserData(backendUser);
+          setSessionInitialized(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error in signInUser:', error);
+      setUserData(null);
+      setIsSigningUp(false);
+      setIsNewUser(false);
+    }
+  }, [createSession]);
 
   const signOutUser = useCallback(async () => {
     try {
-      // Sign out from Firebase
       await auth.signOut();
-
-      // Sign out from backend
-      await apiSignOutUser(); // Ensure this does NOT call auth.signOut() again
-
-      // Reset state
+      await apiSignOutUser();
       setFirebaseUser(null);
       setUserData(null);
+      setSessionInitialized(false);
     } catch (error) {
       console.error('Error signing out:', error);
     }
   }, []);
 
   const contextValue = useMemo(() => ({
-    user: firebaseUser ? { firebaseUser, ...userData } : null, // Set to null when not authenticated
+    user: firebaseUser ? { 
+      ...firebaseUser, 
+      ...userData,
+      isAdmin: userData?.role === 'admin'
+    } : null,
     loading,
     error,
     signInUser,
@@ -118,7 +157,7 @@ export const AuthProvider = ({ children }) => {
   }), [firebaseUser, userData, loading, error, signInUser, signOutUser]);
 
   if (loading) {
-    return <div>Loading...</div>; // Or your loading component
+    return <div>Loading...</div>;
   }
 
   return (

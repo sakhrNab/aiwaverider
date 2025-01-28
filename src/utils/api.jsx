@@ -1,5 +1,7 @@
 // src/utils/api.jsx
+
 import firebase from 'firebase/compat/app';
+// import 'firebase/compat/auth';
 import { auth } from '../utils/firebase';
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -42,7 +44,34 @@ export const createSession = async (user) => {
   }
 };
 
-// Update regular sign up to use Firebase
+// Sign Out User
+export const signOutUser = async () => {
+  try {
+    // Only sign out from your backend
+    const response = await fetch(`${API_URL}/api/auth/signout`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (e) {
+      data = { message: response.statusText };
+    }
+
+    return { success: true, message: data.message || 'Signed out successfully' };
+  } catch (error) {
+    console.error('Error during sign out:', error);
+    // Still return success to ensure client-side cleanup
+    return { success: true, message: 'Signed out locally' };
+  }
+};
+
+// Sign Up with Email and Password
 export const signUp = async (userData) => {
   try {
     // Extract password and create user in Firebase first
@@ -93,7 +122,7 @@ export const signUp = async (userData) => {
   }
 };
 
-// Update regular sign in to use Firebase
+// Sign In with Email and Password
 export const signIn = async (credentials) => {
   try {
     const { usernameOrEmail, password } = credentials;
@@ -128,8 +157,7 @@ export const signIn = async (credentials) => {
   }
 };
 
-
-// Replace signInWithGoogle function
+// Sign In with Google
 export const signInWithGoogle = async () => {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
@@ -151,7 +179,7 @@ export const signInWithGoogle = async () => {
   }
 };
 
-// Update signUpWithGoogle function
+// Sign Up with Google
 export const signUpWithGoogle = async () => {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
@@ -192,14 +220,14 @@ export const signUpWithGoogle = async () => {
     }
 
     const data = await response.json();
-    return { user: { ...user, ...data.user } };
+    return { firebaseUser: user }; // Return only the Firebase User object
   } catch (error) {
     console.error('Error in Google sign up:', error);
     throw error;
   }
 };
 
-// Update Microsoft sign-up
+// Sign Up with Microsoft
 export const signUpWithMicrosoft = async () => {
   try {
     const provider = new firebase.auth.OAuthProvider('microsoft.com');
@@ -240,13 +268,14 @@ export const signUpWithMicrosoft = async () => {
     }
 
     const data = await response.json();
-    return { user: { ...user, ...data.user } };
+    return { firebaseUser: user }; // Return only the Firebase User object
   } catch (error) {
     console.error('Error in Microsoft sign up:', error);
     throw error;
   }
 };
 
+// Sign In with Microsoft (Redirect-based, assuming backend handles it)
 export const signInWithMicrosoft = () => {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
   window.location.href = `${apiUrl}/api/auth/microsoft/signin?prompt=select_account`;
@@ -284,7 +313,6 @@ export const createPost = async (formData) => {
 };
 
 // Get All Posts with Optional Parameters
-// Update getAllPosts to always include token
 export const getAllPosts = async (category = 'All', limit = 10, startAfter = null) => {
   try {
     // Get current user's token
@@ -308,7 +336,6 @@ export const getAllPosts = async (category = 'All', limit = 10, startAfter = nul
       },
     });
 
-    // ... rest remains the same
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to fetch posts.');
@@ -391,33 +418,6 @@ export const deletePost = async (postId, token) => {
   } catch (error) {
     console.error('Error deleting post:', error);
     return { error: 'An unexpected error occurred while deleting the post.' };
-  }
-};
-
-// Sign Out User
-export const signOutUser = async () => {
-  try {
-    // Only sign out from your backend
-    const response = await fetch(`${API_URL}/api/auth/signout`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-
-    let data;
-    try {
-      data = await response.json();
-    } catch (e) {
-      data = { message: response.statusText };
-    }
-
-    return { success: true, message: data.message || 'Signed out successfully' };
-  } catch (error) {
-    console.error('Error during sign out:', error);
-    // Still return success to ensure client-side cleanup
-    return { success: true, message: 'Signed out locally' };
   }
 };
 

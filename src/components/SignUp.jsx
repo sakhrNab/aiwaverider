@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import ReactPhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import '../styles/signup.css'; // Import the signup.css
-import { signUp, signUpWithGoogle } from '../utils/api'; // Import the signUp API function and signUpWithGoogle
+import { signUp, signUpWithGoogle, signUpWithMicrosoft } from '../utils/api'; // Import the signUp API functions
 import { AuthContext } from '../contexts/AuthContext'; // Import AuthContext
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
@@ -17,6 +17,7 @@ import 'react-toastify/dist/ReactToastify.css';
 // Add firebase import
 import firebase from 'firebase/compat/app';
 import { auth } from '../utils/firebase';
+
 // Define PasswordRequirements outside of SignUp for effective memoization
 const PasswordRequirements = React.memo(({ validation }) => (
   <div className="text-sm text-gray-600 mt-2">
@@ -60,7 +61,6 @@ PasswordRequirements.propTypes = {
     hasLower: PropTypes.bool.isRequired,
     hasNumber: PropTypes.bool.isRequired,
     hasSpecial: PropTypes.bool.isRequired,
-    // Removed isValid as it's not used in the component
   }).isRequired,
 };
 
@@ -122,7 +122,6 @@ const SignUp = ({ isOpen, onClose }) => {
   const [emailWarning, setEmailWarning] = useState('');
   const navigate = useNavigate();
   const modalRef = useRef(null);
-  const { signInUser } = useContext(AuthContext); // Get signInUser from context
 
   // If isOpen is undefined, that means we're on /sign-up as a "page" rather than a modal.
   const isModalView = isOpen !== undefined;
@@ -224,7 +223,6 @@ const SignUp = ({ isOpen, onClose }) => {
       const { user } = await signUp(formData);
       
       if (user) {
-        await signInUser(user);
         toast.success('Account created successfully!');
         navigate('/');
         if (isModalView) {
@@ -254,8 +252,7 @@ const SignUp = ({ isOpen, onClose }) => {
   const handleGoogleSignUp = async () => {
     try {
       const result = await signUpWithGoogle();
-      if (result.user) {
-        await signInUser(result.user);
+      if (result.firebaseUser) {
         toast.success('Successfully signed up with Google!');
         navigate('/', { replace: true });
         if (isModalView) handleClose();
@@ -270,7 +267,6 @@ const SignUp = ({ isOpen, onClose }) => {
     }
   };
 
-  // Replace handleOutlookSignUp with this Microsoft handler
   const handleMicrosoftSignUp = async () => {
     try {
       const provider = new firebase.auth.OAuthProvider('microsoft.com');
@@ -422,7 +418,7 @@ const SignUp = ({ isOpen, onClose }) => {
             </div>
           </form>
 
-          {/* Google and Outlook Sign Up */}
+          {/* Google and Microsoft Sign Up */}
           <div className="mt-6 text-center">
             <button
               onClick={handleGoogleSignUp}
@@ -436,7 +432,7 @@ const SignUp = ({ isOpen, onClose }) => {
               className="w-full py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-300 flex items-center justify-center"
             >
               <FontAwesomeIcon icon={faMicrosoft} className="mr-2" />
-              Sign Up with Outlook
+              Sign Up with Microsoft
             </button>
           </div>
         </div>
@@ -560,7 +556,7 @@ const SignUp = ({ isOpen, onClose }) => {
             </div>
         </form>
 
-        {/* Google and Outlook Sign Up */}
+        {/* Google and Microsoft Sign Up */}
         <div className="mt-6 text-center">
           <button
             onClick={handleGoogleSignUp}
@@ -574,7 +570,7 @@ const SignUp = ({ isOpen, onClose }) => {
             className="w-full py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-300 flex items-center justify-center"
           >
             <FontAwesomeIcon icon={faMicrosoft} className="mr-2" />
-            Sign Up with Outlook
+            Sign Up with Microsoft
           </button>
         </div>
       </div>
