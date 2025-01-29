@@ -5,7 +5,7 @@ import firebase from 'firebase/compat/app';
 import { auth } from '../utils/firebase';
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-// Add this helper function at the top
+// Update this helper function to use Firebase token
 const getAuthHeaders = async () => {
   const currentUser = auth.currentUser;
   if (!currentUser) {
@@ -260,13 +260,19 @@ export const signInWithMicrosoft = async () => {
   }
 };
 
-// Create Post with FormData
+// Update createPost to use Firebase token
 export const createPost = async (formData) => {
   try {
+    const headers = await getAuthHeaders();
+    
+    // Remove Content-Type from headers when sending FormData
+    delete headers['Content-Type'];
+    
     const response = await fetch(`${API_URL}/api/posts`, {
       method: 'POST',
-      credentials: 'include', // Important for sending cookies
+      headers,
       body: formData,
+      credentials: 'include'
     });
 
     // First check the response type
@@ -291,12 +297,10 @@ export const createPost = async (formData) => {
   }
 };
 
-// Get All Posts with Optional Parameters
+// Update getAllPosts to use Firebase token
 export const getAllPosts = async (category = 'All', limit = 10, startAfter = null) => {
   try {
-    // Get current user's token
-    const currentUser = auth.currentUser;
-    const token = currentUser ? await currentUser.getIdToken() : null;
+    const headers = await getAuthHeaders();
 
     let url = `${API_URL}/api/posts?limit=${limit}`;
     if (category && category !== 'All') {
@@ -309,10 +313,7 @@ export const getAllPosts = async (category = 'All', limit = 10, startAfter = nul
     const response = await fetch(url, {
       method: 'GET',
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
+      headers
     });
 
     if (!response.ok) {
@@ -346,23 +347,16 @@ export const getComments = async (postId) => {
   }
 };
 
-// Add Comment to a Post
+// Update addComment to use Firebase token
 export const addComment = async (postId, commentData) => {
   try {
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      throw new Error('Please sign in to comment');
-    }
-
     const headers = await getAuthHeaders();
     
     const response = await fetch(`${API_URL}/api/posts/${postId}/comments`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        commentText: commentData.commentText
-      }),
-      credentials: 'include'
+      credentials: 'include',
+      body: JSON.stringify(commentData)
     });
 
     if (!response.ok) {
@@ -378,15 +372,14 @@ export const addComment = async (postId, commentData) => {
   }
 };
 
-// Delete Post
-export const deletePost = async (postId, token) => {
+// Update deletePost to use Firebase token
+export const deletePost = async (postId) => {
   try {
+    const headers = await getAuthHeaders();
     const response = await fetch(`${API_URL}/api/posts/${postId}`, {
       method: 'DELETE',
       credentials: 'include',
-      headers: {
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
+      headers
     });
     if (response.ok) {
       return { success: true };
@@ -400,17 +393,18 @@ export const deletePost = async (postId, token) => {
   }
 };
 
-// Update Post
-export const updatePost = async (postId, formData, token) => {
+// Update updatePost to use Firebase token
+export const updatePost = async (postId, formData) => {
   try {
+    const headers = await getAuthHeaders();
+    // Remove Content-Type when sending FormData
+    delete headers['Content-Type'];
+    
     const response = await fetch(`${API_URL}/api/posts/${postId}`, {
       method: 'PUT',
       credentials: 'include',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        // Do NOT set 'Content-Type' header when sending FormData
-      },
-      body: formData, // FormData instance
+      headers,
+      body: formData
     });
     const data = await response.json();
     return data;
@@ -442,41 +436,5 @@ export const getPostById = async (postId) => {
   } catch (error) {
     console.error('Error fetching post by ID:', error);
     throw error;
-  }
-};
-
-// Update Refresh Token
-export const refreshToken = async () => {
-  try {
-    const response = await fetch(`${API_URL}/api/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-
-    // Handle 401s quietly
-    if (response.status === 401) {
-      return { user: null };
-    }
-
-    if (!response.ok) {
-      const error = new Error('Token refresh failed');
-      error.status = response.status;
-      throw error;
-    }
-
-    const data = await response.json();
-    return {
-      user: data.user,
-      message: data.message
-    };
-  } catch (error) {
-    // Only log non-401 errors
-    if (error.status !== 401) {
-      console.error('Error refreshing token:', error);
-    }
-    return { user: null };
   }
 };

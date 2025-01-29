@@ -99,7 +99,7 @@ const PostsList = () => {
   const handleDeletePost = async () => {
     if (!postToDelete) return;
     try {
-      const data = await deletePost(postToDelete.id, token);
+      const data = await deletePost(postToDelete.id);
       if (data.success) {
         setPosts((prev) => prev.filter((p) => p.id !== postToDelete.id));
         setIsModalOpen(false);
@@ -132,6 +132,8 @@ const PostsList = () => {
   if (error || errorPosts) {
     return <div className="p-4 text-red-500 text-center">{error || errorPosts}</div>;
   }
+
+  const userIsAdmin = user?.role === 'admin';
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -188,7 +190,7 @@ const PostsList = () => {
                     Created At: {formatDate(post.createdAt)}
                   </p>
                 </div>
-                {role === 'admin' && (
+                {userIsAdmin && (
                   <button
                     onClick={() => confirmDeletePost(post)}
                     className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"

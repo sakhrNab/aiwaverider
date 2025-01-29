@@ -9,6 +9,7 @@ import RichTextEditor from '../components/RichTextEditor'; // NEW import
 import DOMPurify from 'dompurify';
 import { CATEGORIES } from '../constants/categories';
 import { PostsContext } from '../contexts/PostsContext';
+import { auth } from '../utils/firebase'; // Add this import
 
 const CreatePost = () => {
   const [formData, setFormData] = useState({
@@ -49,6 +50,19 @@ const CreatePost = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Check if user is authenticated and admin
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setError('You must be logged in to create a post.');
+      return;
+    }
+
+    const idTokenResult = await currentUser.getIdTokenResult();
+    if (idTokenResult.claims.role !== 'admin') {
+      setError('Only admins can create posts.');
+      return;
+    }
 
     if (!formData.title || !formData.description || !formData.category) {
       setError('Title, Description, and Category are required.');

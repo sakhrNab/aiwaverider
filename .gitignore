@@ -31,3 +31,9 @@ fetch_classes.py
 *.njsproj
 *.sln
 *.sw?
+
+# unneccessary generated files
+*.$*
+
+# Plan diagram
+AI Waverider.drawio

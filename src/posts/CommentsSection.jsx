@@ -6,7 +6,7 @@ import { addComment } from '../utils/api';
 import DOMPurify from 'dompurify';
 
 const CommentsSection = ({ postId }) => {
-  const { user, token } = useContext(AuthContext);
+  const { user } = useContext(AuthContext);
   const { getComments, addCommentToCache, commentsCache } = useContext(PostsContext);
   const [comments, setComments] = useState(() => commentsCache[postId] || []);
   const [newComment, setNewComment] = useState('');
@@ -58,17 +58,24 @@ const CommentsSection = ({ postId }) => {
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
+    
+    // Check if user is authenticated
+    if (!auth.currentUser) {
+      setError('You must be logged in to comment.');
+      return;
+    }
+
     try {
-      const data = await addComment(postId, { commentText: newComment.trim() }, token);
+      const data = await addComment(postId, { commentText: newComment.trim() });
       if (data.comment) {
         setComments([...comments, data.comment]);
         setNewComment('');
       } else {
-        alert(data.error || 'Failed to add comment.');
+        setError(data.error || 'Failed to add comment.');
       }
     } catch (err) {
       console.error('Error adding comment:', err);
-      setError('An error occurred.');
+      setError('An error occurred while adding your comment.');
     }
   };
 
