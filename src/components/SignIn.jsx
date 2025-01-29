@@ -157,13 +157,15 @@ const SignIn = () => {
   const handleGoogleSignIn = async () => {
     try {
       const result = await signInWithGoogle();
-      if (result.firebaseUser) { // Updated condition
+      if (result.firebaseUser) {
+        // Reset lock info
         clearLockInfo();
         setAttempts(0);
         setIsLocked(false);
         setLockoutEndTime(null);
         setShowTips(false);
-        await signInUser(result.firebaseUser); // Pass only the Firebase User
+        // Let AuthContext handle server sign-in
+        await signInUser(result.firebaseUser, false); 
         toast.success('Successfully signed in with Google!');
         setTimeout(() => navigate('/', { replace: true }), 100);
       }
@@ -180,13 +182,16 @@ const SignIn = () => {
   const handleMicrosoftSignIn = async () => {
     try {
       const result = await signInWithMicrosoft();
-      if (result.user) {
+      if (result.firebaseUser) {
+        // Reset lock info
         clearLockInfo();
         setAttempts(0);
         setIsLocked(false);
         setLockoutEndTime(null);
         setShowTips(false);
-        await signInUser(result.user);
+
+        // Let AuthContext do the backend sign-in
+        await signInUser(result.firebaseUser, false);
         toast.success('Successfully signed in with Microsoft!');
         setTimeout(() => navigate('/', { replace: true }), 100);
       }
@@ -199,7 +204,6 @@ const SignIn = () => {
       }
     }
   };
-
   // Add password requirements hint
   const PasswordHint = () => (
     <div className="text-xs text-gray-500 mt-1">

@@ -401,6 +401,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
 // Remove old sign-in endpoint as it's handled by Firebase
 // Keep only the session management part
+// Verify user session by POSTing { idToken } to this endpoint
 app.post('/api/auth/session', async (req, res) => {
   try {
     const { idToken } = req.body;
@@ -408,17 +409,23 @@ app.post('/api/auth/session', async (req, res) => {
     if (!idToken) {
       return res.status(400).json({ error: 'ID token is required' });
     }
-    
-    // Verify the ID token first
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
-    const userDoc = await usersCollection.doc(decodedToken.uid).get();
-    const userData = userDoc.data();
 
+    // 1. Verify the ID token via Firebase Admin
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+
+    // 2. Check if user doc exists in Firestore
+    const userDoc = await usersCollection.doc(decodedToken.uid).get();
     if (!userDoc.exists) {
       return res.status(404).json({ error: 'User not found in database' });
     }
 
-    // Return user data without setting a session cookie
+    const userData = userDoc.data();
+
+    // 3. Optionally set a session cookie or do anything else here.
+    //    For example, if you're using express-session, you might attach user data:
+    //    req.session.user = { uid: decodedToken.uid, ... };
+
+    // 4. Return user data or a success message
     return res.json({
       message: 'Session verified successfully',
       user: {
@@ -430,9 +437,12 @@ app.post('/api/auth/session', async (req, res) => {
     });
   } catch (err) {
     console.error('Error in /api/auth/session:', err);
-    return res.status(500).json({ error: 'Failed to verify session' });
+    return res
+      .status(500)
+      .json({ error: 'Failed to verify session' });
   }
 });
+
 // Update sign out endpoint
 app.post('/api/auth/signout', (req, res) => {
   res.clearCookie('firebaseToken', {

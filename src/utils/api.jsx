@@ -161,17 +161,14 @@ export const signIn = async (credentials) => {
 export const signInWithGoogle = async () => {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
-    provider.setCustomParameters({
-      prompt: 'select_account'
-    });
+    provider.setCustomParameters({ prompt: 'select_account' });
     const result = await auth.signInWithPopup(provider);
 
     if (!result.user) {
       throw new Error('No user data returned from Google Sign-In');
     }
-
-    // No need to call createSession here; AuthContext handles it via onAuthStateChanged
-
+    
+    // Return { firebaseUser } for consistency
     return { firebaseUser: result.user };
   } catch (error) {
     console.error('Error signing in with Google:', error);
@@ -179,55 +176,23 @@ export const signInWithGoogle = async () => {
   }
 };
 
-// Sign Up with Google
+// -- Google Sign-Up (just signInWithPopup, let AuthContext create user) --
 export const signUpWithGoogle = async () => {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
-    provider.setCustomParameters({
-      prompt: 'select_account'
-    });
-    
+    provider.setCustomParameters({ prompt: 'select_account' });
     const result = await auth.signInWithPopup(provider);
-    const user = result.user;
-    const token = await user.getIdToken();
-    
-    // Prepare user data for backend
-    const userData = {
-      uid: user.uid,
-      email: user.email,
-      username: `user_${user.uid.slice(0, 8)}`,
-      firstName: user.displayName?.split(' ')[0] || '',
-      lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
-      displayName: user.displayName,
-      photoURL: user.photoURL,
-      provider: 'google'
-    };
 
-    // Create/Update user in backend
-    const response = await fetch(`${API_URL}/api/auth/signup`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(userData),
-      credentials: 'include'
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to create user in database');
+    if (!result.user) {
+      throw new Error('No user data returned from Google Sign-Up');
     }
-
-    const data = await response.json();
-    return { firebaseUser: user }; // Return only the Firebase User object
+    return { firebaseUser: result.user };
   } catch (error) {
     console.error('Error in Google sign up:', error);
     throw error;
   }
 };
 
-// Sign Up with Microsoft
 export const signUpWithMicrosoft = async () => {
   try {
     const provider = new firebase.auth.OAuthProvider('microsoft.com');
@@ -235,11 +200,14 @@ export const signUpWithMicrosoft = async () => {
       prompt: 'select_account'
     });
     
+    // Sign in via popup
     const result = await auth.signInWithPopup(provider);
     const user = result.user;
-    const token = await user.getIdToken();
     
-    // Prepare user data
+    // Grab the user's ID token so we can call our backend
+    const token = await user.getIdToken();
+
+    // Prepare user data for the backend
     const userData = {
       uid: user.uid,
       email: user.email,
@@ -251,7 +219,7 @@ export const signUpWithMicrosoft = async () => {
       provider: 'microsoft'
     };
 
-    // Create/Update user in backend
+    // Create/Update user in the backend
     const response = await fetch(`${API_URL}/api/auth/signup`, {
       method: 'POST',
       headers: {
@@ -267,18 +235,29 @@ export const signUpWithMicrosoft = async () => {
       throw new Error(data.error || 'Failed to create user in database');
     }
 
+    // If successful, return the Firebase user object in the same format
     const data = await response.json();
-    return { firebaseUser: user }; // Return only the Firebase User object
+    return { firebaseUser: user };
   } catch (error) {
     console.error('Error in Microsoft sign up:', error);
     throw error;
   }
 };
+// -- Microsoft Sign-In (POPUP approach, consistent with sign-up) --
+export const signInWithMicrosoft = async () => {
+  try {
+    const provider = new firebase.auth.OAuthProvider('microsoft.com');
+    provider.setCustomParameters({ prompt: 'select_account' });
+    const result = await auth.signInWithPopup(provider);
 
-// Sign In with Microsoft (Redirect-based, assuming backend handles it)
-export const signInWithMicrosoft = () => {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-  window.location.href = `${apiUrl}/api/auth/microsoft/signin?prompt=select_account`;
+    if (!result.user) {
+      throw new Error('No user data returned from Microsoft Sign-In');
+    }
+    return { firebaseUser: result.user };
+  } catch (error) {
+    console.error('Error in Microsoft sign in:', error);
+    throw error;
+  }
 };
 
 // Create Post with FormData

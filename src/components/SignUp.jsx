@@ -130,6 +130,7 @@ const SignUp = ({ isOpen, onClose }) => {
   // - If it's a modal scenario, only render if `isOpen` is true.
   // - If it's a normal page scenario, always render.
   const shouldRender = isModalView ? isOpen : true;
+  const { signInUser } = useContext(AuthContext);
 
   useEffect(() => {
     if (!isModalView) return; // If this is a normal page view, skip the outside-click logic
@@ -253,6 +254,7 @@ const SignUp = ({ isOpen, onClose }) => {
     try {
       const result = await signUpWithGoogle();
       if (result.firebaseUser) {
+        await signInUser(result.firebaseUser, true);
         toast.success('Successfully signed up with Google!');
         navigate('/', { replace: true });
         if (isModalView) handleClose();
@@ -267,28 +269,25 @@ const SignUp = ({ isOpen, onClose }) => {
     }
   };
 
+  // NEW: Microsoft sign-up (mirrors Google sign-up)
   const handleMicrosoftSignUp = async () => {
     try {
-      const provider = new firebase.auth.OAuthProvider('microsoft.com');
-      provider.setCustomParameters({
-        prompt: 'select_account'
-      });
-      
-      const result = await auth.signInWithPopup(provider);
-      const user = result.user;
-
-      if (user) {
-        await signInUser(user);
+      const result = await signUpWithMicrosoft();
+      if (result.firebaseUser) {
+        await signInUser(result.firebaseUser, true);
         toast.success('Successfully signed up with Microsoft!');
         navigate('/', { replace: true });
         if (isModalView) handleClose();
       }
     } catch (error) {
       console.error("Microsoft Sign-up Error:", error);
-      toast.error(`Microsoft Sign-up failed: ${error.message}`);
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast.error('Sign-up popup was closed before completion');
+      } else {
+        toast.error(`Microsoft Sign-up failed: ${error.message}`);
+      }
     }
   };
-
   // If we shouldn't render at all, return null
   if (!shouldRender) {
     return null;

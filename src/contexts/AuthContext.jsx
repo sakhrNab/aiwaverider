@@ -1,6 +1,12 @@
 // src/contexts/AuthContext.jsx
 
-import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo
+} from 'react';
 import { auth } from '../utils/firebase';
 import { API_URL, signOutUser as apiSignOutUser } from '../utils/api'; // Import the backend signOutUser
 
@@ -8,28 +14,36 @@ export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState(null); // Firebase User object
-  const [userData, setUserData] = useState(null); // Backend user data
+  const [userData, setUserData] = useState(null);         // Backend user data
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [sessionInitialized, setSessionInitialized] = useState(false);
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
 
+  /**
+   * Calls /api/auth/session with the user's ID token to create/verify a session.
+   * (No longer checks `isNewUser` so that newly created users can get a session.)
+   */
   const createSession = useCallback(async (user) => {
-    if (!user || isNewUser) return null;
-    
+    if (!user) return null; // <-- UPDATED: remove the "|| isNewUser" check
+
     try {
       const token = await user.getIdToken(true);
-      
-      const response = await fetch(`${API_URL}/api/auth/session`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        credentials: 'include',
-        body: JSON.stringify({ idToken: token })
-      });
+
+      if (isSigningUp && sessionInitialized){
+        return null;
+      } 
+
+        const response = await fetch(`${API_URL}/api/auth/session`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          credentials: 'include',
+          body: JSON.stringify({ idToken: token })
+        });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -42,18 +56,27 @@ export const AuthProvider = ({ children }) => {
       console.error('Session creation error:', error);
       return null;
     }
-  }, [isNewUser]);
+  }, []);
 
-  // Auth state change handler
+  /**
+   * Watch for Firebase auth state changes.
+   * If there's a user, and we're not in the middle of signing up,
+   * we'll call createSession if it isn't already initialized.
+   */
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       try {
         setLoading(true);
         if (user) {
-          console.log('Auth state changed:', { isSigningUp, isNewUser, sessionInitialized });
+          console.log('Auth state changed:', {
+            isSigningUp,
+            isNewUser,
+            sessionInitialized
+          });
           setFirebaseUser(user);
-          
-          // Skip session creation if we're signing up or it's a new user
+
+          // Skip session creation if we're signing up or
+          // already flagged as "new user" or if session is set
           if (!isSigningUp && !isNewUser && !sessionInitialized) {
             const backendUser = await createSession(user);
             if (backendUser) {
@@ -76,8 +99,19 @@ export const AuthProvider = ({ children }) => {
     });
 
     return () => unsubscribe();
-  }, [sessionInitialized, createSession, isSigningUp, isNewUser]);
+  }, [
+    sessionInitialized,
+    createSession,
+    isSigningUp,
+    isNewUser
+  ]);
 
+  /**
+   * Called by your SignIn or SignUp components after a Firebase auth popup resolves.
+   * If isSignup = true, we first create the user doc in Firestore (via /api/auth/signup),
+   * then we manually call createSession to ensure the doc is ready, and only then
+   * do we set sessionInitialized, isNewUser, etc.
+   */
   const signInUser = useCallback(async (firebaseUserObj, isSignup = false) => {
     try {
       if (!firebaseUserObj || typeof firebaseUserObj.getIdToken !== 'function') {
@@ -85,16 +119,19 @@ export const AuthProvider = ({ children }) => {
       }
 
       setFirebaseUser(firebaseUserObj);
-      
+
       if (isSignup) {
+        // Mark that we are in sign-up mode
         setIsSigningUp(true);
         setIsNewUser(true);
+
+        // 1) Create Firestore doc:
         const token = await firebaseUserObj.getIdToken(true);
         const response = await fetch(`${API_URL}/api/auth/signup`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            Authorization: `Bearer ${token}`
           },
           credentials: 'include',
           body: JSON.stringify({
@@ -111,12 +148,24 @@ export const AuthProvider = ({ children }) => {
 
         const data = await response.json();
         setUserData(data.user);
+
+        // 2) Now that the doc exists, create the session:
+        //    We'll temporarily set isNewUser to false so createSession is allowed
+        setIsNewUser(false); // <-- UPDATED to allow the session
+        const backendUser = await createSession(firebaseUserObj);
+        if (backendUser) {
+          setUserData(backendUser);
+        }
         setSessionInitialized(true);
-        
+
         // Reset flags after successful signup
-        setIsSigningUp(false);
-        // Keep isNewUser true until next sign in
+        // setIsSigningUp(false);
+
+        // If you WANT to keep "isNewUser" true for other reasons, re-set it here:
+        // setIsNewUser(true);
+
       } else {
+        // Normal sign-in flow
         setIsNewUser(false);
         const backendUser = await createSession(firebaseUserObj);
         if (backendUser) {
@@ -132,10 +181,15 @@ export const AuthProvider = ({ children }) => {
     }
   }, [createSession]);
 
+  /**
+   * Sign out from Firebase and remove session cookies in the backend.
+   */
   const signOutUser = useCallback(async () => {
     try {
       await auth.signOut();
+      // If you have an API signout route on the backend, call it:
       await apiSignOutUser();
+
       setFirebaseUser(null);
       setUserData(null);
       setSessionInitialized(false);
@@ -144,17 +198,30 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  /**
+   * The value we provide to our AuthContext consumers.
+   * Merges the Firebase user object with the userData from the backend.
+   */
   const contextValue = useMemo(() => ({
-    user: firebaseUser ? { 
-      ...firebaseUser, 
-      ...userData,
-      isAdmin: userData?.role === 'admin'
-    } : null,
+    user: firebaseUser
+      ? {
+          ...firebaseUser,
+          ...userData,
+          isAdmin: userData?.role === 'admin'
+        }
+      : null,
     loading,
     error,
     signInUser,
     signOutUser,
-  }), [firebaseUser, userData, loading, error, signInUser, signOutUser]);
+  }), [
+    firebaseUser,
+    userData,
+    loading,
+    error,
+    signInUser,
+    signOutUser
+  ]);
 
   if (loading) {
     return <div>Loading...</div>;
