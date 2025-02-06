@@ -171,10 +171,13 @@ const SignIn = () => {
       }
     } catch (error) {
       console.error("Google Sign-in Error:", error);
-      if (error.code === 'auth/popup-closed-by-user') {
+      if (error.code === 'auth/no-account') {
+        toast.error('No account found. Redirecting to sign up...');
+        setTimeout(() => navigate('/sign-up'), 2000);
+      } else if (error.code === 'auth/popup-closed-by-user') {
         toast.error('Sign-in popup was closed before completion');
       } else {
-        toast.error(`Google Sign-in failed: ${error.message}`);
+        toast.error(error.message || 'Failed to sign in with Google');
       }
     }
   };
@@ -197,10 +200,13 @@ const SignIn = () => {
       }
     } catch (error) {
       console.error("Microsoft Sign-in Error:", error);
-      if (error.code === 'auth/popup-closed-by-user') {
+      if (error.code === 'auth/no-account') {
+        toast.error('No account found. Redirecting to sign up...');
+        setTimeout(() => navigate('/sign-up'), 2000);
+      } else if (error.code === 'auth/popup-closed-by-user') {
         toast.error('Sign-in popup was closed before completion');
       } else {
-        toast.error(`Microsoft Sign-in failed: ${error.message}`);
+        toast.error(error.message || 'Failed to sign in with Microsoft');
       }
     }
   };

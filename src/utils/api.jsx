@@ -162,14 +162,43 @@ export const signInWithGoogle = async () => {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
+    
+    // First check if user exists in backend
     const result = await auth.signInWithPopup(provider);
-
+    
     if (!result.user) {
       throw new Error('No user data returned from Google Sign-In');
     }
-    
-    // Return { firebaseUser } for consistency
-    return { firebaseUser: result.user };
+
+    // After Firebase auth, verify user exists in backend
+    try {
+      const token = await result.user.getIdToken();
+      const response = await fetch(`${API_URL}/api/auth/verify-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        // If user doesn't exist, sign out from Firebase and redirect to sign up
+        if (data.errorType === 'NO_ACCOUNT') {
+          await auth.signOut();
+          throw new Error('NO_ACCOUNT');
+        }
+        throw new Error(data.error || 'Failed to verify user');
+      }
+
+      return { firebaseUser: result.user };
+    } catch (error) {
+      if (error.message === 'NO_ACCOUNT') {
+        throw { code: 'auth/no-account', message: 'No account found. Please sign up first.' };
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error signing in with Google:', error);
     throw error;
@@ -248,12 +277,41 @@ export const signInWithMicrosoft = async () => {
   try {
     const provider = new firebase.auth.OAuthProvider('microsoft.com');
     provider.setCustomParameters({ prompt: 'select_account' });
+    
     const result = await auth.signInWithPopup(provider);
-
+    
     if (!result.user) {
       throw new Error('No user data returned from Microsoft Sign-In');
     }
-    return { firebaseUser: result.user };
+
+    // Verify user exists in backend
+    try {
+      const token = await result.user.getIdToken();
+      const response = await fetch(`${API_URL}/api/auth/verify-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        if (data.errorType === 'NO_ACCOUNT') {
+          await auth.signOut();
+          throw new Error('NO_ACCOUNT');
+        }
+        throw new Error(data.error || 'Failed to verify user');
+      }
+
+      return { firebaseUser: result.user };
+    } catch (error) {
+      if (error.message === 'NO_ACCOUNT') {
+        throw { code: 'auth/no-account', message: 'No account found. Please sign up first.' };
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error in Microsoft sign in:', error);
     throw error;

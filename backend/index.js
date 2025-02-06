@@ -453,6 +453,47 @@ app.post('/api/auth/signout', (req, res) => {
   return res.json({ message: 'Signed out successfully' });
 });
 
+// Add this new endpoint
+app.post('/api/auth/verify-user', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ 
+      errorType: 'UNAUTHORIZED',
+      error: 'No token provided' 
+    });
+  }
+
+  try {
+    const token = authHeader.split(' ')[1];
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    
+    // Check if user exists in Firestore
+    const userDoc = await usersCollection.doc(decodedToken.uid).get();
+    
+    if (!userDoc.exists) {
+      return res.status(404).json({ 
+        errorType: 'NO_ACCOUNT',
+        error: 'No account found. Please sign up first.' 
+      });
+    }
+
+    return res.json({ 
+      success: true, 
+      user: {
+        uid: userDoc.id,
+        ...userDoc.data()
+      }
+    });
+  } catch (error) {
+    console.error('Error verifying user:', error);
+    return res.status(500).json({ 
+      errorType: 'SYSTEM_ERROR',
+      error: 'Failed to verify user' 
+    });
+  }
+});
+
 // ------------------ 3) Create Post (Admin only) -------
 app.post('/api/posts', validateFirebaseToken, upload.single('image'), async (req, res) => {
   try {

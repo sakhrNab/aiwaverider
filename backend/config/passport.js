@@ -34,46 +34,35 @@ const initializePassport = (passport) => {
     try {
       const email = profile.emails[0].value.toLowerCase();
       
-      // Create Firebase user if doesn't exist
+      // First check if user exists in Firestore
+      let userQuery = await usersCollection.where('email', '==', email).get();
+      
+      if (userQuery.empty) {
+        // User doesn't exist in our database
+        return done(null, false, { 
+          errorType: 'NO_ACCOUNT',
+          message: 'No account found. Please sign up first.' 
+        });
+      }
+
+      // User exists, continue with Firebase auth
       let firebaseUser;
       try {
         firebaseUser = await admin.auth().getUserByEmail(email);
       } catch (error) {
         if (error.code === 'auth/user-not-found') {
-          firebaseUser = await admin.auth().createUser({
-            email: email,
-            emailVerified: true,
-            displayName: profile.displayName,
-            photoURL: profile.photos[0]?.value
+          // This shouldn't happen since we found the user in Firestore
+          return done(null, false, { 
+            errorType: 'SYSTEM_ERROR',
+            message: 'User system synchronization error' 
           });
-        } else {
-          throw error;
         }
+        throw error;
       }
 
-      // Check if user exists in Firestore
-      let userDoc = await usersCollection.doc(firebaseUser.uid).get();
-      
-      if (!userDoc.exists) {
-        // Create new user in Firestore
-        const userData = {
-          uid: firebaseUser.uid,
-          email: email,
-          username: email.split('@')[0],
-          firstName: profile.name?.givenName || '',
-          lastName: profile.name?.familyName || '',
-          displayName: profile.displayName,
-          photoURL: profile.photos[0]?.value,
-          role: 'authenticated',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          provider: 'google'
-        };
-
-        await usersCollection.doc(firebaseUser.uid).set(userData);
-        userDoc = await usersCollection.doc(firebaseUser.uid).get();
-      }
-
+      const userDoc = userQuery.docs[0];
       const userData = userDoc.data();
+
       return done(null, {
         uid: firebaseUser.uid,
         ...userData
