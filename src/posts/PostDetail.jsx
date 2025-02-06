@@ -1,7 +1,7 @@
 // src/posts/PostDetail.jsx
 
 import React, { useEffect, useState, useContext } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 import { getPostById, updatePost } from '../utils/api';
 import CommentsSection from './CommentsSection';
@@ -132,19 +132,30 @@ const PostDetail = () => {
   useEffect(() => {
     const loadPost = async () => {
       try {
+        setLoading(true);
         const post = await getPostById(postId);
         setPost(post);
         setAdditionalHTML(post.additionalHTML || '');
+
+        // Load comments if they're not in cache
+        const comments = await getComments(postId);
+        if (comments) {
+          setPost(prevPost => ({
+            ...prevPost,
+            comments: comments
+          }));
+        }
       } catch (err) {
         setError(err.message);
       } finally {
         setLoading(false);
       }
     };
+
     if (postId !== 'create') {
       loadPost();
     }
-  }, [postId, getPostById]);
+  }, [postId, getPostById, getComments]);
 
   // Called when saving admin edits to additionalHTML
   const handleSave = async (e) => {
@@ -214,6 +225,13 @@ const PostDetail = () => {
         </p>
       )}
 
+      <Link 
+        to="/"
+        className="inline-block mb-4 text-blue-600 hover:text-blue-800"
+      >
+        ← Back to Posts
+      </Link>
+
       {!editMode ? (
         // View Mode
         <div>
@@ -255,7 +273,7 @@ const PostDetail = () => {
           </p>
 
           {/* Comments Section */}
-          <CommentsSection postId={postId} />
+          <CommentsSection postId={post.id} />
         </div>
       ) : (
         // Edit Mode

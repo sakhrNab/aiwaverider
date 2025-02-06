@@ -5,9 +5,10 @@ import { PostsContext } from '../contexts/PostsContext';
 import { addComment, deletePost, getAllPosts } from '../utils/api';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { auth } from '../utils/firebase';
+import { Link } from 'react-router-dom'; // Add this import
 
 const PostsList = () => {
-  const { posts, setPosts, fetchAllPosts, loadingPosts, errorPosts } = useContext(PostsContext);
+  const { posts, setPosts, fetchAllPosts, loadingPosts, errorPosts, addCommentToCache } = useContext(PostsContext);
   const { user, role, token } = useContext(AuthContext);
   
   // Add error state
@@ -63,32 +64,27 @@ const PostsList = () => {
       return;
     }
     try {
-    // 2. Check authentication state
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-      const shouldLogin = confirm('You need to sign in to comment. Sign in now?');
-      if (shouldLogin) {
-        await signInWithRedirect(auth, yourAuthProvider); // Update with your auth provider
+      // Check authentication state
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        const shouldLogin = confirm('You need to sign in to comment. Sign in now?');
+        if (shouldLogin) {
+          await signInWithRedirect(auth, yourAuthProvider); // Update with your auth provider
+        }
+        return;
       }
-      return;
-    }
       const data = await addComment(postId, { commentText: commentText.trim() });
-
-  
-    if (data.comment) {
-      setPosts(prevPosts => prevPosts.map(post => 
-        post.id === postId ? {
-          ...post,
-          comments: [...(post.comments || []), data.comment]
-        } : post
-      ));
-      setCommentTexts(prev => ({ ...prev, [postId]: '' }));
-    }
+      if (data.comment) {
+        // Update global caches (posts, postDetails, commentsCache)
+        addCommentToCache(postId, data.comment);
+        setCommentTexts(prev => ({ ...prev, [postId]: '' }));
+      }
     } catch (err) {
       console.error('Error adding comment:', err);
       alert('An unexpected error occurred while adding the comment.');
     }
   };
+
 
   // Delete post
   const confirmDeletePost = (post) => {
@@ -170,25 +166,25 @@ const PostsList = () => {
           return (
             <div key={`post-${postId}`} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
               <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-2xl font-semibold mb-2">{post.title}</h3>
-                  <p className="text-gray-700">{post.description}</p>
-                  <p className="text-sm text-gray-500 mt-2">
-                    Category: {post.category || 'Uncategorized'}
-                  </p>
-                  {post.imageUrl && (
-                    <img
-                      src={post.imageUrl}
-                      alt={post.title}
-                      className="mt-2 h-40 w-full object-cover rounded-md"
-                    />
-                  )}
-                  <p className="text-sm text-gray-500">
-                    Created By: {post.createdByUsername || 'Unknown'}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Created At: {formatDate(post.createdAt)}
-                  </p>
+                <div className="w-full"> {/* Add w-full to ensure clickable area */}
+                  <Link 
+                    to={`/posts/${post.id}`}
+                    className="block hover:text-blue-600 transition-colors cursor-pointer"
+                  >
+                    <div className="mb-4">
+                      <h3 className="text-2xl font-semibold mb-2">{post.title}</h3>
+                      <p className="text-gray-700">{post.description}</p>
+                      {post.imageUrl && (
+                        <img
+                          src={post.imageUrl}
+                          alt={post.title}
+                          className="mt-2 h-40 w-full object-cover rounded-md"
+                        />
+                      )}
+                    </div>
+                  </Link>
+
+                  {/* Rest of post content... */}
                 </div>
                 {userIsAdmin && (
                   <button
@@ -200,8 +196,8 @@ const PostsList = () => {
                 )}
               </div>
 
-              {/* Comments */}
-              <div className="mt-4">
+              {/* Comments section */}
+              <div className="mt-4 border-t pt-4">
                 <h4 className="font-semibold">Comments:</h4>
                 {Array.isArray(post.comments) ? (
                   post.comments.length === 0 ? (

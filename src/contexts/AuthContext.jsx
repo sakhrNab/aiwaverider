@@ -20,6 +20,7 @@ export const AuthProvider = ({ children }) => {
   const [sessionInitialized, setSessionInitialized] = useState(false);
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
+  const [user, setUser] = useState(null); // <-- Added user state
 
   /**
    * Calls /api/auth/session with the user's ID token to create/verify a session.
@@ -64,21 +65,46 @@ export const AuthProvider = ({ children }) => {
    * we'll call createSession if it isn't already initialized.
    */
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       try {
         setLoading(true);
-        if (user) {
+        if (firebaseUser) {
           console.log('Auth state changed:', {
             isSigningUp,
             isNewUser,
             sessionInitialized
           });
-          setFirebaseUser(user);
+          setFirebaseUser(firebaseUser);
+
+          // Get the user's role and other data from your backend
+          const token = await firebaseUser.getIdToken();
+          try {
+            const response = await fetch(`${API_URL}/api/auth/session`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              credentials: 'include',
+              body: JSON.stringify({ idToken: token })
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              setUser({
+                ...firebaseUser,
+                role: data.user.role
+              });
+            }
+          } catch (error) {
+            console.error('Error getting user session:', error);
+            setUser(null);
+          }
 
           // Skip session creation if we're signing up or
           // already flagged as "new user" or if session is set
           if (!isSigningUp && !isNewUser && !sessionInitialized) {
-            const backendUser = await createSession(user);
+            const backendUser = await createSession(firebaseUser);
             if (backendUser) {
               setUserData(backendUser);
               setSessionInitialized(true);
@@ -89,6 +115,7 @@ export const AuthProvider = ({ children }) => {
           setUserData(null);
           setSessionInitialized(false);
           setIsNewUser(false);
+          setUser(null); // <-- Added user state reset
         }
       } catch (err) {
         console.error('Auth state change error:', err);
@@ -193,6 +220,7 @@ export const AuthProvider = ({ children }) => {
       setFirebaseUser(null);
       setUserData(null);
       setSessionInitialized(false);
+      setUser(null); // <-- Added user state reset
     } catch (error) {
       console.error('Error signing out:', error);
     }

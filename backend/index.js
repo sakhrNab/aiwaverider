@@ -1038,17 +1038,23 @@ app.get('/api/posts/:postId/comments', async (req, res) => {
       .where('postId', '==', postId)
       .orderBy('createdAt', 'desc')
       .get();
+
     const allComments = [];
-    snapshot.forEach((doc) => {
+    for (const doc of snapshot.docs) {
       const data = doc.data();
-      allComments.push({
+      // Ensure we have all required fields
+      const comment = {
         id: doc.id,
-        ...data,
-        createdAt: data.createdAt
-          ? data.createdAt.toDate().toISOString()
-          : null,
-      });
-    });
+        postId: data.postId,
+        userId: data.userId,
+        text: data.text,
+        username: data.username || 'Anonymous',
+        userRole: data.userRole || 'user',
+        createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+      };
+      allComments.push(comment);
+    }
+
     return res.json(allComments);
   } catch (err) {
     console.error('Error in GET /api/posts/:postId/comments:', err);

@@ -138,70 +138,91 @@ export const PostsProvider = ({ children }) => {
   );
 
   // 3. Memoize getComments using useCallback
-  const getComments = useCallback(
-    async (postId, force = false) => {
-      // 1. Check cache validity
-      const isCommentsCacheValid =
-        commentsLastFetch[postId] &&
-        Date.now() - commentsLastFetch[postId] < CACHE_DURATION;
+  const getComments = useCallback(async (postId, force = false) => {
+    try {
+      setLoadingComments((prev) => ({ ...prev, [postId]: true }));
+      
+      // Always fetch fresh comments if forced or no cache
+      if (force || !commentsCache[postId]) {
+        const response = await fetch(`${API_URL}/api/posts/${postId}/comments`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        });
 
-      // 2. Return cached data if valid and not forcing refresh
-      if (!force && isCommentsCacheValid && commentsCache[postId]) {
-        console.log('Returning cached comments for post:', postId);
-        return commentsCache[postId];
-      }
+        if (!response.ok) {
+          throw new Error('Failed to fetch comments');
+        }
 
-      // 3. Skip if already loading
-      if (loadingComments[postId]) {
-        console.log('Already loading comments for post:', postId);
-        return commentsCache[postId] || [];
-      }
-
-      // 4. Fetch new data
-      try {
-        setLoadingComments((prev) => ({ ...prev, [postId]: true }));
+        const comments = await response.json();
         
-        const response = await fetchWithRetry(
-          `${API_URL}/api/posts/${postId}/comments`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+        // Update cache
+        setCommentsCache(prev => ({
+          ...prev,
+          [postId]: comments
+        }));
 
-        const data = await response.json();
-        const newComments = data.comments || [];
-
-        // 5. Update cache with timestamp
-        setCommentsCache((prev) => ({ ...prev, [postId]: newComments }));
-        setCommentsLastFetch((prev) => ({ ...prev, [postId]: Date.now() }));
-
-        return newComments;
-      } catch (err) {
-        console.error('Error fetching comments:', err);
-        return commentsCache[postId] || [];
-      } finally {
-        setLoadingComments((prev) => ({ ...prev, [postId]: false }));
+        return comments;
       }
-    },
-    [token, commentsCache, commentsLastFetch, loadingComments, CACHE_DURATION]
-  );
+
+      return commentsCache[postId];
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+      return [];
+    } finally {
+      setLoadingComments((prev) => ({ ...prev, [postId]: false }));
+    }
+  }, [commentsCache]);
 
   // 4. Memoize addCommentToCache using useCallback
   const addCommentToCache = useCallback((postId, newComment) => {
-    setCommentsCache((prev) => {
-      const existing = prev[postId] || [];
-      // Prevent duplicate comments
-      if (existing.some((c) => c.id === newComment.id)) {
-        return prev;
-      }
+    // Handle both single comment and array of comments
+    const commentsToAdd = Array.isArray(newComment) ? newComment : [newComment];
+    
+    // Update comments cache
+    setCommentsCache(prev => {
+      const existingComments = prev[postId] || [];
+      const newComments = commentsToAdd.filter(comment => 
+        !existingComments.some(existing => existing.id === comment.id)
+      );
       return {
         ...prev,
-        [postId]: [...existing, newComment],
+        [postId]: [...newComments, ...existingComments]
       };
     });
+
+    // Update post details
+    setPostDetails(prev => {
+      if (!prev[postId]) return prev;
+      return {
+        ...prev,
+        [postId]: {
+          ...prev[postId],
+          comments: [
+            ...commentsToAdd,
+            ...(prev[postId].comments || [])
+          ]
+        }
+      };
+    });
+
+    // Update posts list
+    setPosts(prevPosts => 
+      prevPosts.map(post => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            comments: [
+              ...commentsToAdd,
+              ...(post.comments || [])
+            ]
+          };
+        }
+        return post;
+      })
+    );
   }, []);
 
   // 5. Memoize updatePostInCache using useCallback
@@ -274,7 +295,19 @@ export const PostsProvider = ({ children }) => {
     setPosts((prev) => [newPost, ...prev]);
     setPostDetails((prev) => ({ ...prev, [newPost.id]: newPost }));
   }, []);
-  
+
+  // Add a function to sync comments between views
+  const syncComments = useCallback(async (postId) => {
+    try {
+      const comments = await getComments(postId);
+      if (Array.isArray(comments)) {
+        // Update all caches with the new comments
+        addCommentToCache(postId, comments);
+      }
+    } catch (error) {
+      console.error('Error syncing comments:', error);
+    }
+  }, [getComments, addCommentToCache]);
 
   // 9. Memoize context value using useMemo
   const contextValue = useMemo(
@@ -302,6 +335,7 @@ export const PostsProvider = ({ children }) => {
       addCommentToCache,
       loadingComments,
       addPostToCache,
+      syncComments,
       // Additional functions can be added here
     }),
     [
@@ -319,6 +353,7 @@ export const PostsProvider = ({ children }) => {
       commentsCache,
       addCommentToCache,
       loadingComments,
+      syncComments,
     ]
   );
 
@@ -379,6 +414,17 @@ export const PostsProvider = ({ children }) => {
     setCommentsCache({});
     setCommentsLastFetch({});
   }, []);
+
+    // In src/contexts/PostsContext.jsx (add this snippet near the end, before the return statement)
+  useEffect(() => {
+    setPosts(prevPosts =>
+      prevPosts.map(post => ({
+        ...post,
+        // If we have cached comments for this post, use them; otherwise, leave post.comments unchanged
+        comments: commentsCache[post.id] || post.comments,
+      }))
+    );
+  }, [commentsCache]);
 
   return (
     <PostsContext.Provider value={contextValue}>

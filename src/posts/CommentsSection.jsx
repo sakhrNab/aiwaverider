@@ -4,63 +4,53 @@ import { AuthContext } from '../contexts/AuthContext';
 import { PostsContext } from '../contexts/PostsContext';
 import { addComment } from '../utils/api';
 import DOMPurify from 'dompurify';
+import { auth } from '../utils/firebase';
 
 const CommentsSection = ({ postId }) => {
   const { user } = useContext(AuthContext);
-  const { getComments, addCommentToCache, commentsCache } = useContext(PostsContext);
-  const [comments, setComments] = useState(() => commentsCache[postId] || []);
-  const [newComment, setNewComment] = useState('');
+  const { getComments, addCommentToCache, commentsCache, loadingComments } = useContext(PostsContext);
+  const [comments, setComments] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(!commentsCache[postId]);
+  const [newComment, setNewComment] = useState('');
 
+  // Load comments with cache
   useEffect(() => {
     let mounted = true;
-    
     const loadComments = async () => {
-      // Skip if we already have cached comments
-      if (commentsCache[postId]) {
-        console.log('Using cached comments');
-        setComments(commentsCache[postId]);
-        setIsLoading(false);
-        return;
-      }
-
       try {
-        console.log('Fetching comments');
-        const data = await getComments(postId);
-        if (mounted && data) {
-          setComments(data);
+        setIsLoading(true);
+        // Check cache first
+        if (commentsCache[postId]) {
+          setComments(commentsCache[postId]);
+          setIsLoading(false);
+          return;
+        }
+
+        const fetchedComments = await getComments(postId);
+        if (mounted && Array.isArray(fetchedComments)) {
+          setComments(fetchedComments);
+          addCommentToCache(postId, fetchedComments);
         }
       } catch (err) {
         if (mounted) {
-          setError(err.message);
+          setError('Failed to load comments');
+          console.error('Error loading comments:', err);
         }
       } finally {
-        if (mounted) {
-          setIsLoading(false);
-        }
+        if (mounted) setIsLoading(false);
       }
     };
 
     loadComments();
-
-    return () => {
-      mounted = false;
-    };
-  }, [postId, commentsCache]);
-
-  // Update local comments when cache changes
-  useEffect(() => {
-    if (commentsCache[postId]) {
-      setComments(commentsCache[postId]);
-    }
-  }, [commentsCache, postId]);
+    return () => { mounted = false; };
+  }, [postId, getComments, commentsCache, addCommentToCache]);
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
     
-    // Check if user is authenticated
-    if (!auth.currentUser) {
+    // Verify authentication
+    if (!user) {
       setError('You must be logged in to comment.');
       return;
     }
@@ -68,14 +58,14 @@ const CommentsSection = ({ postId }) => {
     try {
       const data = await addComment(postId, { commentText: newComment.trim() });
       if (data.comment) {
-        setComments([...comments, data.comment]);
+        addCommentToCache(postId, data.comment);
+        setComments(prev => [data.comment, ...prev]);
         setNewComment('');
-      } else {
-        setError(data.error || 'Failed to add comment.');
+        setError('');
       }
     } catch (err) {
+      setError('Failed to add comment');
       console.error('Error adding comment:', err);
-      setError('An error occurred while adding your comment.');
     }
   };
 
