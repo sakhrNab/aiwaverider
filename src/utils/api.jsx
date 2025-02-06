@@ -409,7 +409,6 @@ export const getComments = async (postId) => {
 export const addComment = async (postId, commentData) => {
   try {
     const headers = await getAuthHeaders();
-    
     const response = await fetch(`${API_URL}/api/posts/${postId}/comments`, {
       method: 'POST',
       headers,
@@ -423,12 +422,13 @@ export const addComment = async (postId, commentData) => {
     }
 
     const data = await response.json();
-    return data;
+    return data.comment;  // Return only the comment object
   } catch (error) {
     console.error('Error adding comment:', error);
     throw error;
   }
 };
+
 
 // Update deletePost to use Firebase token
 export const deletePost = async (postId) => {
@@ -496,3 +496,69 @@ export const getPostById = async (postId) => {
     throw error;
   }
 };
+
+export const likeComment = async (postId, commentId) => {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/api/posts/${postId}/comments/${commentId}/like`, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to like comment');
+  }
+  const data = await response.json();
+  return data.updatedComment; // Assumes the backend returns the updated comment
+};
+
+export const unlikeComment = async (postId, commentId) => {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/api/posts/${postId}/comments/${commentId}/like`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers,
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to unlike comment');
+  }
+  const data = await response.json();
+  return data.updatedComment;
+};
+
+export const deleteComment = async (postId, commentId) => {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_URL}/api/posts/${postId}/comments/${commentId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers,
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to delete comment');
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting comment:', error);
+    throw error;
+  }
+};
+
+export const updateComment = async (postId, commentId, commentData) => {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/api/posts/${postId}/comments/${commentId}`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers,
+    body: JSON.stringify(commentData),
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to update comment');
+  }
+  const data = await response.json();
+  return data.updatedComment;
+};
+

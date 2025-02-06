@@ -208,22 +208,22 @@ export const PostsProvider = ({ children }) => {
       };
     });
 
-    // Update posts list
-    setPosts(prevPosts => 
-      prevPosts.map(post => {
-        if (post.id === postId) {
-          return {
-            ...post,
-            comments: [
-              ...commentsToAdd,
-              ...(post.comments || [])
-            ]
-          };
-        }
-        return post;
-      })
-    );
-  }, []);
+  // Update posts list
+  setPosts(prevPosts => 
+    prevPosts.map(post => {
+      if (post.id === postId) {
+        return {
+          ...post,
+          comments: [
+            ...commentsToAdd,
+            ...(post.comments || [])
+          ]
+        };
+      }
+      return post;
+    })
+  );
+}, []);
 
   // 5. Memoize updatePostInCache using useCallback
   const updatePostInCache = useCallback((updatedPost) => {
@@ -309,6 +309,79 @@ export const PostsProvider = ({ children }) => {
     }
   }, [getComments, addCommentToCache]);
 
+  // Fix the updateCommentInCache declaration and placement
+  const updateCommentInCache = useCallback((postId, updatedComment) => {
+    // Update the comments cache for this post
+    setCommentsCache(prev => ({
+      ...prev,
+      [postId]: prev[postId]?.map(c => 
+        c.id === updatedComment.id ? updatedComment : c
+      ) || [updatedComment]
+    }));
+    
+    // Update in postDetails if it exists
+    setPostDetails(prev => {
+      if (!prev[postId]) return prev;
+      return {
+        ...prev,
+        [postId]: {
+          ...prev[postId],
+          comments: (prev[postId].comments || []).map(c => 
+            c.id === updatedComment.id ? updatedComment : c
+          )
+        }
+      };
+    });
+
+    // Update the posts array
+    setPosts(prevPosts => 
+      prevPosts.map(post => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            comments: (post.comments || []).map(c => 
+              c.id === updatedComment.id ? updatedComment : c
+            )
+          };
+        }
+        return post;
+      })
+    );
+  }, []);
+
+  const removeCommentFromCache = useCallback((postId, commentId) => {
+    // Remove from the comments cache
+    setCommentsCache(prev => ({
+      ...prev,
+      [postId]: (prev[postId] || []).filter(comment => comment.id !== commentId)
+    }));
+  
+    // Update the postDetails cache if available
+    setPostDetails(prev => {
+      if (!prev[postId]) return prev;
+      return {
+        ...prev,
+        [postId]: {
+          ...prev[postId],
+          comments: (prev[postId].comments || []).filter(comment => comment.id !== commentId)
+        }
+      };
+    });
+  
+    // Update the posts array
+    setPosts(prevPosts => 
+      prevPosts.map(post => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            comments: (post.comments || []).filter(comment => comment.id !== commentId)
+          };
+        }
+        return post;
+      })
+    );
+  }, []);
+  
   // 9. Memoize context value using useMemo
   const contextValue = useMemo(
     () => ({
@@ -317,14 +390,14 @@ export const PostsProvider = ({ children }) => {
       postDetails,
       loadingPosts,
       errorPosts,
-
+      removeCommentFromCache,
       // Post getters/setters
       setPosts,
       fetchAllPosts,
       getPostById,
       updatePostInCache,
       removePostFromCache,
-
+      updateCommentInCache,
       // Carousel
       carouselData,
       fetchCarouselData,
@@ -335,7 +408,7 @@ export const PostsProvider = ({ children }) => {
       addCommentToCache,
       loadingComments,
       addPostToCache,
-      syncComments,
+      syncComments
       // Additional functions can be added here
     }),
     [
@@ -353,7 +426,8 @@ export const PostsProvider = ({ children }) => {
       commentsCache,
       addCommentToCache,
       loadingComments,
-      syncComments,
+      syncComments, 
+      updateCommentInCache
     ]
   );
 

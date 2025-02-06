@@ -5,6 +5,7 @@ import { PostsContext } from '../contexts/PostsContext';
 import { addComment } from '../utils/api';
 import DOMPurify from 'dompurify';
 import { auth } from '../utils/firebase';
+import CommentsList from './CommentsList';
 
 const CommentsSection = ({ postId }) => {
   const { user } = useContext(AuthContext);
@@ -46,28 +47,29 @@ const CommentsSection = ({ postId }) => {
     return () => { mounted = false; };
   }, [postId, getComments, commentsCache, addCommentToCache]);
 
-  const handleAddComment = async () => {
-    if (!newComment.trim()) return;
-    
-    // Verify authentication
-    if (!user) {
-      setError('You must be logged in to comment.');
-      return;
-    }
+const handleAddComment = async () => {
+  if (!newComment.trim()) return;
+  
+  // Verify authentication
+  if (!user) {
+    setError('You must be logged in to comment.');
+    return;
+  }
 
-    try {
-      const data = await addComment(postId, { commentText: newComment.trim() });
-      if (data.comment) {
-        addCommentToCache(postId, data.comment);
-        setComments(prev => [data.comment, ...prev]);
-        setNewComment('');
-        setError('');
-      }
-    } catch (err) {
-      setError('Failed to add comment');
-      console.error('Error adding comment:', err);
+  try {
+
+    const comment = await addComment(postId, { commentText: newComment.trim() });
+    if (comment) {
+      addCommentToCache(postId, comment);
+      setComments(prev => [comment, ...prev]);
+      setNewComment('');
+      setError('');
     }
-  };
+  } catch (err) {
+    setError('Failed to add comment');
+    console.error('Error adding comment:', err);
+  }
+};
 
   return (
     <div className="mt-6">
@@ -77,16 +79,7 @@ const CommentsSection = ({ postId }) => {
       ) : comments.length === 0 ? (
         <p className="text-gray-600">No comments yet. Be the first to comment!</p>
       ) : (
-        <ul className="space-y-2">
-          {comments.map((comment, index) => (
-            <li key={`comment-${comment.id}-${index}`} className="border-b border-gray-200 pb-2">
-              <strong>
-                {comment.username} ({comment.userRole}):
-              </strong>{' '}
-              {DOMPurify.sanitize(comment.text)}
-            </li>
-          ))}
-        </ul>
+        <CommentsList postId={postId} comments={comments} refreshComments={loadingComments} />
       )}
 
       {user ? (

@@ -6,6 +6,7 @@ import { addComment, deletePost, getAllPosts } from '../utils/api';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { auth } from '../utils/firebase';
 import { Link } from 'react-router-dom'; // Add this import
+import CommentsList from './CommentsList';
 
 const PostsList = () => {
   const { posts, setPosts, fetchAllPosts, loadingPosts, errorPosts, addCommentToCache } = useContext(PostsContext);
@@ -74,9 +75,8 @@ const PostsList = () => {
         return;
       }
       const data = await addComment(postId, { commentText: commentText.trim() });
-      if (data.comment) {
-        // Update global caches (posts, postDetails, commentsCache)
-        addCommentToCache(postId, data.comment);
+      if (data) {
+        addCommentToCache(postId, data);
         setCommentTexts(prev => ({ ...prev, [postId]: '' }));
       }
     } catch (err) {
@@ -199,25 +199,10 @@ const PostsList = () => {
               {/* Comments section */}
               <div className="mt-4 border-t pt-4">
                 <h4 className="font-semibold">Comments:</h4>
-                {Array.isArray(post.comments) ? (
-                  post.comments.length === 0 ? (
-                    <p className="text-gray-600">No comments yet.</p>
-                  ) : (
-                    <ul className="space-y-2 mt-2">
-                      {post.comments.map((comment, commentIndex) => (
-                        <li key={`comment-${comment.id}-${commentIndex}`} className="border-t pt-2">
-                          <strong className="text-gray-800">
-                            {comment.username} ({comment.userRole}):
-                          </strong>{' '}
-                          {comment.text}
-                        </li>
-                      ))}
-                    </ul>
-                  )
-                ) : post.comments === undefined  ? (
-                  <p className="text-gray-600">{post.comments}Loading comments...</p>
+                {Array.isArray(post.comments) && post.comments.length > 0 ? (
+                  <CommentsList postId={post.id} comments={post.comments} />
                 ) : (
-                  <p className="text-gray-600">Error loading comments.</p>
+                  <p className="text-gray-600">No comments yet.</p>
                 )}
               </div>
 

@@ -966,50 +966,43 @@ app.put('/api/posts/:postId', validateFirebaseToken, upload.single('image'), asy
 });
 
 // ------------------ 5) Add Comment (auth or admin) ----
-// ------------------ 5) Add Comment (authenticated users) ------------------
+// POST /api/posts/:postId/comments
 app.post('/api/posts/:postId/comments', validateFirebaseToken, async (req, res) => {
   try {
     const { postId } = req.params;
-    const { commentText } = req.body;
-    
-    // Get user info from Firebase token validation
-    const uid = req.user.uid; // Changed from req.user.id to req.user.uid
-
+    const { commentText, parentCommentId } = req.body;
+    const uid = req.user.uid;
     if (!uid) {
       return res.status(401).json({ error: 'User not authenticated' });
     }
-
     if (!commentText) {
       return res.status(400).json({ error: 'Comment text is required.' });
     }
-
     // Validate post exists
     const postDoc = await postsCollection.doc(postId).get();
     if (!postDoc.exists) {
       return res.status(404).json({ error: 'Post not found.' });
     }
-
     // Get user data from Firestore using uid
     const userDoc = await usersCollection.doc(uid).get();
     if (!userDoc.exists) {
       return res.status(404).json({ error: 'User not found.' });
     }
-
     const userData = userDoc.data();
     const username = userData.username || 'Anonymous';
     const userRole = userData.role || 'authenticated';
 
-    // Create comment
+    // Create comment – include parentCommentId if provided
     const newCommentRef = await commentsCollection.add({
       postId,
       userId: uid,
       text: commentText,
       username,
       userRole,
+      parentCommentId: parentCommentId || null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // Get the created comment
     const newCommentDoc = await newCommentRef.get();
     const commentData = newCommentDoc.data();
 
@@ -1059,6 +1052,152 @@ app.get('/api/posts/:postId/comments', async (req, res) => {
   } catch (err) {
     console.error('Error in GET /api/posts/:postId/comments:', err);
     return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// Like a comment
+app.post('/api/posts/:postId/comments/:commentId/like', validateFirebaseToken, async (req, res) => {
+  try {
+    const { postId, commentId } = req.params;
+    const uid = req.user.uid;
+    const commentRef = commentsCollection.doc(commentId);
+    const commentDoc = await commentRef.get();
+    if (!commentDoc.exists) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    let commentData = commentDoc.data();
+    let likes = commentData.likes || [];
+    if (!likes.includes(uid)) {
+      likes.push(uid);
+    }
+    await commentRef.update({ likes });
+    const updatedDoc = await commentRef.get();
+    const updatedComment = { id: updatedDoc.id, ...updatedDoc.data() };
+    return res.json({ updatedComment });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Unlike a comment
+// Like a comment endpoint
+app.post('/api/posts/:postId/comments/:commentId/like', validateFirebaseToken, async (req, res) => {
+  try {
+    const { postId, commentId } = req.params;
+    const uid = req.user.uid;
+    const commentRef = commentsCollection.doc(commentId);
+    const commentDoc = await commentRef.get();
+    if (!commentDoc.exists) {
+      return res.status(404).json({ error: 'Comment not found.' });
+    }
+    let commentData = commentDoc.data();
+    let likes = commentData.likes || [];
+    if (!likes.includes(uid)) {
+      likes.push(uid);
+    }
+    await commentRef.update({ likes });
+    const updatedDoc = await commentRef.get();
+    const updatedComment = { id: updatedDoc.id, ...updatedDoc.data() };
+
+    // Retrieve user details for each liker
+    const userPromises = (updatedComment.likes || []).map(userId =>
+      usersCollection.doc(userId).get()
+    );
+    const userDocs = await Promise.all(userPromises);
+    const likedBy = userDocs
+      .filter(doc => doc.exists)
+      .map(doc => ({ id: doc.id, username: doc.data().username }));
+    updatedComment.likedBy = likedBy;
+
+    return res.json({ updatedComment });
+  } catch (err) {
+    console.error('Error liking comment:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// Similarly, update the unlike endpoint:
+app.delete('/api/posts/:postId/comments/:commentId/like', validateFirebaseToken, async (req, res) => {
+  try {
+    const { postId, commentId } = req.params;
+    const uid = req.user.uid;
+    const commentRef = commentsCollection.doc(commentId);
+    const commentDoc = await commentRef.get();
+    if (!commentDoc.exists) {
+      return res.status(404).json({ error: 'Comment not found.' });
+    }
+    let commentData = commentDoc.data();
+    let likes = commentData.likes || [];
+    likes = likes.filter(id => id !== uid);
+    await commentRef.update({ likes });
+    const updatedDoc = await commentRef.get();
+    const updatedComment = { id: updatedDoc.id, ...updatedDoc.data() };
+
+    // Retrieve user details for each liker
+    const userPromises = (updatedComment.likes || []).map(userId =>
+      usersCollection.doc(userId).get()
+    );
+    const userDocs = await Promise.all(userPromises);
+    const likedBy = userDocs
+      .filter(doc => doc.exists)
+      .map(doc => ({ id: doc.id, username: doc.data().username }));
+    updatedComment.likedBy = likedBy;
+
+    return res.json({ updatedComment });
+  } catch (err) {
+    console.error('Error unliking comment:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// DELETE a comment (allowed for the comment owner or an admin)
+app.delete('/api/posts/:postId/comments/:commentId', validateFirebaseToken, async (req, res) => {
+  try {
+    const { postId, commentId } = req.params;
+    const uid = req.user.uid;
+    const commentRef = commentsCollection.doc(commentId);
+    const commentDoc = await commentRef.get();
+    if (!commentDoc.exists) {
+      return res.status(404).json({ error: 'Comment not found.' });
+    }
+    const commentData = commentDoc.data();
+    // Only allow the owner or an admin to delete the comment.
+    if (commentData.userId !== uid && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden.' });
+    }
+    await commentRef.delete();
+    return res.json({ message: 'Comment deleted successfully.' });
+  } catch (err) {
+    console.error('Error deleting comment:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+app.put('/api/posts/:postId/comments/:commentId', validateFirebaseToken, async (req, res) => {
+  try {
+    const { postId, commentId } = req.params;
+    const { commentText } = req.body;
+    const uid = req.user.uid;
+    const commentRef = commentsCollection.doc(commentId);
+    const commentDoc = await commentRef.get();
+    if (!commentDoc.exists) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    const commentData = commentDoc.data();
+    if (commentData.userId !== uid && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    await commentRef.update({
+      text: commentText,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    const updatedDoc = await commentRef.get();
+    const updatedComment = { id: updatedDoc.id, ...updatedDoc.data() };
+    return res.json({ updatedComment });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
