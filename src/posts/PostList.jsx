@@ -1,82 +1,275 @@
-import React, { useState, useContext } from 'react';
+// src/posts/PostsList.jsx
+import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
-
-// Sample initial posts
-const initialPosts = [
-  {
-    id: 1,
-    title: 'Welcome to AI Wave Rider!',
-    description: 'This is a sample post from admin.',
-    comments: [
-      { userRole: 'admin', text: 'Welcome everyone!' }
-    ],
-  },
-];
+import { PostsContext } from '../contexts/PostsContext';
+import { addComment, deletePost, getAllPosts } from '../utils/api';
+import ConfirmationModal from '../components/ConfirmationModal';
+import { auth } from '../utils/firebase';
+import { Link } from 'react-router-dom'; // Add this import
 
 const PostsList = () => {
-  const { role } = useContext(AuthContext);
-  const [posts, setPosts] = useState(initialPosts);
-  const [commentText, setCommentText] = useState('');
+  const { posts, setPosts, fetchAllPosts, loadingPosts, errorPosts, addCommentToCache } = useContext(PostsContext);
+  const { user, role, token } = useContext(AuthContext);
+  
+  // Add error state
+  const [error, setError] = useState('');
+  const [commentTexts, setCommentTexts] = useState({});
+  const [postToDelete, setPostToDelete] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [lastPostCreatedAt, setLastPostCreatedAt] = useState(null);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
-  const addComment = (postId) => {
-    // If not authenticated, do nothing (or prompt to sign in)
-    if (!role) return;
+  useEffect(() => {
+    const loadPosts = async () => {
+      try {
+        await fetchAllPosts(selectedCategory, 10);
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+    loadPosts();
+  }, [selectedCategory, fetchAllPosts]);
 
-    setPosts((prevPosts) =>
-      prevPosts.map((p) => {
-        if (p.id === postId) {
-          return {
-            ...p,
-            comments: [
-              ...p.comments,
-              {
-                userRole: role,
-                text: commentText
-              }
-            ],
-          };
-        }
-        return p;
-      })
-    );
-    setCommentText('');
+  // Load more posts
+  const handleLoadMore = async () => {
+    if (!hasMore) return;
+    setIsFetchingMore(true);
+    try {
+      const data = await getAllPosts(selectedCategory, 10, lastPostCreatedAt, token);
+      setPosts((prev) => [...prev, ...data.posts]);
+      setLastPostCreatedAt(data.lastPostCreatedAt);
+      if (data.posts.length < 10) {
+        setHasMore(false);
+      }
+    } catch (err) {
+      console.error('Error fetching more posts:', err);
+      setError(err.message || 'Failed to load more posts.');
+    } finally {
+      setIsFetchingMore(false);
+    }
   };
 
+  // Handle comment input
+  const handleCommentChange = (postId, text) => {
+    setCommentTexts((prev) => ({ ...prev, [postId]: text }));
+  };
+
+  // Add comment
+  const handleAddComment = async (postId) => {
+    const commentText = commentTexts[postId];
+    if (!commentText || commentText.trim() === '') {
+      alert('Comment cannot be empty.');
+      return;
+    }
+    try {
+      // Check authentication state
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        const shouldLogin = confirm('You need to sign in to comment. Sign in now?');
+        if (shouldLogin) {
+          await signInWithRedirect(auth, yourAuthProvider); // Update with your auth provider
+        }
+        return;
+      }
+      const data = await addComment(postId, { commentText: commentText.trim() });
+      if (data.comment) {
+        // Update global caches (posts, postDetails, commentsCache)
+        addCommentToCache(postId, data.comment);
+        setCommentTexts(prev => ({ ...prev, [postId]: '' }));
+      }
+    } catch (err) {
+      console.error('Error adding comment:', err);
+      alert('An unexpected error occurred while adding the comment.');
+    }
+  };
+
+
+  // Delete post
+  const confirmDeletePost = (post) => {
+    setPostToDelete(post);
+    setIsModalOpen(true);
+  };
+
+  const handleDeletePost = async () => {
+    if (!postToDelete) return;
+    try {
+      const data = await deletePost(postToDelete.id);
+      if (data.success) {
+        setPosts((prev) => prev.filter((p) => p.id !== postToDelete.id));
+        setIsModalOpen(false);
+        setPostToDelete(null);
+      } else {
+        alert(data.error || 'Failed to delete post.');
+      }
+    } catch (err) {
+      console.error('Error deleting post:', err);
+      alert('An unexpected error occurred while deleting the post.');
+    }
+  };
+
+  // Format date
+  const formatDate = (isoString) => {
+    if (!isoString) return 'N/A';
+    return new Date(isoString).toLocaleString();
+  };
+
+  // Use loadingPosts instead of local loading state
+  if (loadingPosts) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-16 w-16" />
+      </div>
+    );
+  }
+
+  // Use either local error or context error
+  if (error || errorPosts) {
+    return <div className="p-4 text-red-500 text-center">{error || errorPosts}</div>;
+  }
+
+  const userIsAdmin = user?.role === 'admin';
+
   return (
-    <div className="p-4">
-      <h2 className="text-xl mb-4">All Posts</h2>
-      {posts.map((post) => (
-        <div key={post.id} className="border rounded p-4 mb-4">
-          <h3 className="font-bold text-lg">{post.title}</h3>
-          <p>{post.description}</p>
-          <div className="mt-2">
-            <h4 className="font-semibold">Comments:</h4>
-            {post.comments.map((c, index) => (
-              <p key={index} className="ml-4">
-                <strong>{c.userRole}:</strong> {c.text}
-              </p>
-            ))}
-          </div>
-          {/* Comment form if user is signed in */}
-          {role && (
-            <div className="mt-2">
-              <input
-                type="text"
-                className="border p-1 w-full mb-2"
-                placeholder="Add a comment..."
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-              />
-              <button
-                onClick={() => addComment(post.id)}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Comment
-              </button>
+    <div className="p-8 max-w-5xl mx-auto">
+      <h2 className="text-3xl font-bold mb-6 text-center">Community Posts</h2>
+
+      {/* Category Filter */}
+      <div className="mb-6 flex justify-end">
+        <label htmlFor="category" className="mr-2 text-gray-700">
+          Filter by Category:
+        </label>
+        <select
+          id="category"
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="p-2 border border-gray-300 rounded-md"
+        >
+          <option value="All">All</option>
+          <option value="Trends">Trends</option>
+          <option value="Latest Tech">Latest Tech</option>
+          <option value="AI Tools">AI Tools</option>
+          {/* Add more categories if needed */}
+        </select>
+      </div>
+
+      {posts.length === 0 && (
+        <p className="text-center text-gray-600">No posts available.</p>
+      )}
+
+      <div className="space-y-6">
+        {Array.from(new Set(posts.map(p => p.id))).map((postId) => {
+          const post = posts.find(p => p.id === postId);
+          if (!post) return null;
+          
+          return (
+            <div key={`post-${postId}`} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <div className="flex justify-between items-start">
+                <div className="w-full"> {/* Add w-full to ensure clickable area */}
+                  <Link 
+                    to={`/posts/${post.id}`}
+                    className="block hover:text-blue-600 transition-colors cursor-pointer"
+                  >
+                    <div className="mb-4">
+                      <h3 className="text-2xl font-semibold mb-2">{post.title}</h3>
+                      <p className="text-gray-700">{post.description}</p>
+                      {post.imageUrl && (
+                        <img
+                          src={post.imageUrl}
+                          alt={post.title}
+                          className="mt-2 h-40 w-full object-cover rounded-md"
+                        />
+                      )}
+                    </div>
+                  </Link>
+
+                  {/* Rest of post content... */}
+                </div>
+                {userIsAdmin && (
+                  <button
+                    onClick={() => confirmDeletePost(post)}
+                    className="px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+
+              {/* Comments section */}
+              <div className="mt-4 border-t pt-4">
+                <h4 className="font-semibold">Comments:</h4>
+                {Array.isArray(post.comments) ? (
+                  post.comments.length === 0 ? (
+                    <p className="text-gray-600">No comments yet.</p>
+                  ) : (
+                    <ul className="space-y-2 mt-2">
+                      {post.comments.map((comment, commentIndex) => (
+                        <li key={`comment-${comment.id}-${commentIndex}`} className="border-t pt-2">
+                          <strong className="text-gray-800">
+                            {comment.username} ({comment.userRole}):
+                          </strong>{' '}
+                          {comment.text}
+                        </li>
+                      ))}
+                    </ul>
+                  )
+                ) : post.comments === undefined  ? (
+                  <p className="text-gray-600">{post.comments}Loading comments...</p>
+                ) : (
+                  <p className="text-gray-600">Error loading comments.</p>
+                )}
+              </div>
+
+              {/* Add Comment if logged in */}
+              {user && (
+                <div className="mt-4">
+                  <input
+                    type="text"
+                    value={commentTexts[post.id] || ''}
+                    onChange={(e) => handleCommentChange(post.id, e.target.value)}
+                    placeholder="Add a comment..."
+                    className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={() => handleAddComment(post.id)}
+                    className="mt-2 w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    Comment
+                  </button>
+                </div>
+              )}
             </div>
-          )}
+          );
+        })}
+      </div>
+
+      {/* Load More Button */}
+      {hasMore && (
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={handleLoadMore}
+            disabled={isFetchingMore}
+            className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors ${
+              isFetchingMore ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {isFetchingMore ? 'Loading...' : 'Load More'}
+          </button>
         </div>
-      ))}
+      )}
+
+      {/* Confirmation Modal */}
+      {isModalOpen && postToDelete && (
+        <ConfirmationModal
+          title="Confirm Deletion"
+          message={`Are you sure you want to delete "${postToDelete.title}"?`}
+          onConfirm={handleDeletePost}
+          onCancel={() => setIsModalOpen(false)}
+        />
+      )}
+
+      {error && <div className="p-4 text-red-500 text-center">{error}</div>}
     </div>
   );
 };

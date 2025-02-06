@@ -1,12 +1,8 @@
+// vite.config.js
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 
-// https://vite.dev/config/
 export default defineConfig({
+  base: '/', // Replace with your repository name
   plugins: [react()],
-  esbuild: {
-    loader: {
-      '.js': 'jsx', // Tells esbuild to treat .js files as JSX
-    },
-  },
 })

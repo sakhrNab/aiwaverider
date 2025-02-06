@@ -2,7 +2,7 @@
 
 import React, { useState, useContext } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import logo from '../assets/v2.jpg';
+import logo from '../assets/v6.webp';
 import { AuthContext } from '../contexts/AuthContext'; // Import AuthContext
 
 const Header = ({ openSignUpModal }) => {
@@ -34,7 +34,6 @@ const Header = ({ openSignUpModal }) => {
   // Get user and signOutUser from context
   const { user, signOutUser } = useContext(AuthContext);
   const role = user?.role;
-
   return (
     <header className="bg-gray-800 text-white px-4 py-3 shadow-lg">
       <div className="flex flex-wrap justify-between items-center">

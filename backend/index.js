@@ -1,415 +1,1080 @@
-// index.js
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
-const admin = require('firebase-admin');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const Joi = require('joi');
+const sanitizeHtml = require('./utils/sanitize'); // Import sanitize function
+const authenticateJWT = require('./middleware/auth'); // Import auth middleware
+const passport = require('passport');
+// const admin = require('firebase-admin');
 
+const {
+  octokit,
+  owner,
+  repo,
+  branch,
+  imagesDir,
+  uploadImageToGitHub,
+  deleteImageFromGitHub,
+} = require('./utils/github'); // GitHub utils
+const upload = require('./middleware/upload'); // Multer upload
+const logger = require('./utils/logger'); // Add this import
+const dns = require('dns');
+const { promisify } = require('util');
+const resolveMx = promisify(dns.resolveMx);
+const cookieParser = require('cookie-parser');
+const session = require('express-session');
+const { admin, db } = require('./config/firebase');
+const { initializePassport } = require('./config/passport');
+
+// Initialize express
 const app = express();
 
-const rateLimit = require('express-rate-limit');
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
-});
-
-app.use(limiter);
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ error: 'Something went wrong!' });
-});
-  
-app.use(cors());
-app.use(express.json());
-app.use(cors({
-    origin: 'http://localhost:5173', // Replace with your React app's URL
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true,
-  }));
-  
-// ------------- Initialize Firebase Admin -------------
-
-const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-console.log("ServiceAccountPat: ", serviceAccountPath);
-// Resolve the absolute path (ensure it points correctly)
-const resolvedServiceAccountPath = path.resolve(serviceAccountPath);
-
-admin.initializeApp({
-  credential: admin.credential.cert(resolvedServiceAccountPath),
-});
-
-const db = admin.firestore();
-
-// Collection references
+// ------------------ Collection References ------------------
 const usersCollection = db.collection('users');
 const postsCollection = db.collection('posts');
 const commentsCollection = db.collection('comments');
 
-/*************************************************************************
- * Data structure:
- *   users (collection)
- *     doc: userId (auto gen)
- *       username, firstName, lastName, email, phoneNumber, password, role
- *
- *   posts (collection)
- *     doc: postId
- *       title, description, createdBy (userId or username), createdAt
- *
- *   comments (collection)
- *     doc: commentId
- *       postId, userId, commentText, createdAt
- *************************************************************************/
-
-// Middleware to verify JWT
-const authenticateJWT = (req, res, next) => {
+// ================== Updated Firebase Token Middleware ==================
+const validateFirebaseToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  if (authHeader) {
-    const token = authHeader.split(' ')[1];
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized - Missing token' });
+  }
 
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-      if (err) {
-        console.error('JWT verification error:', err);
-        return res.sendStatus(403); // Forbidden
-      }
-      req.user = user;
-      next();
+  const token = authHeader.split(' ')[1];
+  
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    
+    // Get user data from Firestore
+    const userDoc = await usersCollection.doc(decodedToken.uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found in database' });
+    }
+
+    const userData = userDoc.data();
+    
+    req.user = {
+      uid: decodedToken.uid,
+      email: decodedToken.email,
+      role: userData.role || 'authenticated',
+      username: userData.username
+    };
+    next();
+  } catch (error) {
+    console.error('Token verification failed:', error);
+    return res.status(401).json({ 
+      error: 'Unauthorized - Invalid token',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
-  } else {
-    res.sendStatus(401); // Unauthorized
   }
 };
 
-const signUpSchema = Joi.object({
-    username: Joi.string().max(20).required(),
-    firstName: Joi.string().allow('', null),
-    lastName: Joi.string().allow('', null),
-    email: Joi.string().email().required(),
-    phoneNumber: Joi.string().allow('', null),
-    password: Joi.string().min(6).required(),
-  });
+// Basic middleware setup
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production'
+    ? process.env.CORS_ORIGINS?.split(',').map(origin => origin.trim())
+    : ['http://localhost:5173'],
+  credentials: true
+}));
 
-// ------------------ 1) Sign Up -----------------------
-app.post('/api/auth/signup', async (req, res) => {
-    try {
-      // Validate the incoming data
-      const { error, value } = signUpSchema.validate(req.body);
-      if (error) {
-        return res.status(400).json({ error: error.details[0].message });
-      }
-  
-      // Destructure the validated data
-      const { username, firstName, lastName, email, phoneNumber, password } = value;
-  
-      // Check if user with same username or email exists
-      const usernameQuery = await usersCollection.where('username', '==', username).get();
-      if (!usernameQuery.empty) {
-        return res.status(400).json({ error: 'Username is already taken.' });
-      }
-  
-      const emailQuery = await usersCollection.where('email', '==', email.toLowerCase()).get();
-      if (!emailQuery.empty) {
-        return res.status(400).json({ error: 'Email is already in use.' });
-      }
-  
-      // Hash the password
-      const hashedPassword = await bcrypt.hash(password, 10);
-  
-      // Add user to Firestore
-      const newUserRef = await usersCollection.add({
-        username,
-        firstName: firstName || '',
-        lastName: lastName || '',
-        email: email.toLowerCase(),
-        phoneNumber: phoneNumber || '',
-        password: hashedPassword,
-        role: 'authenticated', // default role
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
+
+// Session configuration - required for Passport
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Initialize Passport and restore authentication state from session
+initializePassport(passport);
+app.use(passport.initialize());
+app.use(passport.session());
+
+// ------------------ Rate Limiting ------------------
+const rateLimit = require('express-rate-limit');
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000,
+  message: 'Too many requests, please try again in 15 minutes!',
+});
+
+// Apply rate limiting only in production or development
+const isProduction = process.env.NODE_ENV === 'production';
+const isDevelopment = process.env.NODE_ENV === 'development';
+if (isProduction || isDevelopment) {
+  app.use(limiter);
+}
+
+// Add rate limiting specifically for auth routes
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per window
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Too many login attempts, please try again later.' });
+  }
+});
+
+// Add security headers
+const helmet = require('helmet');
+app.use(helmet());
+
+// Track login attempts
+const loginAttempts = new Map();
+
+// Clear login attempts every 15 minutes
+setInterval(() => {
+  loginAttempts.clear();
+}, 15 * 60 * 1000);
+
+// ------------------ CORS Configuration ------------------
+const allowedOrigins = isProduction
+  ? (process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim())
+  : ['http://localhost:5173']; // Frontend origin
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}));
+app.options('*', cors());
+
+// ------------------ Body Parsing ------------------
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Add passport middleware
+app.use(passport.initialize());
+
+// Move this route before other routes
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    
+    if (!refreshToken) {
+      return res.status(401).json({ 
+        error: 'No refresh token found',
+        user: null 
       });
-  
-      // Generate a JWT upon sign-up
+    }
+
+    try {
+      const payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+      const userDoc = await usersCollection.doc(payload.id).get();
+      
+      if (!userDoc.exists) {
+        return res.status(401).json({ 
+          error: 'User not found',
+          user: null 
+        });
+      }
+
+      const userData = userDoc.data();
       const token = jwt.sign(
         {
-          id: newUserRef.id,
-          username,
-          email: email.toLowerCase(),
-          role: 'authenticated',
+          id: userDoc.id,
+          username: userData.username,
+          email: userData.email,
+          role: userData.role,
         },
         process.env.JWT_SECRET,
         { expiresIn: '1h' }
       );
-  
-      return res.json({
-        message: 'User signed up successfully.',
-        userId: newUserRef.id,
-        token,
-        user: {
-          id: newUserRef.id,
-          username,
-          email: email.toLowerCase(),
-          role: 'authenticated',
-        },
+
+      // Set new access token cookie
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+        path: '/',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
       });
-    } catch (err) {
-      console.error('Error in /api/auth/signup:', err);
-      return res.status(500).json({ error: 'Internal server error.' });
-    }
-  });
-// ------------------ 2) Sign In ------------------------
-app.post('/api/auth/signin', async (req, res) => {
-  try {
-    const { usernameOrEmail, password } = req.body;
-    if (!usernameOrEmail || !password) {
-      return res
-        .status(400)
-        .json({ error: 'Username/Email and password are required.' });
-    }
 
-    // Find user by username or email
-    let userDoc;
-    // First, try username
-    const usernameQuery = await usersCollection
-      .where('username', '==', usernameOrEmail)
-      .get();
-    if (!usernameQuery.empty) {
-      userDoc = usernameQuery.docs[0];
-    } else {
-      // Then, try email
-      const emailQuery = await usersCollection
-        .where('email', '==', usernameOrEmail.toLowerCase())
-        .get();
-      if (!emailQuery.empty) {
-        userDoc = emailQuery.docs[0];
+      return res.json({
+        message: 'Token refreshed successfully',
+        user: {
+          id: userDoc.id,
+          username: userData.username,
+          email: userData.email,
+          role: userData.role,
+        }
+      });
+    } catch (tokenError) {
+      // Clear invalid tokens
+      res.clearCookie('token');
+      res.clearCookie('refreshToken');
+      return res.status(401).json({ error: 'Invalid refresh token', user: null });
+    }
+  } catch (err) {
+    console.error('Error in /api/auth/refresh:', err);
+    return res.status(401).json({ error: 'Invalid refresh token', user: null });
+  }
+});
+
+// Google Sign In
+app.get('/api/auth/google/signin',
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    state: 'signin',
+    prompt: 'select_account'  // Add this line
+  })
+);
+
+// Google Sign Up
+app.get('/api/auth/google/signup',
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    state: 'signup',
+    prompt: 'select_account' // Add this to force account selection
+  })
+);
+
+// Single callback handler for both sign-in and sign-up
+app.get('/api/auth/google/callback',
+  (req, res, next) => {
+    passport.authenticate('google', { session: false }, (err, user, info) => {
+      if (err) {
+        return res.redirect(`${process.env.FRONTEND_URL}/sign-in?error=true&message=${encodeURIComponent(err.message)}`);
       }
+
+      if (!user) {
+        // Handle specific error types
+        if (info && info.errorType === 'EXISTING_ACCOUNT') {
+          return res.redirect(`${process.env.FRONTEND_URL}/sign-in?error=exists&message=${encodeURIComponent(info.message)}`);
+        }
+        if (info && info.errorType === 'NO_ACCOUNT') {
+          return res.redirect(`${process.env.FRONTEND_URL}/sign-up?error=noaccount&message=${encodeURIComponent(info.message)}`);
+        }
+        return res.redirect(`${process.env.FRONTEND_URL}/sign-in?error=true`);
+      }
+
+      try {
+        const token = jwt.sign(
+          {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: '1h' }
+        );
+
+        const refreshToken = jwt.sign(
+          { id: user.id },
+          process.env.REFRESH_TOKEN_SECRET,
+          { expiresIn: '7d' }
+        );
+
+        res.cookie('token', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/'
+        });
+
+        res.cookie('refreshToken', refreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/'
+        });
+
+        res.redirect(`${process.env.FRONTEND_URL}?auth=success`);
+      } catch (error) {
+        console.error('Token creation error:', error);
+        res.redirect(`${process.env.FRONTEND_URL}/login?error=true&message=${encodeURIComponent('Authentication failed')}`);
+      }
+    })(req, res, next);
+  }
+);
+
+
+/*************************************************************************
+ * Data structure:
+ *   users (collection)
+ *     doc: userId
+ *       username, firstName, lastName, email, phoneNumber, password, role
+ *
+ *   posts (collection)
+ *     doc: postId
+ *       title, description, category, imageUrl, imageSha, additionalHTML,
+ *       graphHTML, createdBy, createdByUsername, createdAt, updatedAt
+ *
+ *   comments (collection)
+ *     doc: commentId
+ *       postId, userId, text, username, userRole, createdAt
+ *************************************************************************/
+
+// ------------------ Validation Schemas ------------------
+
+
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { uid, email, username, firstName, lastName, phoneNumber, displayName } = req.body;
+
+    // Verify the user exists in Firebase
+    const firebaseUser = await admin.auth().getUser(uid);
+    if (!firebaseUser) {
+      return res.status(404).json({ error: 'Firebase user not found' });
     }
 
-    if (!userDoc) {
-      return res.status(401).json({ error: 'Invalid credentials (not found).' });
+    // Check if user already exists in Firestore
+    const userDoc = await usersCollection.doc(uid).get();
+    if (userDoc.exists) {
+      return res.json({
+        message: 'User already exists',
+        user: {
+          uid,
+          ...userDoc.data()
+        }
+      });
+    }
+
+    // Check if username already exists
+    const usernameQuery = await usersCollection.where('username', '==', username).get();
+    if (!usernameQuery.empty) {
+      return res.status(400).json({ error: 'Username is already taken.' });
+    }
+
+    // Create user document in Firestore
+    await usersCollection.doc(uid).set({
+      username,
+      firstName: firstName || '',
+      lastName: lastName || '',
+      email: email.toLowerCase(),
+      phoneNumber: phoneNumber || '',
+      role: 'authenticated',
+      displayName: displayName || '',
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Set session cookie
+    const idToken = await admin.auth().createCustomToken(uid);
+    res.cookie('firebaseToken', idToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    return res.json({
+      message: 'User created successfully',
+      user: {
+        uid,
+        username,
+        email: email.toLowerCase(),
+        role: 'authenticated'
+      }
+    });
+  } catch (err) {
+    console.error('Error in /api/auth/signup:', err);
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// Remove old sign-in endpoint as it's handled by Firebase
+// Keep only the session management part
+// Verify user session by POSTing { idToken } to this endpoint
+app.post('/api/auth/session', async (req, res) => {
+  try {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({ error: 'ID token is required' });
+    }
+
+    // 1. Verify the ID token via Firebase Admin
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+
+    // 2. Check if user doc exists in Firestore
+    const userDoc = await usersCollection.doc(decodedToken.uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found in database' });
     }
 
     const userData = userDoc.data();
-    // Compare hashed password
-    const isMatch = await bcrypt.compare(password, userData.password);
-    if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid credentials (bad password).' });
-    }
 
-    // Create JWT
-    const token = jwt.sign(
-      {
-        id: userDoc.id,
-        username: userData.username,
-        email: userData.email,
-        role: userData.role,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
+    // 3. Optionally set a session cookie or do anything else here.
+    //    For example, if you're using express-session, you might attach user data:
+    //    req.session.user = { uid: decodedToken.uid, ... };
 
-    // Return user data and token
+    // 4. Return user data or a success message
     return res.json({
-      message: 'Sign in successful.',
-      token,
+      message: 'Session verified successfully',
       user: {
-        id: userDoc.id,
+        uid: decodedToken.uid,
         username: userData.username,
         email: userData.email,
-        role: userData.role,
-      },
+        role: userData.role
+      }
     });
   } catch (err) {
-    console.error('Error in /api/auth/signin:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+    console.error('Error in /api/auth/session:', err);
+    return res
+      .status(500)
+      .json({ error: 'Failed to verify session' });
+  }
+});
+
+// Update sign out endpoint
+app.post('/api/auth/signout', (req, res) => {
+  res.clearCookie('firebaseToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict'
+  });
+  return res.json({ message: 'Signed out successfully' });
+});
+
+// Add this new endpoint
+app.post('/api/auth/verify-user', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ 
+      errorType: 'UNAUTHORIZED',
+      error: 'No token provided' 
+    });
+  }
+
+  try {
+    const token = authHeader.split(' ')[1];
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    
+    // Check if user exists in Firestore
+    const userDoc = await usersCollection.doc(decodedToken.uid).get();
+    
+    if (!userDoc.exists) {
+      return res.status(404).json({ 
+        errorType: 'NO_ACCOUNT',
+        error: 'No account found. Please sign up first.' 
+      });
+    }
+
+    return res.json({ 
+      success: true, 
+      user: {
+        uid: userDoc.id,
+        ...userDoc.data()
+      }
+    });
+  } catch (error) {
+    console.error('Error verifying user:', error);
+    return res.status(500).json({ 
+      errorType: 'SYSTEM_ERROR',
+      error: 'Failed to verify user' 
+    });
   }
 });
 
 // ------------------ 3) Create Post (Admin only) -------
-app.post('/api/posts', authenticateJWT, async (req, res) => {
+app.post('/api/posts', validateFirebaseToken, upload.single('image'), async (req, res) => {
   try {
-    const { title, description } = req.body;
+    const { title, description, category, additionalHTML, graphHTML } = req.body;
     const { role, id: userId } = req.user;
 
-    if (!title || !description) {
-      return res
-        .status(400)
-        .json({ error: 'Title and description are required.' });
-    }
-    if (role !== 'admin') {
-      return res
-        .status(403)
-        .json({ error: 'Only admin can create posts.' });
+    // 1. Validate required fields
+    if (!title || !description || !category) {
+      return res.status(400).json({ 
+        error: 'Title, description, and category are required.' 
+      });
     }
 
-    // Add post to Firestore
+    // 2. Check admin role
+    if (role !== 'admin') {
+      return res.status(403).json({ 
+        error: 'Only admin can create posts.' 
+      });
+    }
+
+    let imageUrl = null;
+    let imageSha = null;
+
+    // 3. Handle image upload if provided
+    if (req.file) {
+      const filename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
+      try {
+        const uploadResult = await uploadImageToGitHub(filename, req.file.buffer);
+        if (!uploadResult || !uploadResult.url || !uploadResult.sha) {
+          throw new Error('Image upload failed: Missing URL or SHA.');
+        }
+        imageUrl = uploadResult.url;
+        imageSha = uploadResult.sha;
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        return res.status(500).json({ 
+          error: error.message || 'Image upload failed.' 
+        });
+      }
+    }
+
+    // 4. Get username from users collection
+    const userDoc = await usersCollection.doc(userId).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    const username = userDoc.data().username;
+
+    // 5. Sanitize HTML content
+    const sanitizedAdditionalHTML = sanitizeHtml(additionalHTML || '');
+    const sanitizedGraphHTML = sanitizeHtml(graphHTML || '');
+
+    // 6. Create post document
     const newPostRef = await postsCollection.add({
       title,
       description,
-      createdBy: userId || null,
+      category,
+      imageUrl,
+      imageSha,
+      additionalHTML: sanitizedAdditionalHTML,
+      graphHTML: sanitizedGraphHTML,
+      createdBy: userId,
+      createdByUsername: username,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    // 7. Get the created post
     const newPostDoc = await newPostRef.get();
+    const postData = newPostDoc.data();
 
+    // 8. Send response
     return res.json({
       message: 'Post created successfully.',
-      post: { id: newPostRef.id, ...newPostDoc.data() },
+      post: {
+        id: newPostRef.id,
+        ...postData,
+        createdAt: postData.createdAt.toDate().toISOString(),
+        updatedAt: postData.updatedAt.toDate().toISOString(),
+      }
     });
+
   } catch (err) {
-    console.error('Error in /api/posts:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+    logger.error('Error creating post:', err);
+    return res.status(500).json({ 
+      error: 'Internal server error.',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
 // ------------------ 4) Get All Posts (public) ---------
 app.get('/api/posts', async (req, res) => {
-    try {
-      const snapshot = await postsCollection
-        .orderBy('createdAt', 'desc')
-        .get();
-      const allPosts = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        allPosts.push({ 
-          id: doc.id, 
-          ...data, 
-          createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : null 
+  try {
+    const user = req.user;
+    const { category, limit, startAfter } = req.query;
+    const limitNumber = parseInt(limit, 10) || 10;
+
+    let query = postsCollection.orderBy('createdAt', 'desc').limit(limitNumber);
+
+    if (category && category !== 'All') {
+      query = query.where('category', '==', category);
+    }
+
+    if (startAfter) {
+      const startAfterDate = new Date(startAfter);
+      if (!isNaN(startAfterDate)) {
+        const firestoreTimestamp = admin.firestore.Timestamp.fromDate(startAfterDate);
+        query = query.startAfter(firestoreTimestamp);
+      }
+    }
+
+    const snapshot = await query.get();
+    const allPosts = [];
+
+    const postIds = snapshot.docs.map(doc => doc.id);
+    let comments = [];
+
+    if (postIds.length > 0) {
+      // Firestore 'in' queries up to 10 items each
+      const chunkSize = 10;
+      const chunks = [];
+      for (let i = 0; i < postIds.length; i += chunkSize) {
+        chunks.push(postIds.slice(i, i + chunkSize));
+      }
+
+      const commentsPromises = chunks.map(chunk =>
+        commentsCollection.where('postId', 'in', chunk).orderBy('createdAt', 'desc').get()
+      );
+      const commentsSnapshots = await Promise.all(commentsPromises);
+      commentsSnapshots.forEach(commentsSnap => {
+        commentsSnap.forEach(commentDoc => {
+          const commentData = commentDoc.data();
+          comments.push({
+            id: commentDoc.id,
+            ...commentData,
+            createdAt: commentData.createdAt
+              ? commentData.createdAt.toDate().toISOString()
+              : null,
+          });
         });
       });
-      return res.json(allPosts);
-    } catch (err) {
-      console.error('Error in GET /api/posts:', err);
-      return res.status(500).json({ error: 'Internal server error.' });
     }
-  });
 
-// ------------------ 5) Add Comment (auth or admin) ----
-app.post('/api/posts/:postId/comments', authenticateJWT, async (req, res) => {
+    // Group comments by postId
+    const commentsByPostId = {};
+    comments.forEach(comment => {
+      if (!commentsByPostId[comment.postId]) {
+        commentsByPostId[comment.postId] = [];
+      }
+      commentsByPostId[comment.postId].push(comment);
+    });
+
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      const isOwner = user?.uid === data.createdBy;
+      
+      const postId = doc.id;
+
+      // Ensure strings
+      const additionalHTML =
+        typeof data.additionalHTML === 'string' ? data.additionalHTML : '';
+      const graphHTML =
+        typeof data.graphHTML === 'string' ? data.graphHTML : '';
+
+      allPosts.push({
+        id: postId,
+        ...data,
+        isOwner,
+        additionalHTML,
+        graphHTML,
+        createdAt: data.createdAt
+          ? data.createdAt.toDate().toISOString()
+          : null,
+        comments: commentsByPostId[postId] || [],
+      });
+    });
+
+    // Next-page cursor
+    let lastPostCreatedAt = null;
+    if (snapshot.docs.length > 0) {
+      lastPostCreatedAt = snapshot.docs[snapshot.docs.length - 1].data().createdAt
+        .toDate()
+        .toISOString();
+    }
+
+    return res.json({
+      posts: allPosts,
+      lastPostCreatedAt,
+    });
+  } catch (err) {
+    console.error('Error in GET /api/posts:', err);
+    return res.status(500).json({ error: 'Internal server error.', details: err.message });
+  }
+});
+
+// ------------------ MULTI-CATEGORY FETCH ------------------
+app.get('/api/posts/multi', async (req, res) => {
+  try {
+    // e.g. GET /api/posts/multi?categories=Trends,Latest%20Tech,AI%20Tools&limit=5
+    const { categories, limit } = req.query;
+    if (!categories) {
+      return res.status(400).json({ error: 'No categories provided.' });
+    }
+
+    // Parse categories
+    const categoryArray = categories.split(',').map((c) => c.trim());
+    const limitNumber = parseInt(limit, 10) || 5;
+
+    // We'll store each category's posts in an object
+    const results = {};
+
+    // For each category, do a Firestore query
+    for (const cat of categoryArray) {
+      let query = postsCollection.orderBy('createdAt', 'desc').limit(limitNumber);
+      if (cat !== 'All') {
+        query = query.where('category', '==', cat);
+      }
+
+      const snapshot = await query.get();
+
+      // Gather post IDs
+      const postIds = snapshot.docs.map((doc) => doc.id);
+
+      // Build array of posts
+      const postsForThisCategory = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt
+            ? data.createdAt.toDate().toISOString()
+            : null,
+          comments: [],
+        };
+      });
+
+      // Fetch comments if you want them for each category
+      let allCommentsForThisCategory = [];
+      if (postIds.length > 0) {
+        const chunkSize = 10;
+        const chunks = [];
+        for (let i = 0; i < postIds.length; i += chunkSize) {
+          chunks.push(postIds.slice(i, i + chunkSize));
+        }
+        const commentsPromises = chunks.map((chunk) =>
+          commentsCollection
+            .where('postId', 'in', chunk)
+            .orderBy('createdAt', 'desc')
+            .get()
+        );
+        const commentsSnapshots = await Promise.all(commentsPromises);
+
+        allCommentsForThisCategory = commentsSnapshots.flatMap((snap) =>
+          snap.docs.map((commentDoc) => {
+            const cdata = commentDoc.data();
+            return {
+              id: commentDoc.id,
+              ...cdata,
+              createdAt: cdata.createdAt
+                ? cdata.createdAt.toDate().toISOString()
+                : null,
+            };
+          })
+        );
+      }
+
+      // Group by postId
+      const commentsByPostId = {};
+      allCommentsForThisCategory.forEach((comment) => {
+        if (!commentsByPostId[comment.postId]) {
+          commentsByPostId[comment.postId] = [];
+        }
+        commentsByPostId[comment.postId].push(comment);
+      });
+
+      // Attach comments
+      postsForThisCategory.forEach((post) => {
+        post.comments = commentsByPostId[post.id] || [];
+      });
+
+      // Store final
+      results[cat] = postsForThisCategory;
+    }
+
+    return res.json({
+      data: results, // e.g. { "Trends": [...], "AI Tools": [...] }
+    });
+  } catch (err) {
+    console.error('Error in GET /api/posts/multi:', err);
+    return res.status(500).json({ error: 'Internal server error.', details: err.message });
+  }
+});
+
+// ------------------ 7) Get User Profile (authenticated) ----
+app.get('/api/users/:userId', validateFirebaseToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    // Only allow self or admin
+    if (req.user.id !== userId && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const userDoc = await usersCollection.doc(userId).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const userData = userDoc.data();
+    return res.json({
+      id: userDoc.id,
+      username: userData.username,
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      email: userData.email,
+      phoneNumber: userData.phoneNumber,
+      role: userData.role,
+    });
+  } catch (err) {
+    console.error('Error in GET /api/users/:userId:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ------------------ 8) Delete Post (Admin Only) -------
+app.delete('/api/posts/:postId', validateFirebaseToken, async (req, res) => {
+  try {
+    const { role } = req.user;
+    const { postId } = req.params;
+
+    if (role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can delete posts.' });
+    }
+
+    const postRef = postsCollection.doc(postId);
+    const postDoc = await postRef.get();
+    if (!postDoc.exists) {
+      return res.status(404).json({ error: 'Post not found.' });
+    }
+
+    const postData = postDoc.data();
+
+    // If image present, remove from GitHub
+    if (postData.imageUrl && postData.imageSha) {
+      try {
+        const filename = path.basename(postData.imageUrl);
+        await deleteImageFromGitHub(filename, postData.imageSha);
+      } catch (error) {
+        console.error('Error deleting image from GitHub:', error);
+      }
+    }
+
+    // Delete the post
+    await postRef.delete();
+
+    // Optional: delete comments
+    const commentsSnapshot = await commentsCollection.where('postId', '==', postId).get();
+    const batch = db.batch();
+    commentsSnapshot.forEach((commentDoc) => {
+      batch.delete(commentDoc.ref);
+    });
+    await batch.commit();
+
+    return res.json({ message: 'Post deleted successfully.' });
+  } catch (err) {
+    console.error('Error in DELETE /api/posts/:postId:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ------------------ 10) Get Post by ID ----------------
+app.get('/api/posts/:postId', async (req, res) => {
   try {
     const { postId } = req.params;
-    const { commentText } = req.body;
-    const { role, id: userId } = req.user;
-
-    if (!role || (role !== 'admin' && role !== 'authenticated')) {
-      return res.status(403).json({ error: 'Not authorized to comment.' });
-    }
-    if (!commentText) {
-      return res.status(400).json({ error: 'Comment text is required.' });
-    }
-
-    // Validate that the post exists
     const postDoc = await postsCollection.doc(postId).get();
     if (!postDoc.exists) {
       return res.status(404).json({ error: 'Post not found.' });
     }
 
-    // Add comment to Firestore
+    const postData = postDoc.data();
+
+    // Ensure additionalHTML and graphHTML are strings
+    const additionalHTML =
+      typeof postData.additionalHTML === 'string' ? postData.additionalHTML : '';
+    const graphHTML =
+      typeof postData.graphHTML === 'string' ? postData.graphHTML : '';
+
+    return res.json({
+      id: postId,
+      ...postData,
+      additionalHTML,
+      graphHTML,
+    });
+  } catch (err) {
+    console.error('Error fetching post:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ------------------ 11) Update Post by ID (Admin only) ----
+app.put('/api/posts/:postId', validateFirebaseToken, upload.single('image'), async (req, res) => {
+  try {
+    const { role } = req.user;
+    if (role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can update posts.' });
+    }
+    const { postId } = req.params;
+    const { title, description, category, additionalHTML, graphHTML } = req.body;
+
+    // Handle image if provided
+    let imageUrl = null;
+    let imageSha = null;
+    if (req.file) {
+      try {
+        const filename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
+        const uploadResult = await uploadImageToGitHub(filename, req.file.buffer);
+        if (!uploadResult || !uploadResult.url || !uploadResult.sha) {
+          throw new Error('Image upload failed: Missing URL or SHA.');
+        }
+        imageUrl = uploadResult.url;
+        imageSha = uploadResult.sha;
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        return res.status(500).json({ error: error.message || 'Image upload failed.' });
+      }
+    }
+
+    // Validate post existence
+    const postRef = postsCollection.doc(postId);
+    const postDoc = await postRef.get();
+    if (!postDoc.exists) {
+      return res.status(404).json({ error: 'Post not found.' });
+    }
+
+    // If we have a new image, delete the old one
+    const postData = postDoc.data();
+    if (imageUrl && postData.imageUrl && postData.imageSha) {
+      try {
+        const oldFilename = path.basename(postData.imageUrl);
+        await deleteImageFromGitHub(oldFilename, postData.imageSha);
+      } catch (error) {
+        console.error('Error deleting old image from GitHub:', error);
+      }
+    }
+
+    // Sanitize HTML
+    const sanitizedAdditionalHTML = sanitizeHtml(additionalHTML || '');
+    const sanitizedGraphHTML = sanitizeHtml(graphHTML || '');
+
+    // Build updates
+    const updates = {
+      title,
+      description,
+      category,
+      additionalHTML: sanitizedAdditionalHTML,
+      graphHTML: sanitizedGraphHTML,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    if (imageUrl !== null) {
+      updates.imageUrl = imageUrl;
+      updates.imageSha = imageSha;
+    }
+
+    await postRef.update(updates);
+    return res.json({ message: 'Post updated successfully.' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ------------------ 5) Add Comment (auth or admin) ----
+// ------------------ 5) Add Comment (authenticated users) ------------------
+app.post('/api/posts/:postId/comments', validateFirebaseToken, async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const { commentText } = req.body;
+    
+    // Get user info from Firebase token validation
+    const uid = req.user.uid; // Changed from req.user.id to req.user.uid
+
+    if (!uid) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    if (!commentText) {
+      return res.status(400).json({ error: 'Comment text is required.' });
+    }
+
+    // Validate post exists
+    const postDoc = await postsCollection.doc(postId).get();
+    if (!postDoc.exists) {
+      return res.status(404).json({ error: 'Post not found.' });
+    }
+
+    // Get user data from Firestore using uid
+    const userDoc = await usersCollection.doc(uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const userData = userDoc.data();
+    const username = userData.username || 'Anonymous';
+    const userRole = userData.role || 'authenticated';
+
+    // Create comment
     const newCommentRef = await commentsCollection.add({
       postId,
-      userId: userId || null,
-      commentText,
+      userId: uid,
+      text: commentText,
+      username,
+      userRole,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    // Get the created comment
+    const newCommentDoc = await newCommentRef.get();
+    const commentData = newCommentDoc.data();
+
     return res.json({
       message: 'Comment added successfully.',
-      comment: { id: newCommentRef.id, commentText },
+      comment: {
+        id: newCommentRef.id,
+        ...commentData,
+        createdAt: commentData.createdAt.toDate().toISOString(),
+      },
     });
   } catch (err) {
     console.error('Error in POST /api/posts/:postId/comments:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+    return res.status(500).json({ 
+      error: 'Internal server error.',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
 // ------------------ 6) Get Comments for a Post (public) ----
 app.get('/api/posts/:postId/comments', async (req, res) => {
-    try {
-      const { postId } = req.params;
-      const snapshot = await commentsCollection
-        .where('postId', '==', postId)
-        .orderBy('createdAt', 'desc')
-        .get();
-      const allComments = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        allComments.push({ 
-          id: doc.id, 
-          ...data, 
-          createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : null 
-        });
-      });
-      return res.json(allComments);
-    } catch (err) {
-      console.error('Error in GET /api/posts/:postId/comments:', err);
-      return res.status(500).json({ error: 'Internal server error.' });
-    }
-  });
-// ------------------ 7) Get User Profile (authenticated) ----
-app.get('/api/users/:userId', authenticateJWT, async (req, res) => {
-    try {
-      const { userId } = req.params;
-      
-      // Optional: Only allow users to fetch their own profiles or admins to fetch any
-      if (req.user.id !== userId && req.user.role !== 'admin') {
-        return res.status(403).json({ error: 'Forbidden' });
-      }
-      
-      const userDoc = await usersCollection.doc(userId).get();
-      if (!userDoc.exists) {
-        return res.status(404).json({ error: 'User not found.' });
-      }
-      
-      const userData = userDoc.data();
-      return res.json({
-        id: userDoc.id,
-        username: userData.username,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        email: userData.email,
-        phoneNumber: userData.phoneNumber,
-        role: userData.role,
-      });
-    } catch (err) {
-      console.error('Error in GET /api/users/:userId:', err);
-      return res.status(500).json({ error: 'Internal server error.' });
-    }
-  });
-// index.js
+  try {
+    const { postId } = req.params;
+    const snapshot = await commentsCollection
+      .where('postId', '==', postId)
+      .orderBy('createdAt', 'desc')
+      .get();
 
-// ------------------ 8) Delete Post (Admin Only) -------
-app.delete('/api/posts/:postId', authenticateJWT, async (req, res) => {
-    try {
-      const { role } = req.user;
-      const { postId } = req.params;
-  
-      if (role !== 'admin') {
-        return res.status(403).json({ error: 'Only admins can delete posts.' });
-      }
-  
-      const postRef = postsCollection.doc(postId);
-      const postDoc = await postRef.get();
-  
-      if (!postDoc.exists) {
-        return res.status(404).json({ error: 'Post not found.' });
-      }
-  
-      await postRef.delete();
-  
-      return res.json({ message: 'Post deleted successfully.' });
-    } catch (err) {
-      console.error('Error in DELETE /api/posts/:postId:', err);
-      return res.status(500).json({ error: 'Internal server error.' });
+    const allComments = [];
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      // Ensure we have all required fields
+      const comment = {
+        id: doc.id,
+        postId: data.postId,
+        userId: data.userId,
+        text: data.text,
+        username: data.username || 'Anonymous',
+        userRole: data.userRole || 'user',
+        createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+      };
+      allComments.push(comment);
     }
-  });
-  
+
+    return res.json(allComments);
+  } catch (err) {
+    console.error('Error in GET /api/posts/:postId/comments:', err);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ------------------ Catch-All 404 Handler ------------------
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found.' });
+});
+
+// ------------------ Error Handling Middleware ------------------
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Something went wrong!' });
+});
 
 // ------------------ Start the Server ------------------
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || (isProduction ? 8080 : 4000);
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

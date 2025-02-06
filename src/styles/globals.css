@@ -3,14 +3,95 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer components {
-  /* Hover effect for buttons */
+@layer base {
+  :root {
+    font-family: 'Roboto', sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
+
+    color-scheme: light dark;
+    color: rgba(0, 0, 0, 0.87);
+    background-color: #ffffff;
+
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    --purple-light: #e0e7ff;
+    --black: #000000;
+    --white: #ffffff;
+    --gray-2: #e5e7eb;
+    --gray-3: #d1d5db;
+  }
+
+  h1 {
+    font-size: 3.2em;
+    line-height: 1.1;
+  }
+
+  /* Loader Animation */
+  @keyframes spinner {
+    to { transform: rotate(360deg); }
+  }
+
+  .logo {
+    height: 6em;
+    padding: 1.5em;
+    will-change: filter;
+    transition: filter 300ms;
+  }
+
+  .logo:hover {
+    filter: drop-shadow(0 0 2em #646cffaa);
+  }
+
+  .logo.react:hover {
+    filter: drop-shadow(0 0 2em #61dafbaa);
+  }
+
+  @keyframes logo-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    a:nth-of-type(2) .logo {
+      animation: logo-spin infinite 20s linear;
+    }
+  }
+
+  /* Card Styles */
+  .card {
+    padding: 2em;
+  }
+
+  /* Read the Docs */
+  .read-the-docs {
+    color: #888;
+  }
+
+  /* Button Hover Effects */
   button:hover {
     background-color: #ffcc00;
     transition: background-color 0.3s ease;
   }
 
-  /* Hover effect for cards */
+  /* Scoped hover effect for buttons with class 'custom-button' */
+  .custom-button:hover {
+    background-color: #ffcc00;
+    transition: background-color 0.3s ease;
+  }
+
+  /* Scoped hover effect for cards with class 'custom-card' */
+  .custom-card:hover {
+    transform: scale(1.05);
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+  }
   .card:hover {
     transform: scale(1.05);
     box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
@@ -33,9 +114,24 @@
   src: url('https://fonts.gstatic.com/s/roboto/v18/KFOlCnqEu92Fr1MmEU9fBBc4.woff2') format('woff2');
 }
 
+/* Loader Styles */
+.loader {
+  border: 8px solid #f3f3f3; /* Light grey */
+  border-top: 8px solid #3490dc; /* Blue */
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  animation: spinner 1.5s linear infinite;
+}
+
+/* Additional Styles from App.css */
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+/* You can add more global styles here as needed */
 body {
   font-family: 'Roboto', sans-serif;
 }
 
-
-
+/* Loader Animation */
