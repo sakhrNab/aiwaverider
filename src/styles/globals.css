@@ -25,10 +25,37 @@
     --gray-3: #d1d5db;
   }
 
-  h1 {
-    font-size: 3.2em;
-    line-height: 1.1;
-  }
+/* Standard Heading Styles */
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.2;       /* Increased for better readability */
+  margin-top: 1.5rem;      /* Consistent top margin */
+  margin-bottom: 0.75rem;  /* A balanced bottom margin */
+}
+
+h1 { 
+  font-size: 2rem;        /* Larger scale for primary headings */
+  font-weight: bold;
+}
+
+h2 { 
+  font-size: 1.75rem;     /* Slightly smaller than h1 */
+  font-weight: bold;
+}
+
+h3 { 
+  font-size: 1.5rem;      /* A clear step down */
+  font-weight: bold;
+}
+
+h4 { 
+  font-size: 1.25rem;     /* Standard subheading size */
+}
+
+h5, 
+h6 { 
+  font-size: 1rem;        /* Body-like text size for lower-level headings */
+}
+
 
   /* Loader Animation */
   @keyframes spinner {

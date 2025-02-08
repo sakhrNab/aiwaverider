@@ -4,16 +4,23 @@ const sanitizeHtml = require('sanitize-html');
 
 const sanitizeContent = (html) => {
   return sanitizeHtml(html, {
-    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'iframe', 'h1', 'h2', 'h3', 'pre', 'code']),
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat([
+      'img', 'iframe', 'h1', 'h2', 'h3', 'h4' , 'h5', 'pre', 'code', 'div', 'span'
+    ]),
     allowedAttributes: {
       ...sanitizeHtml.defaults.allowedAttributes,
-      'img': ['src', 'alt', 'class', 'width', 'height', 'style', 'data-align'],  // Add style
       '*': ['style', 'class'], // Allow style on all elements
+      'img': ['src', 'alt', 'class', 'width', 'height', 'style', 'data-align'],
       'a': ['href', 'name', 'target'],
       'iframe': ['src', 'width', 'height', 'allow', 'allowfullscreen'],
     },
     allowedStyles: {
       '*': {
+        'margin-top': [/.*/],
+        'margin-bottom': [/.*/],
+        'font-size': [/.*/],
+        'line-height': [/.*/],
+        'text-wrap': [/.*/],
         'max-width': [/.*/],
         'height': [/.*/],
         'width': [/.*/],

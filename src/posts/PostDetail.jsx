@@ -92,7 +92,7 @@ const TipTapEditor = ({ content, onUpdate }) => {
           ADD_TAGS: ['iframe'],
           ALLOWED_TAGS: [
             'p', 'strong', 'em', 'img', 'a',
-            'ul', 'ol', 'li', 'h1', 'h2', 'h3',
+            'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4' , 'h5',
             'blockquote', 'iframe',
           ],
           ALLOWED_ATTR: [
@@ -168,7 +168,7 @@ const PostDetail = () => {
       ADD_TAGS: ['iframe'],
       ALLOWED_TAGS: [
         'p', 'strong', 'em', 'img', 'a',
-        'ul', 'ol', 'li', 'h1', 'h2', 'h3',
+        'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4' , 'h5',
         'blockquote', 'iframe',
       ],
       ALLOWED_ATTR: [
@@ -248,13 +248,13 @@ const PostDetail = () => {
 
           <h2 className="text-3xl font-bold mb-4">{post.title}</h2>
 
-          {post.imageUrl && (
+          {/* {post.imageUrl && (
             <img
               src={post.imageUrl}
               alt={post.title}
               className="mb-4 w-full h-auto object-cover rounded-md"
             />
-          )}
+          )} */}
 
           {post.additionalHTML && (
             <div
