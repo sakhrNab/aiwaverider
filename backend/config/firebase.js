@@ -1,5 +1,3 @@
-// backend/config/firebase.js
-
 const admin = require('firebase-admin');
 const path = require('path');
 
@@ -29,14 +27,16 @@ const initializeFirebase = () => {
     }
   }
 
+  // Pass the storageBucket property from environment variable
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET, // e.g., "your-project-id.appspot.com"
   });
 
   return admin;
 };
 
-// Initialize Firebase and get db instance
+// Initialize Firebase and get Firestore instance
 initializeFirebase();
 const db = admin.firestore();
 db.settings({ ignoreUndefinedProperties: true });

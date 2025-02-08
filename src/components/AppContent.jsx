@@ -11,6 +11,7 @@ import AdminDashboard from './AdminDashboard';
 import ProtectedRoute from './ProtectedRoute';
 import PostDetail from '../posts/PostDetail';
 import CreatePost from '../posts/CreatePost';
+import Profile from '../pages/Profile';
 
 const AppContent = () => {
   const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
@@ -29,6 +30,7 @@ const AppContent = () => {
           <Route path="/" element={<Body />} />
           <Route path="/sign-in" element={<SignIn />} />
           <Route path="/sign-up" element={<SignUp />} />
+          <Route path="/profile" element={<Profile />} />
 
           {/* Protected: Admin only */}
         {/* Create Post route */}

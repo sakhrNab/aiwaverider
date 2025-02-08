@@ -1,0 +1,244 @@
+/* src/components/ProfilePage.module.css */
+
+.profilePage {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  color: #333;
+}
+
+.profileHeader {
+  position: relative;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.coverImage {
+  width: 100%;
+  height: 200px;
+  background: #eee;
+  border-radius: 8px 8px 0 0;
+}
+
+.avatarContainer {
+    position: absolute;
+    top: 140px; /* Ensures proper alignment under the cover */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 120px;
+    border: 3px solid #fff; /* Kept thin but visible */
+    border-radius: 50%;
+    overflow: hidden;
+    background: #d9d9d9; /* Slightly darker gray for better contrast */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 50%;
+  }
+  
+  .avatarContainer {
+    position: absolute;
+    top: 140px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 120px;
+    border: 2.5px solid #fff; /* Slightly thinner for better balance */
+    border-radius: 50%;
+    overflow: hidden;
+    background: #dadada; /* A slightly refined gray for a softer look */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 5px; /* Extra spacing below avatar for better visual flow */
+  }
+  
+  .avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 50%;
+  }
+  
+  /* PERFECTLY BALANCED OVERLAY */
+  .avatarOverlay {
+    position: absolute;
+    bottom: 15px; /* Moved slightly inward for balance */
+    right: 15px; /* Moved slightly inward for better alignment */
+    width: 34px; /* Slightly smaller for a more proportionate look */
+    height: 34px;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2.5px solid white; /* Refined thickness */
+  }
+  
+  /* Subtle Hover Effect for a More Natural Feel */
+  .avatarOverlay:hover {
+    background: rgba(139, 139, 139, 0.1);
+    box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.2); /* Adds smooth depth */
+  }
+  
+  .uploadIcon {
+    color: #fff;
+    font-size: 1.1rem; /* Slightly smaller for proportion */
+  }
+  
+  
+
+.profileInfo {
+  margin-top: 80px;
+}
+
+.displayName {
+  font-size: 1.8rem;
+  margin: 10px 0 5px;
+}
+
+.username {
+  font-size: 1rem;
+  color: #777;
+  margin-bottom: 10px;
+}
+
+.bio {
+  font-size: 1.1rem;
+  color: #555;
+}
+
+.profileNav {
+  display: flex;
+  justify-content: space-around;
+  margin: 20px 0;
+  border-bottom: 1px solid #ddd;
+}
+
+.profileNav button {
+  background: none;
+  border: none;
+  padding: 10px 15px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: color 0.2s, border-bottom 0.2s;
+  border-bottom: 3px solid transparent;
+}
+
+.profileNav button:hover,
+.profileNav button.active {
+  color: #0073e6;
+  border-bottom: 3px solid #0073e6;
+}
+
+.profileContent {
+  padding: 20px 0;
+}
+
+.tabContent {
+  margin-top: 20px;
+}
+
+.editButton {
+  margin-top: 10px;
+  padding: 8px 16px;
+  background: #0073e6;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.editButton:hover {
+  background: #005bb5;
+}
+
+.editForm {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.editForm label {
+  display: flex;
+  flex-direction: column;
+  font-size: 1rem;
+}
+
+.editForm input,
+.editForm textarea {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.formButtons {
+  display: flex;
+  gap: 10px;
+}
+
+.editForm button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #0073e6;
+  color: #fff;
+  transition: background 0.2s;
+}
+
+.editForm button:hover {
+  background: #005bb5;
+}
+
+.favoritesList {
+  list-style: none;
+  padding: 0;
+}
+
+.favoritesList li {
+  background: #f7f7f7;
+  padding: 10px;
+  margin: 5px 0;
+  border-radius: 4px;
+}
+
+.communityLink {
+  display: inline-block;
+  padding: 10px 15px;
+  background: #7289da;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.communityLink:hover {
+  background: #5b6eae;
+}
+
+.loading {
+  text-align: center;
+  font-size: 1.2rem;
+  padding: 50px;
+}
+
+.error {
+  color: red;
+  text-align: center;
+  padding: 20px;
+}

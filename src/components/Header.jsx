@@ -116,6 +116,7 @@ const Header = ({ openSignUpModal }) => {
             <Link to="/ai-tools" className="px-4 py-2 hover:bg-blue-600 rounded text-center">AI Tools</Link>
             <Link to="/trends" className="px-4 py-2 hover:bg-blue-600 rounded text-center">Trends</Link>
             <Link to="/latest-tech" className="px-4 py-2 hover:bg-blue-600 rounded text-center">Latest Tech</Link>
+            <Link to="/profile" className="px-4 py-2 hover:bg-blue-600 rounded text-center">Profile</Link>
           </div>
 
           {/* Community Button */}

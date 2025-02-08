@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const Joi = require('joi');
 const sanitizeHtml = require('./utils/sanitize'); // Import sanitize function
-const authenticateJWT = require('./middleware/auth'); // Import auth middleware
+// const authenticateJWT = require('./middleware/authenticate'); // Import auth middleware
 const passport = require('passport');
 // const admin = require('firebase-admin');
 
@@ -39,41 +39,8 @@ const postsCollection = db.collection('posts');
 const commentsCollection = db.collection('comments');
 
 // ================== Updated Firebase Token Middleware ==================
-const validateFirebaseToken = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized - Missing token' });
-  }
-
-  const token = authHeader.split(' ')[1];
-  
-  try {
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    
-    // Get user data from Firestore
-    const userDoc = await usersCollection.doc(decodedToken.uid).get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: 'User not found in database' });
-    }
-
-    const userData = userDoc.data();
-    
-    req.user = {
-      uid: decodedToken.uid,
-      email: decodedToken.email,
-      role: userData.role || 'authenticated',
-      username: userData.username
-    };
-    next();
-  } catch (error) {
-    console.error('Token verification failed:', error);
-    return res.status(401).json({ 
-      error: 'Unauthorized - Invalid token',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-};
+const validateFirebaseToken = require('./middleware/authenticate');
+const profileRoutes = require('./routes/profile');
 
 // Basic middleware setup
 app.use(cors({
@@ -1201,6 +1168,11 @@ app.put('/api/posts/:postId/comments/:commentId', validateFirebaseToken, async (
   }
 });
 
+
+//Profile
+// Mount the profile routes at /api/profile
+app.use('/api/profile', profileRoutes);
+
 // ------------------ Catch-All 404 Handler ------------------
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found.' });
@@ -1211,6 +1183,9 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
 });
+
+
+
 
 // ------------------ Start the Server ------------------
 const PORT = process.env.PORT || (isProduction ? 8080 : 4000);

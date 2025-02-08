@@ -1,12 +1,42 @@
 // src/utils/api.jsx
 
+import axios from 'axios';
 import firebase from 'firebase/compat/app';
-// import 'firebase/compat/auth';
 import { auth } from '../utils/firebase';
+
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-// Update this helper function to use Firebase token
-const getAuthHeaders = async () => {
+// Create an Axios instance with the base URL and enable credentials
+const api = axios.create({
+  baseURL: API_URL,
+  withCredentials: true,
+});
+
+// Set up a request interceptor to attach the Firebase token automatically
+api.interceptors.request.use(
+  async (config) => {
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      try {
+        const token = await currentUser.getIdToken(true);
+        config.headers['Authorization'] = `Bearer ${token}`;
+      } catch (error) {
+        console.error('Error getting token:', error);
+      }
+    } else {
+      console.warn('No currentUser found in Axios interceptor');
+    }
+    // For non-FormData payloads, set the Content-Type to application/json
+    if (!(config.data instanceof FormData)) {
+      config.headers['Content-Type'] = 'application/json';
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Helper function to get auth headers (if needed explicitly)
+export const getAuthHeaders = async () => {
   const currentUser = auth.currentUser;
   if (!currentUser) {
     return {};
@@ -18,26 +48,12 @@ const getAuthHeaders = async () => {
   };
 };
 
-// Add this helper function
+// Create Session using Axios
 export const createSession = async (user) => {
   try {
     const token = await user.getIdToken(true);
-    const response = await fetch(`${API_URL}/api/auth/session`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      credentials: 'include',
-      body: JSON.stringify({ idToken: token })
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to create session');
-    }
-
-    return await response.json();
+    const response = await api.post('/api/auth/session', { idToken: token });
+    return response.data;
   } catch (error) {
     console.error('Error creating session:', error);
     throw error;
@@ -47,26 +63,10 @@ export const createSession = async (user) => {
 // Sign Out User
 export const signOutUser = async () => {
   try {
-    // Only sign out from your backend
-    const response = await fetch(`${API_URL}/api/auth/signout`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-
-    let data;
-    try {
-      data = await response.json();
-    } catch (e) {
-      data = { message: response.statusText };
-    }
-
-    return { success: true, message: data.message || 'Signed out successfully' };
+    const response = await api.post('/api/auth/signout');
+    return { success: true, message: response.data.message || 'Signed out successfully' };
   } catch (error) {
     console.error('Error during sign out:', error);
-    // Still return success to ensure client-side cleanup
     return { success: true, message: 'Signed out locally' };
   }
 };
@@ -74,19 +74,14 @@ export const signOutUser = async () => {
 // Sign Up with Email and Password
 export const signUp = async (userData) => {
   try {
-    // Extract password and create user in Firebase first
     const { email, password } = userData;
     const firebaseResult = await auth.createUserWithEmailAndPassword(email, password);
-    
-    // Get the Firebase user
     const firebaseUser = firebaseResult.user;
-
     // Update Firebase profile with display name
     await firebaseUser.updateProfile({
       displayName: `${userData.firstName} ${userData.lastName}`
     });
-
-    // Prepare user data for backend (excluding password and including Firebase UID)
+    // Prepare user data for the backend (excluding password)
     const backendUserData = {
       uid: firebaseUser.uid,
       email: firebaseUser.email,
@@ -96,25 +91,7 @@ export const signUp = async (userData) => {
       phoneNumber: userData.phoneNumber,
       displayName: firebaseUser.displayName
     };
-
-    // Create user in backend database
-    const response = await fetch(`${API_URL}/api/auth/signup`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(backendUserData),
-      credentials: 'include',
-    });
-
-    const data = await response.json();
-    
-    if (!response.ok) {
-      // If backend fails, delete Firebase user and throw error
-      await firebaseUser.delete();
-      throw new Error(data.error || 'Failed to create user in database');
-    }
-
+    const response = await api.post('/api/auth/signup', backendUserData);
     return { user: firebaseUser };
   } catch (error) {
     console.error('Error during sign up:', error);
@@ -126,30 +103,17 @@ export const signUp = async (userData) => {
 export const signIn = async (credentials) => {
   try {
     const { usernameOrEmail, password } = credentials;
-    // Determine if input is email or username
-    const isEmail = usernameOrEmail.includes('@');
     let email = usernameOrEmail;
-
-    // If it's not an email, fetch the email from your backend
+    const isEmail = usernameOrEmail.includes('@');
     if (!isEmail) {
-      const response = await fetch(`${API_URL}/api/auth/get-email/${usernameOrEmail}`, {
-        method: 'GET',
-        credentials: 'include',
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Username not found');
-      email = data.email;
+      const response = await api.get(`/api/auth/get-email/${usernameOrEmail}`);
+      email = response.data.email;
     }
-
-    // Sign in with Firebase
     const result = await auth.signInWithEmailAndPassword(email, password);
-
     if (!result.user) {
       throw new Error('No user data returned from Firebase');
     }
-
-    // No need to call createSession here; AuthContext handles it via onAuthStateChanged
-
+    // AuthContext handles session creation on auth state change.
     return { firebaseUser: result.user };
   } catch (error) {
     console.error('Error signing in:', error);
@@ -162,40 +126,18 @@ export const signInWithGoogle = async () => {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    
-    // First check if user exists in backend
     const result = await auth.signInWithPopup(provider);
-    
     if (!result.user) {
       throw new Error('No user data returned from Google Sign-In');
     }
-
-    // After Firebase auth, verify user exists in backend
     try {
-      const token = await result.user.getIdToken();
-      const response = await fetch(`${API_URL}/api/auth/verify-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        // If user doesn't exist, sign out from Firebase and redirect to sign up
-        if (data.errorType === 'NO_ACCOUNT') {
-          await auth.signOut();
-          throw new Error('NO_ACCOUNT');
-        }
-        throw new Error(data.error || 'Failed to verify user');
-      }
-
+      // Verify user exists in backend
+      await api.post('/api/auth/verify-user');
       return { firebaseUser: result.user };
     } catch (error) {
-      if (error.message === 'NO_ACCOUNT') {
-        throw { code: 'auth/no-account', message: 'No account found. Please sign up first.' };
+      if (error.response && error.response.data.errorType === 'NO_ACCOUNT') {
+        await auth.signOut();
+        throw new Error('NO_ACCOUNT');
       }
       throw error;
     }
@@ -205,13 +147,12 @@ export const signInWithGoogle = async () => {
   }
 };
 
-// -- Google Sign-Up (just signInWithPopup, let AuthContext create user) --
+// Google Sign-Up (using signInWithPopup; let AuthContext create user)
 export const signUpWithGoogle = async () => {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     const result = await auth.signInWithPopup(provider);
-
     if (!result.user) {
       throw new Error('No user data returned from Google Sign-Up');
     }
@@ -222,21 +163,14 @@ export const signUpWithGoogle = async () => {
   }
 };
 
+// Sign Up with Microsoft
 export const signUpWithMicrosoft = async () => {
   try {
     const provider = new firebase.auth.OAuthProvider('microsoft.com');
-    provider.setCustomParameters({
-      prompt: 'select_account'
-    });
-    
-    // Sign in via popup
+    provider.setCustomParameters({ prompt: 'select_account' });
     const result = await auth.signInWithPopup(provider);
     const user = result.user;
-    
-    // Grab the user's ID token so we can call our backend
     const token = await user.getIdToken();
-
-    // Prepare user data for the backend
     const userData = {
       uid: user.uid,
       email: user.email,
@@ -247,68 +181,30 @@ export const signUpWithMicrosoft = async () => {
       photoURL: user.photoURL,
       provider: 'microsoft'
     };
-
-    // Create/Update user in the backend
-    const response = await fetch(`${API_URL}/api/auth/signup`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(userData),
-      credentials: 'include'
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to create user in database');
-    }
-
-    // If successful, return the Firebase user object in the same format
-    const data = await response.json();
+    const response = await api.post('/api/auth/signup', userData);
     return { firebaseUser: user };
   } catch (error) {
     console.error('Error in Microsoft sign up:', error);
     throw error;
   }
 };
-// -- Microsoft Sign-In (POPUP approach, consistent with sign-up) --
+
+// Sign In with Microsoft
 export const signInWithMicrosoft = async () => {
   try {
     const provider = new firebase.auth.OAuthProvider('microsoft.com');
     provider.setCustomParameters({ prompt: 'select_account' });
-    
     const result = await auth.signInWithPopup(provider);
-    
     if (!result.user) {
       throw new Error('No user data returned from Microsoft Sign-In');
     }
-
-    // Verify user exists in backend
     try {
-      const token = await result.user.getIdToken();
-      const response = await fetch(`${API_URL}/api/auth/verify-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        if (data.errorType === 'NO_ACCOUNT') {
-          await auth.signOut();
-          throw new Error('NO_ACCOUNT');
-        }
-        throw new Error(data.error || 'Failed to verify user');
-      }
-
+      await api.post('/api/auth/verify-user');
       return { firebaseUser: result.user };
     } catch (error) {
-      if (error.message === 'NO_ACCOUNT') {
-        throw { code: 'auth/no-account', message: 'No account found. Please sign up first.' };
+      if (error.response && error.response.data.errorType === 'NO_ACCOUNT') {
+        await auth.signOut();
+        throw new Error('NO_ACCOUNT');
       }
       throw error;
     }
@@ -318,154 +214,81 @@ export const signInWithMicrosoft = async () => {
   }
 };
 
-// Update createPost to use Firebase token
+// Create Post
 export const createPost = async (formData) => {
   try {
     const headers = await getAuthHeaders();
-    
-    // Remove Content-Type from headers when sending FormData
-    delete headers['Content-Type'];
-    
-    const response = await fetch(`${API_URL}/api/posts`, {
-      method: 'POST',
-      headers,
-      body: formData,
-      credentials: 'include'
-    });
-
-    // First check the response type
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const text = await response.text();
-      console.error('Non-JSON response:', text);
-      throw new Error('Server returned non-JSON response');
+    if (headers['Content-Type']) {
+      delete headers['Content-Type'];
     }
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('Error response:', data);
-      throw new Error(data.error || data.details || 'Failed to create post');
-    }
-
-    return data;
+    const response = await api.post('/api/posts', formData, { headers });
+    return response.data;
   } catch (error) {
     console.error('Error creating post:', error);
     throw error;
   }
 };
 
-// Update getAllPosts to use Firebase token
+// Get All Posts
 export const getAllPosts = async (category = 'All', limit = 10, startAfter = null) => {
   try {
-    const headers = await getAuthHeaders();
-
-    let url = `${API_URL}/api/posts?limit=${limit}`;
+    let url = `/api/posts?limit=${limit}`;
     if (category && category !== 'All') {
       url += `&category=${encodeURIComponent(category)}`;
     }
     if (startAfter) {
       url += `&startAfter=${encodeURIComponent(startAfter)}`;
     }
-
-    const response = await fetch(url, {
-      method: 'GET',
-      credentials: 'include',
-      headers
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to fetch posts.');
-    }
-
-    const data = await response.json();
-    return data; // Expected to be { posts: [...], lastPostCreatedAt: '...' }
+    const response = await api.get(url);
+    return response.data;
   } catch (error) {
     console.error('Error fetching posts:', error);
-    throw error; // Rethrow to be caught in components
+    throw error;
   }
 };
 
 // Get Comments for a Post
 export const getComments = async (postId) => {
   try {
-    const response = await fetch(`${API_URL}/api/posts/${postId}/comments`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    const data = await response.json();
-    return data;
+    const response = await api.get(`/api/posts/${postId}/comments`);
+    return response.data;
   } catch (error) {
     console.error('Error fetching comments:', error);
     return [];
   }
 };
 
-// Update addComment to use Firebase token
+// Add Comment
 export const addComment = async (postId, commentData) => {
   try {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${API_URL}/api/posts/${postId}/comments`, {
-      method: 'POST',
-      headers,
-      credentials: 'include',
-      body: JSON.stringify(commentData)
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to add comment');
-    }
-
-    const data = await response.json();
-    return data.comment;  // Return only the comment object
+    const response = await api.post(`/api/posts/${postId}/comments`, commentData);
+    return response.data.comment;
   } catch (error) {
     console.error('Error adding comment:', error);
     throw error;
   }
 };
 
-
-// Update deletePost to use Firebase token
+// Delete Post
 export const deletePost = async (postId) => {
   try {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${API_URL}/api/posts/${postId}`, {
-      method: 'DELETE',
-      credentials: 'include',
-      headers
-    });
-    if (response.ok) {
-      return { success: true };
-    } else {
-      const data = await response.json();
-      return { error: data.error || 'Failed to delete post.' };
-    }
+    const response = await api.delete(`/api/posts/${postId}`);
+    return response.data;
   } catch (error) {
     console.error('Error deleting post:', error);
     return { error: 'An unexpected error occurred while deleting the post.' };
   }
 };
 
-// Update updatePost to use Firebase token
+// Update Post
 export const updatePost = async (postId, formData) => {
   try {
     const headers = await getAuthHeaders();
-    // Remove Content-Type when sending FormData
-    delete headers['Content-Type'];
-    
-    const response = await fetch(`${API_URL}/api/posts/${postId}`, {
-      method: 'PUT',
-      credentials: 'include',
-      headers,
-      body: formData
-    });
-    const data = await response.json();
-    return data;
+    if (headers['Content-Type']) {
+      delete headers['Content-Type'];
+    }
+    const response = await api.put(`/api/posts/${postId}`, formData, { headers });
+    return response.data;
   } catch (error) {
     console.error('Error updating post:', error);
     return { error: 'An unexpected error occurred while updating the post.' };
@@ -475,70 +298,40 @@ export const updatePost = async (postId, formData) => {
 // Get Post by ID
 export const getPostById = async (postId) => {
   try {
-    const response = await fetch(`${API_URL}/api/posts/${postId}`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        // Add Authorization header if the endpoint requires authentication
-      },
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to fetch the post.');
-    }
-
-    const data = await response.json();
-    return data;
+    const response = await api.get(`/api/posts/${postId}`);
+    return response.data;
   } catch (error) {
     console.error('Error fetching post by ID:', error);
     throw error;
   }
 };
 
+// Like Comment
 export const likeComment = async (postId, commentId) => {
-  const headers = await getAuthHeaders();
-  const response = await fetch(`${API_URL}/api/posts/${postId}/comments/${commentId}/like`, {
-    method: 'POST',
-    credentials: 'include',
-    headers,
-  });
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to like comment');
+  try {
+    const response = await api.post(`/api/posts/${postId}/comments/${commentId}/like`);
+    return response.data.updatedComment;
+  } catch (error) {
+    console.error('Error liking comment:', error);
+    throw error;
   }
-  const data = await response.json();
-  return data.updatedComment; // Assumes the backend returns the updated comment
 };
 
+// Unlike Comment
 export const unlikeComment = async (postId, commentId) => {
-  const headers = await getAuthHeaders();
-  const response = await fetch(`${API_URL}/api/posts/${postId}/comments/${commentId}/like`, {
-    method: 'DELETE',
-    credentials: 'include',
-    headers,
-  });
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to unlike comment');
+  try {
+    const response = await api.delete(`/api/posts/${postId}/comments/${commentId}/like`);
+    return response.data.updatedComment;
+  } catch (error) {
+    console.error('Error unliking comment:', error);
+    throw error;
   }
-  const data = await response.json();
-  return data.updatedComment;
 };
 
+// Delete Comment
 export const deleteComment = async (postId, commentId) => {
   try {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${API_URL}/api/posts/${postId}/comments/${commentId}`, {
-      method: 'DELETE',
-      credentials: 'include',
-      headers,
-    });
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to delete comment');
-    }
+    const response = await api.delete(`/api/posts/${postId}/comments/${commentId}`);
     return { success: true };
   } catch (error) {
     console.error('Error deleting comment:', error);
@@ -546,19 +339,136 @@ export const deleteComment = async (postId, commentId) => {
   }
 };
 
+// Update Comment
 export const updateComment = async (postId, commentId, commentData) => {
-  const headers = await getAuthHeaders();
-  const response = await fetch(`${API_URL}/api/posts/${postId}/comments/${commentId}`, {
-    method: 'PUT',
-    credentials: 'include',
-    headers,
-    body: JSON.stringify(commentData),
-  });
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to update comment');
+  try {
+    const response = await api.put(`/api/posts/${postId}/comments/${commentId}`, commentData);
+    return response.data.updatedComment;
+  } catch (error) {
+    console.error('Error updating comment:', error);
+    throw error;
   }
-  const data = await response.json();
-  return data.updatedComment;
 };
 
+// =================================================================
+// Profile API Functions (Using '/api/profile' as the base path)
+// =================================================================
+
+export const getProfile = async () => {
+  try {
+    const response = await api.get('/api/profile');
+    return response.data;
+  } catch (error) {
+    console.error('Error getting profile:', error);
+    throw error;
+  }
+};
+
+export const updateProfile = async (profileData) => {
+  try {
+    const response = await api.put('/api/profile', profileData);
+    return response.data;
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    throw error;
+  }
+};
+
+export const updateInterests = async (interests) => {
+  try {
+    const response = await api.put('/api/profile/interests', { interests });
+    return response.data;
+  } catch (error) {
+    console.error('Error updating interests:', error);
+    throw error;
+  }
+};
+
+export const getNotifications = async () => {
+  try {
+    const response = await api.get('/api/profile/notifications');
+    return response.data;
+  } catch (error) {
+    console.error('Error getting notifications:', error);
+    throw error;
+  }
+};
+
+export const updateNotifications = async (notifications) => {
+  try {
+    const response = await api.put('/api/profile/notifications', { notifications });
+    return response.data;
+  } catch (error) {
+    console.error('Error updating notifications:', error);
+    throw error;
+  }
+};
+
+export const getSubscriptions = async () => {
+  try {
+    const response = await api.get('/api/profile/subscriptions');
+    return response.data;
+  } catch (error) {
+    console.error('Error getting subscriptions:', error);
+    throw error;
+  }
+};
+
+export const getFavorites = async () => {
+  try {
+    const response = await api.get('/api/profile/favorites');
+    return response.data;
+  } catch (error) {
+    console.error('Error getting favorites:', error);
+    throw error;
+  }
+};
+
+export const addFavorite = async (favoriteId) => {
+  try {
+    const response = await api.post('/api/profile/favorites', { favoriteId });
+    return response.data;
+  } catch (error) {
+    console.error('Error adding favorite:', error);
+    throw error;
+  }
+};
+
+export const removeFavorite = async (favoriteId) => {
+  try {
+    const response = await api.delete(`/api/profile/favorites/${favoriteId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error removing favorite:', error);
+    throw error;
+  }
+};
+
+export const getCommunityInfo = async () => {
+  try {
+    const response = await api.get('/api/profile/community');
+    return response.data;
+  } catch (error) {
+    console.error('Error getting community info:', error);
+    throw error;
+  }
+};
+
+// Upload Profile Avatar using Firebase Storage
+export const uploadProfileImage = async (file) => {
+  try {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    // Call the backend endpoint for avatar upload (Firebase Storage based)
+    const response = await api.put('/api/profile/upload-avatar', formData, {
+      // Do not set Content-Type header manually for FormData.
+    });
+    return response.data; // Expected to return { photoURL: "new_image_url" }
+  } catch (error) {
+    console.error('Error uploading profile image:', error);
+    throw error;
+  }
+};
+
+
+export default api;
