@@ -1,6 +1,6 @@
 // src/components/ProfilePage.jsx
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import styles from '../styles/ProfilePage.module.css';
 import { 
   getProfile, 
@@ -9,6 +9,7 @@ import {
   getCommunityInfo, 
   uploadProfileImage 
 } from '../utils/api';
+import { AuthContext } from '../contexts/AuthContext';
 
 const ProfilePage = () => {
   // Local state for profile data and UI
@@ -31,26 +32,40 @@ const ProfilePage = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showModal, setShowModal] = useState(false); // State for modal
+  const { user, setUserData } = useContext(AuthContext); // Get setUserData from context
 
   // useRef to reference the hidden file input
   const fileInputRef = useRef(null);
+
+  // Helper function to set profile and formData from a given user object
+  const updateProfileState = (userObj) => {
+    setProfile(userObj);
+    setFormData({
+      displayName: userObj.displayName || '',
+      firstName: userObj.firstName || '',
+      lastName: userObj.lastName || '',
+      username: userObj.username || '',
+      bio: userObj.bio || '',
+      interests: userObj.interests ? userObj.interests.join(', ') : '',
+      notifications: userObj.notifications || { email: true, inApp: true },
+    });
+  };
 
   // Fetch profile and community info on mount.
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         setLoading(true);
+        // Use cached data from AuthContext if available
+        if (user) {
+          updateProfileState(user);
+          setLoading(false);
+          return; // Exit early if cached data is used
+        }
+
         const data = await getProfile();
-        setProfile(data);
-        setFormData({
-          displayName: data.displayName || '',
-          firstName: data.firstName || '',
-          lastName: data.lastName || '',
-          username: data.username || '',
-          bio: data.bio || '',
-          interests: data.interests ? data.interests.join(', ') : '',
-          notifications: data.notifications || { email: true, inApp: true },
-        });
+        console.log("Sakhr: ", data.photoURL);
+        updateProfileState(data);
       } catch (err) {
         console.error(err);
         setError(err.message || 'Error fetching profile');
@@ -61,6 +76,12 @@ const ProfilePage = () => {
 
     const fetchCommunity = async () => {
       try {
+        // Use cached data from AuthContext if available
+        if (user) {
+          updateProfileState(user);
+          setLoading(false);
+          return; // Exit early if cached data is used
+        }
         const commData = await getCommunityInfo();
         setCommunityInfo(commData);
       } catch (err) {
@@ -112,6 +133,10 @@ const ProfilePage = () => {
         setSuccess("Profile image updated successfully!");
         setImageFile(null);
         setPreviewImage("");
+        const updatedProfile = await getProfile();
+        setProfile(updatedProfile);
+        setUserData(updatedProfile); // Sync AuthContext
+        localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile));
       }
     } catch (err) {
       console.error(err);
@@ -132,6 +157,8 @@ const ProfilePage = () => {
       await updateProfile({ ...profile, photoURL: '' });
       const updatedProfile = await getProfile();
       setProfile(updatedProfile);
+      setUserData(updatedProfile); // Sync AuthContext
+      localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile));
       setSuccess("Avatar removed successfully!");
     } catch (err) {
       console.error(err);
@@ -160,6 +187,8 @@ const ProfilePage = () => {
       }
       const updatedProfile = await getProfile();
       setProfile(updatedProfile);
+      setUserData(updatedProfile);
+      localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile)); // Update cache
       setSuccess('Profile updated successfully!');
       setEditMode(false);
       setImageFile(null);

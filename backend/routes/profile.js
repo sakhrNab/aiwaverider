@@ -72,10 +72,13 @@ router.put('/upload-avatar', validateFirebaseToken, upload.single('avatar'), asy
           contentType: req.file.mimetype,
         },
       });
+      // NEW: Make file public so it can be retrieved via public URL
+      await fileRef.makePublic();
     }
     // Get public URL (assumes file is public or token is added)
-    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media`;
     // Update profile, etc...
+    await db.collection('users').doc(req.user.uid).update({ photoURL: publicUrl });
     return res.json({ photoURL: publicUrl });
   } catch (err) {
     console.error(err);
