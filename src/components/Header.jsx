@@ -61,8 +61,6 @@ const Header = ({ openSignUpModal }) => {
             <Link to="/latest-tech" className="px-3 py-2 hover:bg-blue-600 rounded">
               Latest Tech
             </Link>
-
-
             {!user && (
               <>
                 <Link to="/sign-in" className="px-3 py-2 hover:bg-blue-600 rounded">
