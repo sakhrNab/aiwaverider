@@ -10,7 +10,6 @@ import React, {
 } from 'react';
 import { getAllPosts as apiGetAllPosts, getPostById as apiGetPostById, API_URL } from '../utils/api';
 import { AuthContext } from './AuthContext';
-import { fetchWithRetry } from '../utils/apiUtils.jsx'; // if still needed
 
 export const PostsContext = createContext();
 
