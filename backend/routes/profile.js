@@ -23,30 +23,70 @@ const upload = multer({
 // Initialize Firestore
 const db = admin.firestore();
 
-// GET /api/profile - Retrieve the main profile details.
+// GET /api/profile - Get user profile
 router.get('/', validateFirebaseToken, async (req, res) => {
   try {
     const userDoc = await db.collection('users').doc(req.user.uid).get();
+    
     if (!userDoc.exists) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'User profile not found' });
     }
-    res.json(userDoc.data());
+
+    const userData = userDoc.data();
+    return res.json({
+      uid: req.user.uid,
+      email: userData.email,
+      username: userData.username,
+      displayName: userData.displayName || '',
+      photoURL: userData.photoURL || '',
+      firstName: userData.firstName || '',
+      lastName: userData.lastName || '',
+      role: userData.role || 'authenticated',
+      phoneNumber: userData.phoneNumber || '',
+      interests: userData.interests || [],
+      notifications: userData.notifications || {},
+      createdAt: userData.createdAt || null
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error fetching profile:', err);
+    return res.status(500).json({ 
+      error: 'Failed to fetch profile',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
-// PUT /api/profile - Update profile information.
+// PUT /api/profile - Update user profile
 router.put('/', validateFirebaseToken, async (req, res) => {
   try {
-    const updateData = req.body; // e.g., { firstName, lastName, displayName, bio, ... }
-    await db.collection('users').doc(req.user.uid).update(updateData);
-    const updatedDoc = await db.collection('users').doc(req.user.uid).get();
-    res.json(updatedDoc.data());
+    const userRef = db.collection('users').doc(req.user.uid);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User profile not found' });
+    }
+
+    const updateData = {
+      ...req.body,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await userRef.update(updateData);
+    
+    const updatedDoc = await userRef.get();
+    const userData = updatedDoc.data();
+
+    return res.json({
+      uid: req.user.uid,
+      ...userData,
+      updatedAt: userData.updatedAt ? userData.updatedAt.toDate().toISOString() : null
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error updating profile:', err);
+    return res.status(500).json({ 
+      error: 'Failed to update profile',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 

@@ -51,6 +51,12 @@ const PasswordRequirements = React.memo(({ validation }) => (
       </span>{' '}
       At least one special character (@$!%*?&)
     </p>
+    <p>
+      <span className={validation.passwordsMatch ? 'text-green-600' : 'text-red-600'}>
+        {validation.passwordsMatch ? '✓' : '✗'}
+      </span>{' '}
+      Passwords match
+    </p>
   </div>
 ));
 
@@ -61,6 +67,7 @@ PasswordRequirements.propTypes = {
     hasLower: PropTypes.bool.isRequired,
     hasNumber: PropTypes.bool.isRequired,
     hasSpecial: PropTypes.bool.isRequired,
+    passwordsMatch: PropTypes.bool.isRequired,
   }).isRequired,
 };
 
@@ -108,6 +115,7 @@ const SignUp = ({ isOpen, onClose }) => {
     email: '',
     phoneNumber: '',
     password: '',
+    confirmPassword: '',
   });
   const [error, setError] = useState('');
   const [passwordValidation, setPasswordValidation] = useState({
@@ -117,6 +125,7 @@ const SignUp = ({ isOpen, onClose }) => {
     hasLower: false,
     hasNumber: false,
     hasSpecial: false,
+    passwordsMatch: false,
   });
   const [emailError, setEmailError] = useState('');
   const [emailWarning, setEmailWarning] = useState('');
@@ -151,20 +160,27 @@ const SignUp = ({ isOpen, onClose }) => {
   }, [handleClose, isModalView]);
 
   // Update the validatePassword function to not trigger re-renders
-  const validatePassword = useCallback((password) => {
-    setPasswordValidation({
+  const validatePassword = useCallback((password, confirmPassword) => {
+    const validation = {
       hasLength: password.length >= 8,
       hasUpper: /[A-Z]/.test(password),
       hasLower: /[a-z]/.test(password),
       hasNumber: /\d/.test(password),
       hasSpecial: /[@$!%*?&]/.test(password),
-      isValid: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(password),
-    });
+      passwordsMatch: password === confirmPassword,
+    };
+    validation.isValid = validation.hasLength && 
+                        validation.hasUpper && 
+                        validation.hasLower && 
+                        validation.hasNumber && 
+                        validation.hasSpecial &&
+                        validation.passwordsMatch;
+    setPasswordValidation(validation);
   }, []);
 
   // Use debounce for password validation
   const debouncedValidatePassword = useCallback(
-    debounce((value) => validatePassword(value), 100),
+    debounce((password, confirmPassword) => validatePassword(password, confirmPassword), 100),
     [validatePassword]
   );
 
@@ -182,10 +198,17 @@ const SignUp = ({ isOpen, onClose }) => {
       [name]: value,
     }));
     
-    if (name === 'password') {
-      debouncedValidatePassword(value);
+    if (name === 'password' || name === 'confirmPassword') {
+      const newFormData = {
+        ...formData,
+        [name]: value
+      };
+      debouncedValidatePassword(
+        name === 'password' ? value : newFormData.password,
+        name === 'confirmPassword' ? value : newFormData.confirmPassword
+      );
     }
-  }, [debouncedValidatePassword]);
+  }, [debouncedValidatePassword, formData]);
 
   const handlePhoneChange = (value) => {
     setFormData((prevFormData) => ({
@@ -448,11 +471,36 @@ const SignUp = ({ isOpen, onClose }) => {
             </div>
 
             {/* Password */}
-            <PasswordInput
-              password={formData.password}
-              onChange={handleInputChange}
-              validation={passwordValidation}
-            />
+            <div className="form-group">
+              <label htmlFor="password" className="form-label">Password</label>
+              <input
+                type="password"
+                id="password"
+                name="password"
+                required
+                aria-required="true"
+                value={formData.password}
+                onChange={handleInputChange}
+                className={`form-input ${passwordValidation.isValid ? 'border-green-500' : ''}`}
+                placeholder="Enter your password"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="confirmPassword" className="form-label">Confirm Password</label>
+              <input
+                type="password"
+                id="confirmPassword"
+                name="confirmPassword"
+                required
+                aria-required="true"
+                value={formData.confirmPassword}
+                onChange={handleInputChange}
+                className={`form-input ${passwordValidation.passwordsMatch ? 'border-green-500' : 'border-red-500'}`}
+                placeholder="Confirm your password"
+              />
+              <PasswordRequirements validation={passwordValidation} />
+            </div>
 
             {/* Profile Image */}
             {profileImageField}
@@ -586,11 +634,36 @@ const SignUp = ({ isOpen, onClose }) => {
             </div>
 
             {/* Password */}
-            <PasswordInput
-              password={formData.password}
-              onChange={handleInputChange}
-              validation={passwordValidation}
-            />
+            <div className="form-group">
+              <label htmlFor="password" className="form-label">Password</label>
+              <input
+                type="password"
+                id="password"
+                name="password"
+                required
+                aria-required="true"
+                value={formData.password}
+                onChange={handleInputChange}
+                className={`form-input ${passwordValidation.isValid ? 'border-green-500' : ''}`}
+                placeholder="Enter your password"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="confirmPassword" className="form-label">Confirm Password</label>
+              <input
+                type="password"
+                id="confirmPassword"
+                name="confirmPassword"
+                required
+                aria-required="true"
+                value={formData.confirmPassword}
+                onChange={handleInputChange}
+                className={`form-input ${passwordValidation.passwordsMatch ? 'border-green-500' : 'border-red-500'}`}
+                placeholder="Confirm your password"
+              />
+              <PasswordRequirements validation={passwordValidation} />
+            </div>
 
             {/* Profile Image */}
             {profileImageField}

@@ -371,12 +371,14 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-// Remove old sign-in endpoint as it's handled by Firebase
-// Keep only the session management part
 // Verify user session by POSTing { idToken } to this endpoint
 app.post('/api/auth/session', async (req, res) => {
   try {
-    const { idToken } = req.body;
+    // Get token from either the request body or Authorization header
+    let idToken = req.body.idToken;
+    if (!idToken && req.headers.authorization) {
+      idToken = req.headers.authorization.split('Bearer ')[1];
+    }
 
     if (!idToken) {
       return res.status(400).json({ error: 'ID token is required' });
@@ -398,7 +400,7 @@ app.post('/api/auth/session', async (req, res) => {
     const sessionToken = jwt.sign(
       { 
         uid,
-        role: userData.role,
+        role: userData.role || 'authenticated',
         email: userData.email
       },
       process.env.JWT_SECRET,
@@ -409,7 +411,8 @@ app.post('/api/auth/session', async (req, res) => {
     res.cookie('session', sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      path: '/',
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     });
 
@@ -419,14 +422,20 @@ app.post('/api/auth/session', async (req, res) => {
         uid,
         username: userData.username,
         email: userData.email,
-        role: userData.role,
+        role: userData.role || 'authenticated',
         photoURL: userData.photoURL || null,
-        displayName: userData.displayName || null
+        displayName: userData.displayName || null,
+        firstName: userData.firstName || '',
+        lastName: userData.lastName || '',
+        phoneNumber: userData.phoneNumber || ''
       }
     });
   } catch (err) {
     console.error('Error creating session:', err);
-    return res.status(500).json({ error: 'Failed to create session' });
+    return res.status(500).json({ 
+      error: 'Failed to create session',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 

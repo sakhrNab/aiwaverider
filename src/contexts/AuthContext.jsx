@@ -144,7 +144,7 @@ export const AuthProvider = ({ children }) => {
       const sessionKey = `sessionInitialized_${fUser.uid}`;
       const isSessionInitialized = localStorage.getItem(sessionKey);
       const cachedProfile = localStorage.getItem(`profileData_${fUser.uid}`);
-      console.log("sakhr;: ", cachedProfile, isSessionInitialized)
+      
       // If we haven't already fetched the user doc
       if (isSessionInitialized && cachedProfile) {
         setUserData(JSON.parse(cachedProfile)); // Use cached profile
