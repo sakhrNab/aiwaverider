@@ -129,12 +129,51 @@ router.put('/upload-avatar', validateFirebaseToken, upload.single('avatar'), asy
 // PUT /api/profile/interests - Update topics of interest.
 router.put('/interests', validateFirebaseToken, async (req, res) => {
   try {
-    const { interests } = req.body; // interests should be an array of strings
-    await db.collection('users').doc(req.user.uid).update({ interests });
-    res.json({ interests });
+    const { interests } = req.body;
+    // Validate interests format
+    if (!Array.isArray(interests)) {
+      return res.status(400).json({ error: 'Interests must be an array' });
+    }
+
+    // Predefined categories
+    const validCategories = [
+      'Quantum Computing',
+      'AI',
+      'Text to Image',
+      'Image to Video',
+      'Text to Video',
+      'Text to Sound',
+      'Text to Song',
+      'Speech to Song',
+      'Editing Tools',
+      'VR',
+      'Health',
+      'Finance',
+      'Automation',
+      'VR and AG'
+    ];
+
+    // Validate that all interests are from valid categories
+    const invalidInterests = interests.filter(interest => !validCategories.includes(interest));
+    if (invalidInterests.length > 0) {
+      return res.status(400).json({ 
+        error: 'Invalid interests detected', 
+        invalidInterests 
+      });
+    }
+
+    await db.collection('users').doc(req.user.uid).update({ 
+      interests,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return res.json({ 
+      success: true,
+      interests 
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('Error updating interests:', err);
+    return res.status(500).json({ error: 'Failed to update interests' });
   }
 });
 
@@ -232,11 +271,77 @@ router.delete('/favorites/:id', validateFirebaseToken, async (req, res) => {
   }
 });
 
-// GET /api/profile/community - Retrieve community information (e.g., a Discord invite link).
+// GET /api/profile/settings - Get user settings
+router.get('/settings', validateFirebaseToken, async (req, res) => {
+  try {
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const userData = userDoc.data();
+    return res.json({
+      language: userData.language || 'en',
+      theme: userData.theme || 'light',
+      notifications: userData.notifications || { email: true, inApp: true }
+    });
+  } catch (err) {
+    console.error('Error fetching settings:', err);
+    return res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+// PUT /api/profile/settings - Update user settings
+router.put('/settings', validateFirebaseToken, async (req, res) => {
+  try {
+    const { language, theme, notifications } = req.body;
+    
+    // Validate language
+    const validLanguages = ['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh', 'ja', 'ko'];
+    if (language && !validLanguages.includes(language)) {
+      return res.status(400).json({ error: 'Invalid language selection' });
+    }
+
+    const updates = {
+      ...(language && { language }),
+      ...(theme && { theme }),
+      ...(notifications && { notifications }),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('users').doc(req.user.uid).update(updates);
+    return res.json({ 
+      success: true,
+      settings: updates
+    });
+  } catch (err) {
+    console.error('Error updating settings:', err);
+    return res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
+// GET /api/profile/community - Get community links and info
 router.get('/community', validateFirebaseToken, async (req, res) => {
-  // You can store your Discord invite URL in an environment variable.
-  const discordInvite = process.env.DISCORD_INVITE || 'https://discord.gg/your-invite-code';
-  res.json({ discordInvite });
+  try {
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    return res.json({
+      discordLink: process.env.DISCORD_INVITE_LINK || 'https://discord.gg/your-invite-link',
+      paymentLink: process.env.PAYMENT_LINK || 'https://payment-provider.com/your-payment-link',
+      communityBenefits: [
+        'Access to exclusive content',
+        'Direct interaction with experts',
+        'Early access to new features',
+        'Premium support'
+      ]
+    });
+  } catch (err) {
+    console.error('Error fetching community info:', err);
+    return res.status(500).json({ error: 'Failed to fetch community info' });
+  }
 });
 
 module.exports = router;

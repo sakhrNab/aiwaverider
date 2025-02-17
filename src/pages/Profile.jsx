@@ -11,6 +11,36 @@ import {
 } from '../utils/api';
 import { AuthContext } from '../contexts/AuthContext';
 
+const INTEREST_CATEGORIES = [
+  'Quantum Computing',
+  'AI',
+  'Text to Image',
+  'Image to Video',
+  'Text to Video',
+  'Text to Sound',
+  'Text to Song',
+  'Speech to Song',
+  'Editing Tools',
+  'VR',
+  'Health',
+  'Finance',
+  'Automation',
+  'VR and AG'
+];
+
+const LANGUAGES = [
+  { code: 'en', name: 'English' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'it', name: 'Italian' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'zh', name: 'Chinese' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' }
+];
+
 const ProfilePage = () => {
   // Local state for profile data and UI
   const [profile, setProfile] = useState(null);
@@ -350,23 +380,48 @@ const ProfilePage = () => {
             {!editMode ? (
               <>
                 <h2>My Interests</h2>
-                <p>{profile.interests ? profile.interests.join(', ') : 'No interests set.'}</p>
+                <div className={styles.interestsList}>
+                  {profile.interests && profile.interests.length > 0 ? (
+                    <div className={styles.interestTags}>
+                      {profile.interests.map((interest, index) => (
+                        <span key={index} className={styles.interestTag}>
+                          {interest}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p>No interests selected yet.</p>
+                  )}
+                </div>
                 <button className={styles.editButton} onClick={() => setEditMode(true)}>
                   Edit Interests
                 </button>
               </>
             ) : (
               <form className={styles.editForm} onSubmit={handleUpdate}>
-                <h2>Edit Interests</h2>
-                <label>
-                  Interests (comma-separated):
+                <h2>Select Your Interests</h2>
+                <div className={styles.interestsGrid}>
+                  {INTEREST_CATEGORIES.map((category, index) => (
+                    <label key={index} className={styles.interestCheckbox}>
                   <input
-                    type="text"
+                        type="checkbox"
                     name="interests"
-                    value={formData.interests}
-                    onChange={handleInputChange}
-                  />
+                        value={category}
+                        checked={formData.interests.includes(category)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setFormData(prev => ({
+                            ...prev,
+                            interests: e.target.checked
+                              ? [...prev.interests.split(',').filter(i => i), value].join(',')
+                              : prev.interests.split(',').filter(i => i !== value).join(',')
+                          }));
+                        }}
+                      />
+                      {category}
                 </label>
+                  ))}
+                </div>
                 <div className={styles.formButtons}>
                   <button type="submit">Save</button>
                   <button type="button" onClick={() => setEditMode(false)}>
@@ -396,22 +451,107 @@ const ProfilePage = () => {
         {activeTab === 'settings' && (
           <div className={styles.tabContent}>
             <h2>Settings</h2>
-            <p>Settings content goes here.</p>
+            <form className={styles.settingsForm} onSubmit={handleUpdate}>
+              <div className={styles.settingSection}>
+                <h3>Language</h3>
+                <select
+                  name="language"
+                  value={formData.language || 'en'}
+                  onChange={handleInputChange}
+                  className={styles.languageSelect}
+                >
+                  {LANGUAGES.map(lang => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className={styles.settingSection}>
+                <h3>Notifications</h3>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    name="emailNotifications"
+                    checked={formData.notifications.email}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        notifications: {
+                          ...prev.notifications,
+                          email: e.target.checked
+                        }
+                      }));
+                    }}
+                  />
+                  Email Notifications
+                </label>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    name="inAppNotifications"
+                    checked={formData.notifications.inApp}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        notifications: {
+                          ...prev.notifications,
+                          inApp: e.target.checked
+                        }
+                      }));
+                    }}
+                  />
+                  In-App Notifications
+                </label>
+              </div>
+
+              <button type="submit" className={styles.saveButton}>
+                Save Settings
+              </button>
+            </form>
           </div>
         )}
 
         {activeTab === 'community' && (
           <div className={styles.tabContent}>
             <h2>Community</h2>
-            <p>Join our Discord community for exclusive updates and discussions.</p>
+            <div className={styles.communitySection}>
+              <h3>Join Our Discord Community</h3>
+              <p>Connect with other AI enthusiasts, share ideas, and get exclusive updates!</p>
+              {communityInfo?.discordLink && (
             <a
-              href={profile.discordInvite || '#'}
+                  href={communityInfo.discordLink}
               target="_blank"
               rel="noopener noreferrer"
-              className={styles.communityLink}
+                  className={styles.discordButton}
             >
               Join Discord
             </a>
+              )}
+            </div>
+
+            <div className={styles.communitySection}>
+              <h3>Premium Membership</h3>
+              <div className={styles.benefitsList}>
+                <h4>Benefits:</h4>
+                <ul>
+                  {communityInfo?.communityBenefits?.map((benefit, index) => (
+                    <li key={index}>{benefit}</li>
+                  ))}
+                </ul>
+              </div>
+              {communityInfo?.paymentLink && (
+                <a
+                  href={communityInfo.paymentLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.upgradeButton}
+                >
+                  Upgrade to Premium
+                </a>
+              )}
+            </div>
           </div>
         )}
       </main>
