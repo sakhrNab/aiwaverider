@@ -10,23 +10,7 @@ import {
   uploadProfileImage 
 } from '../utils/api';
 import { AuthContext } from '../contexts/AuthContext';
-
-const INTEREST_CATEGORIES = [
-  'Quantum Computing',
-  'AI',
-  'Text to Image',
-  'Image to Video',
-  'Text to Video',
-  'Text to Sound',
-  'Text to Song',
-  'Speech to Song',
-  'Editing Tools',
-  'VR',
-  'Health',
-  'Finance',
-  'Automation',
-  'VR and AG'
-];
+import { INTEREST_CATEGORIES } from '../constants/categories';
 
 const LANGUAGES = [
   { code: 'en', name: 'English' },
@@ -53,7 +37,7 @@ const ProfilePage = () => {
     lastName: '',
     username: '',
     bio: '',
-    interests: '',
+    interests: [],
     notifications: { email: true, inApp: true },
   });
   const [imageFile, setImageFile] = useState(null); // State for file input
@@ -76,7 +60,7 @@ const ProfilePage = () => {
       lastName: userObj.lastName || '',
       username: userObj.username || '',
       bio: userObj.bio || '',
-      interests: userObj.interests ? userObj.interests.join(', ') : '',
+      interests: userObj.interests || [],
       notifications: userObj.notifications || { email: true, inApp: true },
     });
   };
@@ -196,36 +180,102 @@ const ProfilePage = () => {
     }
   };
 
-  // Handle profile update (including avatar update if a new file is selected)
+  // Handle checkbox change for interests
+  const handleInterestChange = (category) => {
+    setFormData(prev => {
+      const currentInterests = [...prev.interests];
+      const index = currentInterests.indexOf(category);
+      
+      if (index === -1) {
+        // Add the category if it's not in the array
+        currentInterests.push(category);
+      } else {
+        // Remove the category if it's already in the array
+        currentInterests.splice(index, 1);
+      }
+      
+      return {
+        ...prev,
+        interests: currentInterests,
+      };
+    });
+  };
+
+  // Handle profile update
   const handleUpdate = async (e) => {
     e.preventDefault();
+    setError(''); // Clear any previous errors
+    setSuccess(''); // Clear any previous success messages
+    
     try {
+      if (activeTab === 'interests') {
+        // Get selected interests array
+        const selectedInterests = formData.interests;
+        
+        // Validate interests array
+        if (!Array.isArray(selectedInterests)) {
+          throw new Error('Invalid interests format');
+        }
+
+        // Log the interests being sent
+        console.log('Selected interests for update:', selectedInterests);
+        
+        try {
+          // Update interests
+          const response = await updateInterests(selectedInterests);
+          console.log('Update interests response:', response);
+
+          if (response.success) {
+            // After successful interests update, update the profile state
+            const updatedProfile = await getProfile();
+            setProfile(updatedProfile);
+            setUserData(updatedProfile);
+            localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile));
+            setSuccess('Interests updated successfully!');
+            setEditMode(false);
+          } else {
+            throw new Error('Failed to update interests');
+          }
+        } catch (error) {
+          console.error('Error updating interests:', error);
+          setError(error.message || 'Failed to update interests');
+          return;
+        }
+        return;
+      }
+
+      // Rest of the code for other profile updates remains the same...
       let updatedPhotoURL = profile.photoURL;
       if (imageFile) {
         const uploadResponse = await uploadProfileImage(imageFile);
         updatedPhotoURL = uploadResponse.photoURL;
       }
+
       const updatedData = {
         ...formData,
-        interests: formData.interests.split(',').map(item => item.trim()),
         photoURL: updatedPhotoURL,
       };
-      // Update general profile info
-      await updateProfile({ ...profile, displayName: updatedData.displayName, bio: updatedData.bio, photoURL: updatedPhotoURL });
-      if (activeTab === 'interests') {
-        await updateInterests(updatedData.interests);
-      }
+
+      await updateProfile({ 
+        ...profile, 
+        displayName: updatedData.displayName, 
+        bio: updatedData.bio, 
+        photoURL: updatedPhotoURL 
+      });
+
       const updatedProfile = await getProfile();
       setProfile(updatedProfile);
       setUserData(updatedProfile);
-      localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile)); // Update cache
+      localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile));
       setSuccess('Profile updated successfully!');
       setEditMode(false);
       setImageFile(null);
       setPreviewImage('');
     } catch (err) {
-      console.error(err);
+      console.error('Error in handleUpdate:', err);
       setError(err.message || 'Error updating profile');
+      // Keep edit mode active when there's an error
+      setEditMode(true);
     }
   };
 
@@ -403,23 +453,13 @@ const ProfilePage = () => {
                 <div className={styles.interestsGrid}>
                   {INTEREST_CATEGORIES.map((category, index) => (
                     <label key={index} className={styles.interestCheckbox}>
-                  <input
+                      <input
                         type="checkbox"
-                    name="interests"
-                        value={category}
                         checked={formData.interests.includes(category)}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setFormData(prev => ({
-                            ...prev,
-                            interests: e.target.checked
-                              ? [...prev.interests.split(',').filter(i => i), value].join(',')
-                              : prev.interests.split(',').filter(i => i !== value).join(',')
-                          }));
-                        }}
+                        onChange={() => handleInterestChange(category)}
                       />
                       {category}
-                </label>
+                    </label>
                   ))}
                 </div>
                 <div className={styles.formButtons}>

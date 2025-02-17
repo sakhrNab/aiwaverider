@@ -194,35 +194,40 @@ export const PostsProvider = ({ children }) => {
 
   const fetchCarouselData = useCallback(
     async (categories, force = false) => {
-      if (!force && carouselLastFetch && Date.now() - carouselLastFetch < CACHE_DURATION) {
+      const now = Date.now();
+      if (!force && carouselLastFetch && now - carouselLastFetch < CACHE_DURATION) {
+        console.log('Using cached carousel data');
         return carouselData;
       }
+
       try {
         setLoadingPosts(true);
-        const joinedCategories = categories.join(',');
-        // Use Axios instance (api) for fetching carousel data
-        const response = await fetch(`${API_URL}/api/posts/multi?categories=${encodeURIComponent(joinedCategories)}&limit=5`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        });
-        const json = await response.json();
-        if (!json.data) {
-          throw new Error('Invalid response format from server');
-        }
-        setCarouselData(json.data);
-        setCarouselLastFetch(Date.now());
-        return json.data;
+        const categorySections = await Promise.all(
+          categories.map(async (category) => {
+            try {
+              const posts = await fetchAllPosts(category, 5);
+              return [category, posts || []];
+            } catch (err) {
+              console.error(`Error fetching posts for ${category}:`, err);
+              return [category, []];
+            }
+          })
+        );
+
+        const newCarouselData = Object.fromEntries(categorySections);
+        setCarouselData(newCarouselData);
+        setCarouselLastFetch(now);
+        localStorage.setItem('cachedCarouselData', JSON.stringify(newCarouselData));
+        localStorage.setItem('carouselLastFetch', now.toString());
+        return newCarouselData;
       } catch (err) {
         console.error('Error fetching carousel data:', err);
-        return Object.fromEntries(categories.map((cat) => [cat, []]));
+        return {};
       } finally {
         setLoadingPosts(false);
       }
     },
-    [carouselLastFetch, carouselData, CACHE_DURATION]
+    [carouselLastFetch, carouselData, CACHE_DURATION, fetchAllPosts]
   );
 
   const addPostToCache = useCallback((newPost) => {

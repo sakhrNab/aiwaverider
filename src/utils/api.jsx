@@ -391,10 +391,29 @@ export const updateProfile = async (profileData) => {
 
 export const updateInterests = async (interests) => {
   try {
+    // Ensure interests is an array
+    if (!Array.isArray(interests)) {
+      throw new Error('Interests must be an array');
+    }
+
+    // Log the request payload for debugging
+    console.log('Sending interests update:', { interests });
+
+    // Make the API call with properly formatted request body
     const response = await api.put('/api/profile/interests', { interests });
+    
+    // Log the response for debugging
+    console.log('Interests update response:', response.data);
+
+    // Return the response data directly
     return response.data;
   } catch (error) {
     console.error('Error updating interests:', error);
+    if (error.response) {
+      // If we have a response from the server, throw its error message
+      throw new Error(error.response.data.error || 'Failed to update interests');
+    }
+    // Otherwise throw the original error
     throw error;
   }
 };

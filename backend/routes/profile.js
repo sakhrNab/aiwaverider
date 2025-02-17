@@ -137,6 +137,14 @@ router.put('/interests', validateFirebaseToken, async (req, res) => {
 
     // Predefined categories
     const validCategories = [
+      // General categories
+      'Trends',
+      'Latest Tech',
+      'AI Tools',
+      'Tutorials',
+      'News',
+      
+      // Specific technology categories
       'Quantum Computing',
       'AI',
       'Text to Image',
