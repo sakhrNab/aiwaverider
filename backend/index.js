@@ -620,28 +620,79 @@ app.get('/api/posts', async (req, res) => {
         commentsCollection.where('postId', 'in', chunk).orderBy('createdAt', 'desc').get()
       );
       const commentsSnapshots = await Promise.all(commentsPromises);
-      commentsSnapshots.forEach(commentsSnap => {
-        commentsSnap.forEach(commentDoc => {
+      
+      // Process each comment and get likedBy information
+      const commentMap = new Map(); // Map to store comments by ID
+      
+      for (const commentsSnap of commentsSnapshots) {
+        for (const commentDoc of commentsSnap.docs) {
           const commentData = commentDoc.data();
-          comments.push({
+          const likes = commentData.likes || [];
+          let likedBy = [];
+          
+          if (likes.length > 0) {
+            const userPromises = likes.map(userId =>
+              usersCollection.doc(userId).get()
+            );
+            const userDocs = await Promise.all(userPromises);
+            likedBy = userDocs
+              .filter(doc => doc.exists)
+              .map(doc => ({ id: doc.id, username: doc.data().username }));
+          }
+          
+          const comment = {
             id: commentDoc.id,
             ...commentData,
+            likes: likes,
+            likedBy: likedBy,
+            replies: [], // Initialize empty replies array
             createdAt: commentData.createdAt
               ? commentData.createdAt.toDate().toISOString()
               : null,
-          });
-        });
-      });
-    }
-
-    // Group comments by postId
-    const commentsByPostId = {};
-    comments.forEach(comment => {
-      if (!commentsByPostId[comment.postId]) {
-        commentsByPostId[comment.postId] = [];
+          };
+          
+          commentMap.set(commentDoc.id, comment);
+        }
       }
-      commentsByPostId[comment.postId].push(comment);
-    });
+
+      // Structure comments hierarchy
+      const commentsByPostId = {};
+      
+      // First, initialize empty arrays for each post
+      postIds.forEach(postId => {
+        commentsByPostId[postId] = [];
+      });
+
+      // Then, organize comments with proper hierarchy
+      for (const comment of commentMap.values()) {
+        if (comment.parentCommentId) {
+          // This is a reply
+          const parentComment = commentMap.get(comment.parentCommentId);
+          if (parentComment) {
+            parentComment.replies.push(comment);
+          } else {
+            // If parent doesn't exist, add to top level
+            commentsByPostId[comment.postId].push(comment);
+          }
+        } else {
+          // This is a top-level comment
+          commentsByPostId[comment.postId].push(comment);
+        }
+      }
+
+      // Sort replies by createdAt for each post's comments
+      for (const postId in commentsByPostId) {
+        for (const comment of commentsByPostId[postId]) {
+          if (comment.replies.length > 0) {
+            comment.replies.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+          }
+        }
+        // Also sort top-level comments
+        commentsByPostId[postId].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      }
+
+      comments = commentsByPostId;
+    }
 
     snapshot.forEach(doc => {
       const data = doc.data();
@@ -664,7 +715,7 @@ app.get('/api/posts', async (req, res) => {
         createdAt: data.createdAt
           ? data.createdAt.toDate().toISOString()
           : null,
-        comments: commentsByPostId[postId] || [],
+        comments: comments[postId] || [],
       });
     });
 
@@ -702,7 +753,7 @@ app.get('/api/posts/multi', async (req, res) => {
     // We'll store each category's posts in an object
     const results = {};
 
-    // For each category, do a Firestore query
+// For each category, do a Firestore query
     for (const cat of categoryArray) {
       let query = postsCollection.orderBy('createdAt', 'desc').limit(limitNumber);
       if (cat !== 'All') {
@@ -871,6 +922,73 @@ app.get('/api/posts/:postId', async (req, res) => {
 
     const postData = postDoc.data();
 
+    // Fetch comments for this post
+    const commentsSnapshot = await commentsCollection
+      .where('postId', '==', postId)
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const commentMap = new Map(); // Map to store comments by ID
+    
+    // First pass: Process all comments and store in map
+    for (const commentDoc of commentsSnapshot.docs) {
+      const commentData = commentDoc.data();
+      const likes = commentData.likes || [];
+      let likedBy = [];
+      
+      if (likes.length > 0) {
+        const userPromises = likes.map(userId =>
+          usersCollection.doc(userId).get()
+        );
+        const userDocs = await Promise.all(userPromises);
+        likedBy = userDocs
+          .filter(doc => doc.exists)
+          .map(doc => ({ id: doc.id, username: doc.data().username }));
+      }
+      
+      const comment = {
+        id: commentDoc.id,
+        ...commentData,
+        likes: likes,
+        likedBy: likedBy,
+        replies: [], // Initialize empty replies array
+        createdAt: commentData.createdAt
+          ? commentData.createdAt.toDate().toISOString()
+          : null,
+      };
+      
+      commentMap.set(commentDoc.id, comment);
+    }
+
+    // Second pass: Structure the comments hierarchy
+    const comments = [];
+    
+    for (const comment of commentMap.values()) {
+      if (comment.parentCommentId) {
+        // This is a reply
+        const parentComment = commentMap.get(comment.parentCommentId);
+        if (parentComment) {
+          parentComment.replies.push(comment);
+        } else {
+          // If parent doesn't exist, add to top level
+          comments.push(comment);
+        }
+      } else {
+        // This is a top-level comment
+        comments.push(comment);
+      }
+    }
+
+    // Sort replies by createdAt
+    for (const comment of comments) {
+      if (comment.replies.length > 0) {
+        comment.replies.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      }
+    }
+    
+    // Sort top-level comments by createdAt (newest first)
+    comments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
     // Ensure additionalHTML and graphHTML are strings
     const additionalHTML =
       typeof postData.additionalHTML === 'string' ? postData.additionalHTML : '';
@@ -882,6 +1000,10 @@ app.get('/api/posts/:postId', async (req, res) => {
       ...postData,
       additionalHTML,
       graphHTML,
+      comments: comments,
+      createdAt: postData.createdAt
+        ? postData.createdAt.toDate().toISOString()
+        : null,
     });
   } catch (err) {
     console.error('Error fetching post:', err);
@@ -966,7 +1088,7 @@ app.put('/api/posts/:postId', validateFirebaseToken, upload.single('image'), asy
 app.post('/api/posts/:postId/comments', validateFirebaseToken, async (req, res) => {
   try {
     const { postId } = req.params;
-    const { commentText, parentCommentId } = req.body;
+const { commentText, parentCommentId } = req.body;
     const uid = req.user.uid;
     if (!uid) {
       return res.status(401).json({ error: 'User not authenticated' });
@@ -1029,9 +1151,24 @@ app.get('/api/posts/:postId/comments', async (req, res) => {
       .get();
 
     const allComments = [];
+    const commentMap = new Map(); // Map to store comments by ID
+
+    // First pass: Process all comments and store in map
     for (const doc of snapshot.docs) {
       const data = doc.data();
-      // Ensure we have all required fields
+      const likes = data.likes || [];
+      let likedBy = [];
+      
+      if (likes.length > 0) {
+        const userPromises = likes.map(userId =>
+          usersCollection.doc(userId).get()
+        );
+        const userDocs = await Promise.all(userPromises);
+        likedBy = userDocs
+          .filter(doc => doc.exists)
+          .map(doc => ({ id: doc.id, username: doc.data().username }));
+      }
+
       const comment = {
         id: doc.id,
         postId: data.postId,
@@ -1039,9 +1176,38 @@ app.get('/api/posts/:postId/comments', async (req, res) => {
         text: data.text,
         username: data.username || 'Anonymous',
         userRole: data.userRole || 'user',
+        likes: likes,
+        likedBy: likedBy,
+        parentCommentId: data.parentCommentId || null,
+        replies: [], // Initialize empty replies array
         createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
       };
+
+      commentMap.set(doc.id, comment);
+    }
+
+    // Second pass: Structure the comments hierarchy
+    for (const comment of commentMap.values()) {
+      if (comment.parentCommentId) {
+        // This is a reply - add it to parent's replies array
+        const parentComment = commentMap.get(comment.parentCommentId);
+        if (parentComment) {
+          parentComment.replies.push(comment);
+        } else {
+          // If parent doesn't exist, treat as top-level comment
       allComments.push(comment);
+        }
+      } else {
+        // This is a top-level comment
+        allComments.push(comment);
+      }
+    }
+
+    // Sort replies by createdAt
+    for (const comment of allComments) {
+      if (comment.replies.length > 0) {
+        comment.replies.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      }
     }
 
     return res.json(allComments);
@@ -1059,61 +1225,61 @@ app.post('/api/posts/:postId/comments/:commentId/like', validateFirebaseToken, a
     const commentRef = commentsCollection.doc(commentId);
     const commentDoc = await commentRef.get();
     if (!commentDoc.exists) {
-      return res.status(404).json({ error: 'Comment not found' });
-    }
-    let commentData = commentDoc.data();
-    let likes = commentData.likes || [];
-    if (!likes.includes(uid)) {
-      likes.push(uid);
-    }
-    await commentRef.update({ likes });
-    const updatedDoc = await commentRef.get();
-    const updatedComment = { id: updatedDoc.id, ...updatedDoc.data() };
-    return res.json({ updatedComment });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Unlike a comment
-// Like a comment endpoint
-app.post('/api/posts/:postId/comments/:commentId/like', validateFirebaseToken, async (req, res) => {
-  try {
-    const { postId, commentId } = req.params;
-    const uid = req.user.uid;
-    const commentRef = commentsCollection.doc(commentId);
-    const commentDoc = await commentRef.get();
-    if (!commentDoc.exists) {
       return res.status(404).json({ error: 'Comment not found.' });
     }
     let commentData = commentDoc.data();
     let likes = commentData.likes || [];
     if (!likes.includes(uid)) {
       likes.push(uid);
+      await commentRef.update({ likes });
+      const updatedDoc = await commentRef.get();
+      const updatedData = updatedDoc.data();
+
+      // Get user details for likers
+      const userPromises = likes.map(userId =>
+        usersCollection.doc(userId).get()
+      );
+      const userDocs = await Promise.all(userPromises);
+      const likedBy = userDocs
+        .filter(doc => doc.exists)
+        .map(doc => ({ id: doc.id, username: doc.data().username }));
+
+      const updatedComment = {
+        id: updatedDoc.id,
+        ...updatedData,
+        likes,
+        likedBy,
+        createdAt: updatedData.createdAt ? updatedData.createdAt.toDate().toISOString() : null
+      };
+
+      return res.json({ updatedComment });
+    } else {
+      // If already liked, return current state
+      const userPromises = likes.map(userId =>
+        usersCollection.doc(userId).get()
+      );
+      const userDocs = await Promise.all(userPromises);
+      const likedBy = userDocs
+        .filter(doc => doc.exists)
+        .map(doc => ({ id: doc.id, username: doc.data().username }));
+
+      const updatedComment = {
+        id: commentDoc.id,
+        ...commentData,
+        likes,
+        likedBy,
+        createdAt: commentData.createdAt ? commentData.createdAt.toDate().toISOString() : null
+      };
+
+      return res.json({ updatedComment });
     }
-    await commentRef.update({ likes });
-    const updatedDoc = await commentRef.get();
-    const updatedComment = { id: updatedDoc.id, ...updatedDoc.data() };
-
-    // Retrieve user details for each liker
-    const userPromises = (updatedComment.likes || []).map(userId =>
-      usersCollection.doc(userId).get()
-    );
-    const userDocs = await Promise.all(userPromises);
-    const likedBy = userDocs
-      .filter(doc => doc.exists)
-      .map(doc => ({ id: doc.id, username: doc.data().username }));
-    updatedComment.likedBy = likedBy;
-
-    return res.json({ updatedComment });
   } catch (err) {
     console.error('Error liking comment:', err);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
-// Similarly, update the unlike endpoint:
+// Unlike a comment
 app.delete('/api/posts/:postId/comments/:commentId/like', validateFirebaseToken, async (req, res) => {
   try {
     const { postId, commentId } = req.params;
@@ -1125,22 +1291,51 @@ app.delete('/api/posts/:postId/comments/:commentId/like', validateFirebaseToken,
     }
     let commentData = commentDoc.data();
     let likes = commentData.likes || [];
-    likes = likes.filter(id => id !== uid);
-    await commentRef.update({ likes });
-    const updatedDoc = await commentRef.get();
-    const updatedComment = { id: updatedDoc.id, ...updatedDoc.data() };
+    
+    if (likes.includes(uid)) {
+      likes = likes.filter(id => id !== uid);
+      await commentRef.update({ likes });
+      const updatedDoc = await commentRef.get();
+      const updatedData = updatedDoc.data();
 
-    // Retrieve user details for each liker
-    const userPromises = (updatedComment.likes || []).map(userId =>
-      usersCollection.doc(userId).get()
-    );
-    const userDocs = await Promise.all(userPromises);
-    const likedBy = userDocs
-      .filter(doc => doc.exists)
-      .map(doc => ({ id: doc.id, username: doc.data().username }));
-    updatedComment.likedBy = likedBy;
+      // Get user details for remaining likers
+      const userPromises = likes.map(userId =>
+        usersCollection.doc(userId).get()
+      );
+      const userDocs = await Promise.all(userPromises);
+      const likedBy = userDocs
+        .filter(doc => doc.exists)
+        .map(doc => ({ id: doc.id, username: doc.data().username }));
 
-    return res.json({ updatedComment });
+      const updatedComment = {
+        id: updatedDoc.id,
+        ...updatedData,
+        likes,
+        likedBy,
+        createdAt: updatedData.createdAt ? updatedData.createdAt.toDate().toISOString() : null
+      };
+
+      return res.json({ updatedComment });
+    } else {
+      // If not liked, return current state
+      const userPromises = likes.map(userId =>
+        usersCollection.doc(userId).get()
+      );
+      const userDocs = await Promise.all(userPromises);
+      const likedBy = userDocs
+        .filter(doc => doc.exists)
+        .map(doc => ({ id: doc.id, username: doc.data().username }));
+
+      const updatedComment = {
+        id: commentDoc.id,
+        ...commentData,
+        likes,
+        likedBy,
+        createdAt: commentData.createdAt ? commentData.createdAt.toDate().toISOString() : null
+      };
+
+      return res.json({ updatedComment });
+    }
   } catch (err) {
     console.error('Error unliking comment:', err);
     return res.status(500).json({ error: 'Internal server error.' });
