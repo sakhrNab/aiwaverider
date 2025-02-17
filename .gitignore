@@ -20,7 +20,9 @@ file_contents.txt
 deleteFiles.ps1
 classes_found.txt
 fetch_classes.py
-
+firebase-storage*
+TODO.md
+package-lock*
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -37,3 +39,5 @@ fetch_classes.py
 
 # Plan diagram
 AI Waverider.drawio
+package-lock.json
+package-lock.json

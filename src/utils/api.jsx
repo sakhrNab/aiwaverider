@@ -156,7 +156,14 @@ export const signUpWithGoogle = async () => {
     if (!result.user) {
       throw new Error('No user data returned from Google Sign-Up');
     }
-    return { firebaseUser: result.user };
+    
+    // Get profile image URL from Google
+    const photoURL = result.user.photoURL;
+    
+    return { 
+      firebaseUser: result.user,
+      photoURL 
+    };
   } catch (error) {
     console.error('Error in Google sign up:', error);
     throw error;
@@ -171,6 +178,10 @@ export const signUpWithMicrosoft = async () => {
     const result = await auth.signInWithPopup(provider);
     const user = result.user;
     const token = await user.getIdToken();
+    
+    // Get profile image URL from Microsoft
+    const photoURL = user.photoURL;
+    
     const userData = {
       uid: user.uid,
       email: user.email,
@@ -178,11 +189,15 @@ export const signUpWithMicrosoft = async () => {
       firstName: user.displayName?.split(' ')[0] || '',
       lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
       displayName: user.displayName,
-      photoURL: user.photoURL,
+      photoURL,
       provider: 'microsoft'
     };
+    
     const response = await api.post('/api/auth/signup', userData);
-    return { firebaseUser: user };
+    return { 
+      firebaseUser: user,
+      photoURL 
+    };
   } catch (error) {
     console.error('Error in Microsoft sign up:', error);
     throw error;

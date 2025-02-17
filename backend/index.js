@@ -28,6 +28,9 @@ const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const { admin, db } = require('./config/firebase');
 const { initializePassport } = require('./config/passport');
+const { Storage } = require('@google-cloud/storage');
+const storage = new Storage();
+const bucket = storage.bucket(process.env.FIREBASE_STORAGE_BUCKET);
 
 // Initialize express
 const app = express();
@@ -301,7 +304,7 @@ app.get('/api/auth/google/callback',
 
 app.post('/api/auth/signup', async (req, res) => {
   try {
-    const { uid, email, username, firstName, lastName, phoneNumber, displayName } = req.body;
+    const { uid, email, username, firstName, lastName, phoneNumber, displayName, photoURL } = req.body;
 
     // Verify the user exists in Firebase
     const firebaseUser = await admin.auth().getUser(uid);
@@ -327,7 +330,7 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(400).json({ error: 'Username is already taken.' });
     }
 
-    // Create user document in Firestore
+    // Create user document in Firestore with profile image if available
     await usersCollection.doc(uid).set({
       username,
       firstName: firstName || '',
@@ -336,6 +339,7 @@ app.post('/api/auth/signup', async (req, res) => {
       phoneNumber: phoneNumber || '',
       role: 'authenticated',
       displayName: displayName || '',
+      photoURL: photoURL || firebaseUser.photoURL || '', // Use OAuth provider photo if available
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
@@ -354,7 +358,8 @@ app.post('/api/auth/signup', async (req, res) => {
         uid,
         username,
         email: email.toLowerCase(),
-        role: 'authenticated'
+        role: 'authenticated',
+        photoURL: photoURL || firebaseUser.photoURL || ''
       }
     });
   } catch (err) {
@@ -377,36 +382,51 @@ app.post('/api/auth/session', async (req, res) => {
       return res.status(400).json({ error: 'ID token is required' });
     }
 
-    // 1. Verify the ID token via Firebase Admin
+    // Verify the ID token
     const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const uid = decodedToken.uid;
 
-    // 2. Check if user doc exists in Firestore
-    const userDoc = await usersCollection.doc(decodedToken.uid).get();
+    // Get user data from Firestore
+    const userDoc = await usersCollection.doc(uid).get();
     if (!userDoc.exists) {
       return res.status(404).json({ error: 'User not found in database' });
     }
 
     const userData = userDoc.data();
 
-    // 3. Optionally set a session cookie or do anything else here.
-    //    For example, if you're using express-session, you might attach user data:
-    //    req.session.user = { uid: decodedToken.uid, ... };
+    // Create a session token
+    const sessionToken = jwt.sign(
+      { 
+        uid,
+        role: userData.role,
+        email: userData.email
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
 
-    // 4. Return user data or a success message
+    // Set session cookie
+    res.cookie('session', sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    });
+
     return res.json({
-      message: 'Session verified successfully',
+      message: 'Session created successfully',
       user: {
-        uid: decodedToken.uid,
+        uid,
         username: userData.username,
         email: userData.email,
-        role: userData.role
+        role: userData.role,
+        photoURL: userData.photoURL || null,
+        displayName: userData.displayName || null
       }
     });
   } catch (err) {
-    console.error('Error in /api/auth/session:', err);
-    return res
-      .status(500)
-      .json({ error: 'Failed to verify session' });
+    console.error('Error creating session:', err);
+    return res.status(500).json({ error: 'Failed to create session' });
   }
 });
 

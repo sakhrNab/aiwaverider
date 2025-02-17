@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import ReactPhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import '../styles/signup.css'; // Import the signup.css
-import { signUp, signUpWithGoogle, signUpWithMicrosoft } from '../utils/api'; // Import the signUp API functions
+import { signUp, signUpWithGoogle, signUpWithMicrosoft, uploadProfileImage } from '../utils/api'; // Import the signUp API functions
 import { AuthContext } from '../contexts/AuthContext'; // Import AuthContext
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
@@ -122,6 +122,8 @@ const SignUp = ({ isOpen, onClose }) => {
   const [emailWarning, setEmailWarning] = useState('');
   const navigate = useNavigate();
   const modalRef = useRef(null);
+  const [profileImage, setProfileImage] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
 
   // If isOpen is undefined, that means we're on /sign-up as a "page" rather than a modal.
   const isModalView = isOpen !== undefined;
@@ -202,6 +204,19 @@ const SignUp = ({ isOpen, onClose }) => {
     handleInputChange(e);
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setProfileImage(file);
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewUrl(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -222,6 +237,17 @@ const SignUp = ({ isOpen, onClose }) => {
 
       // Attempt signup
       const { user } = await signUp(formData);
+      
+      // Upload profile image if selected
+      if (profileImage && user) {
+        try {
+          await uploadProfileImage(profileImage);
+        } catch (imageError) {
+          console.error('Error uploading profile image:', imageError);
+          // Don't fail the signup if image upload fails
+          toast.error('Profile created but image upload failed');
+        }
+      }
       
       if (user) {
         toast.success('Account created successfully!');
@@ -254,6 +280,7 @@ const SignUp = ({ isOpen, onClose }) => {
     try {
       const result = await signUpWithGoogle();
       if (result.firebaseUser) {
+        // Google profile image is handled automatically in the backend
         await signInUser(result.firebaseUser, true);
         toast.success('Successfully signed up with Google!');
         navigate('/', { replace: true });
@@ -274,6 +301,7 @@ const SignUp = ({ isOpen, onClose }) => {
     try {
       const result = await signUpWithMicrosoft();
       if (result.firebaseUser) {
+        // Microsoft profile image is handled automatically in the backend
         await signInUser(result.firebaseUser, true);
         toast.success('Successfully signed up with Microsoft!');
         navigate('/', { replace: true });
@@ -288,6 +316,7 @@ const SignUp = ({ isOpen, onClose }) => {
       }
     }
   };
+
   // If we shouldn't render at all, return null
   if (!shouldRender) {
     return null;
@@ -297,6 +326,30 @@ const SignUp = ({ isOpen, onClose }) => {
   const errorDisplay = error && (
     <div className="text-red-500 text-center mb-4 p-2 bg-red-50 rounded">
       {error}
+    </div>
+  );
+
+  // Add profile image upload field to the form (add this before the Submit Button in both modal and page layouts)
+  const profileImageField = (
+    <div className="form-group">
+      <label htmlFor="profileImage" className="form-label">Profile Image (Optional)</label>
+      <input
+        type="file"
+        id="profileImage"
+        name="profileImage"
+        accept="image/*"
+        onChange={handleImageChange}
+        className="form-input"
+      />
+      {previewUrl && (
+        <div className="mt-2">
+          <img
+            src={previewUrl}
+            alt="Profile preview"
+            className="w-24 h-24 rounded-full object-cover"
+          />
+        </div>
+      )}
     </div>
   );
 
@@ -400,6 +453,9 @@ const SignUp = ({ isOpen, onClose }) => {
               onChange={handleInputChange}
               validation={passwordValidation}
             />
+
+            {/* Profile Image */}
+            {profileImageField}
 
             {/* Submit Button */}
             <div className="button-group">
@@ -535,6 +591,9 @@ const SignUp = ({ isOpen, onClose }) => {
               onChange={handleInputChange}
               validation={passwordValidation}
             />
+
+            {/* Profile Image */}
+            {profileImageField}
 
             {/* Submit Button */}
             <div className="button-group">
