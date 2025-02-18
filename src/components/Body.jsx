@@ -1,6 +1,6 @@
 // src/components/Body.jsx
 
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState, useCallback } from 'react';
 import Welcome from './Welcome';
 import Carousel from './Carousel';
 import PostList from '../posts/PostList';
@@ -9,71 +9,168 @@ import { AuthContext } from '../contexts/AuthContext';
 import { getProfile } from '../utils/api';
 import { CATEGORIES } from '../constants/categories';
 
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
+
 const Body = () => {
-  const { fetchAllPosts, getComments, commentsCache, fetchCarouselData } = useContext(PostsContext);
+  const { fetchCarouselData } = useContext(PostsContext);
   const { user } = useContext(AuthContext);
   const [isLoading, setIsLoading] = useState(true);
-  const [userPreferences, setUserPreferences] = useState({
-    interests: [],
-    favorites: [],
-    likedCategories: new Set(),
+  const [loadError, setLoadError] = useState(null);
+  const [userPreferences, setUserPreferences] = useState(() => {
+    // Initialize from cache if available
+    const cached = localStorage.getItem(`userPreferences_${user?.uid}`);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < CACHE_DURATION) {
+        return {
+          ...data,
+          likedCategories: new Set(data.likedCategories)
+        };
+      }
+    }
+    return {
+      interests: [],
+      favorites: [],
+      likedCategories: new Set()
+    };
   });
 
-  // Memoize the loadData function to prevent recreation on every render
-  const loadData = React.useCallback(async () => {
+  // Memoize the loadData function
+  const loadData = useCallback(async (force = false) => {
     try {
+      setIsLoading(true);
+      setLoadError(null);
+
+      // 1. Get user profile if user is logged in
+      let profile = { interests: [], favorites: [] };
+      const newLikedCategories = new Set();
+      
       if (user) {
-        // 1. First get user profile
-        const profile = await getProfile();
-        const likedCategories = new Set();
-        
-        // 2. Initialize user preferences with profile data
-        setUserPreferences({
-          interests: profile.interests || [],
-          favorites: profile.favorites || [],
-          likedCategories,
-        });
-
-        // 3. Load carousel data first (this will also populate posts)
-        await fetchCarouselData(CATEGORIES);
-
-        // 4. Then fetch additional posts if needed
-        const posts = await fetchAllPosts('All', 10);
-        
-        // 5. Update liked categories from posts
-        if (posts) {
-          posts.forEach(post => {
-            if (post.likes?.includes(user.uid)) {
-              likedCategories.add(post.category);
-              setUserPreferences(prev => ({
-                ...prev,
-                likedCategories: new Set([...prev.likedCategories, post.category])
-              }));
-            }
-          });
-
-          // 6. Fetch comments for posts if needed
-          posts.forEach(post => {
-            if (!commentsCache[post.id]) {
-              getComments(post.id);
-            }
-          });
+        try {
+          profile = await getProfile();
+        } catch (err) {
+          console.error('Error fetching profile:', err);
+          // Continue with default profile values
         }
       }
+      
+      // 2. Initialize user preferences
+      const newPreferences = {
+        interests: profile.interests || [],
+        favorites: profile.favorites || [],
+        likedCategories: newLikedCategories
+      };
+
+      // 3. Load carousel data
+      try {
+        const carouselResult = await fetchCarouselData(CATEGORIES, force);
+        
+        // 4. Process the posts from carousel data
+        if (carouselResult && Object.keys(carouselResult).length > 0) {
+          const allPosts = Object.values(carouselResult).flat();
+          
+          // Update liked categories from posts
+          if (user) {
+            allPosts.forEach(post => {
+              if (post.likes?.includes(user.uid)) {
+                newLikedCategories.add(post.category);
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error loading carousel data:', err);
+        setLoadError('Failed to load carousel data');
+      }
+
+      // Update state and cache
+      setUserPreferences(newPreferences);
+
+      if (user) {
+        localStorage.setItem(`userPreferences_${user.uid}`, JSON.stringify({
+          data: {
+            ...newPreferences,
+            likedCategories: Array.from(newPreferences.likedCategories)
+          },
+          timestamp: Date.now()
+        }));
+      }
     } catch (err) {
-      console.error('Error preloading data:', err);
+      console.error('Error loading data:', err);
+      setLoadError(err.message || 'Failed to load data');
     } finally {
       setIsLoading(false);
     }
-  }, [user, fetchAllPosts, getComments, commentsCache, fetchCarouselData]);
+  }, [user, fetchCarouselData]);
 
+  // Load data on mount and when user changes
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    const controller = new AbortController();
+    let isMounted = true;
+    
+    const loadInitialData = async () => {
+      // Check if we have valid cached data
+      const cached = localStorage.getItem(`userPreferences_${user?.uid}`);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_DURATION) {
+          setUserPreferences({
+            ...data,
+            likedCategories: new Set(data.likedCategories)
+          });
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // If no valid cache, load fresh data
+      if (isMounted) {
+        await loadData(false);
+      }
+    };
+
+    loadInitialData();
+    
+    return () => {
+      controller.abort();
+      isMounted = false;
+    };
+  }, [loadData, user]);
+
+  // Refresh data periodically (every 5 minutes)
+  useEffect(() => {
+    let timeoutId;
+    
+    const scheduleNextRefresh = () => {
+      const lastUpdate = localStorage.getItem(`userPreferences_${user?.uid}`);
+      if (lastUpdate) {
+        const { timestamp } = JSON.parse(lastUpdate);
+        const timeUntilNextRefresh = Math.max(0, CACHE_DURATION - (Date.now() - timestamp));
+        timeoutId = setTimeout(() => {
+          loadData(true);
+          scheduleNextRefresh();
+        }, timeUntilNextRefresh);
+      }
+    };
+
+    scheduleNextRefresh();
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [loadData, user, CACHE_DURATION]);
 
   if (isLoading) {
     return <div className="flex justify-center items-center h-96">
       <div className="loader">Loading...</div>
+    </div>;
+  }
+
+  if (loadError) {
+    return <div className="text-red-500 text-center p-4">
+      Error: {loadError}
     </div>;
   }
 

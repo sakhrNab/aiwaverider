@@ -6,6 +6,35 @@ import { auth } from '../utils/firebase';
 
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+// Add token caching
+let cachedToken = null;
+let tokenExpirationTime = null;
+
+// Function to get token with caching
+const getTokenWithCache = async (currentUser) => {
+  const now = Date.now();
+  
+  // If we have a cached token that's not expired, use it
+  if (cachedToken && tokenExpirationTime && now < tokenExpirationTime) {
+    return cachedToken;
+  }
+
+  try {
+    // Get a new token
+    const token = await currentUser.getIdToken(false);
+    
+    // Cache the token and set expiration (5 minutes before actual expiration)
+    cachedToken = token;
+    // Firebase tokens expire in 1 hour, we'll refresh 5 minutes before
+    tokenExpirationTime = now + (55 * 60 * 1000);
+    
+    return token;
+  } catch (error) {
+    console.error('Error refreshing token:', error);
+    throw error;
+  }
+};
+
 // Create an Axios instance with the base URL and enable credentials
 const api = axios.create({
   baseURL: API_URL,
@@ -18,7 +47,7 @@ api.interceptors.request.use(
     const currentUser = auth.currentUser;
     if (currentUser) {
       try {
-        const token = await currentUser.getIdToken(true);
+        const token = await getTokenWithCache(currentUser);
         config.headers['Authorization'] = `Bearer ${token}`;
       } catch (error) {
         console.error('Error getting token:', error);
@@ -41,11 +70,17 @@ export const getAuthHeaders = async () => {
   if (!currentUser) {
     return {};
   }
-  const token = await currentUser.getIdToken(true);
+  const token = await getTokenWithCache(currentUser);
   return {
     'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json'
   };
+};
+
+// Clear token cache on sign out
+export const clearTokenCache = () => {
+  cachedToken = null;
+  tokenExpirationTime = null;
 };
 
 // Create Session using Axios
@@ -63,6 +98,7 @@ export const createSession = async (user) => {
 // Sign Out User
 export const signOutUser = async () => {
   try {
+    clearTokenCache(); // Clear token cache
     const response = await api.post('/api/auth/signout');
     return { success: true, message: response.data.message || 'Signed out successfully' };
   } catch (error) {

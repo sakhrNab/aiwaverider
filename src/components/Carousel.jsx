@@ -17,111 +17,69 @@ const Carousel = ({ userPreferences }) => {
   const [sections, setSections] = useState([]);
   const [error, setError] = useState(null);
 
-  // Calculate priority for sorting sections
-  const calculatePriority = useCallback((category, preferences) => {
-    let priority = 0;
-    if (preferences.interests.includes(category)) priority += 3;
-    if (preferences.likedCategories.has(category)) priority += 2;
-    if (preferences.favorites.some(post => post.category === category)) priority += 1;
-    return priority;
-  }, []);
-
-  // Process carousel data when it changes
-  useEffect(() => {
-    if (!carouselData || Object.keys(carouselData).length === 0) {
-      return;
+  // Process and organize carousel data
+  const processCarouselData = useCallback(() => {
+    if (!carouselData || !userPreferences) {
+      console.log('Missing data:', { carouselData: !!carouselData, userPreferences: !!userPreferences });
+      return [];
     }
 
     try {
-      // Process and sort the sections
-      const processedSections = Object.entries(carouselData).map(([category, posts]) => ({
+      // Get user interests and liked categories
+      const userInterests = userPreferences.interests || [];
+      const likedCategoriesArray = Array.from(userPreferences.likedCategories || new Set());
+      
+      // Get all available categories that have posts
+      const availableCategories = Object.keys(carouselData).filter(
+        category => carouselData[category]?.length > 0
+      );
+
+      if (availableCategories.length === 0) {
+        console.log('No categories with posts found');
+        return [];
+      }
+
+      // Create array of all categories with their priority
+      const categoriesWithPriority = availableCategories.map(category => ({
         category,
-        posts: posts || [],
-        priority: calculatePriority(category, userPreferences)
+        priority: userInterests.includes(category) ? 2 :
+                 likedCategoriesArray.includes(category) ? 1 : 0,
+        posts: carouselData[category] || []
       }));
 
-      const sortedSections = processedSections
-        .filter(section => section.posts.length > 0)
-        .sort((a, b) => b.priority - a.priority);
+      // Sort by priority (highest first) but keep all categories
+      categoriesWithPriority.sort((a, b) => {
+        // First sort by priority
+        const priorityDiff = b.priority - a.priority;
+        if (priorityDiff !== 0) return priorityDiff;
+        
+        // If same priority, sort by number of posts
+        return b.posts.length - a.posts.length;
+      });
 
-      setSections(sortedSections);
+      console.log('Processed categories:', categoriesWithPriority.map(c => ({
+        category: c.category,
+        priority: c.priority,
+        postsCount: c.posts.length
+      })));
+
+      return categoriesWithPriority;
     } catch (err) {
       console.error('Error processing carousel data:', err);
-      setError('Failed to process content. Please try again later.');
+      setError('Failed to process carousel data');
+      return [];
     }
-  }, [carouselData, userPreferences, calculatePriority]);
+  }, [carouselData, userPreferences]);
 
-  // Helper function to calculate post priority score
-  const getPostScore = (post, userPreferences) => {
-    let score = 0;
-    
-    // Check if post content matches user interests
-    if (userPreferences.interests && userPreferences.interests.length > 0) {
-      userPreferences.interests.forEach(interest => {
-        // Check title
-        if (post.title?.toLowerCase().includes(interest.toLowerCase())) {
-          score += 3;
-        }
-        // Check description
-        if (post.description?.toLowerCase().includes(interest.toLowerCase())) {
-          score += 2;
-        }
-        // Check content/additionalHTML
-        if (post.additionalHTML?.toLowerCase().includes(interest.toLowerCase())) {
-          score += 2;
-        }
-        // Check category
-        if (post.category?.toLowerCase().includes(interest.toLowerCase())) {
-          score += 3;
-        }
-      });
+  // Update sections when data changes
+  useEffect(() => {
+    const processedData = processCarouselData();
+    if (processedData.length > 0) {
+      setSections(processedData);
     }
-    
-    // Add points for favorites
-    if (userPreferences.favorites?.includes(post.id)) {
-      score += 5;
-    }
-    
-    // Add points for liked categories
-    if (userPreferences.likedCategories?.has(post.category)) {
-      score += 1;
-    }
-    
-    return score;
-  };
+  }, [processCarouselData]);
 
-  // Helper function to sort categories based on user preferences
-  const sortCategories = (categories, preferences) => {
-    return [...categories].sort((a, b) => {
-      const aScore = getCategoryScore(a, preferences);
-      const bScore = getCategoryScore(b, preferences);
-      return bScore - aScore;
-    });
-  };
-
-  // Helper function to calculate category priority score
-  const getCategoryScore = (category, preferences) => {
-    let score = 0;
-    
-    // Highest priority: user's explicit interests
-    if (preferences.interests.includes(category)) {
-      score += 3;
-    }
-    
-    // Medium priority: categories of favorited content
-    if (preferences.favorites.some(fav => fav.category === category)) {
-      score += 2;
-    }
-    
-    // Lower priority: categories user has liked content in
-    if (preferences.likedCategories.has(category)) {
-      score += 1;
-    }
-    
-    return score;
-  };
-
-  // Slider configs
+  // Slider settings
   const mainSettings = {
     dots: true,
     infinite: true,
@@ -139,23 +97,39 @@ const Carousel = ({ userPreferences }) => {
     dots: false,
     infinite: false,
     speed: 500,
-    slidesToShow: 3,
+    slidesToShow: 5,
     slidesToScroll: 1,
-    arrows: false,
+    arrows: true,
     className: 'box-slider',
     responsive: [
       {
-        breakpoint: 1024,
+        breakpoint: 1440,
         settings: {
-          slidesToShow: 2,
-        },
+          slidesToShow: 4,
+          slidesToScroll: 1,
+        }
       },
       {
-        breakpoint: 640,
+        breakpoint: 1024,
+        settings: {
+          slidesToShow: 3,
+          slidesToScroll: 1,
+        }
+      },
+      {
+        breakpoint: 768,
+        settings: {
+          slidesToShow: 2,
+          slidesToScroll: 1,
+        }
+      },
+      {
+        breakpoint: 480,
         settings: {
           slidesToShow: 1,
-        },
-      },
+          slidesToScroll: 1,
+        }
+      }
     ],
   };
 
@@ -184,13 +158,13 @@ const Carousel = ({ userPreferences }) => {
               <h2 className="text-2xl font-bold mb-6 text-center">
                 {section.category}
                 {userPreferences.interests.includes(section.category) && (
-<span className="ml-2 text-sm text-blue-500">(Interested)</span>
+                  <span className="ml-2 text-sm text-blue-500">(Interested)</span>
                 )}
               </h2>
               {section.posts.length > 0 ? (
                 <Slider {...boxSettings}>
                   {section.posts.map((post, postIndex) => (
-                    <div key={`${section.category}-${post.id}-${postIndex}`}>
+                    <div key={`${section.category}-${post.id}-${postIndex}`} className="px-2">
                       <Link to={`/posts/${post.id}`}>
                         <CardBox 
                           {...post} 

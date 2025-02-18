@@ -835,6 +835,51 @@ app.get('/api/posts/multi', async (req, res) => {
   }
 });
 
+// Batch Comments Endpoint
+app.get('/api/posts/comments/batch', validateFirebaseToken, async (req, res) => {
+  try {
+    const { postIds } = req.query;
+    
+    if (!postIds) {
+      return res.status(400).json({ error: 'No post IDs provided' });
+    }
+
+    const postIdsArray = postIds.split(',');
+    
+    // Limit the number of posts to prevent abuse
+    if (postIdsArray.length > 50) {
+      return res.status(400).json({ error: 'Too many post IDs. Maximum is 50.' });
+    }
+
+    // Create a map to store comments for each post
+    const commentsMap = {};
+
+    // Fetch comments for each post in parallel
+    await Promise.all(postIdsArray.map(async (postId) => {
+      try {
+        const commentsSnapshot = await commentsCollection
+          .where('postId', '==', postId)
+          .orderBy('createdAt', 'desc')
+          .get();
+
+        commentsMap[postId] = commentsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate?.() || null
+        }));
+      } catch (err) {
+        console.error(`Error fetching comments for post ${postId}:`, err);
+        commentsMap[postId] = [];
+      }
+    }));
+
+    res.json(commentsMap);
+  } catch (err) {
+    console.error('Error in batch comments endpoint:', err);
+    res.status(500).json({ error: 'Failed to fetch comments' });
+  }
+});
+
 // ------------------ 7) Get User Profile (authenticated) ----
 app.get('/api/users/:userId', validateFirebaseToken, async (req, res) => {
   try {
@@ -1391,7 +1436,6 @@ app.put('/api/posts/:postId/comments/:commentId', validateFirebaseToken, async (
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
-
 
 //Profile
 // Mount the profile routes at /api/profile

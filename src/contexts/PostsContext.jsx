@@ -10,8 +10,27 @@ import React, {
 } from 'react';
 import { getAllPosts as apiGetAllPosts, getPostById as apiGetPostById, API_URL } from '../utils/api';
 import { AuthContext } from './AuthContext';
+import { auth } from '../utils/firebase';
 
 export const PostsContext = createContext();
+
+const pendingRequests = new Map();
+
+const fetchWithDeduplication = async (key, fetchFn) => {
+  // If there's already a pending request for this key, return its promise
+  if (pendingRequests.has(key)) {
+    return pendingRequests.get(key);
+  }
+
+  // Create new request promise
+  const requestPromise = fetchFn().finally(() => {
+    pendingRequests.delete(key);
+  });
+
+  // Store the promise
+  pendingRequests.set(key, requestPromise);
+  return requestPromise;
+};
 
 export const PostsProvider = ({ children }) => {
   // Removed token extraction since Axios interceptor attaches it automatically.
@@ -54,35 +73,52 @@ export const PostsProvider = ({ children }) => {
 
   const fetchAllPosts = useCallback(
     async (category = 'All', limit = 10, lastPostDate = null, force = false) => {
+      const cacheKey = `posts_${category}_${limit}`;
+      
       if (!force && isCacheValid()) {
-        const filteredPosts = posts
-          .filter((post) => category === 'All' || post.category === category)
-          .slice(0, limit);
-        const uniquePosts = Array.from(
-          new Map(filteredPosts.map(post => [post.id, post])).values()
-        );
-        return uniquePosts;
+        const cachedData = localStorage.getItem(cacheKey);
+        if (cachedData) {
+          const { data, timestamp } = JSON.parse(cachedData);
+          if (Date.now() - timestamp < CACHE_DURATION) {
+            const filteredPosts = data.filter((post) => 
+              category === 'All' || post.category === category
+            ).slice(0, limit);
+            return filteredPosts;
+          }
+        }
       }
+
       try {
         setLoadingPosts(true);
         setErrorPosts('');
         const data = await apiGetAllPosts(category, limit, lastPostDate);
-        const postsWithComments = Array.isArray(data.posts)
-          ? data.posts.map(post => ({
-              ...post,
-              comments: Array.isArray(post.comments) ? post.comments : []
-            }))
-          : [];
-        setPosts(postsWithComments);
-        setLastFetchTime(Date.now());
+        
+        if (data && data.posts) {
+          const postsWithComments = data.posts.map(post => ({
+            ...post,
+            comments: Array.isArray(post.comments) ? post.comments : []
+          }));
+          
+          // Cache the data with timestamp
+          localStorage.setItem(cacheKey, JSON.stringify({
+            data: postsWithComments,
+            timestamp: Date.now()
+          }));
+          
+          setPosts(postsWithComments);
+          setLastFetchTime(Date.now());
+          return postsWithComments;
+        }
+        return [];
       } catch (err) {
-        console.error('Error fetching all posts (cached):', err);
+        console.error('Error fetching posts:', err);
         setErrorPosts(err.message || 'Failed to fetch posts.');
+        return [];
       } finally {
         setLoadingPosts(false);
       }
     },
-    [isCacheValid, posts]
+    [isCacheValid]
   );
 
   const getPostById = useCallback(
@@ -106,35 +142,154 @@ export const PostsProvider = ({ children }) => {
   );
 
   const getComments = useCallback(async (postId, force = false) => {
+    const cacheKey = `comments_${postId}`;
+    
     try {
-      setLoadingComments(prev => ({ ...prev, [postId]: true }));
-      if (force || !commentsCache[postId]) {
-        // Use Axios by manually calling fetch here if needed.
-        const response = await fetch(`${API_URL}/api/posts/${postId}/comments`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        });
-        if (!response.ok) {
-          throw new Error('Failed to fetch comments');
+      if (!force && commentsCache[postId]) {
+        const cachedData = localStorage.getItem(cacheKey);
+        if (cachedData) {
+          const { data, timestamp } = JSON.parse(cachedData);
+          if (Date.now() - timestamp < CACHE_DURATION) {
+            return data;
+          }
         }
-        const comments = await response.json();
-        setCommentsCache(prev => ({
-          ...prev,
-          [postId]: comments
-        }));
-        return comments;
       }
-      return commentsCache[postId];
+
+      setLoadingComments(prev => ({ ...prev, [postId]: true }));
+      
+      const response = await fetch(`${API_URL}/api/posts/${postId}/comments`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch comments');
+      }
+      
+      const comments = await response.json();
+      
+      // Cache the comments with timestamp
+      localStorage.setItem(cacheKey, JSON.stringify({
+        data: comments,
+        timestamp: Date.now()
+      }));
+      
+      setCommentsCache(prev => ({
+        ...prev,
+        [postId]: comments
+      }));
+      
+      return comments;
     } catch (error) {
       console.error('Error fetching comments:', error);
       return [];
     } finally {
       setLoadingComments(prev => ({ ...prev, [postId]: false }));
     }
-  }, [commentsCache]);
+  }, [commentsCache, CACHE_DURATION]);
+
+  const fetchBatchComments = useCallback(async (postIds, force = false) => {
+    if (!postIds || postIds.length === 0) return {};
+    
+    const uniquePostIds = [...new Set(postIds)].slice(0, 50);
+    const cacheKey = `batchComments_${uniquePostIds.sort().join('_')}`;
+    
+    return fetchWithDeduplication(cacheKey, async () => {
+      try {
+        // Check cache first
+        if (!force) {
+          const cachedData = localStorage.getItem(cacheKey);
+          if (cachedData) {
+            const { data, timestamp } = JSON.parse(cachedData);
+            if (Date.now() - timestamp < CACHE_DURATION) {
+              console.log('Using cached batch comments');
+              Object.entries(data).forEach(([postId, comments]) => {
+                setCommentsCache(prev => ({
+                  ...prev,
+                  [postId]: comments
+                }));
+              });
+              return data;
+            }
+          }
+        }
+
+        const postsToFetch = force 
+          ? uniquePostIds 
+          : uniquePostIds.filter(id => {
+              const lastFetchTime = commentsLastFetch[id];
+              return !commentsCache[id] || !lastFetchTime || Date.now() - lastFetchTime >= CACHE_DURATION;
+            });
+
+        if (postsToFetch.length === 0) {
+          console.log('All comments are in cache');
+          return uniquePostIds.reduce((acc, id) => ({
+            ...acc,
+            [id]: commentsCache[id] || []
+          }), {});
+        }
+
+        setLoadingComments(prev => 
+          postsToFetch.reduce((acc, id) => ({ ...acc, [id]: true }), prev)
+        );
+
+        const currentUser = auth.currentUser;
+        const token = currentUser ? await currentUser.getIdToken() : null;
+        
+        const response = await fetch(
+          `${API_URL}/api/posts/comments/batch?postIds=${postsToFetch.join(',')}`,
+          {
+            method: 'GET',
+            headers: { 
+              'Content-Type': 'application/json',
+              ...(token && { 'Authorization': `Bearer ${token}` })
+            },
+            credentials: 'include'
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch batch comments: ${response.status}`);
+        }
+
+        const newCommentsMap = await response.json();
+        
+        const mergedCommentsMap = uniquePostIds.reduce((acc, id) => ({
+          ...acc,
+          [id]: force ? newCommentsMap[id] : (newCommentsMap[id] || commentsCache[id] || [])
+        }), {});
+        
+        localStorage.setItem(cacheKey, JSON.stringify({
+          data: mergedCommentsMap,
+          timestamp: Date.now()
+        }));
+
+        const now = Date.now();
+        setCommentsCache(prev => ({
+          ...prev,
+          ...mergedCommentsMap
+        }));
+        setCommentsLastFetch(prev => 
+          postsToFetch.reduce((acc, id) => ({ ...acc, [id]: now }), prev)
+        );
+        setLoadingComments(prev => 
+          postsToFetch.reduce((acc, id) => ({ ...acc, [id]: false }), prev)
+        );
+
+        return mergedCommentsMap;
+      } catch (error) {
+        console.error('Error fetching batch comments:', error);
+        setLoadingComments(prev => 
+          postsToFetch.reduce((acc, id) => ({ ...acc, [id]: false }), prev)
+        );
+        return uniquePostIds.reduce((acc, id) => ({
+          ...acc,
+          [id]: commentsCache[id] || []
+        }), {});
+      }
+    });
+  }, [CACHE_DURATION, commentsCache, commentsLastFetch, API_URL]);
 
   const addCommentToCache = useCallback((postId, newComment) => {
     const commentsToAdd = Array.isArray(newComment) ? newComment : [newComment];
@@ -195,39 +350,101 @@ export const PostsProvider = ({ children }) => {
   const fetchCarouselData = useCallback(
     async (categories, force = false) => {
       const now = Date.now();
-      if (!force && carouselLastFetch && now - carouselLastFetch < CACHE_DURATION) {
-        console.log('Using cached carousel data');
-        return carouselData;
-      }
-
-      try {
-        setLoadingPosts(true);
-        const categorySections = await Promise.all(
-          categories.map(async (category) => {
-            try {
-              const posts = await fetchAllPosts(category, 5);
-              return [category, posts || []];
-            } catch (err) {
-              console.error(`Error fetching posts for ${category}:`, err);
-              return [category, []];
+      const cacheKey = 'carouselData';
+      
+      return fetchWithDeduplication(`carousel_${force}`, async () => {
+        try {
+          // Check cache first
+          if (!force) {
+            const cachedData = localStorage.getItem(cacheKey);
+            if (cachedData) {
+              const { data, timestamp } = JSON.parse(cachedData);
+              if (now - timestamp < CACHE_DURATION) {
+                console.log('Using cached carousel data');
+                setCarouselData(data);
+                return data;
+              }
             }
-          })
-        );
+          }
 
-        const newCarouselData = Object.fromEntries(categorySections);
-        setCarouselData(newCarouselData);
-        setCarouselLastFetch(now);
-        localStorage.setItem('cachedCarouselData', JSON.stringify(newCarouselData));
-        localStorage.setItem('carouselLastFetch', now.toString());
-        return newCarouselData;
-      } catch (err) {
-        console.error('Error fetching carousel data:', err);
-        return {};
-      } finally {
-        setLoadingPosts(false);
-      }
+          setLoadingPosts(true);
+          console.log('Fetching fresh carousel data');
+
+          // Fetch posts with optimized limit
+          const response = await apiGetAllPosts('All', 20);
+          if (!response || !response.posts) {
+            throw new Error('Invalid response format from API');
+          }
+
+          const allPosts = response.posts;
+          setPosts(allPosts);
+
+          // Organize posts by category
+          const newCarouselData = {};
+          const visiblePostIds = new Set();
+
+          if (!Array.isArray(categories)) {
+            categories = ['All'];
+          }
+
+          // Process each category
+          categories.forEach(category => {
+            if (!category) return;
+            
+            const categoryPosts = allPosts
+              .filter(post => post.category === category)
+              .slice(0, 5);
+            
+            if (categoryPosts.length > 0) {
+              newCarouselData[category] = categoryPosts;
+              categoryPosts.forEach(post => visiblePostIds.add(post.id));
+            }
+          });
+
+          // If no categories have posts, add 'All' category
+          if (Object.keys(newCarouselData).length === 0) {
+            newCarouselData['All'] = allPosts.slice(0, 5);
+            allPosts.slice(0, 5).forEach(post => visiblePostIds.add(post.id));
+          }
+
+          // Fetch comments for visible posts
+          if (visiblePostIds.size > 0) {
+            const commentsMap = await fetchBatchComments([...visiblePostIds], force);
+            
+            Object.keys(newCarouselData).forEach(category => {
+              newCarouselData[category] = newCarouselData[category].map(post => ({
+                ...post,
+                comments: commentsMap[post.id] || []
+              }));
+            });
+          }
+
+          // Cache the results
+          const cacheData = {
+            data: newCarouselData,
+            timestamp: now
+          };
+          
+          localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+          setCarouselData(newCarouselData);
+          setCarouselLastFetch(now);
+          
+          return newCarouselData;
+        } catch (err) {
+          console.error('Error fetching carousel data:', err);
+          const cachedData = localStorage.getItem(cacheKey);
+          if (cachedData) {
+            const { data } = JSON.parse(cachedData);
+            setCarouselData(data);
+            return data;
+          }
+          return {};
+        } finally {
+          setLoadingPosts(false);
+        }
+      });
     },
-    [carouselLastFetch, carouselData, CACHE_DURATION, fetchAllPosts]
+    [CACHE_DURATION, fetchBatchComments, apiGetAllPosts]
   );
 
   const addPostToCache = useCallback((newPost) => {
@@ -321,7 +538,8 @@ export const PostsProvider = ({ children }) => {
     addCommentToCache,
     loadingComments,
     addPostToCache,
-    syncComments
+    syncComments,
+    fetchBatchComments
   }), [
     posts,
     postDetails,
@@ -339,7 +557,8 @@ export const PostsProvider = ({ children }) => {
     loadingComments,
     syncComments,
     updateCommentInCache,
-    removeCommentFromCache
+    removeCommentFromCache,
+    fetchBatchComments
   ]);
 
   useEffect(() => {

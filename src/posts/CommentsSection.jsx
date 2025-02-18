@@ -9,7 +9,7 @@ import CommentsList from './CommentsList';
 
 const CommentsSection = ({ postId }) => {
   const { user } = useContext(AuthContext);
-  const { getComments, addCommentToCache, commentsCache, loadingComments } = useContext(PostsContext);
+  const { fetchBatchComments, addCommentToCache, commentsCache, loadingComments } = useContext(PostsContext);
   const [comments, setComments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -21,6 +21,7 @@ const CommentsSection = ({ postId }) => {
     const loadComments = async () => {
       try {
         setIsLoading(true);
+        
         // Check cache first
         if (commentsCache[postId]) {
           setComments(commentsCache[postId]);
@@ -28,10 +29,12 @@ const CommentsSection = ({ postId }) => {
           return;
         }
 
-        const fetchedComments = await getComments(postId);
-        if (mounted && Array.isArray(fetchedComments)) {
-          setComments(fetchedComments);
-          addCommentToCache(postId, fetchedComments);
+        // Fetch comments using batch endpoint
+        const commentsMap = await fetchBatchComments([postId]);
+        if (mounted && commentsMap[postId]) {
+          const postComments = commentsMap[postId];
+          setComments(postComments);
+          addCommentToCache(postId, postComments);
         }
       } catch (err) {
         if (mounted) {
@@ -45,31 +48,31 @@ const CommentsSection = ({ postId }) => {
 
     loadComments();
     return () => { mounted = false; };
-  }, [postId, getComments, commentsCache, addCommentToCache]);
+  }, [postId, fetchBatchComments, commentsCache, addCommentToCache]);
 
-const handleAddComment = async () => {
-  if (!newComment.trim()) return;
-  
-  // Verify authentication
-  if (!user) {
-    setError('You must be logged in to comment.');
-    return;
-  }
-
-  try {
-
-    const comment = await addComment(postId, { commentText: newComment.trim() });
-    if (comment) {
-      addCommentToCache(postId, comment);
-      setComments(prev => [comment, ...prev]);
-      setNewComment('');
-      setError('');
+  const handleAddComment = async () => {
+    if (!newComment.trim()) return;
+    
+    // Verify authentication
+    if (!user) {
+      setError('You must be logged in to comment.');
+      return;
     }
-  } catch (err) {
-    setError('Failed to add comment');
-    console.error('Error adding comment:', err);
-  }
-};
+
+    try {
+      const comment = await addComment(postId, { commentText: newComment.trim() });
+      if (comment) {
+        // Update local state and cache
+        addCommentToCache(postId, comment);
+        setComments(prev => [comment, ...prev]);
+        setNewComment('');
+        setError('');
+      }
+    } catch (err) {
+      setError('Failed to add comment');
+      console.error('Error adding comment:', err);
+    }
+  };
 
   return (
     <div className="mt-6">
