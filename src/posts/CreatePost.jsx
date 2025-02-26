@@ -22,10 +22,10 @@ const CreatePost = () => {
   });
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const { token } = useContext(AuthContext);
+const { user, token } = useContext(AuthContext);
   const navigate = useNavigate();
   const { addPostToCache } = useContext(PostsContext);
-
+  
   const handleInputChange = (e) => {
     const { name, value, files } = e.target;
     if (name === 'image') {
@@ -58,10 +58,19 @@ const CreatePost = () => {
       return;
     }
 
-    const idTokenResult = await currentUser.getIdTokenResult();
-    if (idTokenResult.claims.role !== 'admin') {
-      setError('Only admins can create posts.');
-      return;
+    // const idTokenResult = await currentUser.getIdTokenResult();
+    // console.log('currentUser', currentUser);
+    // console.log('idTokenResult', idTokenResult);
+// console.log('idTokenResult.claims.role', idTokenResult.claims.role);
+    try {
+      //  Get the ID token and check claims
+        if (user.role !== 'admin') {
+setError('Only admins can create posts.');
+        return;
+      }
+    } catch (error) {
+      console.log('Error fetching To: ', error);
+      setError('Authentication Error');
     }
 
     if (!formData.title || !formData.description || !formData.category) {
@@ -86,8 +95,9 @@ const CreatePost = () => {
 
     try {
       const response = await createPost(postData, token);
-      console.log('Create Post Response:', response);
+  console.log('Create Post Response2', response.post);
       if (response.post) {
+        console.log('Post created successfully:', response.post);
         addPostToCache(response.post);
         setSuccessMessage('Post created successfully!');
         setFormData({

@@ -25,7 +25,7 @@ const SignIn = () => {
   const [timeLeft, setTimeLeft] = useState(null);
   const timerRef = useRef(null);
   const navigate = useNavigate();
-  const { signInUser } = useContext(AuthContext);
+  const { user, updateUserProfile } = useContext(AuthContext);
 
   useEffect(() => {
     // Clean up timer on unmount
@@ -104,13 +104,16 @@ const SignIn = () => {
 
     try {
       const data = await signIn(formData);
-      if (data.firebaseUser) { // Updated condition
+      if (data.firebaseUser) {
         clearLockInfo();
         setAttempts(0);
         setIsLocked(false);
         setLockoutEndTime(null);
         setShowTips(false);
-        await signInUser(data.firebaseUser); // Pass only the Firebase User
+        
+        // Update user profile in context
+        await updateUserProfile(data.firebaseUser.uid, data.firebaseUser);
+        
         toast.success('Successfully signed in!');
         setTimeout(() => navigate('/', { replace: true }), 100);
       }
@@ -158,14 +161,15 @@ const SignIn = () => {
     try {
       const result = await signInWithGoogle();
       if (result.firebaseUser) {
-        // Reset lock info
         clearLockInfo();
         setAttempts(0);
         setIsLocked(false);
         setLockoutEndTime(null);
         setShowTips(false);
-        // Let AuthContext handle server sign-in
-        await signInUser(result.firebaseUser, false); 
+        
+        // Update user profile in context
+        await updateUserProfile(result.firebaseUser.uid, result.firebaseUser);
+        
         toast.success('Successfully signed in with Google!');
         setTimeout(() => navigate('/', { replace: true }), 100);
       }
@@ -186,15 +190,15 @@ const SignIn = () => {
     try {
       const result = await signInWithMicrosoft();
       if (result.firebaseUser) {
-        // Reset lock info
         clearLockInfo();
         setAttempts(0);
         setIsLocked(false);
         setLockoutEndTime(null);
         setShowTips(false);
 
-        // Let AuthContext do the backend sign-in
-        await signInUser(result.firebaseUser, false);
+        // Update user profile in context
+        await updateUserProfile(result.firebaseUser.uid, result.firebaseUser);
+        
         toast.success('Successfully signed in with Microsoft!');
         setTimeout(() => navigate('/', { replace: true }), 100);
       }

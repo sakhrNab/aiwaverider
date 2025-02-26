@@ -7,7 +7,7 @@ import {
   updateProfile, 
   updateInterests, 
   getCommunityInfo, 
-  uploadProfileImage 
+  uploadProfileImage
 } from '../utils/api';
 import { AuthContext } from '../contexts/AuthContext';
 import { INTEREST_CATEGORIES } from '../constants/categories';
@@ -46,13 +46,16 @@ const ProfilePage = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showModal, setShowModal] = useState(false); // State for modal
-  const { user, setUserData } = useContext(AuthContext); // Get setUserData from context
+  const { user, updateUserProfile } = useContext(AuthContext); // Use updateUserProfile instead of setUserData
 
   // useRef to reference the hidden file input
   const fileInputRef = useRef(null);
 
   // Helper function to set profile and formData from a given user object
   const updateProfileState = (userObj) => {
+    if (!userObj) return;
+    
+    // Update profile state
     setProfile(userObj);
     setFormData({
       displayName: userObj.displayName || '',
@@ -149,7 +152,12 @@ const ProfilePage = () => {
         setPreviewImage("");
         const updatedProfile = await getProfile();
         setProfile(updatedProfile);
-        setUserData(updatedProfile); // Sync AuthContext
+        
+        // Update user profile in AuthContext
+        if (updateUserProfile) {
+          await updateUserProfile(user.uid, updatedProfile);
+        }
+        
         localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile));
       }
     } catch (err) {
@@ -171,7 +179,12 @@ const ProfilePage = () => {
       await updateProfile({ ...profile, photoURL: '' });
       const updatedProfile = await getProfile();
       setProfile(updatedProfile);
-      setUserData(updatedProfile); // Sync AuthContext
+      
+      // Update user profile in AuthContext
+      if (updateUserProfile) {
+        await updateUserProfile(user.uid, updatedProfile);
+      }
+      
       localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile));
       setSuccess("Avatar removed successfully!");
     } catch (err) {
@@ -229,7 +242,12 @@ const ProfilePage = () => {
             // After successful interests update, update the profile state
             const updatedProfile = await getProfile();
             setProfile(updatedProfile);
-            setUserData(updatedProfile);
+            
+            // Update user profile in AuthContext
+            if (updateUserProfile) {
+              await updateUserProfile(user.uid, updatedProfile);
+            }
+            
             localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile));
             setSuccess('Interests updated successfully!');
             setEditMode(false);
@@ -239,12 +257,11 @@ const ProfilePage = () => {
         } catch (error) {
           console.error('Error updating interests:', error);
           setError(error.message || 'Failed to update interests');
-          return;
         }
         return;
       }
 
-      // Rest of the code for other profile updates remains the same...
+      // Rest of the code for other profile updates
       let updatedPhotoURL = profile.photoURL;
       if (imageFile) {
         const uploadResponse = await uploadProfileImage(imageFile);
@@ -265,7 +282,12 @@ const ProfilePage = () => {
 
       const updatedProfile = await getProfile();
       setProfile(updatedProfile);
-      setUserData(updatedProfile);
+      
+      // Update user profile in AuthContext
+      if (updateUserProfile) {
+        await updateUserProfile(user.uid, updatedProfile);
+      }
+      
       localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile));
       setSuccess('Profile updated successfully!');
       setEditMode(false);
@@ -286,6 +308,13 @@ const ProfilePage = () => {
     }
   };
 
+  useEffect(() => {
+    if (user?.uid && updateUserProfile) {
+      // Update interests in AuthContext when profile is loaded
+      updateUserProfile(user.uid, profile);
+    }
+  }, [user?.uid, profile, updateUserProfile]);
+
   if (loading) {
     return <div className={styles.loading}>Loading profile...</div>;
   }
@@ -298,12 +327,17 @@ const ProfilePage = () => {
       {/* Header with cover image, avatar, and basic info */}
       <header className={styles.profileHeader}>
         <div className={styles.coverImage}></div>
-        <div className={`${styles.avatarContainer} ${profile.photoURL ? 'hasImage' : ''}`}>
+        <div className={`${styles.avatarContainer} ${profile?.photoURL ? styles.hasImage : ''}`}>
           <img
             className={styles.avatar}
-            src={previewImage || profile.photoURL || '/default-avatar.png'}
-            alt="Avatar"
+            src={previewImage || (profile?.photoURL || '/default-avatar.png')}
+            alt="Profile Avatar"
             onClick={handleImageClick}
+            onError={(e) => {
+              console.error('Image load error:', e);
+              e.target.src = '/default-avatar.png';
+              e.target.onerror = null;
+            }}
           />
           {/* Overlay icon for uploading avatar */}
           <div className={styles.avatarOverlay} onClick={handleAvatarUploadClick}>
@@ -329,7 +363,7 @@ const ProfilePage = () => {
               Cancel Upload
             </button>
           </div>
-        ) : profile.photoURL && (
+        ) : profile?.photoURL && (
           <div className={styles.imageActionButtons}>
             <button className={styles.editImageButton} onClick={handleAvatarUploadClick}>
               Change Image
@@ -340,9 +374,9 @@ const ProfilePage = () => {
           </div>
         )}
         <div className={styles.profileInfo}>
-          <h1 className={styles.displayName}>{profile.displayName}</h1>
-          <p className={styles.username}>@{profile.username}</p>
-          <p className={styles.bio}>{profile.bio || 'No bio provided.'}</p>
+          <h1 className={styles.displayName}>{profile?.displayName}</h1>
+          <p className={styles.username}>@{profile?.username}</p>
+          <p className={styles.bio}>{profile?.bio || 'No bio provided.'}</p>
         </div>
       </header>
 

@@ -1,12 +1,16 @@
 // src/posts/PostDetail.jsx
 
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 import { getPostById, updatePost } from '../utils/api';
 import CommentsSection from './CommentsSection';
 import DOMPurify from 'dompurify';
 import { PostsContext } from '../contexts/PostsContext';
+import { onSnapshot, doc } from 'firebase/firestore';
+import { toast } from 'react-toastify';
+import { db } from '../utils/firebase';
+import LikeButton from '../components/LikeButton';
 
 // TipTap + EditorProvider
 import { EditorProvider } from '@tiptap/react';
@@ -117,35 +121,103 @@ const PostDetail = () => {
   const navigate = useNavigate();
   const { user, token } = useContext(AuthContext);
   const isAdmin = user?.role === 'admin';
-  const { getPostById, updatePostInCache, getComments } = useContext(PostsContext);
+  const { getPostById, updatePostInCache, getComments, postDetails } = useContext(PostsContext);
 
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-
-  // We'll store the "additionalHTML" in local state for editing
   const [additionalHTML, setAdditionalHTML] = useState('');
+  const [skipRealtimeUpdates, setSkipRealtimeUpdates] = useState(false);
+  
+  // Use ref to track active listeners
+  const listenerRef = useRef(null);
+  const lastUpdateTime = useRef(Date.now());
 
-  // Fetch the post by ID
+  // Update the initial useEffect
   useEffect(() => {
     const loadPost = async () => {
       try {
         setLoading(true);
-        const post = await getPostById(postId);
-        setPost(post);
-        setAdditionalHTML(post.additionalHTML || '');
-
-        // Load comments if they're not in cache
-        const comments = await getComments(postId);
-        if (comments) {
-          setPost(prevPost => ({
-            ...prevPost,
-            comments: comments
-          }));
+        console.log(`[PostDetail] Loading post ${postId}, checking cache first`);
+        
+        // First check if post is already in cache and use that immediately
+        const cachedPost = postDetails[postId];
+        if (cachedPost) {
+          console.log(`[PostDetail] Using cached post data for ${postId}`);
+          setPost(cachedPost);
+          setAdditionalHTML(cachedPost.additionalHTML || '');
+          
+          // Skip realtime updates if we have fresh data (< 30 seconds old)
+          const postTimestamp = cachedPost.fetchTimestamp || 0;
+          if (Date.now() - postTimestamp < 30000) {
+            console.log(`[PostDetail] Cached post data is fresh, skipping immediate API fetch`);
+            setSkipRealtimeUpdates(true);
+            setLoading(false);
+            return;
+          }
+        }
+        
+        // Then fetch latest post data
+        console.log(`[PostDetail] Fetching latest data for post ${postId}`);
+        const freshPost = await getPostById(postId);
+        if (freshPost) {
+          console.log(`[PostDetail] Received fresh post data for ${postId}`);
+          // Add timestamp for cache freshness check
+          freshPost.fetchTimestamp = Date.now();
+          setPost(freshPost);
+          setAdditionalHTML(freshPost.additionalHTML || '');
+          lastUpdateTime.current = Date.now();
+        }
+        
+        // Only set up real-time listener in specific cases:
+        // 1. For admin users who need to see changes immediately
+        // 2. If we don't already have complete post data
+        // 3. If we haven't set up a listener recently (within 10 seconds)
+        const shouldCreateListener = 
+          (isAdmin || !freshPost?.likes) && 
+          !skipRealtimeUpdates &&
+          (Date.now() - lastUpdateTime.current > 10000);
+        
+        if (shouldCreateListener) {
+          console.log(`[PostDetail] Setting up Firebase listener for post ${postId}`);
+          
+          // Clean up any existing listener first
+          if (listenerRef.current) {
+            console.log(`[PostDetail] Cleaning up previous listener before creating new one`);
+            listenerRef.current();
+            listenerRef.current = null;
+          }
+          
+          // Set up new real-time listener for likes and views
+          listenerRef.current = onSnapshot(doc(db, 'posts', postId), (doc) => {
+            if (doc.exists()) {
+              const data = doc.data();
+              console.log(`[PostDetail] Received Firebase update for post ${postId}`);
+              lastUpdateTime.current = Date.now();
+              
+              // Only update the specific fields we need to reduce re-renders
+              setPost(prevPost => {
+                if (!prevPost) return { ...data, id: doc.id };
+                
+                return {
+                  ...prevPost,
+                  likes: data.likes || [],
+                  views: data.views || 0,
+                  // Only update if newer than what we have
+                  updatedAt: data.updatedAt > prevPost.updatedAt ? data.updatedAt : prevPost.updatedAt
+                };
+              });
+            }
+          }, (error) => {
+            console.error(`[PostDetail] Error in Firebase listener for post ${postId}:`, error);
+          });
+        } else {
+          console.log(`[PostDetail] Skipping Firebase listener creation for post ${postId}`);
         }
       } catch (err) {
+        console.error(`[PostDetail] Error loading post ${postId}:`, err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -155,7 +227,16 @@ const PostDetail = () => {
     if (postId !== 'create') {
       loadPost();
     }
-  }, [postId, getPostById, getComments]);
+    
+    // Clean up function
+    return () => {
+      if (listenerRef.current) {
+        console.log(`[PostDetail] Cleaning up Firebase listener for post ${postId}`);
+        listenerRef.current();
+        listenerRef.current = null;
+      }
+    };
+  }, [postId, getPostById, postDetails, isAdmin, skipRealtimeUpdates]);
 
   // Called when saving admin edits to additionalHTML
   const handleSave = async (e) => {
@@ -248,17 +329,15 @@ const PostDetail = () => {
 
           <h2 className="text-3xl font-bold mb-4">{post.title}</h2>
 
-          {/* {post.imageUrl && (
-            <img
-              src={post.imageUrl}
-              alt={post.title}
-              className="mb-4 w-full h-auto object-cover rounded-md"
-            />
-          )} */}
+          {/* Stats section */}
+          <div className="flex items-center space-x-4 mb-4">
+            <LikeButton postId={postId} initialLikes={post.likes || []} />
+            <span className="text-gray-600">{post.views || 0} views</span>
+          </div>
 
           {post.additionalHTML && (
             <div
-              className="prose mb-4"
+              className="prose max-w-none mb-4"
               dangerouslySetInnerHTML={{
                 __html: DOMPurify.sanitize(post.additionalHTML),
               }}
@@ -273,16 +352,16 @@ const PostDetail = () => {
           </p>
 
           {/* Comments Section */}
-          <CommentsSection postId={post.id} />
+          <CommentsSection postId={postId} />
         </div>
       ) : (
-        // Edit Mode
+        // Edit Mode - Only accessible by admin
         <form onSubmit={handleSave} className="space-y-4">
           <h2 className="text-2xl font-semibold mb-4">Edit Post</h2>
 
-          <div>
-            <label className="block text-gray-700 mb-1">
-              Content (HTML)
+          <div className="mb-4">
+            <label className="block text-gray-700 mb-2">
+              Content
             </label>
             <TipTapEditor
               content={additionalHTML}
@@ -304,7 +383,6 @@ const PostDetail = () => {
               onClick={() => {
                 setEditMode(false);
                 setError('');
-                // revert to original
                 setAdditionalHTML(post.additionalHTML || '');
               }}
               className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"

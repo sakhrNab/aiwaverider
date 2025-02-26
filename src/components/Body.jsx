@@ -47,7 +47,29 @@ const Body = () => {
       
       if (user) {
         try {
-          profile = await getProfile();
+          // Check cache first
+          const cacheKey = `profileData_${user.uid}`;
+          const cached = localStorage.getItem(cacheKey);
+          if (!force && cached) {
+            const { data, timestamp } = JSON.parse(cached);
+            if (Date.now() - timestamp < CACHE_DURATION) {
+              profile = data;
+            } else {
+              profile = await getProfile();
+              // Update cache
+              localStorage.setItem(cacheKey, JSON.stringify({
+                data: profile,
+                timestamp: Date.now()
+              }));
+            }
+          } else {
+            profile = await getProfile();
+            // Update cache
+            localStorage.setItem(cacheKey, JSON.stringify({
+              data: profile,
+              timestamp: Date.now()
+            }));
+          }
         } catch (err) {
           console.error('Error fetching profile:', err);
           // Continue with default profile values
@@ -146,21 +168,32 @@ const Body = () => {
       if (lastUpdate) {
         const { timestamp } = JSON.parse(lastUpdate);
         const timeUntilNextRefresh = Math.max(0, CACHE_DURATION - (Date.now() - timestamp));
+        
+        // Clear any existing timeout
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        
+        // Schedule next refresh
         timeoutId = setTimeout(() => {
-          loadData(true);
-          scheduleNextRefresh();
+          loadData(true).then(() => {
+            // Only schedule next refresh after current one completes
+            scheduleNextRefresh();
+          });
         }, timeUntilNextRefresh);
       }
     };
 
-    scheduleNextRefresh();
+    if (user) {
+      scheduleNextRefresh();
+    }
 
     return () => {
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
     };
-  }, [loadData, user, CACHE_DURATION]);
+  }, [loadData, user]);
 
   if (isLoading) {
     return <div className="flex justify-center items-center h-96">

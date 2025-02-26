@@ -7,9 +7,21 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import { auth } from '../utils/firebase';
 import { Link } from 'react-router-dom'; // Add this import
 import CommentsList from './CommentsList';
+import LikeButton from '../components/LikeButton';
+import { toast } from 'react-toastify';
 
 const PostsList = () => {
-  const { posts, setPosts, fetchAllPosts, loadingPosts, errorPosts, addCommentToCache } = useContext(PostsContext);
+  const { 
+    posts, 
+    setPosts, 
+    fetchAllPosts, 
+    loadingPosts, 
+    errorPosts, 
+    addCommentToCache, 
+    fetchBatchComments,
+    commentsCache,
+    commentsLastFetch
+  } = useContext(PostsContext);
   const { user, role, token } = useContext(AuthContext);
   
   // Add error state
@@ -21,29 +33,79 @@ const PostsList = () => {
   const [lastPostCreatedAt, setLastPostCreatedAt] = useState(null);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [loadingComments, setLoadingComments] = useState(true);
 
+  // Load posts and their comments
   useEffect(() => {
-    const loadPosts = async () => {
+    const loadPostsAndComments = async () => {
       try {
+        // First load posts
         await fetchAllPosts(selectedCategory, 10);
+        
+        // Then fetch comments for all posts
+        if (posts.length > 0) {
+          setLoadingComments(true);
+          const postIds = Array.from(new Set(posts.map(p => p.id)));
+          await fetchBatchComments(postIds);
+        }
       } catch (err) {
         setError(err.message);
+      } finally {
+        setLoadingComments(false);
       }
     };
-    loadPosts();
-  }, [selectedCategory, fetchAllPosts]);
+    
+    loadPostsAndComments();
+  }, [selectedCategory, fetchAllPosts, fetchBatchComments]);
+
+  // In the useEffect that loads comments, add optimizations similar to CommentsSection
+  useEffect(() => {
+    const loadComments = async () => {
+      if (posts.length === 0) return;
+      
+      // Extract unique post IDs that need comments
+      const postIds = Array.from(new Set(posts.map(post => post.id)));
+      
+      // Check if all post comments are already in cache and fresh (less than 1 min old)
+      // Make sure commentsLastFetch and commentsCache are properly initialized before access
+      if (!commentsLastFetch || !commentsCache) {
+        await fetchBatchComments(postIds);
+        return;
+      }
+
+      const needsFetching = postIds.some(id => {
+        // Make sure we safely access commentsLastFetch[id]
+        const lastFetchTime = commentsLastFetch[id] || 0;
+        return !commentsCache[id] || (Date.now() - lastFetchTime >= 60000);
+      });
+      
+      if (needsFetching) {
+        // Only fetch comments for visible posts on the screen
+        await fetchBatchComments(postIds);
+      } else {
+        console.log('All post comments are already in fresh cache, skipping fetch');
+      }
+    };
+    
+    loadComments();
+  }, [posts, fetchBatchComments, commentsCache, commentsLastFetch]);
 
   // Load more posts
   const handleLoadMore = async () => {
-    if (!hasMore) return;
+    if (!hasMore || isFetchingMore) return;
+    
     setIsFetchingMore(true);
     try {
       const data = await getAllPosts(selectedCategory, 10, lastPostCreatedAt, token);
-      setPosts((prev) => [...prev, ...data.posts]);
-      setLastPostCreatedAt(data.lastPostCreatedAt);
-      if (data.posts.length < 10) {
-        setHasMore(false);
+      if (data.posts.length > 0) {
+        setPosts((prev) => [...prev, ...data.posts]);
+        setLastPostCreatedAt(data.lastPostCreatedAt);
+        
+        // Fetch comments for new posts
+        const newPostIds = data.posts.map(p => p.id);
+        await fetchBatchComments(newPostIds);
       }
+      setHasMore(data.posts.length === 10);
     } catch (err) {
       console.error('Error fetching more posts:', err);
       setError(err.message || 'Failed to load more posts.');
@@ -59,32 +121,42 @@ const PostsList = () => {
 
   // Add comment
   const handleAddComment = async (postId) => {
-    const commentText = commentTexts[postId];
-    if (!commentText || commentText.trim() === '') {
-      alert('Comment cannot be empty.');
+    if (!user) {
+      toast.info(
+        <div>
+          Please <a href="/signin" className="text-blue-500 hover:text-blue-700">sign in</a> or{' '}
+          <a href="/signup" className="text-blue-500 hover:text-blue-700">sign up</a> to comment.
+        </div>,
+        {
+          position: "top-center",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        }
+      );
       return;
     }
+
+    const commentText = commentTexts[postId];
+    if (!commentText?.trim()) {
+      toast.error('Comment cannot be empty');
+      return;
+    }
+
     try {
-      // Check authentication state
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        const shouldLogin = confirm('You need to sign in to comment. Sign in now?');
-        if (shouldLogin) {
-          await signInWithRedirect(auth, yourAuthProvider); // Update with your auth provider
-        }
-        return;
-      }
       const data = await addComment(postId, { commentText: commentText.trim() });
       if (data) {
         addCommentToCache(postId, data);
         setCommentTexts(prev => ({ ...prev, [postId]: '' }));
+        toast.success('Comment added successfully');
       }
     } catch (err) {
       console.error('Error adding comment:', err);
-      alert('An unexpected error occurred while adding the comment.');
+      toast.error('Failed to add comment');
     }
   };
-
 
   // Delete post
   const confirmDeletePost = (post) => {
@@ -163,6 +235,8 @@ const PostsList = () => {
           const post = posts.find(p => p.id === postId);
           if (!post) return null;
           
+          const postComments = commentsCache[postId] || [];
+          
           return (
             <div key={`post-${postId}`} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
               <div className="flex justify-between items-start">
@@ -184,7 +258,52 @@ const PostsList = () => {
                     </div>
                   </Link>
 
-                  {/* Rest of post content... */}
+                  <div className="flex items-center space-x-4 mt-4">
+                    <LikeButton postId={post.id} initialLikes={post.likes || []} />
+                    <span className="text-gray-600">{post.views || 0} views</span>
+                  </div>
+
+                  {/* Comments section */}
+                  <div className="mt-4 border-t pt-4">
+                    <h4 className="font-semibold mb-2">Comments:</h4>
+                    {loadingComments ? (
+                      <div className="flex justify-center items-center py-4">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                      </div>
+                    ) : postComments.length > 0 ? (
+                      <CommentsList 
+                        postId={post.id} 
+                        comments={postComments}
+                      />
+                    ) : (
+                      <p className="text-gray-600">No comments yet.</p>
+                    )}
+
+                    {/* Add Comment */}
+                    <div className="mt-4">
+                      <div className="flex space-x-2">
+                        <input
+                          type="text"
+                          value={commentTexts[post.id] || ''}
+                          onChange={(e) => handleCommentChange(post.id, e.target.value)}
+                          placeholder={user ? "Write a comment..." : "Sign in to comment"}
+                          disabled={!user}
+                          className="flex-1 p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          onClick={() => handleAddComment(post.id)}
+                          disabled={!user || !commentTexts[post.id]?.trim()}
+                          className={`px-4 py-2 rounded-md transition-colors ${
+                            user && commentTexts[post.id]?.trim()
+                              ? 'bg-blue-600 text-white hover:bg-blue-700'
+                              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          }`}
+                        >
+                          Comment
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 {userIsAdmin && (
                   <button
@@ -195,35 +314,6 @@ const PostsList = () => {
                   </button>
                 )}
               </div>
-
-              {/* Comments section */}
-              <div className="mt-4 border-t pt-4">
-                <h4 className="font-semibold">Comments:</h4>
-                {Array.isArray(post.comments) && post.comments.length > 0 ? (
-                  <CommentsList postId={post.id} comments={post.comments} />
-                ) : (
-                  <p className="text-gray-600">No comments yet.</p>
-                )}
-              </div>
-
-              {/* Add Comment if logged in */}
-              {user && (
-                <div className="mt-4">
-                  <input
-                    type="text"
-                    value={commentTexts[post.id] || ''}
-                    onChange={(e) => handleCommentChange(post.id, e.target.value)}
-                    placeholder="Add a comment..."
-                    className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    onClick={() => handleAddComment(post.id)}
-                    className="mt-2 w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                  >
-                    Comment
-                  </button>
-                </div>
-              )}
             </div>
           );
         })}

@@ -8,7 +8,7 @@ const Joi = require('joi');
 const sanitizeHtml = require('./utils/sanitize'); // Import sanitize function
 // const authenticateJWT = require('./middleware/authenticate'); // Import auth middleware
 const passport = require('passport');
-// const admin = require('firebase-admin');
+
 
 const {
   octokit,
@@ -32,6 +32,29 @@ const { Storage } = require('@google-cloud/storage');
 const storage = new Storage();
 const bucket = storage.bucket(process.env.FIREBASE_STORAGE_BUCKET);
 
+const { 
+  cacheControl, 
+  etagCache, 
+  varyHeader, 
+  conditionalGet 
+} = require('./middleware/cache');
+const publicCacheMiddleware = require('./middleware/publicCacheMiddleware');
+const {
+  getCache,
+  setCache,
+  deleteCache,
+  deleteCacheByPattern,
+  generatePostsCacheKey,
+  generatePostCacheKey,
+  generateCommentsCacheKey,
+  generateProfileCacheKey,
+} = require('./utils/cache');
+
+// Import routes correctly
+const postsRoutes = require('./routes/posts');
+// const authRoutes = require('./middleware/authenticate'); // Fix: import from routes/auth
+const profileRoutes = require('./routes/profile');
+
 // Initialize express
 const app = express();
 
@@ -43,7 +66,6 @@ const commentsCollection = db.collection('comments');
 
 // ================== Updated Firebase Token Middleware ==================
 const validateFirebaseToken = require('./middleware/authenticate');
-const profileRoutes = require('./routes/profile');
 
 // Basic middleware setup
 app.use(cors({
@@ -490,970 +512,77 @@ app.post('/api/auth/verify-user', async (req, res) => {
   }
 });
 
-// ------------------ 3) Create Post (Admin only) -------
-app.post('/api/posts', validateFirebaseToken, upload.single('image'), async (req, res) => {
-  try {
-    const { title, description, category, additionalHTML, graphHTML } = req.body;
-    const { role, id: userId } = req.user;
-
-    // 1. Validate required fields
-    if (!title || !description || !category) {
-      return res.status(400).json({ 
-        error: 'Title, description, and category are required.' 
-      });
-    }
-
-    // 2. Check admin role
-    if (role !== 'admin') {
-      return res.status(403).json({ 
-        error: 'Only admin can create posts.' 
-      });
-    }
-
-    let imageUrl = null;
-    let imageSha = null;
-
-    // 3. Handle image upload if provided
-    if (req.file) {
-      const filename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
-      try {
-        const uploadResult = await uploadImageToGitHub(filename, req.file.buffer);
-        if (!uploadResult || !uploadResult.url || !uploadResult.sha) {
-          throw new Error('Image upload failed: Missing URL or SHA.');
-        }
-        imageUrl = uploadResult.url;
-        imageSha = uploadResult.sha;
-      } catch (error) {
-        console.error('Error uploading image:', error);
-        return res.status(500).json({ 
-          error: error.message || 'Image upload failed.' 
-        });
-      }
-    }
-
-    // 4. Get username from users collection
-    const userDoc = await usersCollection.doc(userId).get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
-    const username = userDoc.data().username;
-
-    // 5. Sanitize HTML content
-    const sanitizedAdditionalHTML = sanitizeHtml(additionalHTML || '');
-    const sanitizedGraphHTML = sanitizeHtml(graphHTML || '');
-
-    // 6. Create post document
-    const newPostRef = await postsCollection.add({
-      title,
-      description,
-      category,
-      imageUrl,
-      imageSha,
-      additionalHTML: sanitizedAdditionalHTML,
-      graphHTML: sanitizedGraphHTML,
-      createdBy: userId,
-      createdByUsername: username,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    // 7. Get the created post
-    const newPostDoc = await newPostRef.get();
-    const postData = newPostDoc.data();
-
-    // 8. Send response
-    return res.json({
-      message: 'Post created successfully.',
-      post: {
-        id: newPostRef.id,
-        ...postData,
-        createdAt: postData.createdAt.toDate().toISOString(),
-        updatedAt: postData.updatedAt.toDate().toISOString(),
-      }
-    });
-
-  } catch (err) {
-    logger.error('Error creating post:', err);
-    return res.status(500).json({ 
-      error: 'Internal server error.',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
-
-// ------------------ 4) Get All Posts (public) ---------
-app.get('/api/posts', async (req, res) => {
-  try {
-    const user = req.user;
-    const { category, limit, startAfter } = req.query;
-    const limitNumber = parseInt(limit, 10) || 10;
-
-    let query = postsCollection.orderBy('createdAt', 'desc').limit(limitNumber);
-
-    if (category && category !== 'All') {
-      query = query.where('category', '==', category);
-    }
-
-    if (startAfter) {
-      const startAfterDate = new Date(startAfter);
-      if (!isNaN(startAfterDate)) {
-        const firestoreTimestamp = admin.firestore.Timestamp.fromDate(startAfterDate);
-        query = query.startAfter(firestoreTimestamp);
-      }
-    }
-
-    const snapshot = await query.get();
-    const allPosts = [];
-
-    const postIds = snapshot.docs.map(doc => doc.id);
-    let comments = [];
-
-    if (postIds.length > 0) {
-      // Firestore 'in' queries up to 10 items each
-      const chunkSize = 10;
-      const chunks = [];
-      for (let i = 0; i < postIds.length; i += chunkSize) {
-        chunks.push(postIds.slice(i, i + chunkSize));
-      }
-
-      const commentsPromises = chunks.map(chunk =>
-        commentsCollection.where('postId', 'in', chunk).orderBy('createdAt', 'desc').get()
-      );
-      const commentsSnapshots = await Promise.all(commentsPromises);
-      
-      // Process each comment and get likedBy information
-      const commentMap = new Map(); // Map to store comments by ID
-      
-      for (const commentsSnap of commentsSnapshots) {
-        for (const commentDoc of commentsSnap.docs) {
-          const commentData = commentDoc.data();
-          const likes = commentData.likes || [];
-          let likedBy = [];
-          
-          if (likes.length > 0) {
-            const userPromises = likes.map(userId =>
-              usersCollection.doc(userId).get()
-            );
-            const userDocs = await Promise.all(userPromises);
-            likedBy = userDocs
-              .filter(doc => doc.exists)
-              .map(doc => ({ id: doc.id, username: doc.data().username }));
-          }
-          
-          const comment = {
-            id: commentDoc.id,
-            ...commentData,
-            likes: likes,
-            likedBy: likedBy,
-            replies: [], // Initialize empty replies array
-            createdAt: commentData.createdAt
-              ? commentData.createdAt.toDate().toISOString()
-              : null,
-          };
-          
-          commentMap.set(commentDoc.id, comment);
-        }
-      }
-
-      // Structure comments hierarchy
-      const commentsByPostId = {};
-      
-      // First, initialize empty arrays for each post
-      postIds.forEach(postId => {
-        commentsByPostId[postId] = [];
-      });
-
-      // Then, organize comments with proper hierarchy
-      for (const comment of commentMap.values()) {
-        if (comment.parentCommentId) {
-          // This is a reply
-          const parentComment = commentMap.get(comment.parentCommentId);
-          if (parentComment) {
-            parentComment.replies.push(comment);
-          } else {
-            // If parent doesn't exist, add to top level
-            commentsByPostId[comment.postId].push(comment);
-          }
-        } else {
-          // This is a top-level comment
-          commentsByPostId[comment.postId].push(comment);
-        }
-      }
-
-      // Sort replies by createdAt for each post's comments
-      for (const postId in commentsByPostId) {
-        for (const comment of commentsByPostId[postId]) {
-          if (comment.replies.length > 0) {
-            comment.replies.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-          }
-        }
-        // Also sort top-level comments
-        commentsByPostId[postId].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      }
-
-      comments = commentsByPostId;
-    }
-
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      const isOwner = user?.uid === data.createdBy;
-      
-      const postId = doc.id;
-
-      // Ensure strings
-      const additionalHTML =
-        typeof data.additionalHTML === 'string' ? data.additionalHTML : '';
-      const graphHTML =
-        typeof data.graphHTML === 'string' ? data.graphHTML : '';
-
-      allPosts.push({
-        id: postId,
-        ...data,
-        isOwner,
-        additionalHTML,
-        graphHTML,
-        createdAt: data.createdAt
-          ? data.createdAt.toDate().toISOString()
-          : null,
-        comments: comments[postId] || [],
-      });
-    });
-
-    // Next-page cursor
-    let lastPostCreatedAt = null;
-    if (snapshot.docs.length > 0) {
-      lastPostCreatedAt = snapshot.docs[snapshot.docs.length - 1].data().createdAt
-        .toDate()
-        .toISOString();
-    }
-
-    return res.json({
-      posts: allPosts,
-      lastPostCreatedAt,
-    });
-  } catch (err) {
-    console.error('Error in GET /api/posts:', err);
-    return res.status(500).json({ error: 'Internal server error.', details: err.message });
-  }
-});
-
-// ------------------ MULTI-CATEGORY FETCH ------------------
-app.get('/api/posts/multi', async (req, res) => {
-  try {
-    // e.g. GET /api/posts/multi?categories=Trends,Latest%20Tech,AI%20Tools&limit=5
-    const { categories, limit } = req.query;
-    if (!categories) {
-      return res.status(400).json({ error: 'No categories provided.' });
-    }
-
-    // Parse categories
-    const categoryArray = categories.split(',').map((c) => c.trim());
-    const limitNumber = parseInt(limit, 10) || 5;
-
-    // We'll store each category's posts in an object
-    const results = {};
-
-// For each category, do a Firestore query
-    for (const cat of categoryArray) {
-      let query = postsCollection.orderBy('createdAt', 'desc').limit(limitNumber);
-      if (cat !== 'All') {
-        query = query.where('category', '==', cat);
-      }
-
-      const snapshot = await query.get();
-
-      // Gather post IDs
-      const postIds = snapshot.docs.map((doc) => doc.id);
-
-      // Build array of posts
-      const postsForThisCategory = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt
-            ? data.createdAt.toDate().toISOString()
-            : null,
-          comments: [],
-        };
-      });
-
-      // Fetch comments if you want them for each category
-      let allCommentsForThisCategory = [];
-      if (postIds.length > 0) {
-        const chunkSize = 10;
-        const chunks = [];
-        for (let i = 0; i < postIds.length; i += chunkSize) {
-          chunks.push(postIds.slice(i, i + chunkSize));
-        }
-        const commentsPromises = chunks.map((chunk) =>
-          commentsCollection
-            .where('postId', 'in', chunk)
-            .orderBy('createdAt', 'desc')
-            .get()
-        );
-        const commentsSnapshots = await Promise.all(commentsPromises);
-
-        allCommentsForThisCategory = commentsSnapshots.flatMap((snap) =>
-          snap.docs.map((commentDoc) => {
-            const cdata = commentDoc.data();
-            return {
-              id: commentDoc.id,
-              ...cdata,
-              createdAt: cdata.createdAt
-                ? cdata.createdAt.toDate().toISOString()
-                : null,
-            };
-          })
-        );
-      }
-
-      // Group by postId
-      const commentsByPostId = {};
-      allCommentsForThisCategory.forEach((comment) => {
-        if (!commentsByPostId[comment.postId]) {
-          commentsByPostId[comment.postId] = [];
-        }
-        commentsByPostId[comment.postId].push(comment);
-      });
-
-      // Attach comments
-      postsForThisCategory.forEach((post) => {
-        post.comments = commentsByPostId[post.id] || [];
-      });
-
-      // Store final
-      results[cat] = postsForThisCategory;
-    }
-
-    return res.json({
-      data: results, // e.g. { "Trends": [...], "AI Tools": [...] }
-    });
-  } catch (err) {
-    console.error('Error in GET /api/posts/multi:', err);
-    return res.status(500).json({ error: 'Internal server error.', details: err.message });
-  }
-});
-
-// Batch Comments Endpoint
-app.get('/api/posts/comments/batch', validateFirebaseToken, async (req, res) => {
-  try {
-    const { postIds } = req.query;
-    
-    if (!postIds) {
-      return res.status(400).json({ error: 'No post IDs provided' });
-    }
-
-    const postIdsArray = postIds.split(',');
-    
-    // Limit the number of posts to prevent abuse
-    if (postIdsArray.length > 50) {
-      return res.status(400).json({ error: 'Too many post IDs. Maximum is 50.' });
-    }
-
-    // Create a map to store comments for each post
-    const commentsMap = {};
-
-    // Fetch comments for each post in parallel
-    await Promise.all(postIdsArray.map(async (postId) => {
-      try {
-        const commentsSnapshot = await commentsCollection
-          .where('postId', '==', postId)
-          .orderBy('createdAt', 'desc')
-          .get();
-
-        commentsMap[postId] = commentsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate?.() || null
-        }));
-      } catch (err) {
-        console.error(`Error fetching comments for post ${postId}:`, err);
-        commentsMap[postId] = [];
-      }
-    }));
-
-    res.json(commentsMap);
-  } catch (err) {
-    console.error('Error in batch comments endpoint:', err);
-    res.status(500).json({ error: 'Failed to fetch comments' });
-  }
-});
+// Routes
+app.use('/api/posts', postsRoutes);
 
 // ------------------ 7) Get User Profile (authenticated) ----
-app.get('/api/users/:userId', validateFirebaseToken, async (req, res) => {
+app.get('/api/users/:userId', publicCacheMiddleware(), async (req, res) => {
   try {
     const { userId } = req.params;
-    // Only allow self or admin
-    if (req.user.id !== userId && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Forbidden' });
+    
+    // Try to get from cache first
+    const cacheKey = generateProfileCacheKey(userId);
+    const cachedProfile = await getCache(cacheKey);
+    if (cachedProfile) {
+      return res.json(cachedProfile);
     }
 
+    // If not in cache, get from Firestore
     const userDoc = await usersCollection.doc(userId).get();
     if (!userDoc.exists) {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    const userData = userDoc.data();
-    return res.json({
-      id: userDoc.id,
-      username: userData.username,
-      firstName: userData.firstName,
-      lastName: userData.lastName,
-      email: userData.email,
-      phoneNumber: userData.phoneNumber,
-      role: userData.role,
-    });
+    const profileData = {
+      uid: userId,
+      ...userDoc.data(),
+      // Exclude sensitive data
+      password: undefined,
+      authTokens: undefined
+    };
+    
+    // Cache the profile
+    await setCache(cacheKey, profileData);
+
+    return res.json(profileData);
   } catch (err) {
     console.error('Error in GET /api/users/:userId:', err);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
-// ------------------ 8) Delete Post (Admin Only) -------
-app.delete('/api/posts/:postId', validateFirebaseToken, async (req, res) => {
-  try {
-    const { role } = req.user;
-    const { postId } = req.params;
-
-    if (role !== 'admin') {
-      return res.status(403).json({ error: 'Only admins can delete posts.' });
-    }
-
-    const postRef = postsCollection.doc(postId);
-    const postDoc = await postRef.get();
-    if (!postDoc.exists) {
-      return res.status(404).json({ error: 'Post not found.' });
-    }
-
-    const postData = postDoc.data();
-
-    // If image present, remove from GitHub
-    if (postData.imageUrl && postData.imageSha) {
-      try {
-        const filename = path.basename(postData.imageUrl);
-        await deleteImageFromGitHub(filename, postData.imageSha);
-      } catch (error) {
-        console.error('Error deleting image from GitHub:', error);
-      }
-    }
-
-    // Delete the post
-    await postRef.delete();
-
-    // Optional: delete comments
-    const commentsSnapshot = await commentsCollection.where('postId', '==', postId).get();
-    const batch = db.batch();
-    commentsSnapshot.forEach((commentDoc) => {
-      batch.delete(commentDoc.ref);
-    });
-    await batch.commit();
-
-    return res.json({ message: 'Post deleted successfully.' });
-  } catch (err) {
-    console.error('Error in DELETE /api/posts/:postId:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
-  }
-});
-
-// ------------------ 10) Get Post by ID ----------------
-app.get('/api/posts/:postId', async (req, res) => {
-  try {
-    const { postId } = req.params;
-    const postDoc = await postsCollection.doc(postId).get();
-    if (!postDoc.exists) {
-      return res.status(404).json({ error: 'Post not found.' });
-    }
-
-    const postData = postDoc.data();
-
-    // Fetch comments for this post
-    const commentsSnapshot = await commentsCollection
-      .where('postId', '==', postId)
-      .orderBy('createdAt', 'desc')
-      .get();
-
-    const commentMap = new Map(); // Map to store comments by ID
-    
-    // First pass: Process all comments and store in map
-    for (const commentDoc of commentsSnapshot.docs) {
-      const commentData = commentDoc.data();
-      const likes = commentData.likes || [];
-      let likedBy = [];
-      
-      if (likes.length > 0) {
-        const userPromises = likes.map(userId =>
-          usersCollection.doc(userId).get()
-        );
-        const userDocs = await Promise.all(userPromises);
-        likedBy = userDocs
-          .filter(doc => doc.exists)
-          .map(doc => ({ id: doc.id, username: doc.data().username }));
-      }
-      
-      const comment = {
-        id: commentDoc.id,
-        ...commentData,
-        likes: likes,
-        likedBy: likedBy,
-        replies: [], // Initialize empty replies array
-        createdAt: commentData.createdAt
-          ? commentData.createdAt.toDate().toISOString()
-          : null,
-      };
-      
-      commentMap.set(commentDoc.id, comment);
-    }
-
-    // Second pass: Structure the comments hierarchy
-    const comments = [];
-    
-    for (const comment of commentMap.values()) {
-      if (comment.parentCommentId) {
-        // This is a reply
-        const parentComment = commentMap.get(comment.parentCommentId);
-        if (parentComment) {
-          parentComment.replies.push(comment);
-        } else {
-          // If parent doesn't exist, add to top level
-          comments.push(comment);
-        }
-      } else {
-        // This is a top-level comment
-        comments.push(comment);
-      }
-    }
-
-    // Sort replies by createdAt
-    for (const comment of comments) {
-      if (comment.replies.length > 0) {
-        comment.replies.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-      }
-    }
-    
-    // Sort top-level comments by createdAt (newest first)
-    comments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-    // Ensure additionalHTML and graphHTML are strings
-    const additionalHTML =
-      typeof postData.additionalHTML === 'string' ? postData.additionalHTML : '';
-    const graphHTML =
-      typeof postData.graphHTML === 'string' ? postData.graphHTML : '';
-
-    return res.json({
-      id: postId,
-      ...postData,
-      additionalHTML,
-      graphHTML,
-      comments: comments,
-      createdAt: postData.createdAt
-        ? postData.createdAt.toDate().toISOString()
-        : null,
-    });
-  } catch (err) {
-    console.error('Error fetching post:', err);
-    return res.status(500).json({ error: 'Server error.' });
-  }
-});
-
-// ------------------ 11) Update Post by ID (Admin only) ----
-app.put('/api/posts/:postId', validateFirebaseToken, upload.single('image'), async (req, res) => {
-  try {
-    const { role } = req.user;
-    if (role !== 'admin') {
-      return res.status(403).json({ error: 'Only admins can update posts.' });
-    }
-    const { postId } = req.params;
-    const { title, description, category, additionalHTML, graphHTML } = req.body;
-
-    // Handle image if provided
-    let imageUrl = null;
-    let imageSha = null;
-    if (req.file) {
-      try {
-        const filename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
-        const uploadResult = await uploadImageToGitHub(filename, req.file.buffer);
-        if (!uploadResult || !uploadResult.url || !uploadResult.sha) {
-          throw new Error('Image upload failed: Missing URL or SHA.');
-        }
-        imageUrl = uploadResult.url;
-        imageSha = uploadResult.sha;
-      } catch (error) {
-        console.error('Error uploading image:', error);
-        return res.status(500).json({ error: error.message || 'Image upload failed.' });
-      }
-    }
-
-    // Validate post existence
-    const postRef = postsCollection.doc(postId);
-    const postDoc = await postRef.get();
-    if (!postDoc.exists) {
-      return res.status(404).json({ error: 'Post not found.' });
-    }
-
-    // If we have a new image, delete the old one
-    const postData = postDoc.data();
-    if (imageUrl && postData.imageUrl && postData.imageSha) {
-      try {
-        const oldFilename = path.basename(postData.imageUrl);
-        await deleteImageFromGitHub(oldFilename, postData.imageSha);
-      } catch (error) {
-        console.error('Error deleting old image from GitHub:', error);
-      }
-    }
-
-    // Sanitize HTML
-    const sanitizedAdditionalHTML = sanitizeHtml(additionalHTML || '');
-    const sanitizedGraphHTML = sanitizeHtml(graphHTML || '');
-
-    // Build updates
-    const updates = {
-      title,
-      description,
-      category,
-      additionalHTML: sanitizedAdditionalHTML,
-      graphHTML: sanitizedGraphHTML,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-    if (imageUrl !== null) {
-      updates.imageUrl = imageUrl;
-      updates.imageSha = imageSha;
-    }
-
-    await postRef.update(updates);
-    return res.json({ message: 'Post updated successfully.' });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Server error.' });
-  }
-});
-
-// ------------------ 5) Add Comment (auth or admin) ----
-// POST /api/posts/:postId/comments
-app.post('/api/posts/:postId/comments', validateFirebaseToken, async (req, res) => {
-  try {
-    const { postId } = req.params;
-const { commentText, parentCommentId } = req.body;
-    const uid = req.user.uid;
-    if (!uid) {
-      return res.status(401).json({ error: 'User not authenticated' });
-    }
-    if (!commentText) {
-      return res.status(400).json({ error: 'Comment text is required.' });
-    }
-    // Validate post exists
-    const postDoc = await postsCollection.doc(postId).get();
-    if (!postDoc.exists) {
-      return res.status(404).json({ error: 'Post not found.' });
-    }
-    // Get user data from Firestore using uid
-    const userDoc = await usersCollection.doc(uid).get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
-    const userData = userDoc.data();
-    const username = userData.username || 'Anonymous';
-    const userRole = userData.role || 'authenticated';
-
-    // Create comment – include parentCommentId if provided
-    const newCommentRef = await commentsCollection.add({
-      postId,
-      userId: uid,
-      text: commentText,
-      username,
-      userRole,
-      parentCommentId: parentCommentId || null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    const newCommentDoc = await newCommentRef.get();
-    const commentData = newCommentDoc.data();
-
-    return res.json({
-      message: 'Comment added successfully.',
-      comment: {
-        id: newCommentRef.id,
-        ...commentData,
-        createdAt: commentData.createdAt.toDate().toISOString(),
-      },
-    });
-  } catch (err) {
-    console.error('Error in POST /api/posts/:postId/comments:', err);
-    return res.status(500).json({ 
-      error: 'Internal server error.',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
-
-// ------------------ 6) Get Comments for a Post (public) ----
-app.get('/api/posts/:postId/comments', async (req, res) => {
-  try {
-    const { postId } = req.params;
-    const snapshot = await commentsCollection
-      .where('postId', '==', postId)
-      .orderBy('createdAt', 'desc')
-      .get();
-
-    const allComments = [];
-    const commentMap = new Map(); // Map to store comments by ID
-
-    // First pass: Process all comments and store in map
-    for (const doc of snapshot.docs) {
-      const data = doc.data();
-      const likes = data.likes || [];
-      let likedBy = [];
-      
-      if (likes.length > 0) {
-        const userPromises = likes.map(userId =>
-          usersCollection.doc(userId).get()
-        );
-        const userDocs = await Promise.all(userPromises);
-        likedBy = userDocs
-          .filter(doc => doc.exists)
-          .map(doc => ({ id: doc.id, username: doc.data().username }));
-      }
-
-      const comment = {
-        id: doc.id,
-        postId: data.postId,
-        userId: data.userId,
-        text: data.text,
-        username: data.username || 'Anonymous',
-        userRole: data.userRole || 'user',
-        likes: likes,
-        likedBy: likedBy,
-        parentCommentId: data.parentCommentId || null,
-        replies: [], // Initialize empty replies array
-        createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
-      };
-
-      commentMap.set(doc.id, comment);
-    }
-
-    // Second pass: Structure the comments hierarchy
-    for (const comment of commentMap.values()) {
-      if (comment.parentCommentId) {
-        // This is a reply - add it to parent's replies array
-        const parentComment = commentMap.get(comment.parentCommentId);
-        if (parentComment) {
-          parentComment.replies.push(comment);
-        } else {
-          // If parent doesn't exist, treat as top-level comment
-      allComments.push(comment);
-        }
-      } else {
-        // This is a top-level comment
-        allComments.push(comment);
-      }
-    }
-
-    // Sort replies by createdAt
-    for (const comment of allComments) {
-      if (comment.replies.length > 0) {
-        comment.replies.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-      }
-    }
-
-    return res.json(allComments);
-  } catch (err) {
-    console.error('Error in GET /api/posts/:postId/comments:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
-  }
-});
-
-// Like a comment
-app.post('/api/posts/:postId/comments/:commentId/like', validateFirebaseToken, async (req, res) => {
-  try {
-    const { postId, commentId } = req.params;
-    const uid = req.user.uid;
-    const commentRef = commentsCollection.doc(commentId);
-    const commentDoc = await commentRef.get();
-    if (!commentDoc.exists) {
-      return res.status(404).json({ error: 'Comment not found.' });
-    }
-    let commentData = commentDoc.data();
-    let likes = commentData.likes || [];
-    if (!likes.includes(uid)) {
-      likes.push(uid);
-      await commentRef.update({ likes });
-      const updatedDoc = await commentRef.get();
-      const updatedData = updatedDoc.data();
-
-      // Get user details for likers
-      const userPromises = likes.map(userId =>
-        usersCollection.doc(userId).get()
-      );
-      const userDocs = await Promise.all(userPromises);
-      const likedBy = userDocs
-        .filter(doc => doc.exists)
-        .map(doc => ({ id: doc.id, username: doc.data().username }));
-
-      const updatedComment = {
-        id: updatedDoc.id,
-        ...updatedData,
-        likes,
-        likedBy,
-        createdAt: updatedData.createdAt ? updatedData.createdAt.toDate().toISOString() : null
-      };
-
-      return res.json({ updatedComment });
-    } else {
-      // If already liked, return current state
-      const userPromises = likes.map(userId =>
-        usersCollection.doc(userId).get()
-      );
-      const userDocs = await Promise.all(userPromises);
-      const likedBy = userDocs
-        .filter(doc => doc.exists)
-        .map(doc => ({ id: doc.id, username: doc.data().username }));
-
-      const updatedComment = {
-        id: commentDoc.id,
-        ...commentData,
-        likes,
-        likedBy,
-        createdAt: commentData.createdAt ? commentData.createdAt.toDate().toISOString() : null
-      };
-
-      return res.json({ updatedComment });
-    }
-  } catch (err) {
-    console.error('Error liking comment:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
-  }
-});
-
-// Unlike a comment
-app.delete('/api/posts/:postId/comments/:commentId/like', validateFirebaseToken, async (req, res) => {
-  try {
-    const { postId, commentId } = req.params;
-    const uid = req.user.uid;
-    const commentRef = commentsCollection.doc(commentId);
-    const commentDoc = await commentRef.get();
-    if (!commentDoc.exists) {
-      return res.status(404).json({ error: 'Comment not found.' });
-    }
-    let commentData = commentDoc.data();
-    let likes = commentData.likes || [];
-    
-    if (likes.includes(uid)) {
-      likes = likes.filter(id => id !== uid);
-      await commentRef.update({ likes });
-      const updatedDoc = await commentRef.get();
-      const updatedData = updatedDoc.data();
-
-      // Get user details for remaining likers
-      const userPromises = likes.map(userId =>
-        usersCollection.doc(userId).get()
-      );
-      const userDocs = await Promise.all(userPromises);
-      const likedBy = userDocs
-        .filter(doc => doc.exists)
-        .map(doc => ({ id: doc.id, username: doc.data().username }));
-
-      const updatedComment = {
-        id: updatedDoc.id,
-        ...updatedData,
-        likes,
-        likedBy,
-        createdAt: updatedData.createdAt ? updatedData.createdAt.toDate().toISOString() : null
-      };
-
-      return res.json({ updatedComment });
-    } else {
-      // If not liked, return current state
-      const userPromises = likes.map(userId =>
-        usersCollection.doc(userId).get()
-      );
-      const userDocs = await Promise.all(userPromises);
-      const likedBy = userDocs
-        .filter(doc => doc.exists)
-        .map(doc => ({ id: doc.id, username: doc.data().username }));
-
-      const updatedComment = {
-        id: commentDoc.id,
-        ...commentData,
-        likes,
-        likedBy,
-        createdAt: commentData.createdAt ? commentData.createdAt.toDate().toISOString() : null
-      };
-
-      return res.json({ updatedComment });
-    }
-  } catch (err) {
-    console.error('Error unliking comment:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
-  }
-});
-
-// DELETE a comment (allowed for the comment owner or an admin)
-app.delete('/api/posts/:postId/comments/:commentId', validateFirebaseToken, async (req, res) => {
-  try {
-    const { postId, commentId } = req.params;
-    const uid = req.user.uid;
-    const commentRef = commentsCollection.doc(commentId);
-    const commentDoc = await commentRef.get();
-    if (!commentDoc.exists) {
-      return res.status(404).json({ error: 'Comment not found.' });
-    }
-    const commentData = commentDoc.data();
-    // Only allow the owner or an admin to delete the comment.
-    if (commentData.userId !== uid && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Forbidden.' });
-    }
-    await commentRef.delete();
-    return res.json({ message: 'Comment deleted successfully.' });
-  } catch (err) {
-    console.error('Error deleting comment:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
-  }
-});
-
-app.put('/api/posts/:postId/comments/:commentId', validateFirebaseToken, async (req, res) => {
-  try {
-    const { postId, commentId } = req.params;
-    const { commentText } = req.body;
-    const uid = req.user.uid;
-    const commentRef = commentsCollection.doc(commentId);
-    const commentDoc = await commentRef.get();
-    if (!commentDoc.exists) {
-      return res.status(404).json({ error: 'Comment not found' });
-    }
-    const commentData = commentDoc.data();
-    if (commentData.userId !== uid && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-    await commentRef.update({
-      text: commentText,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-    const updatedDoc = await commentRef.get();
-    const updatedComment = { id: updatedDoc.id, ...updatedDoc.data() };
-    return res.json({ updatedComment });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-//Profile
-// Mount the profile routes at /api/profile
+//Mount the profile routes at /api/profile
 app.use('/api/profile', profileRoutes);
 
-// ------------------ Catch-All 404 Handler ------------------
+// Enhanced logging
+app.use((req, res, next) => {
+  let start = Date.now();
+  res.on('finish', () => {
+    let duration = Date.now() - start;
+    logger.info(`${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`);
+  });
+  next();
+});
+
+// Health check endpoint at the root level
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || 'development'
+  });
+});
+
+// Catch-all 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found.' });
 });
 
-// ------------------ Error Handling Middleware ------------------
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
 });
-
-
-
 
 // ------------------ Start the Server ------------------
 const PORT = process.env.PORT || (isProduction ? 8080 : 4000);

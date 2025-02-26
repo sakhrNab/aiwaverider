@@ -12,25 +12,33 @@ let tokenExpirationTime = null;
 
 // Function to get token with caching
 const getTokenWithCache = async (currentUser) => {
+  console.log('getTokenWithCache called');
   const now = Date.now();
   
-  // If we have a cached token that's not expired, use it
-  if (cachedToken && tokenExpirationTime && now < tokenExpirationTime) {
+  // If we have a cached token that's not expired and not close to expiring, use it
+  if (cachedToken && tokenExpirationTime && now < tokenExpirationTime - (5 * 60 * 1000)) {
+    console.log('Using cached token, expires in:', Math.round((tokenExpirationTime - now) / 1000), 'seconds');
     return cachedToken;
   }
 
   try {
-    // Get a new token
-    const token = await currentUser.getIdToken(false);
+    console.log('Getting fresh token, old token expires in:', tokenExpirationTime ? Math.round((tokenExpirationTime - now) / 1000) : 'N/A', 'seconds');
+    // Force refresh the token
+    const token = await currentUser.getIdToken(true);
     
     // Cache the token and set expiration (5 minutes before actual expiration)
     cachedToken = token;
     // Firebase tokens expire in 1 hour, we'll refresh 5 minutes before
     tokenExpirationTime = now + (55 * 60 * 1000);
     
+    console.log('New token obtained and cached, expires in:', Math.round((tokenExpirationTime - now) / 1000), 'seconds');
     return token;
   } catch (error) {
     console.error('Error refreshing token:', error);
+    console.error('Error stack:', error.stack);
+    // Clear the cache on error
+    cachedToken = null;
+    tokenExpirationTime = null;
     throw error;
   }
 };
@@ -44,24 +52,52 @@ const api = axios.create({
 // Set up a request interceptor to attach the Firebase token automatically
 api.interceptors.request.use(
   async (config) => {
+    console.log('Interceptor running for:', config.url);
+    console.log('Request method:', config.method);
+    console.log('Request data type:', config.data instanceof FormData ? 'FormData' : typeof config.data);
+    
     const currentUser = auth.currentUser;
     if (currentUser) {
       try {
         const token = await getTokenWithCache(currentUser);
-        config.headers['Authorization'] = `Bearer ${token}`;
+        console.log('Token obtained:', token ? 'yes' : 'no');
+        if (token) {
+          config.headers['Authorization'] = `Bearer ${token}`;
+          console.log('Authorization header set');
+        } else {
+          console.warn('No token obtained from getTokenWithCache');
+        }
       } catch (error) {
-        console.error('Error getting token:', error);
+        console.error('Error getting token in interceptor:', error);
+        console.error('Error stack:', error.stack);
       }
     } else {
       console.warn('No currentUser found in Axios interceptor');
     }
+    
     // For non-FormData payloads, set the Content-Type to application/json
     if (!(config.data instanceof FormData)) {
       config.headers['Content-Type'] = 'application/json';
+      console.log('Content-Type set to application/json');
+    } else {
+      console.log('FormData detected, letting browser set Content-Type');
     }
+    
+    console.log('Final request headers:', config.headers);
+    console.log('Final request config:', {
+      url: config.url,
+      method: config.method,
+      baseURL: config.baseURL,
+      withCredentials: config.withCredentials
+    });
+    
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    console.error('Interceptor error:', error);
+    console.error('Error stack:', error.stack);
+    return Promise.reject(error);
+  }
 );
 
 // Helper function to get auth headers (if needed explicitly)
@@ -268,14 +304,22 @@ export const signInWithMicrosoft = async () => {
 // Create Post
 export const createPost = async (formData) => {
   try {
-    const headers = await getAuthHeaders();
-    if (headers['Content-Type']) {
-      delete headers['Content-Type'];
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Authentication required');
     }
-    const response = await api.post('/api/posts', formData, { headers });
+
+    console.log('Creating post with FormData');
+    const response = await api.post('/api/posts', formData);
+    console.log('Post created successfully:', response.data);
+
     return response.data;
   } catch (error) {
     console.error('Error creating post:', error);
+    if (error.response) {
+      console.error('Error response:', error.response.data);
+      throw new Error(error.response.data.error || 'Failed to create post');
+    }
     throw error;
   }
 };
@@ -360,10 +404,16 @@ export const getPostById = async (postId) => {
 // Like Comment
 export const likeComment = async (postId, commentId) => {
   try {
+    console.log(`[API] Sending request to like comment ${commentId} for post ${postId}`);
     const response = await api.post(`/api/posts/${postId}/comments/${commentId}/like`);
-    return response.data.updatedComment;
+    console.log(`[API] Like comment response received:`, response.status);
+    
+    // Return in a consistent format, handling different response structures
+    return {
+      updatedComment: response.data.updatedComment || response.data
+    };
   } catch (error) {
-    console.error('Error liking comment:', error);
+    console.error(`[API] Error liking comment ${commentId}:`, error);
     throw error;
   }
 };
@@ -371,10 +421,16 @@ export const likeComment = async (postId, commentId) => {
 // Unlike Comment
 export const unlikeComment = async (postId, commentId) => {
   try {
-    const response = await api.delete(`/api/posts/${postId}/comments/${commentId}/like`);
-    return response.data.updatedComment;
+    console.log(`[API] Sending request to unlike comment ${commentId} for post ${postId}`);
+    const response = await api.post(`/api/posts/${postId}/comments/${commentId}/unlike`);
+    console.log(`[API] Unlike comment response received:`, response.status);
+    
+    // Return the same format as likeComment for consistency
+    return {
+      updatedComment: response.data.updatedComment || response.data
+    };
   } catch (error) {
-    console.error('Error unliking comment:', error);
+    console.error(`[API] Error unliking comment ${commentId}:`, error);
     throw error;
   }
 };
@@ -398,6 +454,47 @@ export const updateComment = async (postId, commentId, commentData) => {
   } catch (error) {
     console.error('Error updating comment:', error);
     throw error;
+  }
+};
+
+// Toggle Like on a Post
+export const toggleLike = async (postId) => {
+  try {
+    console.log(`[API] Sending request to toggle like for post ${postId}`);
+    
+    // Add timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await api.post(`/api/posts/${postId}/like`, {}, {
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    console.log(`[API] Toggle like response received: ${response.status}`, response.data);
+    
+    // Check for various response formats to be backward compatible
+    const updatedPost = response.data.updatedPost || response.data.post || response.data;
+    
+    // Return in a consistent format
+    return {
+      updatedPost: updatedPost,
+      status: response.status,
+      success: response.data.success
+    };
+  } catch (error) {
+    // Enhanced error logging
+    if (error.name === 'AbortError') {
+      console.error(`[API] Request to toggle like for post ${postId} timed out`);
+      throw new Error(`Request timed out. The server might be overloaded.`);
+    } else if (error.response) {
+      console.error(`[API] Error toggling like for post ${postId}:`, 
+        error.response.status, error.response.data);
+      throw new Error(error.response.data.error || 'Failed to update like status');
+    } else {
+      console.error(`[API] Error toggling like for post ${postId}:`, error.message);
+      throw error;
+    }
   }
 };
 

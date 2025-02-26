@@ -3,9 +3,10 @@ import React, { useState, useContext } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import logo from '../assets/v6.webp';
 import { AuthContext } from '../contexts/AuthContext';
+import { toast } from 'react-toastify';
 
 const Header = ({ openSignUpModal }) => {
-  const { user, signOutUser } = useContext(AuthContext);
+  const { user, signOut } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -26,12 +27,23 @@ const Header = ({ openSignUpModal }) => {
     }
   };
 
-  // If we’re already on /sign-in, going to sign up should push /sign-up
+  // If we're already on /sign-in, going to sign up should push /sign-up
   const handleSignUp = () => {
     if (location.pathname === '/sign-in') {
       navigate('/sign-up');
     } else {
       openSignUpModal();
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast.success('Successfully signed out');
+      navigate('/');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      toast.error('Failed to sign out. Please try again.');
     }
   };
 
@@ -102,10 +114,7 @@ const Header = ({ openSignUpModal }) => {
                 </Link>
               )}
               <button
-                onClick={() => {
-                  signOutUser();
-                  navigate('/');
-                }}
+                onClick={handleSignOut}
                 className="px-3 py-2 bg-red-600 hover:bg-red-700 rounded font-medium"
               >
                 Sign Out
@@ -115,9 +124,18 @@ const Header = ({ openSignUpModal }) => {
                 className="block w-10 h-10 rounded-full overflow-hidden border-2 border-white"
               >
                 <img
-                  src={user.photoURL || '/default-avatar.png'}
-                  alt="Profile"
+                  src={user?.photoURL || '/default-avatar.png'}
+                  alt={`${user?.displayName || 'User'}'s Profile`}
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Only set default if not already default
+                    if (e.target.src.indexOf('default-avatar.png') === -1) {
+                      console.log('Header: Avatar image failed to load, using default');
+                      e.target.src = '/default-avatar.png';
+                    }
+                    // Prevent infinite error handling
+                    e.target.onerror = null;
+                  }}
                 />
               </Link>
             </div>
@@ -182,10 +200,7 @@ const Header = ({ openSignUpModal }) => {
                   </Link>
                 )}
                 <button
-                  onClick={() => {
-                    signOutUser();
-                    navigate('/');
-                  }}
+                  onClick={handleSignOut}
                   className="px-3 py-2 bg-red-600 hover:bg-red-700 rounded font-medium text-left"
                 >
                   Sign Out

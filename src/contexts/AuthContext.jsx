@@ -1,209 +1,168 @@
 // src/contexts/AuthContext.jsx
-import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { auth } from '../utils/firebase';
-import { 
-  API_URL, 
-  signOutUser as apiSignOutUser, 
-  createSession as apiCreateSession, 
-  getProfile  // we'll call this once user is known
-} from '../utils/api';
+import { getProfile, updateProfile } from '../utils/api';
+import { db } from '../utils/firebase';
 
-// Create the context
 export const AuthContext = createContext(null);
 
-export const AuthProvider = ({ children }) => {
-  // Raw Firebase user object
-  const [firebaseUser, setFirebaseUser] = useState(null);
-  // Your custom user data from Firestore or the backend
-  const [userData, setUserData] = useState(null);
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-  // Basic state for loading/error
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Track if we already created a session & fetched doc
-  const [sessionInitialized, setSessionInitialized] = useState(false);
-
-  // These track sign-up flows
-  const [isSigningUp, setIsSigningUp] = useState(false);
-  const [isNewUser, setIsNewUser] = useState(false);
-
-  // Step 1: create a session on the backend (using your /api/auth/session)
-  const createSession = useCallback(async (user) => {
-    if (!user) return null;
-    const sessionKey =`sessionInitialized_${user.uid}`;
-    const isSessionInitialized = localStorage.getItem(sessionKey);
-    if (isSessionInitialized) return null; // Skip if already initialized
-    try {
-      
-      const sessionResponse = await apiCreateSession(user);
-      localStorage.setItem(sessionKey, 'true');
-
-      // Typically returns: { user: { ...fields } }
-      return sessionResponse.user;
-    } catch (error) {
-      console.error('Session creation error:', error);
-      return null;
-    }
+  // Cache management functions
+  const getCacheKey = useCallback((type, id) => {
+    return `auth_${type}_${id}`;
   }, []);
 
-  // Step 2: signOut function
-  const signOutUser = useCallback(async () => {
-    try {
-      const currentUser = auth.currentUser;
-
-      // Firebase sign out
-      await auth.signOut();
-      // Your backend sign out
-      await apiSignOutUser();
-
-      if (currentUser) {
-        localStorage.removeItem(`sessionInitialized_${currentUser.uid}`);
-        localStorage.removeItem(`profileData_${currentUser.uid}`);
+  const getFromCache = useCallback((type, id) => {
+    const key = getCacheKey(type, id);
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < CACHE_DURATION) {
+        return data;
       }
-      // Clear states
-      setFirebaseUser(null);
-      setUserData(null);
-      setSessionInitialized(false);
-    } catch (error) {
-      console.error('Error signing out:', error);
+      localStorage.removeItem(key);
     }
-  }, []);
+    return null;
+  }, [getCacheKey]);
 
-  // Called from your sign-in flows if needed
-  const signInUser = useCallback(async (firebaseUserObj, isSignup = false) => {
+  const setInCache = useCallback((type, id, data) => {
+    const key = getCacheKey(type, id);
+    localStorage.setItem(key, JSON.stringify({
+      data,
+      timestamp: Date.now()
+    }));
+  }, [getCacheKey]);
+
+  const clearCache = useCallback((type, id) => {
+    if (id) {
+      localStorage.removeItem(getCacheKey(type, id));
+    } else {
+      Object.keys(localStorage)
+        .filter(key => key.startsWith('auth_'))
+        .forEach(key => localStorage.removeItem(key));
+    }
+  }, [getCacheKey]);
+
+  // Fetch user profile with caching
+  const fetchUserProfile = useCallback(async (uid, force = false) => {
     try {
-      if (!firebaseUserObj || typeof firebaseUserObj.getIdToken !== 'function') {
-        throw new Error('Invalid Firebase user object');
-      }
-      setFirebaseUser(firebaseUserObj);
-
-      if (isSignup) {
-        setIsSigningUp(true);
-        setIsNewUser(true);
-
-        // If you have a separate /api/auth/signup for new users, call it here
-        const token = await firebaseUserObj.getIdToken(true);
-        const response = await fetch(`${API_URL}/api/auth/signup`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            uid: firebaseUserObj.uid,
-            email: firebaseUserObj.email,
-            displayName: firebaseUserObj.displayName,
-            username: firebaseUserObj.email.split('@')[0],
-          })
-        });
-        if (!response.ok) {
-          throw new Error('Failed to create user account');
+      if (!force) {
+        const cachedProfile = getFromCache('profile', uid);
+        if (cachedProfile) {
+          return cachedProfile;
         }
-
-        setIsNewUser(false);
-        setIsSigningUp(false);
       }
 
-      // Create the session
-      const backendUser = await createSession(firebaseUserObj);
-      if (backendUser) {
-        setUserData(backendUser); // Some fields from your backend
+      const profile = await getProfile(uid);
+      if (profile) {
+        setInCache('profile', uid, profile);
       }
-      setSessionInitialized(true);
-
-    } catch (error) {
-      console.error('Error in signInUser:', error);
-      setUserData(null);
-      setIsSigningUp(false);
-      setIsNewUser(false);
+      return profile;
+    } catch (err) {
+      console.error('Error fetching user profile:', err);
+      throw err;
     }
-  }, [createSession]);
+  }, [getFromCache, setInCache]);
 
-  // Listen for Firebase Auth changes
+  // Update user profile and invalidate cache
+  const updateUserProfile = useCallback(async (uid, updates) => {
+    try {
+      const updatedProfile = await updateProfile(updates);
+      if (updatedProfile) {
+        clearCache('profile', uid);
+        setUser(prev => ({
+          ...prev,
+          ...updatedProfile
+        }));
+      }
+      return updatedProfile;
+    } catch (err) {
+      console.error('Error updating user profile:', err);
+      throw err;
+    }
+  }, [clearCache]);
+
+  // Handle auth state changes
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (fUser) => {
-      setLoading(true);
-      setError(null);
-
-      if (!fUser) {
-        // user is signed out
-        setFirebaseUser(null);
-        setUserData(null);
-        setSessionInitialized(false);
-        setIsNewUser(false);
-        setLoading(false);
-        return;
-      }
-
-      // We have a Firebase user
-      setFirebaseUser(fUser);
-
-
-      const sessionKey = `sessionInitialized_${fUser.uid}`;
-      const isSessionInitialized = localStorage.getItem(sessionKey);
-      const cachedProfile = localStorage.getItem(`profileData_${fUser.uid}`);
-      
-      // If we haven't already fetched the user doc
-      if (isSessionInitialized && cachedProfile) {
-        setUserData(JSON.parse(cachedProfile)); // Use cached profile
-        setSessionInitialized(true);
-        setLoading(false);
-        console.log("hello")
-        return;
-      }
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       try {
-        console.log("try your luck")
-        // Step 1: create the session
-        const backendUser = await createSession(fUser);
-        const profileDoc = await getProfile();
+        if (firebaseUser) {
+          const { uid, email, displayName } = firebaseUser;
+          
+          // Check cache first
+          const cachedProfile = getFromCache('profile', uid);
+          let userProfile;
+          
+          if (cachedProfile && (Date.now() - cachedProfile.timestamp) < CACHE_DURATION) {
+            userProfile = cachedProfile.data;
+          } else {
+            // Fetch fresh profile from Firestore
+            const userDoc = await db.collection('users').doc(uid).get();
+            userProfile = userDoc.exists ? userDoc.data() : null;
+            
+            if (userProfile) {
+              setInCache('profile', uid, {
+                data: userProfile,
+                timestamp: Date.now()
+              });
+            }
+          }
 
-        // Update cache and state
-        localStorage.setItem(`profileData_${fUser.uid}`, JSON.stringify(profileDoc));
-        
-        setUserData(backendUser);
-        // This might contain { photoURL, displayName, role, ... }
-        setUserData(profileDoc);
+          const userData = {
+            uid,
+            email,
+            displayName,
+            photoURL: userProfile?.photoURL || firebaseUser.photoURL,
+            role: userProfile?.role || 'authenticated', // Include role from Firestore
+            ...userProfile
+          };
 
-        setSessionInitialized(true);
+          setUser(userData);
+        } else {
+          setUser(null);
+          clearCache();
+        }
       } catch (err) {
-        console.error('Error in onAuthStateChanged flow:', err);
+        console.error('Error in auth state change:', err);
         setError(err.message);
+      } finally {
+        setLoading(false);
       }
-    setLoading(false);
     });
 
-    return unsubscribe;
-  }, [sessionInitialized, createSession]);
+    return () => unsubscribe();
+  }, [getFromCache, setInCache, clearCache]);
 
-  // Merge firebaseUser + userData into a single object
-  const mergedUser = useMemo(() => {
-    if (!firebaseUser || !userData) return null;
-    return {
-      ...firebaseUser, // e.g. uid, email, etc.
-      ...userData      // e.g. firstName, lastName, photoURL, role, ...
-    };
-  }, [firebaseUser, userData]);
+  // Sign out
+  const signOut = useCallback(async () => {
+    try {
+      await auth.signOut();
+      clearCache();
+      setUser(null);
+    } catch (err) {
+      console.error('Error signing out:', err);
+      throw err;
+    }
+  }, [clearCache]);
 
-  // Provide everything in context
-  const contextValue = useMemo(() => ({
-    user: mergedUser,
+  const value = {
+    user,
     loading,
     error,
-    signInUser,
-    signOutUser,
-    setUserData, // Added for profile update
-  }), [mergedUser, loading, error, signInUser, signOutUser, setUserData]);
-
-  // Optionally show a loading spinner while we fetch data
-  if (loading) {
-    return <div>Loading user...</div>;
-  }
+    fetchUserProfile,
+    updateUserProfile,
+    signOut
+  };
 
   return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
+    <AuthContext.Provider value={value}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 };

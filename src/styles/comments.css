@@ -4,101 +4,120 @@
 .comment-container {
     background: #f8f9fa;          /* very light gray background */
     border: 1px solid #e1e4e8;    /* subtle border */
-    border-radius: 4px;
-    padding: 8px;
-    margin-bottom: 8px;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
   }
   
   /* Username styling */
   .comment-username {
     font-weight: 600;
-    margin-right: 4px;
+    margin-right: 8px;
     color: #0079d3;  /* Reddit blue */
+  }
+  
+  /* Comment time styling */
+  .comment-time {
+    font-size: 0.85em;
+    color: #666;
+    margin-left: 4px;
   }
   
   /* Comment text styling */
   .comment-text {
     font-size: 0.95em;
     color: #333;
-    display: inline;
-  }
-  
-  /* Action buttons (like, reply, edit, delete) */
-  .comment-actions {
-    font-size: 0.85em;
-    color: #555;
+    display: block;
     margin-top: 4px;
   }
   
-  .comment-actions button {
+  /* Action buttons container */
+  .comment-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+  }
+  
+  /* Reply, Edit, Delete buttons */
+  .reply-button,
+  .edit-button,
+  .delete-button {
     background: none;
     border: none;
-    color: #0079d3;  /* Reddit blue */
-    cursor: pointer;
-    margin-right: 8px;
-    padding: 2px 4px;
+    font-size: 0.9em;
     font-weight: 500;
-    transition: color 0.2s ease;
-  }
-  
-  .comment-actions button:hover {
-    color: #005999;
-  }
-  
-  /* Liked-by info styling */
-  .liked-by {
-    font-size: 0.8em;
-    color: #555;
-    margin-left: 4px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
   }
   
   /* Input for replying or editing */
   .comment-input {
     width: 100%;
-    padding: 6px 8px;
-    margin-top: 4px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 0.9em;
+    padding: 8px 12px;
+    margin-top: 8px;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    font-size: 0.95em;
+    transition: border-color 0.2s ease;
+  }
+  
+  .comment-input:focus {
+    outline: none;
+    border-color: #0079d3;
+    box-shadow: 0 0 0 2px rgba(0, 121, 211, 0.1);
   }
   
   /* Reply section container */
   .reply-section {
-    margin-top: 4px;
+    margin-top: 8px;
+    padding-left: 20px;
   }
   
-  /* Style for Save and Cancel buttons (used for editing/replying) */
+  /* Style for Save and Cancel buttons */
   .reply-btn,
   .cancel-btn {
-    background-color: #f5f6f7;
-    border: 1px solid #d1d5db;
-    color: #0079d3;
-    cursor: pointer;
     padding: 6px 12px;
-    border-radius: 4px;
+    border-radius: 6px;
     font-weight: 500;
+    font-size: 0.9em;
+    margin-top: 8px;
     margin-right: 8px;
-    transition: background-color 0.2s ease;
-    font-size: 0.85em;
+    transition: all 0.2s ease;
   }
   
-  .reply-btn:hover,
+  .reply-btn {
+    background-color: #0079d3;
+    color: white;
+    border: none;
+  }
+  
+  .reply-btn:hover {
+    background-color: #005999;
+  }
+  
+  .cancel-btn {
+    background-color: #f5f6f7;
+    border: 1px solid #e1e4e8;
+    color: #666;
+  }
+  
   .cancel-btn:hover {
     background-color: #e4e6e9;
   }
   
   /* Load More Comments Button */
   .load-more-btn {
+    width: 100%;
+    padding: 8px;
     background-color: #f5f6f7;
-    border: 1px solid #d1d5db;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
     color: #0079d3;
-    cursor: pointer;
-    padding: 6px 12px;
-    border-radius: 4px;
     font-weight: 500;
-    margin-top: 8px;
-    transition: background-color 0.2s ease;
-    font-size: 0.9em;
+    margin-top: 12px;
+    transition: all 0.2s ease;
   }
   
   .load-more-btn:hover {

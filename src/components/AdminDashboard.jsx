@@ -209,7 +209,7 @@ const AdminDashboard = () => {
           </div>
 
           {/* Posts List in 3-column grid */}
-          {uniqueFilteredPosts.length === 0 ? (
+      {uniqueFilteredPosts.length === 0 ? (
             <p className="text-gray-600 text-center">
               No posts match your filter/search.
             </p>
@@ -218,6 +218,9 @@ const AdminDashboard = () => {
               {uniqueFilteredPosts.map((post, index) => (
                 <div
                   key={`${post.id}-${index}`}
+                  postId={post.id}
+                  user={user}
+                  disableRealtime={true} // Disable real-time listener here
                   className="p-4 border border-gray-200 rounded-md shadow-sm hover:shadow-md flex flex-col"
                 >
                   <div className="flex-1">
