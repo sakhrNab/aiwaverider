@@ -62,13 +62,15 @@ const CommentsList = ({ postId, comments, onAuthRequired, refreshComments }) => 
         revertUpdate();
         toast.error('Failed to update like. Please try again.');
       } finally {
+        // Only remove this specific comment's ID from the likingComments Set
+        // This ensures other comment like buttons aren't affected
         setLikingComments(prev => {
           const next = new Set(prev);
           next.delete(commentId);
           return next;
         });
       }
-    }, 500),
+    }, 300), // Reduced debounce time for better responsiveness
     [postId, unlikeComment, likeComment, updateCommentInCache]
   );
 
@@ -112,8 +114,14 @@ const CommentsList = ({ postId, comments, onAuthRequired, refreshComments }) => 
       updateCommentInCache(postId, revertedComment);
     };
 
+    // Immediately add this comment's ID to the likingComments Set to disable the button
     setLikingComments(prev => new Set([...prev, comment.id]));
+    
+    // Apply optimistic update for immediate UI feedback
     optimisticUpdate();
+    
+    // Call the debounced function to make the actual API request
+    // The button will remain disabled until this specific operation completes
     debouncedLikeAction(comment.id, isLiked, revertUpdate);
   };
 
@@ -277,14 +285,18 @@ const CommentsList = ({ postId, comments, onAuthRequired, refreshComments }) => 
               user && comment.likes && Array.isArray(comment.likes) && comment.likes.includes(user.uid)
                 ? 'bg-red-50 text-red-500 hover:bg-red-100'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-            disabled={!user}
+            } ${likingComments.has(comment.id) ? 'opacity-60 cursor-not-allowed' : ''}`}
+            disabled={!user || likingComments.has(comment.id)}
             title={user ? undefined : 'Sign in to like comments'}
+            aria-busy={likingComments.has(comment.id)}
+            aria-label={user && comment.likes && Array.isArray(comment.likes) && comment.likes.includes(user.uid)
+              ? 'Unlike this comment' 
+              : 'Like this comment'}
           >
             {user && comment.likes && Array.isArray(comment.likes) && comment.likes.includes(user.uid) ? (
-              <FaHeart className="w-4 h-4 text-red-500" />
+              <FaHeart className={`w-4 h-4 text-red-500 ${likingComments.has(comment.id) ? 'animate-pulse' : ''}`} />
             ) : (
-              <FaRegHeart className="w-4 h-4" />
+              <FaRegHeart className={`w-4 h-4 ${likingComments.has(comment.id) ? 'animate-pulse' : ''}`} />
             )}
             <span className={`font-medium ${
               user && comment.likes && Array.isArray(comment.likes) && comment.likes.includes(user.uid)

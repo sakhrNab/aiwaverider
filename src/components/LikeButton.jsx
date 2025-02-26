@@ -223,12 +223,14 @@ const LikeButton = ({ postId, initialLikes = [], className = '' }) => {
         isLiked 
           ? 'bg-red-50 text-red-500 hover:bg-red-100' 
           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-      } ${className}`}
+      } ${className} ${isLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+      aria-busy={isLoading}
+      aria-label={isLiked ? 'Unlike this post' : 'Like this post'}
     >
       {isLiked ? (
-        <FaHeart className="w-5 h-5 text-red-500" />
+        <FaHeart className={`w-5 h-5 text-red-500 ${isLoading ? 'animate-pulse' : ''}`} />
       ) : (
-        <FaRegHeart className="w-5 h-5" />
+        <FaRegHeart className={`w-5 h-5 ${isLoading ? 'animate-pulse' : ''}`} />
       )}
       <span className={`font-medium ${isLiked ? 'text-red-500' : 'text-gray-600'}`}>
         {likes}

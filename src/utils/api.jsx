@@ -405,7 +405,16 @@ export const getPostById = async (postId) => {
 export const likeComment = async (postId, commentId) => {
   try {
     console.log(`[API] Sending request to like comment ${commentId} for post ${postId}`);
-    const response = await api.post(`/api/posts/${postId}/comments/${commentId}/like`);
+    
+    // Add timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await api.post(`/api/posts/${postId}/comments/${commentId}/like`, {}, {
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
     console.log(`[API] Like comment response received:`, response.status);
     
     // Return in a consistent format, handling different response structures
@@ -413,8 +422,18 @@ export const likeComment = async (postId, commentId) => {
       updatedComment: response.data.updatedComment || response.data
     };
   } catch (error) {
-    console.error(`[API] Error liking comment ${commentId}:`, error);
-    throw error;
+    // Enhanced error logging
+    if (error.name === 'AbortError') {
+      console.error(`[API] Request to like comment ${commentId} timed out`);
+      throw new Error(`Request timed out. The server might be overloaded.`);
+    } else if (error.response) {
+      console.error(`[API] Error liking comment ${commentId}:`, 
+        error.response.status, error.response.data);
+      throw new Error(error.response.data.error || 'Failed to update like status');
+    } else {
+      console.error(`[API] Error liking comment ${commentId}:`, error.message);
+      throw error;
+    }
   }
 };
 
@@ -422,7 +441,16 @@ export const likeComment = async (postId, commentId) => {
 export const unlikeComment = async (postId, commentId) => {
   try {
     console.log(`[API] Sending request to unlike comment ${commentId} for post ${postId}`);
-    const response = await api.post(`/api/posts/${postId}/comments/${commentId}/unlike`);
+    
+    // Add timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await api.post(`/api/posts/${postId}/comments/${commentId}/unlike`, {}, {
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
     console.log(`[API] Unlike comment response received:`, response.status);
     
     // Return the same format as likeComment for consistency
@@ -430,8 +458,18 @@ export const unlikeComment = async (postId, commentId) => {
       updatedComment: response.data.updatedComment || response.data
     };
   } catch (error) {
-    console.error(`[API] Error unliking comment ${commentId}:`, error);
-    throw error;
+    // Enhanced error logging
+    if (error.name === 'AbortError') {
+      console.error(`[API] Request to unlike comment ${commentId} timed out`);
+      throw new Error(`Request timed out. The server might be overloaded.`);
+    } else if (error.response) {
+      console.error(`[API] Error unliking comment ${commentId}:`, 
+        error.response.status, error.response.data);
+      throw new Error(error.response.data.error || 'Failed to update like status');
+    } else {
+      console.error(`[API] Error unliking comment ${commentId}:`, error.message);
+      throw error;
+    }
   }
 };
 
