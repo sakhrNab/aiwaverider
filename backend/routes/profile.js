@@ -93,36 +93,73 @@ router.put('/', validateFirebaseToken, async (req, res) => {
 // Updated upload-avatar endpoint
 router.put('/upload-avatar', validateFirebaseToken, upload.single('avatar'), async (req, res) => {
   try {
+    console.log('Upload avatar request received');
+    
     if (!req.file) {
+      console.log('No file uploaded');
       return res.status(400).json({ error: 'No file uploaded.' });
     }
+    
+    console.log('File received:', req.file.originalname, req.file.mimetype, req.file.size);
+    
     // Compute md5 hash of file buffer
     const fileHash = crypto.createHash('md5').update(req.file.buffer).digest('hex');
+    
+    // Get Storage bucket
     const storage = admin.storage();
-    const bucket = storage.bucket(process.env.FIREBASE_STORAGE_BUCKET);
-    // Create a file reference using the hash as filename
-    const fileName = `avatars/${fileHash}-${req.file.originalname}`;
-    const fileRef = bucket.file(fileName);
-    // Check if file exists already
-    const [exists] = await fileRef.exists();
-    if (!exists) {
-      // Upload file if not exists
-      await fileRef.save(req.file.buffer, {
-        metadata: {
-          contentType: req.file.mimetype,
-        },
+    const bucketName = process.env.FIREBASE_STORAGE_BUCKET;
+    
+    console.log('Using bucket:', bucketName);
+    
+    try {
+      const bucket = storage.bucket(bucketName);
+      
+      // Create a file reference using the hash as filename
+      const fileName = `avatars/${fileHash}-${req.file.originalname}`;
+      const fileRef = bucket.file(fileName);
+      
+      console.log('File reference created:', fileName);
+      
+      // Check if file exists already
+      const [exists] = await fileRef.exists();
+      console.log('File exists?', exists);
+      
+      if (!exists) {
+        // Upload file if not exists
+        console.log('Uploading file...');
+        await fileRef.save(req.file.buffer, {
+          metadata: {
+            contentType: req.file.mimetype,
+          },
+        });
+        
+        // Make file public so it can be retrieved via public URL
+        console.log('Making file public...');
+        await fileRef.makePublic();
+      }
+      
+      // Get public URL (assumes file is public or token is added)
+      const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media`;
+      console.log('Public URL:', publicUrl);
+      
+      // Update profile, etc...
+      await db.collection('users').doc(req.user.uid).update({ photoURL: publicUrl });
+      
+      console.log('Profile updated successfully with new photoURL');
+      return res.json({ photoURL: publicUrl });
+    } catch (storageError) {
+      console.error('Firebase Storage error:', storageError);
+      return res.status(500).json({ 
+        error: 'Failed to upload avatar to storage.', 
+        details: storageError.message 
       });
-      // NEW: Make file public so it can be retrieved via public URL
-      await fileRef.makePublic();
     }
-    // Get public URL (assumes file is public or token is added)
-    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media`;
-    // Update profile, etc...
-    await db.collection('users').doc(req.user.uid).update({ photoURL: publicUrl });
-    return res.json({ photoURL: publicUrl });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Failed to upload avatar.' });
+    console.error('Error in upload-avatar endpoint:', err);
+    return res.status(500).json({ 
+      error: 'Failed to upload avatar.',
+      details: err.message
+    });
   }
 });
 

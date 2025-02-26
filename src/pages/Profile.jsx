@@ -264,8 +264,24 @@ const ProfilePage = () => {
       // Rest of the code for other profile updates
       let updatedPhotoURL = profile.photoURL;
       if (imageFile) {
-        const uploadResponse = await uploadProfileImage(imageFile);
-        updatedPhotoURL = uploadResponse.photoURL;
+        try {
+          console.log('Uploading profile image...');
+          const formData = new FormData();
+          formData.append('avatar', imageFile);
+          
+          const uploadResponse = await uploadProfileImage(imageFile);
+          console.log('Upload response:', uploadResponse);
+          
+          if (uploadResponse && uploadResponse.photoURL) {
+            updatedPhotoURL = uploadResponse.photoURL;
+          } else {
+            throw new Error('Invalid response from image upload');
+          }
+        } catch (uploadError) {
+          console.error('Error uploading image:', uploadError);
+          setError(`Error uploading image: ${uploadError.message || 'Unknown error'}`);
+          return;
+        }
       }
 
       const updatedData = {
@@ -273,26 +289,38 @@ const ProfilePage = () => {
         photoURL: updatedPhotoURL,
       };
 
-      await updateProfile({ 
-        ...profile, 
-        displayName: updatedData.displayName, 
-        bio: updatedData.bio, 
-        photoURL: updatedPhotoURL 
-      });
+      try {
+        console.log('Updating profile with data:', { 
+          ...profile, 
+          displayName: updatedData.displayName, 
+          bio: updatedData.bio, 
+          photoURL: updatedPhotoURL 
+        });
+        
+        await updateProfile({ 
+          ...profile, 
+          displayName: updatedData.displayName, 
+          bio: updatedData.bio, 
+          photoURL: updatedPhotoURL 
+        });
 
-      const updatedProfile = await getProfile();
-      setProfile(updatedProfile);
-      
-      // Update user profile in AuthContext
-      if (updateUserProfile) {
-        await updateUserProfile(user.uid, updatedProfile);
+        const updatedProfile = await getProfile();
+        setProfile(updatedProfile);
+        
+        // Update user profile in AuthContext
+        if (updateUserProfile) {
+          await updateUserProfile(user.uid, updatedProfile);
+        }
+        
+        localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile));
+        setSuccess('Profile updated successfully!');
+        setEditMode(false);
+        setImageFile(null);
+        setPreviewImage('');
+      } catch (profileUpdateError) {
+        console.error('Error updating profile:', profileUpdateError);
+        setError(`Error updating profile: ${profileUpdateError.message || 'Unknown error'}`);
       }
-      
-      localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile));
-      setSuccess('Profile updated successfully!');
-      setEditMode(false);
-      setImageFile(null);
-      setPreviewImage('');
     } catch (err) {
       console.error('Error in handleUpdate:', err);
       setError(err.message || 'Error updating profile');

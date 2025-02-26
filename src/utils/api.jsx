@@ -514,10 +514,16 @@ export const getProfile = async () => {
 
 export const updateProfile = async (profileData) => {
   try {
+    console.log('Sending profile update request:', profileData);
     const response = await api.put('/api/profile', profileData);
+    console.log('Profile update response:', response.data);
     return response.data;
   } catch (error) {
     console.error('Error updating profile:', error);
+    if (error.response) {
+      console.error('Server response:', error.response.data);
+      throw new Error(error.response.data.error || `Server error: ${error.response.status}`);
+    }
     throw error;
   }
 };
@@ -624,15 +630,22 @@ export const getCommunityInfo = async () => {
 // Upload Profile Avatar using Firebase Storage
 export const uploadProfileImage = async (file) => {
   try {
+    console.log('Preparing to upload image:', file.name, file.type, file.size);
     const formData = new FormData();
     formData.append('avatar', file);
+    
     // Call the backend endpoint for avatar upload (Firebase Storage based)
     const response = await api.put('/api/profile/upload-avatar', formData, {
       // Do not set Content-Type header manually for FormData.
     });
+    console.log('Image upload response:', response.data);
     return response.data; // Expected to return { photoURL: "new_image_url" }
   } catch (error) {
     console.error('Error uploading profile image:', error);
+    if (error.response) {
+      console.error('Server response:', error.response.data);
+      throw new Error(error.response.data.error || `Server error: ${error.response.status}`);
+    }
     throw error;
   }
 };
