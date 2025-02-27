@@ -5,6 +5,7 @@ import { PostsContext } from '../contexts/PostsContext';
 import { toast } from 'react-toastify';
 import { FaHeart, FaRegHeart } from 'react-icons/fa';
 import debounce from 'lodash/debounce';
+import { Link } from "react-router-dom";
 
 const LikeButton = ({ postId, initialLikes = [], className = '' }) => {
   const [likes, setLikes] = useState(initialLikes ? initialLikes.length : 0);
@@ -167,7 +168,7 @@ const LikeButton = ({ postId, initialLikes = [], className = '' }) => {
     if (!user) {
       toast.info(
         <div>
-          Please <a href="/signin" className="text-blue-500 hover:text-blue-700">sign in</a> to like posts
+  Please <Link to="/sign-in" className="text-blue-500 hover:text-blue-700">sign in</Link> to like posts
         </div>,
         {
           position: "top-center",

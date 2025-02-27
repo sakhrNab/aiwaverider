@@ -542,10 +542,63 @@ export const toggleLike = async (postId) => {
 
 export const getProfile = async () => {
   try {
+    // Check for cached profile data first
+    const cacheKey = 'profile_data';
+    const cachedData = localStorage.getItem(cacheKey);
+    
+    if (cachedData) {
+      try {
+        const { data, timestamp } = JSON.parse(cachedData);
+        const cacheAge = Date.now() - timestamp;
+        const cacheDuration = 30 * 60 * 1000; // 30 minutes
+        
+        if (cacheAge < cacheDuration) {
+          console.log('[API] Using cached profile data', { cacheAge: Math.round(cacheAge/1000) + 's' });
+          return data;
+        } else {
+          console.log('[API] Profile cache expired, fetching fresh data');
+        }
+      } catch (cacheError) {
+        console.error('[API] Error parsing cached profile data:', cacheError);
+        // Continue to fetch fresh data
+      }
+    } else {
+      console.log('[API] No profile cache found, fetching fresh data');
+    }
+    
+    // Fetch fresh data from API
     const response = await api.get('/api/profile');
-    return response.data;
+    const profileData = response.data;
+    
+    // Cache the fresh data
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({
+        data: profileData,
+        timestamp: Date.now()
+      }));
+      console.log('[API] Profile data cached successfully');
+    } catch (cacheError) {
+      console.error('[API] Error caching profile data:', cacheError);
+      // Continue even if caching fails
+    }
+    
+    return profileData;
   } catch (error) {
     console.error('Error getting profile:', error);
+    
+    // Try to return cached data even if expired as fallback
+    try {
+      const cacheKey = 'profile_data';
+      const cachedData = localStorage.getItem(cacheKey);
+      if (cachedData) {
+        const { data } = JSON.parse(cachedData);
+        console.log('[API] Using expired cache as fallback after API error');
+        return data;
+      }
+    } catch (fallbackError) {
+      console.error('[API] Error reading fallback cache:', fallbackError);
+    }
+    
     throw error;
   }
 };
@@ -570,27 +623,28 @@ export const updateInterests = async (interests) => {
   try {
     // Ensure interests is an array
     if (!Array.isArray(interests)) {
+      console.error('[API] Invalid interests format:', interests);
       throw new Error('Interests must be an array');
     }
 
-    // Log the request payload for debugging
-    console.log('Sending interests update:', { interests });
-
-    // Make the API call with properly formatted request body
-    const response = await api.put('/api/profile/interests', { interests });
+    console.log('[API] Updating interests:', interests);
     
-    // Log the response for debugging
-    console.log('Interests update response:', response.data);
-
-    // Return the response data directly
+    // Make the API call
+    const response = await api.put('/api/profile/interests', { interests });
+    console.log('[API] Update interests response:', response.data);
+    
+    // Clear caches after successful update
+    try {
+      localStorage.removeItem('profile_data');
+      localStorage.removeItem('community_data');
+      console.log('[API] Cleared profile and community caches after interests update');
+    } catch (cacheError) {
+      console.error('[API] Error clearing caches:', cacheError);
+    }
+    
     return response.data;
   } catch (error) {
     console.error('Error updating interests:', error);
-    if (error.response) {
-      // If we have a response from the server, throw its error message
-      throw new Error(error.response.data.error || 'Failed to update interests');
-    }
-    // Otherwise throw the original error
     throw error;
   }
 };
@@ -657,10 +711,63 @@ export const removeFavorite = async (favoriteId) => {
 
 export const getCommunityInfo = async () => {
   try {
+    // Check for cached data
+    const cacheKey = 'community_data';
+    const cachedData = localStorage.getItem(cacheKey);
+    
+    if (cachedData) {
+      try {
+        const { data, timestamp } = JSON.parse(cachedData);
+        const cacheAge = Date.now() - timestamp;
+        const cacheDuration = 30 * 60 * 1000; // 30 minutes
+        
+        if (cacheAge < cacheDuration) {
+          console.log('[API] Using cached community data', { cacheAge: Math.round(cacheAge/1000) + 's' });
+          return data;
+        } else {
+          console.log('[API] Community cache expired, fetching fresh data');
+        }
+      } catch (cacheError) {
+        console.error('[API] Error parsing cached community data:', cacheError);
+        // Continue to fetch fresh data
+      }
+    } else {
+      console.log('[API] No community cache found, fetching fresh data');
+    }
+    
+    // Fetch fresh data from API
     const response = await api.get('/api/profile/community');
-    return response.data;
+    const communityData = response.data;
+    
+    // Cache the fresh data
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({
+        data: communityData,
+        timestamp: Date.now()
+      }));
+      console.log('[API] Community data cached successfully');
+    } catch (cacheError) {
+      console.error('[API] Error caching community data:', cacheError);
+      // Continue even if caching fails
+    }
+    
+    return communityData;
   } catch (error) {
     console.error('Error getting community info:', error);
+    
+    // Try to return cached data even if expired as fallback
+    try {
+      const cacheKey = 'community_data';
+      const cachedData = localStorage.getItem(cacheKey);
+      if (cachedData) {
+        const { data } = JSON.parse(cachedData);
+        console.log('[API] Using expired community cache as fallback due to error');
+        return data;
+      }
+    } catch (fallbackError) {
+      console.error('[API] Error reading fallback community cache:', fallbackError);
+    }
+    
     throw error;
   }
 };

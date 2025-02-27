@@ -72,7 +72,7 @@ const CommentsSection = ({ postId }) => {
           const lastFetchTime = localStorage.getItem(`commentsLastFetch_${postId}`);
           if (lastFetchTime && (Date.now() - parseInt(lastFetchTime)) < 30000) {
             console.log('[CommentsSection] Using fresh cache for comments, fetching in background');
-            setIsLoading(false);
+          setIsLoading(false);
           }
         } else {
           console.log(`[CommentsSection] No cached comments found for post ${postId}`);
@@ -161,9 +161,9 @@ const CommentsSection = ({ postId }) => {
     }
   }, [commentsCache, postId]);
 
-  const handleAddComment = async () => {
-    if (!newComment.trim()) return;
-    
+const handleAddComment = async () => {
+  if (!newComment.trim()) return;
+  
     if (!handleAuthRequired('add a comment')) return;
 
     try {
@@ -173,15 +173,15 @@ const CommentsSection = ({ postId }) => {
         setComments(prev => [response.comment, ...prev]);
         // Then update cache
         addCommentToCache(postId, response.comment);
-        setNewComment('');
-        setError('');
-      }
-    } catch (err) {
-      console.error('Error adding comment:', err);
+      setNewComment('');
+      setError('');
+    }
+  } catch (err) {
+    console.error('Error adding comment:', err);
       setError('Failed to add comment. Please try again.');
       toast.error('Failed to add comment. Please try again.');
-    }
-  };
+  }
+};
 
   return (
     <div className="mt-6">
@@ -189,9 +189,9 @@ const CommentsSection = ({ postId }) => {
       
       {/* Add comment section - always visible but conditionally enabled */}
       <div className="mb-4">
-        <textarea
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
+          <textarea
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
           className={`w-full p-2 border rounded resize-none transition-colors ${
             user ? 'bg-white hover:border-blue-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500' : 'bg-gray-100'
           }`}

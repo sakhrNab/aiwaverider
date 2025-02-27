@@ -1,57 +1,103 @@
 // src/contexts/AuthContext.jsx
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { auth } from '../utils/firebase';
 import { getProfile, updateProfile } from '../utils/api';
 import { db } from '../utils/firebase';
 
 export const AuthContext = createContext(null);
 
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes cache duration
+
+// Profile fields to store in cache (to keep it lightweight)
+const PROFILE_CACHE_FIELDS = [
+  'uid', 'email', 'username', 'displayName', 'photoURL', 
+  'firstName', 'lastName', 'role', 'interests', 
+  'notifications', 'favorites', 'language'
+];
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [lastProfileFetch, setLastProfileFetch] = useState(0);
 
   // Cache management functions
-  const getCacheKey = useCallback((type, id) => {
-    return `auth_${type}_${id}`;
-  }, []);
+  const getCacheKey = useCallback((type, id) => `auth_${type}_${id}`, []);
 
   const getFromCache = useCallback((type, id) => {
-    const key = getCacheKey(type, id);
-    const cached = localStorage.getItem(key);
-    if (cached) {
-      const { data, timestamp } = JSON.parse(cached);
-      if (Date.now() - timestamp < CACHE_DURATION) {
-        return data;
+    try {
+      const key = getCacheKey(type, id);
+      const cached = localStorage.getItem(key);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_DURATION) {
+          console.log(`[AuthContext] Using cached ${type} data for ${id}`);
+          return data;
+        }
+        // Cache expired
+        console.log(`[AuthContext] Cache expired for ${type} data for ${id}`);
+        localStorage.removeItem(key);
       }
-      localStorage.removeItem(key);
+    } catch (err) {
+      console.error("[AuthContext] Cache read error:", err);
     }
     return null;
   }, [getCacheKey]);
 
-  const setInCache = useCallback((type, id, data) => {
-    const key = getCacheKey(type, id);
-    localStorage.setItem(key, JSON.stringify({
-      data,
-      timestamp: Date.now()
-    }));
-  }, [getCacheKey]);
-
-  const clearCache = useCallback((type, id) => {
-    if (id) {
-      localStorage.removeItem(getCacheKey(type, id));
-    } else {
-      Object.keys(localStorage)
-        .filter(key => key.startsWith('auth_'))
-        .forEach(key => localStorage.removeItem(key));
+  const setInCache = useCallback((type, id, fullData) => {
+    try {
+      // For profile data, only store essential fields to keep cache lightweight
+      let dataToCache = fullData;
+      
+      if (type === 'profile' && fullData) {
+        dataToCache = {};
+        PROFILE_CACHE_FIELDS.forEach(field => {
+          if (fullData[field] !== undefined) {
+            dataToCache[field] = fullData[field];
+          }
+        });
+      }
+      
+      const key = getCacheKey(type, id);
+      localStorage.setItem(key, JSON.stringify({ 
+        data: dataToCache, 
+        timestamp: Date.now() 
+      }));
+      console.log(`[AuthContext] Cached ${type} data for ${id}`);
+    } catch (err) {
+      console.error("[AuthContext] Cache write error:", err);
     }
   }, [getCacheKey]);
 
-  // Fetch user profile with caching
+  const clearCache = useCallback((type, id) => {
+    try {
+      if (id) {
+        localStorage.removeItem(getCacheKey(type, id));
+        console.log(`[AuthContext] Cleared cache for ${type} ${id}`);
+      } else {
+        const keysToRemove = Object.keys(localStorage)
+          .filter(key => key.startsWith('auth_'));
+        
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        console.log(`[AuthContext] Cleared all auth cache (${keysToRemove.length} items)`);
+      }
+    } catch (err) {
+      console.error("[AuthContext] Cache clear error:", err);
+    }
+  }, [getCacheKey]);
+
+  // Fetch user profile with improved caching
   const fetchUserProfile = useCallback(async (uid, force = false) => {
     try {
+      // Check if we've fetched recently (throttle API calls)
+      const timeSinceLastFetch = Date.now() - lastProfileFetch;
+      if (!force && timeSinceLastFetch < 5000) { // 5 second throttle
+        console.log('[AuthContext] Throttling profile fetch - requested too soon');
+        const cachedProfile = getFromCache('profile', uid);
+        return cachedProfile;
+      }
+      
+      // Check cache first unless forced refresh
       if (!force) {
         const cachedProfile = getFromCache('profile', uid);
         if (cachedProfile) {
@@ -59,77 +105,118 @@ export const AuthProvider = ({ children }) => {
         }
       }
 
-      const profile = await getProfile(uid);
+      console.log('[AuthContext] Fetching fresh profile data from API');
+      setLastProfileFetch(Date.now());
+      
+      const profile = await getProfile();
       if (profile) {
         setInCache('profile', uid, profile);
       }
       return profile;
     } catch (err) {
-      console.error('Error fetching user profile:', err);
-      throw err;
+      console.error('[AuthContext] Error fetching user profile:', err);
+      // Return cached data as fallback even if it's expired
+      try {
+        const key = getCacheKey('profile', uid);
+        const cached = localStorage.getItem(key);
+        if (cached) {
+          const { data } = JSON.parse(cached);
+          console.log('[AuthContext] Using expired cache as fallback after API error');
+          return data;
+        }
+      } catch (cacheErr) {
+        console.error('[AuthContext] Error reading cache as fallback:', cacheErr);
+      }
+      return null;
     }
-  }, [getFromCache, setInCache]);
+  }, [getFromCache, setInCache, getCacheKey, lastProfileFetch]);
 
   // Update user profile and invalidate cache
   const updateUserProfile = useCallback(async (uid, updates) => {
     try {
+      console.log('[AuthContext] Updating user profile');
       const updatedProfile = await updateProfile(updates);
+      
       if (updatedProfile) {
+        // Clear the cache for this profile
         clearCache('profile', uid);
-        setUser(prev => ({
-          ...prev,
-          ...updatedProfile
-        }));
+        
+        // Update the user state with the new profile data
+        setUser(prev => {
+          // Only update if there are actual changes to prevent unnecessary renders
+          const hasChanges = Object.keys(updatedProfile).some(
+            key => JSON.stringify(prev?.[key]) !== JSON.stringify(updatedProfile[key])
+          );
+          
+          return hasChanges ? { ...prev, ...updatedProfile } : prev;
+        });
+        
+        // Cache the new profile
+        setInCache('profile', uid, updatedProfile);
       }
       return updatedProfile;
     } catch (err) {
-      console.error('Error updating user profile:', err);
-      throw err;
+      console.error('[AuthContext] Error updating user profile:', err);
+      return null;
     }
-  }, [clearCache]);
+  }, [clearCache, setInCache]);
 
   // Handle auth state changes
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+      setLoading(true);
       try {
         if (firebaseUser) {
-          const { uid, email, displayName } = firebaseUser;
+          const { uid, email, displayName, photoURL } = firebaseUser;
           
-          // Check cache first
-          const cachedProfile = getFromCache('profile', uid);
-          let userProfile;
-          
-          if (cachedProfile && (Date.now() - cachedProfile.timestamp) < CACHE_DURATION) {
-            userProfile = cachedProfile.data;
-          } else {
-            // Fetch fresh profile from Firestore
-            const userDoc = await db.collection('users').doc(uid).get();
-            userProfile = userDoc.exists ? userDoc.data() : null;
-            
-            if (userProfile) {
-              setInCache('profile', uid, {
-                data: userProfile,
-                timestamp: Date.now()
-              });
+          // Try to get profile from cache first
+          let userProfile = getFromCache('profile', uid);
+          let needsFreshData = !userProfile;
+
+          // If no cache, try to get from Firestore directly (faster than API call)
+          if (!userProfile) {
+            console.log('[AuthContext] No cached profile, checking Firestore');
+            try {
+              const userDoc = await db.collection('users').doc(uid).get();
+              if (userDoc.exists) {
+                userProfile = userDoc.data();
+                // Cache this data
+                setInCache('profile', uid, userProfile);
+                needsFreshData = false;
+              }
+            } catch (dbErr) {
+              console.error('[AuthContext] Error fetching from Firestore:', dbErr);
+              needsFreshData = true;
             }
           }
 
-          const userData = {
+          // Set user with available data
+          setUser({
             uid,
             email,
-            displayName,
-            photoURL: userProfile?.photoURL || firebaseUser.photoURL,
-            role: userProfile?.role || 'authenticated', // Include role from Firestore
-            ...userProfile
-          };
-
-          setUser(userData);
+            displayName: userProfile?.displayName || displayName,
+            photoURL: userProfile?.photoURL || photoURL,
+            role: userProfile?.role || 'authenticated',
+            ...(userProfile || {})
+          });
+          
+          // If we need fresh data, fetch it in the background
+          if (needsFreshData) {
+            console.log('[AuthContext] Fetching fresh profile data in background');
+            fetchUserProfile(uid).then(freshProfile => {
+              if (freshProfile) {
+                setUser(prev => ({ ...prev, ...freshProfile }));
+              }
+            }).catch(err => {
+              console.error('[AuthContext] Background profile fetch error:', err);
+            });
+          }
         } else {
           setUser(null);
           clearCache();
         }
       } catch (err) {
-        console.error('Error in auth state change:', err);
+        console.error('[AuthContext] Error in auth state change:', err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -137,32 +224,34 @@ export const AuthProvider = ({ children }) => {
     });
 
     return () => unsubscribe();
-  }, [getFromCache, setInCache, clearCache]);
+  }, [getFromCache, setInCache, clearCache, fetchUserProfile]);
 
   // Sign out
   const signOut = useCallback(async () => {
     try {
       await auth.signOut();
-      clearCache();
       setUser(null);
+      clearCache();
     } catch (err) {
-      console.error('Error signing out:', err);
-      throw err;
+      console.error('[AuthContext] Error signing out:', err);
+      setError(err.message);
     }
   }, [clearCache]);
 
-  const value = {
+  // Memoize the context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => ({
     user,
     loading,
     error,
     fetchUserProfile,
     updateUserProfile,
-    signOut
-  };
+    signOut,
+    clearProfileCache: (uid) => clearCache('profile', uid)
+  }), [user, loading, error, fetchUserProfile, updateUserProfile, signOut, clearCache]);
 
   return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
+    <AuthContext.Provider value={contextValue}>
+      {children}
     </AuthContext.Provider>
   );
 };

@@ -1,16 +1,22 @@
 // src/components/ProfilePage.jsx
 
 import React, { useState, useEffect, useRef, useContext } from 'react';
+import { toast } from 'react-toastify';
 import styles from '../styles/ProfilePage.module.css';
 import { 
   getProfile, 
   updateProfile, 
   updateInterests, 
   getCommunityInfo, 
-  uploadProfileImage
+  uploadProfileImage 
 } from '../utils/api';
 import { AuthContext } from '../contexts/AuthContext';
 import { INTEREST_CATEGORIES } from '../constants/categories';
+
+// Cache keys
+const PROFILE_CACHE_KEY = 'profile_data';
+const COMMUNITY_CACHE_KEY = 'community_data';
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 
 const LANGUAGES = [
   { code: 'en', name: 'English' },
@@ -55,6 +61,8 @@ const ProfilePage = () => {
   const updateProfileState = (userObj) => {
     if (!userObj) return;
     
+    console.log('[Profile] Updating profile state with:', userObj);
+    
     // Update profile state
     setProfile(userObj);
     setFormData({
@@ -73,19 +81,67 @@ const ProfilePage = () => {
     const fetchProfile = async () => {
       try {
         setLoading(true);
+        
+        // Check if we already have profile data in state
+        if (profile && Object.keys(profile).length > 0) {
+          console.log('[Profile] Using existing profile state data');
+          setLoading(false);
+          return;
+        }
+        
         // Use cached data from AuthContext if available
-        if (user) {
+        if (user && Object.keys(user).length > 0) {
+          console.log('[Profile] Using user data from AuthContext');
           updateProfileState(user);
           setLoading(false);
-          return; // Exit early if cached data is used
         }
 
+        // Check for cached profile data
+        const cachedProfile = localStorage.getItem(PROFILE_CACHE_KEY);
+        if (cachedProfile) {
+          try {
+            const { data, timestamp } = JSON.parse(cachedProfile);
+            if (Date.now() - timestamp < CACHE_DURATION) {
+              console.log('[Profile] Using cached profile data');
+              updateProfileState(data);
+              setLoading(false);
+              return;
+            } else {
+              console.log('[Profile] Cache expired, fetching fresh data');
+            }
+          } catch (cacheError) {
+            console.error('[Profile] Error parsing cached profile data:', cacheError);
+          }
+        }
+
+        console.log('[Profile] Fetching profile data from API');
         const data = await getProfile();
-        console.log("Sakhr: ", data.photoURL);
         updateProfileState(data);
+        
+        // Cache the fresh data
+        try {
+          localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
+            data,
+            timestamp: Date.now()
+          }));
+        } catch (cacheError) {
+          console.error('[Profile] Error caching profile data:', cacheError);
+        }
       } catch (err) {
-        console.error(err);
-        setError(err.message || 'Error fetching profile');
+        console.error('[Profile] Error fetching profile:', err);
+        
+        // Try to use cached data as fallback
+        try {
+          const cachedProfile = localStorage.getItem(PROFILE_CACHE_KEY);
+          if (cachedProfile) {
+            const { data } = JSON.parse(cachedProfile);
+            console.log('[Profile] Using expired cache as fallback');
+            updateProfileState(data);
+          }
+        } catch (fallbackError) {
+          console.error('[Profile] Error reading fallback cache:', fallbackError);
+          setError(err.message || 'Error fetching profile');
+        }
       } finally {
         setLoading(false);
       }
@@ -93,22 +149,62 @@ const ProfilePage = () => {
 
     const fetchCommunity = async () => {
       try {
-        // Use cached data from AuthContext if available
-        if (user) {
-          updateProfileState(user);
-          setLoading(false);
-          return; // Exit early if cached data is used
+        // Check if we already have community data in state
+        if (communityInfo && Object.keys(communityInfo).length > 0) {
+          console.log('[Profile] Using existing community state data');
+          return;
         }
+        
+        // Check for cached community data
+        const cachedCommunity = localStorage.getItem(COMMUNITY_CACHE_KEY);
+        if (cachedCommunity) {
+          try {
+            const { data, timestamp } = JSON.parse(cachedCommunity);
+            if (Date.now() - timestamp < CACHE_DURATION) {
+              console.log('[Profile] Using cached community data');
+              setCommunityInfo(data);
+              return;
+            } else {
+              console.log('[Profile] Community cache expired, fetching fresh data');
+            }
+          } catch (cacheError) {
+            console.error('[Profile] Error parsing cached community data:', cacheError);
+          }
+        }
+
+        console.log('[Profile] Fetching community data from API');
         const commData = await getCommunityInfo();
         setCommunityInfo(commData);
+        
+        // Cache the fresh data
+        try {
+          localStorage.setItem(COMMUNITY_CACHE_KEY, JSON.stringify({
+            data: commData,
+            timestamp: Date.now()
+          }));
+        } catch (cacheError) {
+          console.error('[Profile] Error caching community data:', cacheError);
+        }
       } catch (err) {
-        console.error('Error fetching community info:', err);
+        console.error('[Profile] Error fetching community info:', err);
+        
+        // Try to use cached data as fallback
+        try {
+          const cachedCommunity = localStorage.getItem(COMMUNITY_CACHE_KEY);
+          if (cachedCommunity) {
+            const { data } = JSON.parse(cachedCommunity);
+            console.log('[Profile] Using expired community cache as fallback');
+            setCommunityInfo(data);
+          }
+        } catch (fallbackError) {
+          console.error('[Profile] Error reading fallback community cache:', fallbackError);
+        }
       }
     };
 
     fetchProfile();
     fetchCommunity();
-  }, []);
+  }, [user]); // Only re-run when user changes
 
   // Handle tab changes
   const handleTabChange = (tab) => {
@@ -158,11 +254,15 @@ const ProfilePage = () => {
           await updateUserProfile(user.uid, updatedProfile);
         }
         
-        localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile));
+        // Clear cache to force refresh
+        localStorage.removeItem(PROFILE_CACHE_KEY);
+        
+        toast.success("Profile image updated successfully!");
       }
     } catch (err) {
       console.error(err);
       setError("Failed to update profile image.");
+      toast.error("Failed to update profile image.");
     }
   };
 
@@ -185,11 +285,15 @@ const ProfilePage = () => {
         await updateUserProfile(user.uid, updatedProfile);
       }
       
-      localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile));
+      // Clear cache to force refresh
+      localStorage.removeItem(PROFILE_CACHE_KEY);
+      
       setSuccess("Avatar removed successfully!");
+      toast.success("Avatar removed successfully!");
     } catch (err) {
       console.error(err);
       setError("Failed to remove avatar.");
+      toast.error("Failed to remove avatar.");
     }
   };
 
@@ -231,32 +335,42 @@ const ProfilePage = () => {
         }
 
         // Log the interests being sent
-        console.log('Selected interests for update:', selectedInterests);
+        console.log('[Profile] Selected interests for update:', selectedInterests);
         
         try {
           // Update interests
           const response = await updateInterests(selectedInterests);
-          console.log('Update interests response:', response);
+          console.log('[Profile] Update interests response:', response);
 
           if (response.success) {
-            // After successful interests update, update the profile state
-            const updatedProfile = await getProfile();
-            setProfile(updatedProfile);
+            // Clear caches
+            localStorage.removeItem(PROFILE_CACHE_KEY);
+            localStorage.removeItem(COMMUNITY_CACHE_KEY);
+            
+            // Update the profile state directly instead of fetching again
+            setProfile(prev => ({
+              ...prev,
+              interests: selectedInterests
+            }));
             
             // Update user profile in AuthContext
-            if (updateUserProfile) {
-              await updateUserProfile(user.uid, updatedProfile);
+            if (updateUserProfile && user?.uid) {
+              await updateUserProfile(user.uid, {
+                ...user,
+                interests: selectedInterests
+              });
             }
             
-            localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile));
             setSuccess('Interests updated successfully!');
+            toast.success('Interests updated successfully!');
             setEditMode(false);
           } else {
             throw new Error('Failed to update interests');
           }
         } catch (error) {
-          console.error('Error updating interests:', error);
+          console.error('[Profile] Error updating interests:', error);
           setError(error.message || 'Failed to update interests');
+          toast.error(error.message || 'Failed to update interests');
         }
         return;
       }
@@ -265,12 +379,12 @@ const ProfilePage = () => {
       let updatedPhotoURL = profile.photoURL;
       if (imageFile) {
         try {
-          console.log('Uploading profile image...');
+          console.log('[Profile] Uploading profile image...');
           const formData = new FormData();
           formData.append('avatar', imageFile);
           
           const uploadResponse = await uploadProfileImage(imageFile);
-          console.log('Upload response:', uploadResponse);
+          console.log('[Profile] Upload response:', uploadResponse);
           
           if (uploadResponse && uploadResponse.photoURL) {
             updatedPhotoURL = uploadResponse.photoURL;
@@ -278,8 +392,9 @@ const ProfilePage = () => {
             throw new Error('Invalid response from image upload');
           }
         } catch (uploadError) {
-          console.error('Error uploading image:', uploadError);
+          console.error('[Profile] Error uploading image:', uploadError);
           setError(`Error uploading image: ${uploadError.message || 'Unknown error'}`);
+          toast.error(`Error uploading image: ${uploadError.message || 'Unknown error'}`);
           return;
         }
       }
@@ -290,7 +405,7 @@ const ProfilePage = () => {
       };
 
       try {
-        console.log('Updating profile with data:', { 
+        console.log('[Profile] Updating profile with data:', { 
           ...profile, 
           displayName: updatedData.displayName, 
           bio: updatedData.bio, 
@@ -304,26 +419,41 @@ const ProfilePage = () => {
           photoURL: updatedPhotoURL 
         });
 
-        const updatedProfile = await getProfile();
-        setProfile(updatedProfile);
+        // Clear cache
+        localStorage.removeItem(PROFILE_CACHE_KEY);
+        
+        // Update profile state directly
+        setProfile(prev => ({
+          ...prev,
+          displayName: updatedData.displayName,
+          bio: updatedData.bio,
+          photoURL: updatedPhotoURL
+        }));
         
         // Update user profile in AuthContext
-        if (updateUserProfile) {
-          await updateUserProfile(user.uid, updatedProfile);
+        if (updateUserProfile && user?.uid) {
+          await updateUserProfile(user.uid, {
+            ...user,
+            displayName: updatedData.displayName,
+            bio: updatedData.bio,
+            photoURL: updatedPhotoURL
+          });
         }
         
-        localStorage.setItem(`profileData_${user.uid}`, JSON.stringify(updatedProfile));
         setSuccess('Profile updated successfully!');
+        toast.success('Profile updated successfully!');
         setEditMode(false);
         setImageFile(null);
         setPreviewImage('');
       } catch (profileUpdateError) {
-        console.error('Error updating profile:', profileUpdateError);
+        console.error('[Profile] Error updating profile:', profileUpdateError);
         setError(`Error updating profile: ${profileUpdateError.message || 'Unknown error'}`);
+        toast.error(`Error updating profile: ${profileUpdateError.message || 'Unknown error'}`);
       }
     } catch (err) {
-      console.error('Error in handleUpdate:', err);
+      console.error('[Profile] Error in handleUpdate:', err);
       setError(err.message || 'Error updating profile');
+      toast.error(err.message || 'Error updating profile');
       // Keep edit mode active when there's an error
       setEditMode(true);
     }
@@ -336,17 +466,18 @@ const ProfilePage = () => {
     }
   };
 
+  // Clean up event listeners on unmount
   useEffect(() => {
-    if (user?.uid && updateUserProfile) {
-      // Update interests in AuthContext when profile is loaded
-      updateUserProfile(user.uid, profile);
-    }
-  }, [user?.uid, profile, updateUserProfile]);
+    return () => {
+      // Clean up any event listeners or subscriptions
+    };
+  }, []);
 
   if (loading) {
     return <div className={styles.loading}>Loading profile...</div>;
   }
-  if (error) {
+  
+  if (error && !profile) {
     return <div className={styles.error}>{error}</div>;
   }
 
@@ -515,13 +646,13 @@ const ProfilePage = () => {
                 <div className={styles.interestsGrid}>
                   {INTEREST_CATEGORIES.map((category, index) => (
                     <label key={index} className={styles.interestCheckbox}>
-                      <input
+                  <input
                         type="checkbox"
                         checked={formData.interests.includes(category)}
                         onChange={() => handleInterestChange(category)}
                       />
                       {category}
-                    </label>
+                </label>
                   ))}
                 </div>
                 <div className={styles.formButtons}>

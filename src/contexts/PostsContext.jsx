@@ -745,7 +745,7 @@ export const PostsProvider = ({ children }) => {
         : currentComments.map(c => c && c.id === updatedComment.id ? updatedComment : c);
       
       return {
-        ...prev,
+      ...prev,
         [postId]: newComments
       };
     });
@@ -797,8 +797,8 @@ export const PostsProvider = ({ children }) => {
           : currentComments.map(c => c && c.id === updatedComment.id ? updatedComment : c);
         
         // Important: Only update the comments array, preserve all other post properties
-        return {
-          ...post,
+          return {
+            ...post,
           comments: updatedComments
         };
       });

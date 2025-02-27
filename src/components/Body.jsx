@@ -120,8 +120,8 @@ const Body = () => {
     } catch (err) {
       console.error('Error loading data:', err);
       setLoadError(err.message || 'Failed to load data');
-    } finally {
-      setIsLoading(false);
+      } finally {
+        setIsLoading(false);
     }
   }, [user, fetchCarouselData]);
 
@@ -226,9 +226,9 @@ const Body = () => {
       </div>
 
       {/* Community Posts with user preferences */}
-      <div className="my-12">
+      {/* <div className="my-12">
         <PostList userPreferences={userPreferences} />
-      </div>
+      </div> */}
     </div>
   );
 };
