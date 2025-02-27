@@ -3,8 +3,6 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { PostsContext } from '../contexts/PostsContext';
 import { addComment } from '../utils/api';
-import DOMPurify from 'dompurify';
-import { auth } from '../utils/firebase';
 import CommentsList from './CommentsList';
 import { toast } from 'react-toastify';
 
@@ -164,22 +162,33 @@ const CommentsSection = ({ postId }) => {
 const handleAddComment = async () => {
   if (!newComment.trim()) return;
   
-    if (!handleAuthRequired('add a comment')) return;
+  if (!handleAuthRequired('add a comment')) return;
 
-    try {
-      const response = await addComment(postId, { commentText: newComment.trim() });
-      if (response?.comment) {
-        // Update local state first for immediate feedback
-        setComments(prev => [response.comment, ...prev]);
-        // Then update cache
-        addCommentToCache(postId, response.comment);
+  try {
+    const response = await addComment(postId, { commentText: newComment.trim() });
+    console.log('Add comment response:', response); // Debug log
+    
+    // Check the structure of the response
+    const commentData = response?.comment || response;
+    
+    if (commentData) {
+      // Update local state first for immediate feedback
+      console.log('Adding comment to local state:', commentData);
+      setComments(prev => [commentData, ...prev]);
+      
+      // Then update cache
+      console.log('Adding comment to cache:', commentData);
+      addCommentToCache(postId, commentData);
       setNewComment('');
       setError('');
+    } else {
+      console.error('Invalid comment data in response:', response);
+      toast.error('Failed to add comment. Invalid response from server.');
     }
   } catch (err) {
     console.error('Error adding comment:', err);
-      setError('Failed to add comment. Please try again.');
-      toast.error('Failed to add comment. Please try again.');
+    setError('Failed to add comment. Please try again.');
+    toast.error('Failed to add comment. Please try again.');
   }
 };
 

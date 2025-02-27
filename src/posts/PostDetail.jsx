@@ -1,5 +1,4 @@
 // src/posts/PostDetail.jsx
-
 import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';

@@ -3,7 +3,6 @@
 import React, { useContext, useEffect, useState, useCallback } from 'react';
 import Welcome from './Welcome';
 import Carousel from './Carousel';
-import PostList from '../posts/PostList';
 import { PostsContext } from '../contexts/PostsContext';
 import { AuthContext } from '../contexts/AuthContext';
 import { getProfile } from '../utils/api';
