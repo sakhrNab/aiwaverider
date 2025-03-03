@@ -601,7 +601,7 @@ export const PostsProvider = ({ children }) => {
   }, []);
 
   const fetchCarouselData = useCallback(
-    async (categories, force = false) => {
+    async (categories, force = false, skipComments = true) => {
       const now = Date.now();
       const cacheKey = 'carouselData';
       
@@ -660,8 +660,9 @@ export const PostsProvider = ({ children }) => {
             allPosts.slice(0, 5).forEach(post => visiblePostIds.add(post.id));
           }
 
-          // Fetch comments for visible posts
-          if (visiblePostIds.size > 0) {
+          // Fetch comments for visible posts ONLY if not skipped
+          if (visiblePostIds.size > 0 && !skipComments) {
+            console.log('Fetching comments for carousel posts');
             const commentsMap = await fetchBatchComments([...visiblePostIds], force);
             
             Object.keys(newCarouselData).forEach(category => {
@@ -670,6 +671,8 @@ export const PostsProvider = ({ children }) => {
                 comments: commentsMap[post.id] || []
               }));
             });
+          } else {
+            console.log('Skipping comments fetch for carousel posts');
           }
 
           // Cache the results

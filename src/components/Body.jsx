@@ -82,9 +82,9 @@ const Body = () => {
         likedCategories: newLikedCategories
       };
 
-      // 3. Load carousel data
+      // 3. Load carousel data - pass true to skip comments since we don't need them for the carousel
       try {
-        const carouselResult = await fetchCarouselData(CATEGORIES, force);
+        const carouselResult = await fetchCarouselData(CATEGORIES, force, true);
         
         // 4. Process the posts from carousel data
         if (carouselResult && Object.keys(carouselResult).length > 0) {
@@ -158,7 +158,7 @@ const Body = () => {
     };
   }, [loadData, user]);
 
-  // Refresh data periodically (every 5 minutes)
+  // Refresh data periodically (every 15 minutes instead of 5)
   useEffect(() => {
     let timeoutId;
     
@@ -166,7 +166,8 @@ const Body = () => {
       const lastUpdate = localStorage.getItem(`userPreferences_${user?.uid}`);
       if (lastUpdate) {
         const { timestamp } = JSON.parse(lastUpdate);
-        const timeUntilNextRefresh = Math.max(0, CACHE_DURATION - (Date.now() - timestamp));
+        // Increase refresh interval to 15 minutes (3 times the cache duration)
+        const timeUntilNextRefresh = Math.max(0, CACHE_DURATION * 3 - (Date.now() - timestamp));
         
         // Clear any existing timeout
         if (timeoutId) {
@@ -175,10 +176,16 @@ const Body = () => {
         
         // Schedule next refresh
         timeoutId = setTimeout(() => {
-          loadData(true).then(() => {
-            // Only schedule next refresh after current one completes
-            scheduleNextRefresh();
-          });
+          // Only refresh if the page is visible to the user
+          if (!document.hidden) {
+            loadData(true).then(() => {
+              // Only schedule next refresh after current one completes
+              scheduleNextRefresh();
+            });
+          } else {
+            // If page is hidden, check again in a minute
+            setTimeout(scheduleNextRefresh, 60000);
+          }
         }, timeUntilNextRefresh);
       }
     };
