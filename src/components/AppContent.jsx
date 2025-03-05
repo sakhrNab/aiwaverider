@@ -12,7 +12,7 @@ import ProtectedRoute from './ProtectedRoute';
 import PostDetail from '../posts/PostDetail';
 import CreatePost from '../posts/CreatePost';
 import Profile from '../pages/Profile';
-
+import Agents from '../pages/Agents';
 const AppContent = () => {
   const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
   const location = useLocation();
@@ -31,6 +31,7 @@ const AppContent = () => {
           <Route path="/sign-in" element={<SignIn />} />
           <Route path="/sign-up" element={<SignUp />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/agents" element={<Agents />} />
 
           {/* Protected: Admin only */}
         {/* Create Post route */}

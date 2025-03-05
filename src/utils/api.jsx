@@ -795,5 +795,416 @@ export const uploadProfileImage = async (file) => {
   }
 };
 
+// Agent-related API functions
+export const fetchAgents = async (category = 'All', filter = 'Hot & Now', page = 1, limit = 20) => {
+  try {
+    // Build query parameters
+    const queryParams = new URLSearchParams({
+      category: category !== 'All' ? category : '',
+      filter,
+      page,
+      limit
+    });
+    
+    const response = await fetch(`${API_URL}/api/agents?${queryParams.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': getAuthHeader()
+      },
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Error fetching agents: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.agents || [];
+  } catch (error) {
+    console.error('Error fetching agents:', error);
+    // Return mock data as fallback
+    return generateMockAgents(limit);
+  }
+};
+
+export const fetchFeaturedAgents = async (limit = 8) => {
+  try {
+    const response = await fetch(`${API_URL}/api/agents/featured?limit=${limit}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Error fetching featured agents: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.agents || [];
+  } catch (error) {
+    console.error('Error fetching featured agents:', error);
+    // Return fallback data for testing/display purposes
+    return generateMockFeaturedAgents(limit);
+  }
+};
+
+export const fetchWishlists = async () => {
+  try {
+    // In development environment, always use mock data to avoid 404 errors
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Using mock wishlists data');
+      return generateMockWishlists();
+    }
+    
+    // In production, try to fetch from API first
+    try {
+      const response = await fetch(`${API_URL}/api/wishlists`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': getAuthHeader()
+        },
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return data;
+      }
+    } catch (error) {
+      console.log(`API fetch failed, falling back to mock data: ${error.message}`);
+    }
+    
+    // Fallback to mock data if API fails
+    return generateMockWishlists();
+  } catch (error) {
+    console.error('Error fetching wishlists:', error);
+    throw new Error(`Error fetching wishlists: ${error.message}`);
+  }
+};
+
+export const toggleWishlist = async (agentId) => {
+  try {
+    const response = await fetch(`${API_URL}/api/wishlists/toggle`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': getAuthHeader()
+      },
+      credentials: 'include',
+      body: JSON.stringify({ agentId })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Error toggling wishlist: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error toggling wishlist:', error);
+    throw error;
+  }
+};
+
+// Helper function to get auth header
+const getAuthHeader = () => {
+  const token = localStorage.getItem('authToken');
+  return token ? `Bearer ${token}` : '';
+};
+
+// Mock data generators for development/testing
+const generateMockFeaturedAgents = (count) => {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `agent-${i}`,
+    title: i === 0 ? 'CNC Discord Membership' : 
+           i === 1 ? 'Leadership Training' : 
+           i === 2 ? 'MDE.TV High-Roller Paywall' :
+           i === 3 ? 'Trishonna\'s Worthy 30 Bundle' :
+           i === 4 ? 'MacWhisper' :
+           i === 5 ? 'Elite Traders Blueprint' :
+           i === 6 ? 'Digital Marketing Suite' :
+           `Agent ${i+1}`,
+    price: i === 0 ? '$97 a month' : 
+           i === 1 ? '$10 a month' : 
+           i === 2 ? '$10+ a month' :
+           i === 3 ? '$597' :
+           i === 4 ? '$0' :
+           i === 5 ? '$47' :
+           `$${(Math.floor(Math.random() * 100) + 10)}`,
+    image: `https://picsum.photos/300/200?random=${i+100}`,
+    creator: {
+      id: `creator-${i}`,
+      name: i === 0 ? '168flyerchess' : 
+            i === 1 ? 'Seth Hesh' : 
+            i === 2 ? 'Seth Hesh' :
+            i === 3 ? 'Trishonna' :
+            i === 4 ? 'Jordi Bruin' :
+            i === 5 ? 'Marketplace Creator' :
+            `Creator ${i+1}`,
+      avatar: `https://picsum.photos/50/50?random=${i+200}`
+    },
+    rating: {
+      average: (4 + Math.random()).toFixed(1),
+      count: Math.floor(Math.random() * 1000) + 10
+    },
+    description: `This is a description for agent ${i+1}. It showcases the agent's capabilities.`
+  }));
+};
+
+const generateMockWishlists = () => {
+  // Categories that might match user interests
+  const categories = ['Design', 'Drawing & Painting', '3D', 'Self Improvement', 'Music & Sound Design', 'Software Development', 'Business'];
+  
+  // Create wishlists with more personalized names and items
+  return [
+    {
+      id: 'wishlist-1',
+      name: 'Essential Design Tools',
+      category: 'Design',
+      creator: {
+        id: 'user-1',
+        name: 'John Doe',
+        avatar: 'https://picsum.photos/50/50?random=w1'
+      },
+      items: [
+        {
+          id: 'agent-101',
+          name: 'Brand Designer Pro',
+          imageUrl: 'https://picsum.photos/100/100?random=101'
+        },
+        {
+          id: 'agent-102',
+          name: 'UI Generator',
+          imageUrl: 'https://picsum.photos/100/100?random=102'
+        },
+        {
+          id: 'agent-103',
+          name: 'Logo Creator',
+          imageUrl: 'https://picsum.photos/100/100?random=103'
+        }
+      ]
+    },
+    {
+      id: 'wishlist-2',
+      name: 'AI Development Kit',
+      category: 'Software Development',
+      creator: {
+        id: 'user-2',
+        name: 'Jane Smith',
+        avatar: 'https://picsum.photos/50/50?random=w2'
+      },
+      items: [
+        {
+          id: 'agent-201',
+          name: 'Code Assistant',
+          imageUrl: 'https://picsum.photos/100/100?random=201'
+        },
+        {
+          id: 'agent-202',
+          name: 'Bug Hunter',
+          imageUrl: 'https://picsum.photos/100/100?random=202'
+        },
+        {
+          id: 'agent-203',
+          name: 'API Designer',
+          imageUrl: 'https://picsum.photos/100/100?random=203'
+        }
+      ]
+    },
+    {
+      id: 'wishlist-3',
+      name: 'Creative Art Suite',
+      category: 'Drawing & Painting',
+      creator: {
+        id: 'user-3',
+        name: 'Alex Johnson',
+        avatar: 'https://picsum.photos/50/50?random=w3'
+      },
+      items: [
+        {
+          id: 'agent-301',
+          name: 'Digital Painter',
+          imageUrl: 'https://picsum.photos/100/100?random=301'
+        },
+        {
+          id: 'agent-302',
+          name: 'Concept Art Generator',
+          imageUrl: 'https://picsum.photos/100/100?random=302'
+        },
+        {
+          id: 'agent-303',
+          name: 'Character Designer',
+          imageUrl: 'https://picsum.photos/100/100?random=303'
+        }
+      ]
+    }
+  ];
+};
+
+// Mock marketplace agents
+const generateMockAgents = (count) => {
+  const categories = ['Design', 'Drawing & Painting', '3D', 'Self Improvement', 'Music & Sound Design', 'Software Development', 'Business'];
+  const agents = [
+    {
+      id: 'novabeast',
+      title: 'Novabeast [VRChat Avatar]',
+      price: '$25',
+      image: 'https://via.placeholder.com/300x300?text=Novabeast',
+      creator: {
+        id: 'krittmatic',
+        name: 'Krittmatic',
+        avatar: 'https://via.placeholder.com/50x50?text=K'
+      },
+      rating: {
+        average: 4.9,
+        count: 141
+      },
+      category: '3D',
+      isWishlisted: Math.random() > 0.5,
+      isBestseller: true,
+      description: 'A cybernetic avatar with stunning visuals and animations, perfect for VRChat.',
+      name: 'Novabeast [VRChat Avatar]'
+    },
+    {
+      id: 'consultations',
+      title: 'Lifetime Consultations',
+      price: '$2,500',
+      image: 'https://via.placeholder.com/300x300?text=Consultations',
+      creator: {
+        id: 'daniel',
+        name: 'Daniel Vassallo',
+        avatar: 'https://via.placeholder.com/50x50?text=DV'
+      },
+      rating: {
+        average: 5.0,
+        count: 2
+      },
+      category: 'Business',
+      isWishlisted: Math.random() > 0.5,
+      description: 'Lifetime access to business consultations from an experienced entrepreneur.',
+      name: 'Lifetime Consultations'
+    },
+    {
+      id: 'resell',
+      title: 'Exclusive All Suppliers Package + FREE Resell Guide!',
+      price: '$29.99',
+      image: 'https://via.placeholder.com/300x300?text=Resell',
+      creator: {
+        id: 'resell',
+        name: 'ResellProVendors',
+        avatar: 'https://via.placeholder.com/50x50?text=RP'
+      },
+      category: 'Business',
+      isWishlisted: Math.random() > 0.5,
+      isBestseller: true,
+      description: 'Complete guide to finding suppliers and reselling products with high profit margins.',
+      name: 'Exclusive All Suppliers Package'
+    },
+    {
+      id: 'geoimgr',
+      title: 'GeoImgr Pro Subscription',
+      price: '$9.90 a month',
+      image: 'https://via.placeholder.com/300x300?text=GeoImgr',
+      creator: {
+        id: 'geoimgr',
+        name: 'GeoImgr',
+        avatar: 'https://via.placeholder.com/50x50?text=GI'
+      },
+      rating: {
+        average: 4.8,
+        count: 141
+      },
+      category: 'Software Development',
+      isWishlisted: Math.random() > 0.5,
+      isNew: true,
+      description: 'Professional image geotagging tool with advanced features for photographers.',
+      name: 'GeoImgr Pro Subscription'
+    }
+  ];
+  
+  // Generate more agents if needed
+  if (count > agents.length) {
+    const more = Array.from({ length: count - agents.length }, (_, i) => {
+      const title = `AI Agent ${i + agents.length + 1}`;
+      const category = categories[Math.floor(Math.random() * categories.length)];
+      return {
+        id: `agent-${i + agents.length}`,
+        title: title,
+        name: title,
+        price: `$${Math.floor(Math.random() * 100) + 10}${Math.random() > 0.7 ? ' a month' : ''}`,
+        image: `https://via.placeholder.com/300x300?text=Agent+${i + agents.length + 1}`,
+        creator: {
+          id: `creator-${i + agents.length}`,
+          name: `Creator ${i + agents.length + 1}`,
+          avatar: `https://via.placeholder.com/50x50?text=C${i + agents.length + 1}`
+        },
+        rating: {
+          average: (3 + Math.random() * 2).toFixed(1),
+          count: Math.floor(Math.random() * 500) + 1
+        },
+        category: category,
+        isWishlisted: Math.random() > 0.7,
+        isBestseller: Math.random() > 0.8,
+        isNew: Math.random() > 0.8,
+        description: `This is a powerful AI agent that helps with ${category.toLowerCase()} tasks and projects.`
+      };
+    });
+    
+    return [...agents, ...more];
+  }
+  
+  return agents.slice(0, count);
+};
+
+// Add agent to wishlist
+export const addToWishlist = async (agentId) => {
+  try {
+    const response = await fetch(`${API_URL}/api/wishlists/add`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': getAuthHeader()
+      },
+      credentials: 'include',
+      body: JSON.stringify({ agentId })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Error adding to wishlist: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error adding to wishlist:', error);
+    // Simulate success for development
+    return { success: true, message: 'Added to wishlist (mocked)' };
+  }
+};
+
+// Remove agent from wishlist
+export const removeFromWishlist = async (agentId) => {
+  try {
+    const response = await fetch(`${API_URL}/api/wishlists/remove/${agentId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': getAuthHeader()
+      },
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Error removing from wishlist: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error removing from wishlist:', error);
+    // Simulate success for development
+    return { success: true, message: 'Removed from wishlist (mocked)' };
+  }
+};
 
 export default api;

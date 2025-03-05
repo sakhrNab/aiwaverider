@@ -62,6 +62,9 @@ const Header = ({ openSignUpModal }) => {
 
           {/* Main Nav (hidden on mobile, shown on md and up) */}
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
+            <Link to="/agents" className="px-2 lg:px-3 py-2 hover:bg-blue-600 rounded text-sm lg:text-base font-medium">
+              Agents
+            </Link>
             <Link to="/ai-tools" className="px-2 lg:px-3 py-2 hover:bg-blue-600 rounded text-sm lg:text-base">
               AI Tools
             </Link>
@@ -167,6 +170,9 @@ const Header = ({ openSignUpModal }) => {
       {isMenuOpen && (
         <div className="md:hidden mt-4 border-t border-gray-700 pt-4">
           <nav className="flex flex-col space-y-2">
+            <Link to="/agents" className="px-3 py-2 hover:bg-blue-600 rounded">
+              Agents
+            </Link>
             <Link to="/ai-tools" className="px-3 py-2 hover:bg-blue-600 rounded">
               AI Tools
             </Link>

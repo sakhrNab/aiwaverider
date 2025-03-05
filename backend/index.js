@@ -54,6 +54,7 @@ const {
 const postsRoutes = require('./routes/posts');
 // const authRoutes = require('./middleware/authenticate'); // Fix: import from routes/auth
 const profileRoutes = require('./routes/profile');
+const agentsRoutes = require('./routes/agents'); // Add this import
 
 // Initialize express
 const app = express();
@@ -71,7 +72,7 @@ const validateFirebaseToken = require('./middleware/authenticate');
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
     ? process.env.CORS_ORIGINS?.split(',').map(origin => origin.trim())
-    : ['http://localhost:5173'],
+: ['http://localhost:5173', 'http://localhost:5174'],
   credentials: true
 }));
 
@@ -135,11 +136,11 @@ setInterval(() => {
 
 // ------------------ CORS Configuration ------------------
 const allowedOrigins = isProduction
-  ? (process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim())
-  : ['http://localhost:5173']; // Frontend origin
+? (process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim())
+: ['http://localhost:5173', 'http://localhost:5174']; // Frontend origin
 
 app.use(cors({
-  origin: function (origin, callback) {
+igin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) === -1) {
@@ -553,6 +554,9 @@ app.get('/api/users/:userId', publicCacheMiddleware(), async (req, res) => {
 
 //Mount the profile routes at /api/profile
 app.use('/api/profile', profileRoutes);
+
+// Mount the agents routes at /api/agents
+app.use('/api/agents', agentsRoutes);
 
 // Enhanced logging
 app.use((req, res, next) => {
