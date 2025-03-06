@@ -8,7 +8,8 @@
     "dev": "nodemon index.js",
     "seed:agents": "node scripts/seedAgents.js",
     "check:agents": "node scripts/checkAndSeedAgents.js",
-    "check:collections": "node scripts/checkAndSeedAgents.js"
+    "check:collections": "node scripts/checkAndSeedAgents.js",
+    "migrate:prices": "node scripts/migratePrices.js"
   },
   "keywords": [],
   "author": "",

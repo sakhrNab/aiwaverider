@@ -1,0 +1,340 @@
+.agent-price-manager {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
+}
+
+.agent-price-manager h2 {
+  margin-top: 0;
+  font-size: 22px;
+  color: #333;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 16px;
+}
+
+.agent-price-manager h3 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  color: #333;
+}
+
+.agent-price-manager h4 {
+  margin: 16px 0 12px;
+  font-size: 16px;
+  color: #444;
+}
+
+.price-manager-loading {
+  padding: 20px;
+  text-align: center;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  color: #666;
+}
+
+.price-manager-error {
+  padding: 12px;
+  background-color: #ffebee;
+  color: #c62828;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.price-manager-success {
+  padding: 12px;
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+/* Current price information */
+.current-price-info {
+  background-color: #f5f5f5;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.price-info-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.price-info-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.price-info-item .label {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.price-info-item .value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Forms */
+.price-update-form,
+.discount-section {
+  border-top: 1px solid #eee;
+  padding-top: 24px;
+  margin-top: 24px;
+}
+
+.form-row {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+  align-items: flex-end;
+}
+
+.form-row label {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  font-size: 14px;
+  color: #555;
+}
+
+.form-row input[type="number"],
+.form-row input[type="text"],
+.form-row input[type="date"],
+.form-row select {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.form-row input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.checkbox-container input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.checkbox-label {
+  font-size: 14px;
+  color: #333;
+}
+
+.form-actions {
+  margin-top: 24px;
+}
+
+.save-button,
+.apply-discount-button,
+.toggle-discount-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.save-button {
+  background-color: #4caf50;
+  color: white;
+}
+
+.save-button:hover {
+  background-color: #388e3c;
+}
+
+.apply-discount-button {
+  background-color: #2196f3;
+  color: white;
+}
+
+.apply-discount-button:hover {
+  background-color: #1976d2;
+}
+
+.toggle-discount-btn {
+  background-color: transparent;
+  color: #2196f3;
+  border: 1px solid #2196f3;
+}
+
+.toggle-discount-btn:hover {
+  background-color: rgba(33, 150, 243, 0.1);
+}
+
+button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Pricing tiers */
+.subscription-tiers {
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.subscription-tier {
+  border-bottom: 1px solid #eee;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+}
+
+.subscription-tier:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.tier-header {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.tier-header input {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tier-features h5 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: #555;
+}
+
+.tier-features ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+}
+
+.tier-features li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.remove-feature {
+  background: none;
+  border: none;
+  color: #f44336;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 8px;
+}
+
+.add-feature {
+  display: flex;
+  gap: 8px;
+}
+
+.add-feature input {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.add-feature button {
+  padding: 8px 16px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.add-feature button:hover {
+  background-color: #388e3c;
+}
+
+/* Discount form */
+.discount-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.discount-form {
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.or-divider {
+  display: flex;
+  align-items: center;
+  font-weight: bold;
+  color: #666;
+  margin: 0 8px;
+  align-self: center;
+  padding-bottom: 10px;
+}
+
+.percentage-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.percentage-sign {
+  position: absolute;
+  right: 10px;
+  color: #666;
+}
+
+@media (max-width: 768px) {
+  .price-info-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-row {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .or-divider {
+    align-self: flex-start;
+    margin: 8px 0;
+  }
+  
+  .tier-header {
+    flex-direction: column;
+  }
+}

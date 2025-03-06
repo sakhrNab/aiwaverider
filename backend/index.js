@@ -56,6 +56,7 @@ const postsRoutes = require('./routes/posts');
 const profileRoutes = require('./routes/profile');
 const agentsRoutes = require('./routes/agents'); // Add this import
 const wishlistsRoutes = require('./routes/wishlists'); // Add wishlists routes
+const pricesRoutes = require('./routes/prices'); // Add prices routes
 
 // Initialize express
 const app = express();
@@ -565,6 +566,9 @@ app.use('/api/agents', agentsRoutes);
 
 // Mount the wishlists routes at /api/wishlists
 app.use('/api/wishlists', wishlistsRoutes);
+
+// Mount the price routes at /api/agent-prices
+app.use('/api/agent-prices', pricesRoutes);
 
 // Enhanced logging
 app.use((req, res, next) => {
