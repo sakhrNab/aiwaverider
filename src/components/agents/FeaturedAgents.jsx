@@ -10,13 +10,14 @@ const AgentCard = ({ agent }) => {
   // Function to handle image errors and use a default placeholder
   const handleImageError = (e) => {
     // Use a data URI for the placeholder instead of a missing file
-    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23f0f0f0'/%3E%3Cpath d='M80 80 L120 120 M120 80 L80 120' stroke='%23999' stroke-width='4'/%3E%3Ctext x='100' y='160' font-family='Arial' font-size='12' text-anchor='middle' fill='%23999'%3ENo Image%3C/text%3E%3C/svg%3E";
-    e.target.onerror = null; // Prevent infinite error loops
+    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='24' text-anchor='middle' fill='white'%3EAgent Image%3C/text%3E%3C/svg%3E";
+    e.target.onerror = null;
   };
-
-  // Handle creator avatar error
+  
+  // Function to handle avatar image errors
   const handleAvatarError = (e) => {
-    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='%23f0f0f0'/%3E%3Cpath d='M8 8 L16 16 M16 8 L8 16' stroke='%23999' stroke-width='2'/%3E%3C/svg%3E";
+    // Use a data URI for the placeholder instead of a missing file
+    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23e0e0e0'/%3E%3Ctext x='20' y='25' font-family='Arial' font-size='20' text-anchor='middle' fill='%23999'%3E?%3C/text%3E%3C/svg%3E";
     e.target.onerror = null;
   };
 
@@ -28,10 +29,25 @@ const AgentCard = ({ agent }) => {
 
   // Format price to show only one decimal place
   const formatPrice = (price) => {
+    // Check if we have price details object
+    if (agent.priceDetails) {
+      if (agent.isFree) return 'Free';
+      
+      const { basePrice, discountedPrice, currency } = agent.priceDetails;
+      const currencySymbol = currency === 'USD' ? '$' : currency;
+      
+      if (discountedPrice !== null && discountedPrice !== basePrice) {
+        return `${currencySymbol}${discountedPrice.toFixed(2)}`;
+      }
+      
+      return basePrice ? `${currencySymbol}${basePrice.toFixed(2)}` : 'Free';
+    }
+    
+    // Legacy format
     if (typeof price === 'number') {
-      return `$${price.toFixed(1)}`;
+      return price === 0 ? 'Free' : `$${price.toFixed(2)}`;
     } else if (typeof price === 'string') {
-      return price.includes('$') ? price : `$${parseFloat(price).toFixed(1)}`;
+      return price.includes('$') ? price : `$${price}`;
     } else if (price === 0 || price === '0' || price === 'Free') {
       return 'Free';
     } else {
@@ -42,22 +58,28 @@ const AgentCard = ({ agent }) => {
   return (
     <div className="agent-card">
       <Link to={`/agents/${agent.id}`} className="agent-link">
-        <img 
-          src={agent.image || agent.imageUrl} 
-          alt={agent.title || agent.name || 'Agent'} 
-          className="agent-image" 
-          onError={handleImageError}
-        />
+        <div className="agent-image">
+          <img 
+            src={agent.iconUrl || agent.imageUrl} 
+            alt={agent.title || agent.name}
+            onError={handleImageError}
+          />
+          
+          {/* Badges */}
+          {agent.isBestseller && <div className="badge bestseller">Bestseller</div>}
+          {agent.isNew && <div className="badge new">New</div>}
+          {agent.isTrending && <div className="badge trending">Trending</div>}
+        </div>
         <div className="agent-content">
-          <h3 className="agent-title">{agent.title || agent.name || 'Unnamed Agent'}</h3>
+          <h3 className="agent-title">{agent.title || agent.name}</h3>
           <div className="agent-creator">
             <img 
-              src={agent.creator?.avatar} 
-              alt={agent.creator?.name || 'Creator'} 
+              src={agent.creator?.avatar || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23e0e0e0'/%3E%3Ctext x='20' y='25' font-family='Arial' font-size='20' text-anchor='middle' fill='%23999'%3E?%3C/text%3E%3C/svg%3E"} 
+              alt={agent.creator?.name || "Creator"} 
               className="creator-avatar"
               onError={handleAvatarError}
             />
-            <span className="creator-name">{agent.creator?.name || 'Unknown Creator'}</span>
+            <span className="creator-name">{agent.creator?.name || "Unknown Creator"}</span>
           </div>
           <div className="agent-footer">
             {agent.rating ? (
@@ -71,8 +93,8 @@ const AgentCard = ({ agent }) => {
                 <span>No ratings</span>
               </div>
             )}
-            <div className={`agent-price ${agent.price === 0 || agent.price === '0' || agent.price === 'Free' ? 'free' : ''}`}>
-              {formatPrice(agent.price)}
+            <div className={`agent-price ${agent.isFree ? 'free' : ''}`}>
+              {agent.priceDetails ? formatPrice(agent.priceDetails.basePrice) : formatPrice(agent.price)}
             </div>
           </div>
         </div>

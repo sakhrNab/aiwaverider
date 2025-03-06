@@ -272,6 +272,17 @@
   color: white;
 }
 
+.recommendation-badge.trending {
+  background-color: #9c27b0;
+  color: white;
+}
+
+.recommendation-version {
+  font-size: 0.75rem;
+  color: #777;
+  margin-top: 0.25rem;
+}
+
 .mock-data-warning {
   display: flex;
   align-items: center;

@@ -29,6 +29,21 @@ const NextArrow = (props) => {
 const RecommendationCard = ({ agent }) => {
   // Format price appropriately
   const formatPrice = (price) => {
+    // Check if we have price details object
+    if (agent.priceDetails) {
+      if (agent.isFree) return 'Free';
+      
+      const { basePrice, discountedPrice, currency } = agent.priceDetails;
+      const currencySymbol = currency === 'USD' ? '$' : currency;
+      
+      if (discountedPrice !== null && discountedPrice !== basePrice) {
+        return `${currencySymbol}${discountedPrice.toFixed(2)}`;
+      }
+      
+      return basePrice ? `${currencySymbol}${basePrice.toFixed(2)}` : 'Free';
+    }
+    
+    // Legacy format
     if (price === 0) return 'Free';
     if (!price) return 'Free';
     
@@ -57,6 +72,9 @@ const RecommendationCard = ({ agent }) => {
 
   // Determine price tag CSS class
   const getPriceTagClass = (price) => {
+    if (agent.isSubscription) return 'monthly';
+    
+    // Legacy format
     if (typeof price === 'string') {
       if (price.includes('/month')) return 'monthly';
       if (price.includes('every')) return 'sale';
@@ -79,7 +97,7 @@ const RecommendationCard = ({ agent }) => {
         <div className="recommendation-card-inner">
           <div className="recommendation-image-container">
             <img 
-              src={agent.imageUrl || placeholderImage} 
+              src={agent.iconUrl || placeholderImage} 
               alt={agent.title || agent.name || 'Agent'} 
               className="recommendation-image"
               onError={(e) => {
@@ -87,7 +105,12 @@ const RecommendationCard = ({ agent }) => {
                 e.target.onerror = null; // Prevent infinite error loops
               }}
             />
-            {agent.price && (
+            {agent.priceDetails ? (
+              <div className={`recommendation-price-tag ${agent.isSubscription ? 'monthly' : ''}`}>
+                {formatPrice(agent.priceDetails.basePrice)}
+                {agent.isSubscription && <span className="subscription-label">/mo</span>}
+              </div>
+            ) : agent.price && (
               <div className={`recommendation-price-tag ${getPriceTagClass(agent.price)}`}>
                 {formatPrice(agent.price)}
               </div>
@@ -97,6 +120,9 @@ const RecommendationCard = ({ agent }) => {
             )}
             {agent.isNew && (
               <div className="recommendation-badge new">New</div>
+            )}
+            {agent.isTrending && (
+              <div className="recommendation-badge trending">Trending</div>
             )}
           </div>
           <div className="recommendation-content">
@@ -113,6 +139,9 @@ const RecommendationCard = ({ agent }) => {
                 <span className="no-rating">No ratings yet</span>
               )}
             </div>
+            {agent.version && (
+              <div className="recommendation-version">v{agent.version}</div>
+            )}
           </div>
         </div>
       </Link>

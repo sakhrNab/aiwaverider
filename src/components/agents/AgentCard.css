@@ -96,6 +96,11 @@
   background-color: #1e6055;
 }
 
+.badge.trending {
+  background-color: #9c27b0;
+  color: white;
+}
+
 .agent-content {
   padding: 12px 16px;
   flex-grow: 1;
@@ -179,6 +184,13 @@
   font-size: 16px;
   margin-top: auto;
   color: #1c1d1f;
+}
+
+.agent-version {
+  font-size: 0.75rem;
+  color: #777;
+  margin-top: 0.25rem;
+  display: inline-block;
 }
 
 @media (max-width: 768px) {

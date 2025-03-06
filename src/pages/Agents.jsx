@@ -187,7 +187,19 @@ const Agents = () => {
     // Apply price filter - ensure this works with different price formats
     if (selectedPrice && (selectedPrice.min > 0 || selectedPrice.max < 1000)) {
       filteredResults = filteredResults.filter(agent => {
-        // Handle price as string (e.g. "$25" or "$25/month")
+        // First check the new format with priceDetails
+        if (agent.priceDetails) {
+          const basePrice = agent.priceDetails.basePrice || 0;
+          const discountedPrice = agent.priceDetails.discountedPrice || basePrice;
+          const effectivePrice = agent.isFree ? 0 : (discountedPrice || basePrice);
+          
+          return (
+            effectivePrice >= selectedPrice.min && 
+            effectivePrice <= selectedPrice.max
+          );
+        }
+        
+        // Legacy format - handle price as string (e.g. "$25" or "$25/month")
         let price = agent.price;
         if (typeof price === 'string') {
           // Extract numeric part

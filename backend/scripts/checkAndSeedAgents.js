@@ -71,6 +71,10 @@ const checkAndSeedCollections = async () => {
           'AI Powered', 'Cloud Storage', 'Offline Mode'
         ].sort(() => 0.5 - Math.random()).slice(0, 2 + Math.floor(Math.random() * 3));
         
+        // Calculate base price
+        const isFree = agent.isFree || false;
+        const basePrice = isFree ? 0 : (agent.priceDetails?.basePrice || (5 + Math.floor(Math.random() * 95)));
+        
         return {
           ...agent,
           popularity,
@@ -79,7 +83,26 @@ const checkAndSeedCollections = async () => {
           viewCount,
           wishlistCount,
           tags,
-          features
+          features,
+          priceDetails: agent.priceDetails || {
+            basePrice,
+            discountedPrice: isFree ? 0 : (Math.random() > 0.7 ? Math.floor(basePrice * 0.7) : basePrice),
+            currency: "USD",
+            validUntil: Math.random() > 0.8 ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null
+          },
+          purchase: agent.purchase || {
+            isAvailable: true,
+            maxPurchasesPerUser: Math.random() > 0.9 ? 1 : null,
+            refundPolicy: ["No refunds allowed", "7-day refund policy", "30-day money-back guarantee"][Math.floor(Math.random() * 3)]
+          },
+          version: agent.version || `1.${Math.floor(Math.random() * 10)}.${Math.floor(Math.random() * 10)}`,
+          priceHistory: agent.priceHistory || (isFree ? [] : [
+            {
+              price: basePrice + 5,
+              discountedPrice: basePrice,
+              dateApplied: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
+            }
+          ])
         };
       });
       

@@ -457,24 +457,6 @@ const generateMockAgents = (count) => {
     "Elevate your %CATEGORY% projects with this smart agent, featuring advanced capabilities and seamless integration."
   ];
   
-  // Create consistent price formats
-  const createPrice = (index) => {
-    // Make 20% of agents free
-    if (index % 5 === 0) {
-      return 0; // Numeric 0 for free agents
-    }
-    
-    // Subscription agents (15%)
-    if (index % 10 === 3 || index % 10 === 8) {
-      const price = 5 + Math.floor(Math.random() * 20); // $5-$25 range
-      return `$${price}/month`;
-    }
-    
-    // Regular priced agents (65%)
-    const price = 5 + Math.floor(Math.random() * 95); // $5-$100 range
-    return price; // Return as a number for consistency
-  };
-  
   // Generate random reviews
   const generateReviews = (agentId, count = 5) => {
     const reviewTexts = [
@@ -518,9 +500,12 @@ const generateMockAgents = (count) => {
   return Array.from({ length: count }, (_, index) => {
     const id = `agent-${index + 1}`;
     const category = categories[Math.floor(Math.random() * categories.length)];
-    const price = createPrice(index);
+    const isFree = index % 5 === 0; // 20% of agents are free
     const isBestseller = index < Math.ceil(count * 0.2); // Top 20% are bestsellers
     const isNew = index >= Math.floor(count * 0.8); // Bottom 20% are new
+    const isTrending = index % 10 === 0; // 10% are trending
+    const isFeatured = index % 5 === 0; // 20% are featured
+    const isSubscription = !isFree && (index % 10 === 3 || index % 10 === 8); // 15% are subscription-based
     const reviews = generateReviews(id, Math.floor(Math.random() * 8) + 3); // 3-10 reviews
     
     // Calculate average rating
@@ -537,10 +522,22 @@ const generateMockAgents = (count) => {
     const descriptionTemplate = descriptions[Math.floor(Math.random() * descriptions.length)];
     const description = descriptionTemplate.replace('%CATEGORY%', category);
     
-    // Create a more realistic createdAt date (within last 30 days)
+    // Calculate popularity metrics
+    const popularity = Math.floor(Math.random() * 1000);
+    const viewCount = popularity * (5 + Math.floor(Math.random() * 20));
+    const wishlistCount = Math.floor(popularity * 0.3);
+    
+    // Select random features and tags
+    const features = [...allFeatures].sort(() => 0.5 - Math.random()).slice(0, 2 + Math.floor(Math.random() * 3));
+    const tags = [...allTags].sort(() => 0.5 - Math.random()).slice(0, 2 + Math.floor(Math.random() * 3));
+    
+    // Create a createdAt date (within last 30 days)
     const createdDate = new Date(
       Date.now() - Math.floor(Math.random() * 30 * 24 * 60 * 60 * 1000)
     );
+    
+    // Base price calculation
+    const basePrice = isFree ? 0 : (5 + Math.floor(Math.random() * 95));
     
     return {
       id,
@@ -548,41 +545,71 @@ const generateMockAgents = (count) => {
       title: `${category} Assistant Pro${isBestseller ? ' Plus' : ''}`,
       description,
       category,
-      price,
-      iconUrl,
-      isBestseller,
-      isNew,
-      isFree: price === 0 || price === '0' || price === 'Free' || price === '$0',
-      isSubscription: typeof price === 'string' && price.includes('/month'),
-      reviews,
-      rating: {
-        average: averageRating,
-        count: reviews.length,
-        distribution: {
-          5: reviews.filter(r => r.rating === 5).length,
-          4: reviews.filter(r => r.rating === 4).length,
-          3: reviews.filter(r => r.rating === 3).length,
-          2: reviews.filter(r => r.rating === 2).length,
-          1: reviews.filter(r => r.rating === 1).length
-        }
-      },
       creator: {
         id: `creator-${Math.floor(Math.random() * 10) + 1}`,
         name: `AI Labs ${Math.floor(Math.random() * 100) + 1}`,
-        verified: Math.random() > 0.2 // 80% verified
+        verified: Math.random() > 0.7 // 30% verified
       },
-      stats: {
-        users: Math.floor(Math.random() * 10000),
-        queries: Math.floor(Math.random() * 1000000)
+      iconUrl,
+      features,
+      tags,
+      isBestseller,
+      isFeatured,
+      isFree,
+      isSubscription,
+      subscriptionTiers: isSubscription ? [
+        {
+          name: "Basic",
+          price: basePrice / 2,
+          features: features.slice(0, Math.ceil(features.length / 2))
+        },
+        {
+          name: "Pro",
+          price: basePrice,
+          features: features
+        }
+      ] : null,
+      isNew,
+      isTrending,
+      popularity,
+      viewCount,
+      wishlistCount,
+      createdAt: createdDate.toISOString(),
+      dateCreated: new Date(createdDate.getTime() - 3600000).toISOString(), // 1 hour earlier
+      version: `1.${Math.floor(Math.random() * 10)}.${Math.floor(Math.random() * 10)}`,
+      
+      priceDetails: {
+        basePrice: isFree ? 0 : basePrice,
+        discountedPrice: isFree ? 0 : (Math.random() > 0.7 ? Math.floor(basePrice * 0.7) : basePrice),
+        currency: "USD",
+        validUntil: Math.random() > 0.8 ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null
       },
-      createdAt: createdDate,
-      dateCreated: createdDate.toISOString(), // Explicit ISO string for frontend sorting
-      // For subscription models, maybe include subscription tiers
-      subscriptionTiers: typeof price === 'string' && price.includes('/month') ? [
-        { name: 'Basic', price: parseInt(price) },
-        { name: 'Pro', price: parseInt(price) * 2 },
-        { name: 'Enterprise', price: parseInt(price) * 5 }
-      ] : null
+      
+      priceHistory: isFree ? [] : [
+        {
+          price: basePrice + 5,
+          discountedPrice: basePrice,
+          dateApplied: new Date(createdDate.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString()
+        }
+      ],
+      
+      purchase: {
+        isAvailable: true,
+        maxPurchasesPerUser: Math.random() > 0.9 ? 1 : null,
+        refundPolicy: ["No refunds allowed", "7-day refund policy", "30-day money-back guarantee"][Math.floor(Math.random() * 3)]
+      },
+      
+      rating: {
+        average: parseFloat(averageRating),
+        count: reviews.length,
+        distribution: {
+          1: reviews.filter(r => r.rating === 1).length,
+          2: reviews.filter(r => r.rating === 2).length,
+          3: reviews.filter(r => r.rating === 3).length,
+          4: reviews.filter(r => r.rating === 4).length,
+          5: reviews.filter(r => r.rating === 5).length
+        }
+      }
     };
   });
 };

@@ -30,6 +30,21 @@ const AgentCard = ({ agent }) => {
 
   // Format the price for display
   const formatPrice = (price) => {
+    // Check if we have price details object
+    if (agent.priceDetails) {
+      if (agent.isFree) return 'Free';
+      
+      const { basePrice, discountedPrice, currency } = agent.priceDetails;
+      const currencySymbol = currency === 'USD' ? '$' : currency;
+      
+      if (discountedPrice !== null && discountedPrice !== basePrice) {
+        return `${currencySymbol}${discountedPrice.toFixed(2)}`;
+      }
+      
+      return basePrice ? `${currencySymbol}${basePrice.toFixed(2)}` : 'Free';
+    }
+    
+    // Legacy format
     if (!price) return 'Free';
     if (typeof price === 'string') return price;
     if (typeof price === 'number') {
@@ -46,11 +61,11 @@ const AgentCard = ({ agent }) => {
 
   // Alternative placeholder with fallbacks
   const getImageUrl = () => {
-    if (!agent.image || imageError) {
+    if (!agent.iconUrl || imageError) {
       // Use placehold.co as a fallback
       return `https://placehold.co/300x160/4a4de7/ffffff?text=${encodeURIComponent(agent.title || 'AI Agent')}`;
     }
-    return agent.image;
+    return agent.iconUrl;
   };
 
   const handleImageError = () => {
@@ -80,6 +95,7 @@ const AgentCard = ({ agent }) => {
           {/* Badges */}
           {agent.isBestseller && <div className="badge bestseller">Bestseller</div>}
           {agent.isNew && <div className="badge new">New</div>}
+          {agent.isTrending && <div className="badge trending">Trending</div>}
         </div>
 
         {/* Card content */}
@@ -104,8 +120,12 @@ const AgentCard = ({ agent }) => {
           </div>
           
           <div className="agent-price">
-            {formatPrice(agent.price)}
+            {formatPrice(agent.priceDetails?.basePrice)}
           </div>
+          
+          {agent.version && 
+            <div className="agent-version">v{agent.version}</div>
+          }
         </div>
       </div>
     </div>
