@@ -57,7 +57,8 @@ const etagCache = () => (req, res, next) => {
  */
 const varyHeader = () => (req, res, next) => {
   // Set Vary header to handle different client capabilities
-  res.setHeader('Vary', 'Accept-Encoding, User-Agent');
+  // Include Origin in Vary header to ensure correct caching with CORS
+  res.setHeader('Vary', 'Origin, Accept-Encoding, User-Agent');
   next();
 };
 

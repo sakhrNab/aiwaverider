@@ -401,33 +401,6 @@ const getWishlists = async (req, res) => {
 };
 
 /**
- * Get a specific wishlist by ID
- */
-const getWishlistById = async (req, res) => {
-  try {
-    const { wishlistId } = req.params;
-    
-    // Fetch the wishlist document
-    const wishlistDoc = await db.collection('wishlists').doc(wishlistId).get();
-    
-    if (!wishlistDoc.exists) {
-      return res.status(404).json({ error: 'Wishlist not found' });
-    }
-    
-    // Get the wishlist data
-    const wishlistData = {
-      id: wishlistDoc.id,
-      ...wishlistDoc.data()
-    };
-    
-    return res.status(200).json(wishlistData);
-  } catch (error) {
-    console.error('Error fetching wishlist:', error);
-    return res.status(500).json({ error: 'Failed to fetch wishlist' });
-  }
-};
-
-/**
  * Generate mock agents for development
  */
 const generateMockAgents = (count) => {
@@ -656,7 +629,6 @@ module.exports = {
   getAgentById,
   toggleWishlist,
   getWishlists,
-  getWishlistById,
   seedAgents,
   generateMockAgents
 }; 

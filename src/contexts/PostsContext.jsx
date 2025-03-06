@@ -8,7 +8,7 @@ import React, {
   useCallback,
   useMemo,
 } from 'react';
-import { getAllPosts as apiGetAllPosts, getPostById as apiGetPostById, API_URL } from '../utils/api';
+import { getAllPosts as apiGetAllPosts, getPostById as apiGetPostById, API_URL, api } from '../utils/api';
 import { AuthContext } from './AuthContext';
 import { auth } from '../utils/firebase';
 import { toast } from 'react-toastify';
@@ -326,17 +326,8 @@ export const PostsProvider = ({ children }) => {
 
       setLoadingComments(prev => ({ ...prev, [postId]: true }));
       
-        const response = await fetch(`${BACKEND_URL}/api/posts/${postId}/comments`, {
-          method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-          credentials: 'include'
-        });
-      
-        if (!response.ok) {
-          throw new Error('Failed to fetch comments');
-        }
-      
-        const comments = await response.json();
+      const response = await api.get(`/api/posts/${postId}/comments`);
+      const comments = response.data;
       
       // Cache the comments with timestamp
       localStorage.setItem(cacheKey, JSON.stringify({

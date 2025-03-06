@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const agentsController = require('../controllers/agentsController');
-const authenticate = require('../middleware/authenticate');
+const validateFirebaseToken = require('../middleware/authenticate');
 const publicCacheMiddleware = require('../middleware/publicCacheMiddleware');
 
 // Public endpoints (cached)
@@ -11,11 +11,13 @@ router.get('/featured', publicCacheMiddleware({ duration: 900 }), agentsControll
 router.get('/:agentId', publicCacheMiddleware({ duration: 600 }), agentsController.getAgentById);
 
 // Protected endpoints (require authentication)
-// Temporarily comment out these routes while fixing authentication
-/* 
-router.get('/wishlists', authenticate.validateFirebaseToken, agentsController.getWishlists);
-router.post('/wishlists/:agentId', authenticate.validateFirebaseToken, agentsController.toggleWishlist);
-router.get('/wishlists/:wishlistId', authenticate.validateFirebaseToken, agentsController.getWishlistById);
-*/
+router.get('/wishlists', validateFirebaseToken, agentsController.getWishlists);
+router.post('/wishlists/:agentId', validateFirebaseToken, agentsController.toggleWishlist);
+router.get('/wishlists/:wishlistId', validateFirebaseToken, agentsController.getWishlistById);
+
+// Development endpoint - only available in development environment
+if (process.env.NODE_ENV === 'development') {
+  router.post('/seed', agentsController.seedAgents);
+}
 
 module.exports = router; 

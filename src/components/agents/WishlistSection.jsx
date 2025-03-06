@@ -1,38 +1,75 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { FaExclamationTriangle } from 'react-icons/fa';
 import './WishlistSection.css';
 
 const WishlistCard = ({ wishlist }) => {
+  // Function to handle image errors and use a default placeholder
+  const handleImageError = (e) => {
+    // Use a data URI for the placeholder instead of a missing file
+    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Cpath d='M35 40 L65 60 M65 40 L35 60' stroke='%23999' stroke-width='2'/%3E%3C/svg%3E";
+    e.target.onerror = null; // Prevent infinite error loops
+  };
+
+  // Generate a default avatar if creator or avatar is missing
+  const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23e0e0e0'/%3E%3Ctext x='50' y='55' font-family='Arial' font-size='40' text-anchor='middle' fill='%23999'%3E?%3C/text%3E%3C/svg%3E";
+  
+  // Check if creator exists, otherwise provide defaults
+  const creator = wishlist.creator || { name: 'Unknown Creator', avatar: defaultAvatar };
+  const avatarSrc = creator.avatar || defaultAvatar;
+  const creatorName = creator.name || 'Unknown Creator';
+
   return (
     <Link to={`/agents/wishlist/${wishlist.id}`} className="wishlist-card">
       <div className="wishlist-header">
         <div className="wishlist-info">
           <img 
-            src={wishlist.creator.avatar} 
-            alt={wishlist.creator.name}
+            src={avatarSrc} 
+            alt={creatorName}
             className="wishlist-avatar"
+            onError={handleImageError}
           />
           <div>
-            <h3 className="wishlist-name">{wishlist.name}</h3>
-            <p className="wishlist-creator">by {wishlist.creator.name}</p>
+            <h3 className="wishlist-name">{wishlist.name || 'Unnamed Wishlist'}</h3>
+            <p className="wishlist-creator">by {creatorName}</p>
           </div>
         </div>
       </div>
       <div className="wishlist-items">
-        {wishlist.items.map(item => (
-          <img 
-            key={item.id}
-            src={item.imageUrl} 
-            alt={item.name}
-            className="wishlist-item"
-          />
-        ))}
+        {wishlist.items && wishlist.items.length > 0 ? (
+          wishlist.items.map(item => (
+            <img 
+              key={item.id || `item-${Math.random()}`}
+              src={item.imageUrl || defaultAvatar} 
+              alt={item.name || 'Item'}
+              className="wishlist-item"
+              onError={handleImageError}
+            />
+          ))
+        ) : (
+          <div className="no-items">No items in this wishlist</div>
+        )}
       </div>
     </Link>
   );
 };
 
 const WishlistSection = ({ wishlists, isLoading }) => {
+  const [isMockData, setIsMockData] = useState(false);
+  
+  useEffect(() => {
+    // Check if the data is likely mock data
+    if (wishlists && wishlists.length > 0) {
+      // Mock data typically has these patterns
+      const hasMockPatterns = wishlists.some(wishlist => 
+        wishlist.id && wishlist.id.startsWith('wishlist-') || 
+        (wishlist.creator && wishlist.creator.avatar && wishlist.creator.avatar.includes('picsum.photos')) ||
+        (wishlist.items && Array.isArray(wishlist.items) && wishlist.items.some(item => item && item.imageUrl && item.imageUrl.includes('picsum.photos')))
+      );
+      setIsMockData(hasMockPatterns);
+    }
+  }, [wishlists]);
+
   if (isLoading) {
     return <div>Loading wishlists...</div>;
   }
@@ -45,6 +82,14 @@ const WishlistSection = ({ wishlists, isLoading }) => {
     <div className="wishlists-section">
       <h2 className="wishlists-title">Wishlists you might like</h2>
       <p className="wishlists-subtitle">Based on your interests and activity</p>
+      
+      {isMockData && (
+        <div className="mock-data-warning">
+          <FaExclamationTriangle className="warning-icon" />
+          <span>Showing mock data - not fetched from database</span>
+        </div>
+      )}
+      
       <div className="wishlists-grid">
         {wishlists.map(wishlist => (
           <WishlistCard key={wishlist.id} wishlist={wishlist} />

@@ -1,10 +1,10 @@
 .category-nav {
   width: 100%;
   overflow-x: auto;
+  padding-bottom: 4px;
   scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
-  padding: 10px 0;
-  margin-bottom: 20px;
+  -ms-overflow-style: none; /* IE/Edge */
+  position: relative;
 }
 
 .category-nav::-webkit-scrollbar {
@@ -13,37 +13,77 @@
 
 .category-scroll {
   display: flex;
-  padding: 0 0 10px;
-  min-width: max-content;
+  gap: 12px;
+  padding: 2px 0;
+  min-width: min-content;
 }
 
 .category-button {
-  padding: 10px 20px;
-  margin-right: 12px;
-  border-radius: 20px;
-  border: 1px solid #e0e0e0;
-  background: white;
-  color: #555;
+  padding: 12px 20px;
+  border: 1px solid #e8e9eb;
+  border-radius: 50px;
+  background-color: #fff;
+  color: #1c1d1f;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
   white-space: nowrap;
+  transition: all 0.2s ease;
+  outline: none;
 }
 
 .category-button:hover:not(.active) {
-  background: #f5f5f5;
+  background-color: #f7f9fa;
+  color: #1c1d1f;
+  border-color: #d1d7dc;
 }
 
 .category-button.active {
-  background: #4a4de7;
+  background-color: #1c1d1f;
   color: white;
-  border-color: #4a4de7;
+  border-color: #1c1d1f;
+}
+
+/* Add fancy scroll indicators */
+.category-nav::before,
+.category-nav::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 30px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.category-nav::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0));
+}
+
+.category-nav::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0));
 }
 
 @media (max-width: 768px) {
   .category-button {
-    padding: 8px 16px;
+    padding: 10px 16px;
     font-size: 13px;
+  }
+  
+  .category-scroll {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .category-button {
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+  
+  .category-scroll {
+    gap: 6px;
   }
 } 

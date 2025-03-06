@@ -44,7 +44,7 @@ const getTokenWithCache = async (currentUser) => {
 };
 
 // Create an Axios instance with the base URL and enable credentials
-const api = axios.create({
+export const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
 });
@@ -795,86 +795,227 @@ export const uploadProfileImage = async (file) => {
   }
 };
 
-// Agent-related API functions
-export const fetchAgents = async (category = 'All', filter = 'Hot & Now', page = 1, limit = 20) => {
+/**
+ * Fetch agents with optional filtering
+ * @param {string} category - Category filter
+ * @param {string} filter - Sort filter (Hot & New, Top Rated, etc.)
+ * @param {number} page - Page number for pagination
+ * @param {number} limit - Number of items per page
+ * @param {object} priceRange - Min and max price range
+ * @param {number} rating - Minimum rating filter
+ * @param {array} tags - Tags to filter by
+ * @param {array} features - Features to filter by
+ * @param {string} search - Search query
+ */
+export const fetchAgents = async (
+  category = 'All',
+  filter = 'Hot & Now',
+  page = 1,
+  limit = 20,
+  priceRange = { min: 0, max: 1000 },
+  rating = 0,
+  tags = [],
+  features = [],
+  search = ''
+) => {
   try {
-    // Build query parameters
-    const queryParams = new URLSearchParams({
-      category: category !== 'All' ? category : '',
-      filter,
-      page,
-      limit
-    });
+    // Create query params for API
+    const params = new URLSearchParams();
+    params.append('category', category);
+    params.append('filter', filter);
+    params.append('page', page);
+    params.append('limit', limit);
     
-    const response = await fetch(`${API_URL}/api/agents?${queryParams.toString()}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': getAuthHeader()
-      },
-      credentials: 'include'
-    });
+    // Add filter params
+    if (priceRange?.min > 0) params.append('priceMin', priceRange.min);
+    if (priceRange?.max < 1000) params.append('priceMax', priceRange.max);
+    if (rating > 0) params.append('rating', rating);
     
-    if (!response.ok) {
-      throw new Error(`Error fetching agents: ${response.status}`);
+    // Join arrays for API consumption
+    if (tags && tags.length > 0) params.append('tags', tags.join(','));
+    if (features && features.length > 0) params.append('features', features.join(','));
+    if (search) params.append('search', search);
+    
+    console.log(`Attempting to fetch agents from API with params: ${params.toString()}`);
+    
+    // Try to fetch from backend API first
+    try {
+      // Use the axios instance with proper credentials handling
+      const response = await api.get(`/api/agents?${params.toString()}`);
+      console.log('Successfully fetched agents from API:', response.data.agents.length);
+      return response.data.agents;
+    } catch (error) {
+      console.warn('Backend API fetch for agents failed, falling back to mock data:', error);
+      // Make it very clear in the console that we're using mock data
+      console.warn('%c ⚠️ USING MOCK AGENTS DATA - NOT REAL DATA ⚠️', 'background: #FFF3CD; color: #856404; font-size: 14px; font-weight: bold; padding: 5px;');
     }
     
-    const data = await response.json();
-    return data.agents || [];
+    // If the API request failed, fall back to mock data
+    const mockAgents = generateMockAgents(30); // Generate 30 mock agents
+    
+    // Apply client-side filtering for mock data
+    let filteredAgents = [...mockAgents];
+    
+    // Apply all filters
+    
+    // Special filter types: Hot & Now, Free, Newest, Top Rated
+    if (filter === 'Free') {
+      filteredAgents = filteredAgents.filter(agent => {
+        // Check if isFree property exists
+        if (agent.isFree !== undefined) {
+          return agent.isFree;
+        }
+        // Otherwise check price
+        if (typeof agent.price === 'number') {
+          return agent.price === 0;
+        }
+        if (typeof agent.price === 'string') {
+          const lowerPrice = agent.price.toLowerCase();
+          return lowerPrice === 'free' || lowerPrice === '$0' || lowerPrice === '0';
+        }
+        return false;
+      });
+    }
+    
+    // Category filter
+    if (category && category !== 'All') {
+      filteredAgents = filteredAgents.filter(agent => agent.category === category);
+    }
+    
+    // Price filter
+    if (priceRange) {
+      filteredAgents = filteredAgents.filter(agent => {
+        let price = agent.price;
+        if (typeof price === 'string') {
+          const numericPrice = parseFloat(price.replace(/[^0-9.]/g, ''));
+          if (!isNaN(numericPrice)) {
+            price = numericPrice;
+          }
+        }
+        return price >= priceRange.min && price <= priceRange.max;
+      });
+    }
+    
+    // Rating filter
+    if (rating > 0) {
+      filteredAgents = filteredAgents.filter(agent => {
+        const agentRating = agent.rating?.average ? parseFloat(agent.rating.average) : 0;
+        return agentRating >= rating;
+      });
+    }
+    
+    // Tags filter
+    if (tags && tags.length > 0) {
+      filteredAgents = filteredAgents.filter(agent => {
+        if (!agent.tags) return false;
+        return tags.some(tag => agent.tags.includes(tag));
+      });
+    }
+    
+    // Features filter
+    if (features && features.length > 0) {
+      filteredAgents = filteredAgents.filter(agent => {
+        // Handle special features like 'Free' and 'Subscription'
+        if (features.includes('Free') && (agent.price === 0 || agent.price === 'Free' || agent.price === '$0')) {
+          return true;
+        }
+        if (features.includes('Subscription') && typeof agent.price === 'string' && agent.price.includes('/month')) {
+          return true;
+        }
+        
+        // Regular features
+        if (!agent.features) return false;
+        return features.some(feature => agent.features.includes(feature));
+      });
+    }
+    
+    // Search filter
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filteredAgents = filteredAgents.filter(agent => {
+        return (
+          (agent.name && agent.name.toLowerCase().includes(searchLower)) ||
+          (agent.description && agent.description.toLowerCase().includes(searchLower)) ||
+          (agent.category && agent.category.toLowerCase().includes(searchLower))
+        );
+      });
+    }
+    
+    // Apply sort based on filter
+    if (filter === 'Hot & Now') {
+      filteredAgents.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+    } else if (filter === 'Top Rated') {
+      filteredAgents.sort((a, b) => {
+        const ratingA = a.rating?.average ? parseFloat(a.rating.average) : 0;
+        const ratingB = b.rating?.average ? parseFloat(b.rating.average) : 0;
+        return ratingB - ratingA;
+      });
+    } else if (filter === 'Newest') {
+      filteredAgents.sort((a, b) => {
+        // Use dateCreated if available, otherwise fallback to createdAt
+        const dateA = a.dateCreated ? new Date(a.dateCreated) : 
+                     (a.createdAt ? new Date(a.createdAt) : new Date(0));
+        const dateB = b.dateCreated ? new Date(b.dateCreated) : 
+                     (b.createdAt ? new Date(b.createdAt) : new Date(0));
+        return dateB - dateA;
+      });
+    }
+    
+    // Apply pagination
+    const startIndex = (page - 1) * limit;
+    const paginatedAgents = filteredAgents.slice(startIndex, startIndex + limit);
+    
+    return paginatedAgents;
   } catch (error) {
     console.error('Error fetching agents:', error);
-    // Return mock data as fallback
-    return generateMockAgents(limit);
+    return [];
   }
 };
 
+/**
+ * Fetch featured agents from the API or fallback to mock data
+ */
 export const fetchFeaturedAgents = async (limit = 8) => {
   try {
-    const response = await fetch(`${API_URL}/api/agents/featured?limit=${limit}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Error fetching featured agents: ${response.status}`);
+    // Try to fetch from backend API first
+    console.log(`Attempting to fetch featured agents from API with limit: ${limit}`);
+    try {
+      // Use the axios instance with proper credentials handling
+      const response = await api.get(`/api/agents/featured?limit=${limit}`);
+      console.log('Successfully fetched featured agents from API:', response.data.agents.length);
+      return response.data.agents;
+    } catch (error) {
+      console.warn('Backend featured agents fetch failed, falling back to mock data:', error);
+      // Make it very clear in the console that we're using mock data
+      console.warn('%c ⚠️ USING MOCK FEATURED AGENTS DATA - NOT REAL DATA ⚠️', 'background: #FFF3CD; color: #856404; font-size: 14px; font-weight: bold; padding: 5px;');
     }
     
-    const data = await response.json();
-    return data.agents || [];
+    // If the API request failed, fall back to mock data
+    const mockAgents = generateMockAgents(20);
+    
+    // Select bestsellers and new agents
+    const bestsellers = mockAgents.filter(agent => agent.isBestseller).slice(0, Math.floor(limit / 2));
+    const newAgents = mockAgents.filter(agent => agent.isNew && !agent.isBestseller).slice(0, limit - bestsellers.length);
+    
+    return [...bestsellers, ...newAgents];
   } catch (error) {
     console.error('Error fetching featured agents:', error);
-    // Return fallback data for testing/display purposes
-    return generateMockFeaturedAgents(limit);
+    return [];
   }
 };
 
 export const fetchWishlists = async () => {
   try {
-    // In development environment, always use mock data to avoid 404 errors
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Using mock wishlists data');
-      return generateMockWishlists();
-    }
-    
-    // In production, try to fetch from API first
+    // Always attempt to fetch from the API first, even in development
     try {
-      const response = await fetch(`${API_URL}/api/wishlists`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': getAuthHeader()
-        },
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        return data;
-      }
+      console.log('Attempting to fetch wishlists from API');
+      const response = await api.get('/api/wishlists');
+      console.log('Successfully fetched wishlists from API:', response.data);
+      return response.data;
     } catch (error) {
-      console.log(`API fetch failed, falling back to mock data: ${error.message}`);
+      console.warn(`API fetch for wishlists failed, falling back to mock data: ${error.message}`);
+      // Make it very clear in the console that we're using mock data
+      console.warn('%c ⚠️ USING MOCK WISHLISTS DATA - NOT REAL DATA ⚠️', 'background: #FFF3CD; color: #856404; font-size: 14px; font-weight: bold; padding: 5px;');
     }
     
     // Fallback to mock data if API fails
@@ -887,21 +1028,8 @@ export const fetchWishlists = async () => {
 
 export const toggleWishlist = async (agentId) => {
   try {
-    const response = await fetch(`${API_URL}/api/wishlists/toggle`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': getAuthHeader()
-      },
-      credentials: 'include',
-      body: JSON.stringify({ agentId })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Error toggling wishlist: ${response.status}`);
-    }
-    
-    return await response.json();
+    const response = await api.post('/api/wishlists/toggle', { agentId });
+    return response.data;
   } catch (error) {
     console.error('Error toggling wishlist:', error);
     throw error;
@@ -1045,137 +1173,94 @@ const generateMockWishlists = () => {
 
 // Mock marketplace agents
 const generateMockAgents = (count) => {
-  const categories = ['Design', 'Drawing & Painting', '3D', 'Self Improvement', 'Music & Sound Design', 'Software Development', 'Business'];
-  const agents = [
-    {
-      id: 'novabeast',
-      title: 'Novabeast [VRChat Avatar]',
-      price: '$25',
-      image: 'https://via.placeholder.com/300x300?text=Novabeast',
-      creator: {
-        id: 'krittmatic',
-        name: 'Krittmatic',
-        avatar: 'https://via.placeholder.com/50x50?text=K'
-      },
-      rating: {
-        average: 4.9,
-        count: 141
-      },
-      category: '3D',
-      isWishlisted: Math.random() > 0.5,
-      isBestseller: true,
-      description: 'A cybernetic avatar with stunning visuals and animations, perfect for VRChat.',
-      name: 'Novabeast [VRChat Avatar]'
-    },
-    {
-      id: 'consultations',
-      title: 'Lifetime Consultations',
-      price: '$2,500',
-      image: 'https://via.placeholder.com/300x300?text=Consultations',
-      creator: {
-        id: 'daniel',
-        name: 'Daniel Vassallo',
-        avatar: 'https://via.placeholder.com/50x50?text=DV'
-      },
-      rating: {
-        average: 5.0,
-        count: 2
-      },
-      category: 'Business',
-      isWishlisted: Math.random() > 0.5,
-      description: 'Lifetime access to business consultations from an experienced entrepreneur.',
-      name: 'Lifetime Consultations'
-    },
-    {
-      id: 'resell',
-      title: 'Exclusive All Suppliers Package + FREE Resell Guide!',
-      price: '$29.99',
-      image: 'https://via.placeholder.com/300x300?text=Resell',
-      creator: {
-        id: 'resell',
-        name: 'ResellProVendors',
-        avatar: 'https://via.placeholder.com/50x50?text=RP'
-      },
-      category: 'Business',
-      isWishlisted: Math.random() > 0.5,
-      isBestseller: true,
-      description: 'Complete guide to finding suppliers and reselling products with high profit margins.',
-      name: 'Exclusive All Suppliers Package'
-    },
-    {
-      id: 'geoimgr',
-      title: 'GeoImgr Pro Subscription',
-      price: '$9.90 a month',
-      image: 'https://via.placeholder.com/300x300?text=GeoImgr',
-      creator: {
-        id: 'geoimgr',
-        name: 'GeoImgr',
-        avatar: 'https://via.placeholder.com/50x50?text=GI'
-      },
-      rating: {
-        average: 4.8,
-        count: 141
-      },
-      category: 'Software Development',
-      isWishlisted: Math.random() > 0.5,
-      isNew: true,
-      description: 'Professional image geotagging tool with advanced features for photographers.',
-      name: 'GeoImgr Pro Subscription'
+  // Categories that might match the ones in the filter
+  const categories = ['All', 'Design', 'Drawing & Painting', '3D', 'Self Improvement', 
+    'Music & Sound Design', 'Software Development', 'Business'];
+  
+  // Create consistent price formats - either numbers or properly formatted strings
+  const createPrice = (index) => {
+    // Make 20% of agents free
+    if (index % 5 === 0) {
+      return 0; // Numeric 0 for free agents
     }
-  ];
-  
-  // Generate more agents if needed
-  if (count > agents.length) {
-    const more = Array.from({ length: count - agents.length }, (_, i) => {
-      const title = `AI Agent ${i + agents.length + 1}`;
-      const category = categories[Math.floor(Math.random() * categories.length)];
-      return {
-        id: `agent-${i + agents.length}`,
-        title: title,
-        name: title,
-        price: `$${Math.floor(Math.random() * 100) + 10}${Math.random() > 0.7 ? ' a month' : ''}`,
-        image: `https://via.placeholder.com/300x300?text=Agent+${i + agents.length + 1}`,
-        creator: {
-          id: `creator-${i + agents.length}`,
-          name: `Creator ${i + agents.length + 1}`,
-          avatar: `https://via.placeholder.com/50x50?text=C${i + agents.length + 1}`
-        },
-        rating: {
-          average: (3 + Math.random() * 2).toFixed(1),
-          count: Math.floor(Math.random() * 500) + 1
-        },
-        category: category,
-        isWishlisted: Math.random() > 0.7,
-        isBestseller: Math.random() > 0.8,
-        isNew: Math.random() > 0.8,
-        description: `This is a powerful AI agent that helps with ${category.toLowerCase()} tasks and projects.`
-      };
-    });
     
-    return [...agents, ...more];
-  }
-  
-  return agents.slice(0, count);
+    // Subscription agents (10%)
+    if (index % 10 === 3) {
+      const price = 5 + Math.floor(Math.random() * 20); // $5-$25 range
+      return `$${price}/month`;
+    }
+    
+    // Regular priced agents (70%)
+    const price = 5 + Math.floor(Math.random() * 95); // $5-$100 range
+    return price; // Return as a number for consistency
+  };
+
+  return Array(count).fill().map((_, i) => {
+    // Generate the price first so we can use it for isFree
+    const price = createPrice(i);
+    const isFree = price === 0 || price === '0' || price === 'Free' || price === '$0';
+    const isNew = Math.random() > 0.9;
+    const isBestseller = Math.random() > 0.85;
+    
+    // Generate random dates for sorting and filtering
+    const monthsAgo = Math.floor(Math.random() * 18);
+    const createdDate = new Date(Date.now() - (monthsAgo * 30 * 24 * 60 * 60 * 1000));
+    
+    // Features and tags
+    const features = ['API Access', 'Customizable', 'Mobile Compatible'].slice(0, Math.floor(Math.random() * 3) + 1);
+    const tags = ['AI', 'Productivity', 'Assistant'].slice(0, Math.floor(Math.random() * 3) + 1);
+    
+    // Calculate popularity for "Hot & Now" filter
+    const basePopularity = Math.floor(Math.random() * 70) + 1;
+    const newBonus = isNew ? 15 : 0;
+    const bestsellerBonus = isBestseller ? 20 : 0;
+    const popularity = Math.min(100, basePopularity + newBonus + bestsellerBonus);
+    
+    return {
+      id: `agent-${i+1}`,
+      title: `AI Agent ${i+1}`,
+      name: `Agent ${i+1}`,
+      price: price,
+      isFree: isFree, // Explicit property for filtering
+      imageUrl: `https://picsum.photos/300/200?random=${i+100}`,
+      isWishlisted: Math.random() > 0.8,
+      isBestseller: isBestseller,
+      isNew: isNew,
+      category: categories[Math.floor(Math.random() * categories.length)],
+      // Optional popularity score for trending sort (1-100)
+      popularity: popularity,
+      // Tags and features for filtering
+      tags: tags,
+      features: features,
+      // Dates for filtering by newest
+      createdAt: createdDate,
+      dateCreated: createdDate.toISOString(),
+      updatedAt: new Date(Date.now() - Math.floor(Math.random() * 30 * 24 * 60 * 60 * 1000)),
+      creator: {
+        id: `creator-${i}`,
+        name: i === 0 ? '168flyerchess' : 
+              i === 1 ? 'Seth Hesh' : 
+              i === 2 ? 'Seth Hesh' :
+              i === 3 ? 'Trishonna' :
+              i === 4 ? 'Jordi Bruin' :
+              i === 5 ? 'Marketplace Creator' :
+              `Creator ${i+1}`,
+        avatar: `https://picsum.photos/50/50?random=${i+200}`
+      },
+      rating: {
+        average: (4 + Math.random()).toFixed(1),
+        count: Math.floor(Math.random() * 1000) + 10
+      },
+      description: `This is a description for agent ${i+1}. It showcases the agent's capabilities.`
+    };
+  });
 };
 
 // Add agent to wishlist
 export const addToWishlist = async (agentId) => {
   try {
-    const response = await fetch(`${API_URL}/api/wishlists/add`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': getAuthHeader()
-      },
-      credentials: 'include',
-      body: JSON.stringify({ agentId })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Error adding to wishlist: ${response.status}`);
-    }
-    
-    return await response.json();
+    const response = await api.post('/api/wishlists/add', { agentId });
+    return response.data;
   } catch (error) {
     console.error('Error adding to wishlist:', error);
     // Simulate success for development
@@ -1186,20 +1271,8 @@ export const addToWishlist = async (agentId) => {
 // Remove agent from wishlist
 export const removeFromWishlist = async (agentId) => {
   try {
-    const response = await fetch(`${API_URL}/api/wishlists/remove/${agentId}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': getAuthHeader()
-      },
-      credentials: 'include'
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Error removing from wishlist: ${response.status}`);
-    }
-    
-    return await response.json();
+    const response = await api.delete(`/api/wishlists/remove/${agentId}`);
+    return response.data;
   } catch (error) {
     console.error('Error removing from wishlist:', error);
     // Simulate success for development

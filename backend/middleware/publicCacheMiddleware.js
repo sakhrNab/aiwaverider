@@ -39,6 +39,23 @@ const publicCacheMiddleware = (options = {}) => {
       return next();
     }
 
+    // Save original methods to restore them if they get overridden
+    const originalSetHeader = res.setHeader;
+    const originalWriteHead = res.writeHead;
+
+    // Override setHeader to prevent overriding of CORS headers
+    res.setHeader = function(name, value) {
+      // Don't override CORS headers that are already set
+      if (name === 'Access-Control-Allow-Origin' || 
+          name === 'Access-Control-Allow-Methods' ||
+          name === 'Access-Control-Allow-Headers' ||
+          name === 'Access-Control-Allow-Credentials') {
+        return originalSetHeader.apply(this, arguments);
+      }
+      
+      return originalSetHeader.apply(this, arguments);
+    };
+
     // Chain the middleware functions
     cacheControl(maxAge)(req, res, () => {
       if (enableEtag) {

@@ -1,32 +1,38 @@
 .agent-card {
-  margin-bottom: 20px;
+  margin-bottom: 0;
   position: relative;
-  transition: transform 0.2s ease;
+  transition: transform 0.15s ease;
+  height: 100%;
 }
 
 .agent-card-inner {
   border: 1px solid #e8e9eb;
-  border-radius: 4px;
+  border-radius: 8px;
   overflow: hidden;
   background-color: #fff;
   height: 100%;
   display: flex;
   flex-direction: column;
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
 }
 
 .agent-card-inner:hover {
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  transform: translateY(-4px);
 }
 
 .agent-image-container {
   position: relative;
   width: 100%;
-  height: 160px;
+  padding-top: 56.25%; /* 16:9 aspect ratio */
   overflow: hidden;
+  background-color: #f5f5f5;
 }
 
 .agent-image {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -91,7 +97,7 @@
 }
 
 .agent-content {
-  padding: 12px;
+  padding: 12px 16px;
   flex-grow: 1;
   display: flex;
   flex-direction: column;
@@ -100,7 +106,7 @@
 .agent-title {
   font-size: 16px;
   font-weight: 700;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   color: #1c1d1f;
   line-height: 1.4;
   display: -webkit-box;
@@ -121,9 +127,23 @@
 }
 
 .agent-creator {
-  font-size: 12px;
+  font-size: 13px;
   color: #6a6f73;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+}
+
+.creator-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background-color: #f7f7f7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6a6f73;
 }
 
 .agent-rating {
@@ -158,6 +178,7 @@
   font-weight: 700;
   font-size: 16px;
   margin-top: auto;
+  color: #1c1d1f;
 }
 
 @media (max-width: 768px) {
@@ -172,6 +193,6 @@
 
 @media (max-width: 480px) {
   .agent-image-container {
-    height: 140px;
+    padding-top: 65%; /* Slightly higher aspect ratio for mobile */
   }
 } 

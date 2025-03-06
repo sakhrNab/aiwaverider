@@ -38,6 +38,12 @@ const AgentCard = ({ agent }) => {
     return 'Price unavailable';
   };
 
+  // Format rating to show only one decimal place
+  const formatRating = (rating) => {
+    if (!rating) return '0';
+    return typeof rating === 'number' ? rating.toFixed(1) : parseFloat(rating).toFixed(1);
+  };
+
   // Alternative placeholder with fallbacks
   const getImageUrl = () => {
     if (!agent.image || imageError) {
@@ -88,7 +94,7 @@ const AgentCard = ({ agent }) => {
           <div className="agent-rating">
             {agent.rating?.average ? (
               <>
-                <span className="rating-score">{agent.rating.average}</span>
+                <span className="rating-score">{formatRating(agent.rating.average)}</span>
                 <FaStar className="star-icon" />
                 <span className="rating-count">({agent.rating.count || 0})</span>
               </>

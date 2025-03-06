@@ -55,6 +55,7 @@ const postsRoutes = require('./routes/posts');
 // const authRoutes = require('./middleware/authenticate'); // Fix: import from routes/auth
 const profileRoutes = require('./routes/profile');
 const agentsRoutes = require('./routes/agents'); // Add this import
+const wishlistsRoutes = require('./routes/wishlists'); // Add wishlists routes
 
 // Initialize express
 const app = express();
@@ -69,12 +70,13 @@ const commentsCollection = db.collection('comments');
 const validateFirebaseToken = require('./middleware/authenticate');
 
 // Basic middleware setup
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? process.env.CORS_ORIGINS?.split(',').map(origin => origin.trim())
-: ['http://localhost:5173', 'http://localhost:5174'],
-  credentials: true
-}));
+// Remove this CORS configuration since we'll use the more detailed one below
+// app.use(cors({
+//   origin: process.env.NODE_ENV === 'production'
+//     ? process.env.CORS_ORIGINS?.split(',').map(origin => origin.trim())
+// : ['http://localhost:5173'],
+//   credentials: true
+// }));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -136,24 +138,27 @@ setInterval(() => {
 
 // ------------------ CORS Configuration ------------------
 const allowedOrigins = isProduction
-? (process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim())
-: ['http://localhost:5173', 'http://localhost:5174']; // Frontend origin
+  ? (process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim())
+  : ['http://localhost:5173']; // Frontend origin
 
-app.use(cors({
-igin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
-      return callback(new Error(msg), false);
+// Create a CORS middleware function with proper configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl requests, or same origin)
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS policy: Origin ${origin} not allowed`));
     }
-    return callback(null, true);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,
-}));
-app.options('*', cors());
+  maxAge: 86400 // 24 hours
+};
+
+// Apply the CORS middleware
+app.use(cors(corsOptions));
 
 // ------------------ Body Parsing ------------------
 app.use(express.json({ limit: '10mb' }));
@@ -558,6 +563,9 @@ app.use('/api/profile', profileRoutes);
 // Mount the agents routes at /api/agents
 app.use('/api/agents', agentsRoutes);
 
+// Mount the wishlists routes at /api/wishlists
+app.use('/api/wishlists', wishlistsRoutes);
+
 // Enhanced logging
 app.use((req, res, next) => {
   let start = Date.now();
@@ -587,6 +595,31 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
 });
+
+// Check if agents collection exists in development mode
+if (!isProduction) {
+  const { db } = require('./config/firebase');
+  
+  // Check if agents collection exists
+  const checkAgentsCollection = async () => {
+    try {
+      console.log('Checking if agents collection exists...');
+      const agentsSnapshot = await db.collection('agents').limit(1).get();
+      if (agentsSnapshot.empty) {
+        console.log('⚠️ Agents collection is empty or does not exist.');
+        console.log('You may want to run: npm run check:agents');
+        console.log('This will populate the database with mock agents for development.');
+      } else {
+        console.log('✅ Agents collection exists with data.');
+      }
+    } catch (error) {
+      console.error('Error checking agents collection:', error);
+    }
+  };
+  
+  // Run the check
+  checkAgentsCollection();
+}
 
 // ------------------ Start the Server ------------------
 const PORT = process.env.PORT || (isProduction ? 8080 : 4000);
