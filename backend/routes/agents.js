@@ -15,6 +15,11 @@ router.get('/wishlists', validateFirebaseToken, agentsController.getWishlists);
 router.post('/wishlists/:agentId', validateFirebaseToken, agentsController.toggleWishlist);
 router.get('/wishlists/:wishlistId', validateFirebaseToken, agentsController.getWishlistById);
 
+// Admin endpoints for agent management (require admin role)
+router.post('/', validateFirebaseToken, agentsController.createAgent);
+router.patch('/:agentId', validateFirebaseToken, agentsController.updateAgent);
+router.delete('/:agentId', validateFirebaseToken, agentsController.deleteAgent);
+
 // Development endpoint - only available in development environment
 if (process.env.NODE_ENV === 'development') {
   router.post('/seed', agentsController.seedAgents);

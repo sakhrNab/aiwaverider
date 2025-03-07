@@ -12,4 +12,8 @@ router.get('/:id/history', publicCacheMiddleware({ duration: 600 }), priceContro
 router.post('/:id', validateFirebaseToken, priceController.updatePrice);
 router.patch('/:id/discount', validateFirebaseToken, priceController.applyDiscount);
 
+// Agent-specific endpoints (matches frontend requests)
+router.get('/agent/:agentId/price', publicCacheMiddleware({ duration: 300 }), priceController.getAgentPrice);
+router.post('/agent/:agentId/price', validateFirebaseToken, priceController.updateAgentPrice);
+
 module.exports = router; 

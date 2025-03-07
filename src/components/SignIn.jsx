@@ -26,6 +26,9 @@ const SignIn = () => {
   const timerRef = useRef(null);
   const navigate = useNavigate();
   const { user, updateUserProfile } = useContext(AuthContext);
+  const [isLoading, setIsLoading] = useState(false);
+  const [networkIssue, setNetworkIssue] = useState(false);
+  const [showNetworkGuide, setShowNetworkGuide] = useState(false);
 
   useEffect(() => {
     // Clean up timer on unmount
@@ -159,65 +162,202 @@ const SignIn = () => {
 
   const handleGoogleSignIn = async () => {
     try {
-      const result = await signInWithGoogle();
-      if (result.firebaseUser) {
+      setIsLoading(true);
+      console.log('Starting Google sign-in from SignIn component');
+      
+      const userData = await signInWithGoogle();
+      
+      // Check if the sign-in was canceled by the user
+      if (userData && userData.canceled) {
+        toast.info('Sign-in was canceled');
+        return; // Exit early, no need for error handling
+      }
+      
+      // Check if there was a network error
+      if (userData && userData.network === false) {
+        handleNetworkIssue(userData.message);
+        return; // Exit with network error
+      }
+      
+      console.log('SignIn component received user data:', userData);
+      
+      if (userData) {
+        // Clear any lockout status
         clearLockInfo();
         setAttempts(0);
         setIsLocked(false);
         setLockoutEndTime(null);
         setShowTips(false);
         
-        // Update user profile in context
-        await updateUserProfile(result.firebaseUser.uid, result.firebaseUser);
+        // Update user profile in context if needed
+        if (updateUserProfile && userData.uid) {
+          await updateUserProfile(userData.uid, userData);
+        }
         
+        // Show success message
         toast.success('Successfully signed in with Google!');
+        
+        // If not verified with backend but we have user info, still proceed
+        if (userData.isVerified === false) {
+          toast.warn('Connected to Google but had trouble verifying with the server. Some features may be limited.', {
+            autoClose: 5000
+          });
+        }
+        
+        // Navigate to home page
         setTimeout(() => navigate('/', { replace: true }), 100);
+      } else {
+        toast.error('Could not retrieve user information from Google');
       }
     } catch (error) {
       console.error("Google Sign-in Error:", error);
-      if (error.code === 'auth/no-account') {
-        toast.error('No account found. Redirecting to sign up...');
+      
+      // Network-related errors
+      if (error.message?.includes('network') || error.code === 'auth/network-request-failed') {
+        handleNetworkIssue('Network error during authentication. Click here for troubleshooting tips.');
+      } else if (error.message?.includes('NO_ACCOUNT') || error.code === 'auth/no-account') {
+        toast.info('No account found. Redirecting to sign up...');
         setTimeout(() => navigate('/sign-up'), 2000);
-      } else if (error.code === 'auth/popup-closed-by-user') {
-        toast.error('Sign-in popup was closed before completion');
       } else {
-        toast.error(error.message || 'Failed to sign in with Google');
+        // For actual errors, show an error message
+        toast.error(`Google sign-in failed: ${error.message || 'Unknown error'}`);
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleMicrosoftSignIn = async () => {
     try {
-      const result = await signInWithMicrosoft();
-      if (result.firebaseUser) {
+      setIsLoading(true);
+      console.log('Starting Microsoft sign-in from SignIn component');
+      
+      const userData = await signInWithMicrosoft();
+      
+      // Check if the sign-in was canceled by the user
+      if (userData && userData.canceled) {
+        toast.info('Sign-in was canceled');
+        return; // Exit early, no need for error handling
+      }
+      
+      // Check if there was a network error
+      if (userData && userData.network === false) {
+        handleNetworkIssue(userData.message);
+        return; // Exit with network error
+      }
+      
+      console.log('SignIn component received user data:', userData);
+      
+      if (userData) {
+        // Clear any lockout status
         clearLockInfo();
         setAttempts(0);
         setIsLocked(false);
         setLockoutEndTime(null);
         setShowTips(false);
-
-        // Update user profile in context
-        await updateUserProfile(result.firebaseUser.uid, result.firebaseUser);
         
+        // Update user profile in context if needed
+        if (updateUserProfile && userData.uid) {
+          await updateUserProfile(userData.uid, userData);
+        }
+        
+        // Show success message
         toast.success('Successfully signed in with Microsoft!');
+        
+        // If not verified with backend but we have user info, still proceed
+        if (userData.isVerified === false) {
+          toast.warn('Connected to Microsoft but had trouble verifying with the server. Some features may be limited.', {
+            autoClose: 5000
+          });
+        }
+        
+        // Navigate to home page
         setTimeout(() => navigate('/', { replace: true }), 100);
+      } else {
+        toast.error('Could not retrieve user information from Microsoft');
       }
     } catch (error) {
       console.error("Microsoft Sign-in Error:", error);
-      if (error.code === 'auth/no-account') {
-        toast.error('No account found. Redirecting to sign up...');
+      
+      // Network-related errors
+      if (error.message?.includes('network') || error.code === 'auth/network-request-failed') {
+        handleNetworkIssue('Network error during authentication. Click here for troubleshooting tips.');
+      } else if (error.message?.includes('NO_ACCOUNT') || error.code === 'auth/no-account') {
+        toast.info('No account found. Redirecting to sign up...');
         setTimeout(() => navigate('/sign-up'), 2000);
-      } else if (error.code === 'auth/popup-closed-by-user') {
-        toast.error('Sign-in popup was closed before completion');
       } else {
-        toast.error(error.message || 'Failed to sign in with Microsoft');
+        // For actual errors, show an error message
+        toast.error(`Microsoft sign-in failed: ${error.message || 'Unknown error'}`);
       }
+    } finally {
+      setIsLoading(false);
     }
   };
   // Add password requirements hint
   const PasswordHint = () => (
     <div className="text-xs text-gray-500 mt-1">
       Password must contain at least 8 characters, including uppercase, lowercase, number and special character (@$!%*?&)
+    </div>
+  );
+
+  // Check if network is online when component mounts
+  useEffect(() => {
+    const checkOnlineStatus = () => {
+      if (!navigator.onLine) {
+        setNetworkIssue(true);
+      }
+    };
+    
+    // Check initially
+    checkOnlineStatus();
+    
+    // Add event listeners for online/offline status
+    window.addEventListener('online', () => setNetworkIssue(false));
+    window.addEventListener('offline', () => setNetworkIssue(true));
+    
+    return () => {
+      window.removeEventListener('online', () => setNetworkIssue(false));
+      window.removeEventListener('offline', () => setNetworkIssue(true));
+    };
+  }, []);
+  
+  // Function to handle network connectivity issues in sign-in
+  const handleNetworkIssue = (message) => {
+    setNetworkIssue(true);
+    toast.error(message || 'Network connectivity issue detected', {
+      autoClose: 8000,
+      onClick: () => setShowNetworkGuide(true)
+    });
+  };
+  
+  // Network troubleshooting guide
+  const NetworkGuide = () => (
+    <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md text-left">
+      <h3 className="text-blue-800 font-medium mb-2">Network Connectivity Issues</h3>
+      <p className="text-sm text-gray-700 mb-3">
+        Authentication requires access to Google and Microsoft servers. Try these steps:
+      </p>
+      <ol className="list-decimal list-inside text-sm text-gray-700 space-y-1 mb-3">
+        <li>Check your internet connection</li>
+        <li>Disable any VPN or proxy services temporarily</li>
+        <li>Check if your firewall is blocking authentication services</li>
+        <li>Try using a different network (like mobile data)</li>
+        <li>Clear your browser cache and cookies</li>
+      </ol>
+      <div className="flex justify-between">
+        <button 
+          onClick={() => setShowNetworkGuide(false)}
+          className="text-xs text-blue-600 hover:underline"
+        >
+          Close guide
+        </button>
+        <button 
+          onClick={() => window.location.reload()}
+          className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
+        >
+          Refresh page
+        </button>
+      </div>
     </div>
   );
 
@@ -295,22 +435,62 @@ const SignIn = () => {
           </div>
         </form>
 
-        {/* Google and Microsoft Sign In */}
-        <div className="mt-6 text-center">
-          <button
-            onClick={handleGoogleSignIn}
-            className="w-full py-3 bg-red-600 text-white rounded-md hover:bg-red-700 transition duration-300 mb-4 flex items-center justify-center"
-          >
-            <FontAwesomeIcon icon={faGoogle} className="mr-2" />
-            Sign In with Google
-          </button>
-          <button
-            onClick={handleMicrosoftSignIn}
-            className="w-full py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-300 flex items-center justify-center"
-          >
-            <FontAwesomeIcon icon={faMicrosoft} className="mr-2" />
-            Sign In with Microsoft
-          </button>
+        {/* Social Login Buttons */}
+        <div className="mt-6">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">Or continue with</span>
+            </div>
+          </div>
+          
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={isLoading}
+              className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed relative"
+            >
+              <span className="sr-only">Sign in with Google</span>
+              {isLoading ? (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                </div>
+              ) : (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
+                  />
+                </svg>
+              )}
+              <span className={`ml-2 ${isLoading ? 'opacity-0' : ''}`}>Google</span>
+            </button>
+            
+            <button
+              type="button"
+              onClick={handleMicrosoftSignIn}
+              disabled={isLoading}
+              className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed relative"
+            >
+              <span className="sr-only">Sign in with Microsoft</span>
+              {isLoading ? (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                </div>
+              ) : (
+                <svg className="w-5 h-5" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg">
+                  <path fill="#f3f3f3" d="M0 0h23v23H0z" />
+                  <path fill="#f35325" d="M1 1h10v10H1z" />
+                  <path fill="#81bc06" d="M12 1h10v10H12z" />
+                  <path fill="#05a6f0" d="M1 12h10v10H1z" />
+                  <path fill="#ffba08" d="M12 12h10v10H12z" />
+                </svg>
+              )}
+              <span className={`ml-2 ${isLoading ? 'opacity-0' : ''}`}>Microsoft</span>
+            </button>
+          </div>
         </div>
 
         {/* Link to Sign Up */}
@@ -335,6 +515,10 @@ const SignIn = () => {
               <li>Try resetting your password</li>
             </ul>
           </div>
+        )}
+
+        {networkIssue && showNetworkGuide && (
+          <NetworkGuide />
         )}
       </div>
     </div>

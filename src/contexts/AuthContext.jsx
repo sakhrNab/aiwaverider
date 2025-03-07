@@ -169,6 +169,25 @@ export const AuthProvider = ({ children }) => {
         if (firebaseUser) {
           const { uid, email, displayName, photoURL } = firebaseUser;
           
+          // Get and store the Firebase ID token for API requests
+          try {
+            const idToken = await firebaseUser.getIdToken(true);
+            localStorage.setItem('authToken', idToken);
+            console.log('[AuthContext] Firebase token refreshed and stored');
+            
+            // Add extra debugging for the token
+            try {
+              const tokenPayload = JSON.parse(atob(idToken.split('.')[1]));
+              console.log('[AuthContext] Token exp:', new Date(tokenPayload.exp * 1000).toLocaleString());
+              console.log('[AuthContext] Token iat:', new Date(tokenPayload.iat * 1000).toLocaleString());
+              console.log('[AuthContext] Token auth_time:', new Date(tokenPayload.auth_time * 1000).toLocaleString());
+            } catch (e) {
+              console.error('[AuthContext] Could not decode token for debugging:', e);
+            }
+          } catch (tokenError) {
+            console.error('[AuthContext] Error getting Firebase token:', tokenError);
+          }
+          
           // Try to get profile from cache first
           let userProfile = getFromCache('profile', uid);
           let needsFreshData = !userProfile;

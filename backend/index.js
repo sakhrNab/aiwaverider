@@ -564,6 +564,9 @@ app.use('/api/profile', profileRoutes);
 // Mount the agents routes at /api/agents
 app.use('/api/agents', agentsRoutes);
 
+// Mount single agent routes at /api/agent
+app.use('/api/agent', require('./routes/agent'));
+
 // Mount the wishlists routes at /api/wishlists
 app.use('/api/wishlists', wishlistsRoutes);
 

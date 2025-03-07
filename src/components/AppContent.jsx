@@ -13,6 +13,14 @@ import PostDetail from '../posts/PostDetail';
 import CreatePost from '../posts/CreatePost';
 import Profile from '../pages/Profile';
 import Agents from '../pages/Agents';
+// Import admin pages
+import Dashboard from '../pages/admin/Dashboard';
+import ManageAgents from '../pages/admin/ManageAgents';
+import ManageUsers from '../pages/admin/ManageUsers';
+import Analytics from '../pages/admin/Analytics';
+import Settings from '../pages/admin/Settings';
+import Pricing from '../pages/admin/Pricing';
+
 const AppContent = () => {
   const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
   const location = useLocation();
@@ -34,8 +42,8 @@ const AppContent = () => {
           <Route path="/agents" element={<Agents />} />
 
           {/* Protected: Admin only */}
-        {/* Create Post route */}
-        <Route
+          {/* Create Post route */}
+          <Route
             path="/posts/create" // or /admin/create
             element={
               <ProtectedRoute roles={['admin']}>
@@ -44,7 +52,7 @@ const AppContent = () => {
             }
           />
 
-          {/* Admin Dash */}
+          {/* Admin Routes */}
           <Route
             path="/admin"
             element={
@@ -53,7 +61,66 @@ const AppContent = () => {
               </ProtectedRoute>
             }
           />
+          
+          {/* Admin Dashboard */}
+          <Route
+            path="/admin/dashboard"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          
+          {/* Manage Agents */}
+          <Route
+            path="/admin/agents"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <ManageAgents />
+              </ProtectedRoute>
+            }
+          />
 
+          {/* Manage Users */}
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <ManageUsers />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Analytics */}
+          <Route
+            path="/admin/analytics"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <Analytics />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Settings */}
+          <Route
+            path="/admin/settings"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Pricing */}
+          <Route
+            path="/admin/pricing"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <Pricing />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Post Detail */}
           <Route path="/posts/:postId" element={<PostDetail />} />

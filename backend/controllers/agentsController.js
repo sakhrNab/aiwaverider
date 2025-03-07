@@ -677,6 +677,135 @@ const seedAgents = async (req, res) => {
   }
 };
 
+/**
+ * Create a new agent
+ */
+const createAgent = async (req, res) => {
+  try {
+    // Check if user is an admin
+    const isAdmin = req.user && req.user.role === 'admin';
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Only administrators can create agents' });
+    }
+
+    const agentData = req.body;
+    
+    // Validate required fields
+    if (!agentData.name || !agentData.category) {
+      return res.status(400).json({ error: 'Name and category are required' });
+    }
+    
+    // Add timestamps
+    const now = new Date().toISOString();
+    agentData.createdAt = now;
+    agentData.updatedAt = now;
+    
+    // Set creator information from the authenticated user if not provided
+    if (!agentData.creator || !agentData.creator.name) {
+      agentData.creator = {
+        name: req.user.displayName || 'Admin',
+        email: req.user.email || '',
+        id: req.user.uid
+      };
+    }
+    
+    // Create the agent in Firestore
+    const agentRef = await db.collection('agents').add(agentData);
+    
+    // Return the created agent with its ID
+    const newAgent = {
+      id: agentRef.id,
+      ...agentData
+    };
+    
+    return res.status(201).json(newAgent);
+  } catch (error) {
+    console.error('Error creating agent:', error);
+    return res.status(500).json({ error: 'Failed to create agent' });
+  }
+};
+
+/**
+ * Update an existing agent
+ */
+const updateAgent = async (req, res) => {
+  try {
+    // Check if user is an admin
+    const isAdmin = req.user && req.user.role === 'admin';
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Only administrators can update agents' });
+    }
+
+    const { agentId } = req.params;
+    const updateData = req.body;
+    
+    // Check if agent exists
+    const agentDoc = await db.collection('agents').doc(agentId).get();
+    if (!agentDoc.exists) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    
+    // Add update timestamp
+    updateData.updatedAt = new Date().toISOString();
+    
+    // Update the agent
+    await db.collection('agents').doc(agentId).update(updateData);
+    
+    // Get the updated agent data
+    const updatedAgentDoc = await db.collection('agents').doc(agentId).get();
+    const updatedAgent = {
+      id: updatedAgentDoc.id,
+      ...updatedAgentDoc.data()
+    };
+    
+    return res.status(200).json(updatedAgent);
+  } catch (error) {
+    console.error('Error updating agent:', error);
+    return res.status(500).json({ error: 'Failed to update agent' });
+  }
+};
+
+/**
+ * Delete an agent
+ */
+const deleteAgent = async (req, res) => {
+  try {
+    // Check if user is an admin
+    const isAdmin = req.user && req.user.role === 'admin';
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Only administrators can delete agents' });
+    }
+
+    const { agentId } = req.params;
+    
+    // Check if agent exists
+    const agentDoc = await db.collection('agents').doc(agentId).get();
+    if (!agentDoc.exists) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    
+    // Delete the agent
+    await db.collection('agents').doc(agentId).delete();
+    
+    // Delete associated prices
+    const priceQuery = await db.collection('prices').where('agentId', '==', agentId).get();
+    const batch = db.batch();
+    priceQuery.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+    
+    return res.status(200).json({ 
+      success: true, 
+      message: 'Agent deleted successfully',
+      id: agentId
+    });
+  } catch (error) {
+    console.error('Error deleting agent:', error);
+    return res.status(500).json({ error: 'Failed to delete agent' });
+  }
+};
+
 module.exports = {
   getAgents,
   getFeaturedAgents,
@@ -685,5 +814,8 @@ module.exports = {
   getWishlists,
   getWishlistById,
   seedAgents,
-  generateMockAgents
+  generateMockAgents,
+  createAgent,
+  updateAgent,
+  deleteAgent
 }; 

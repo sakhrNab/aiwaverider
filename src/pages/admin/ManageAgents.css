@@ -1,0 +1,376 @@
+.manage-agents-page {
+  width: 100%;
+}
+
+/* Page header */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  color: #333;
+}
+
+/* Buttons */
+.btn {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  border: none;
+  font-size: 0.9rem;
+}
+
+.btn svg {
+  margin-right: 8px;
+}
+
+.btn-primary {
+  background-color: #3498db;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #2980b9;
+}
+
+.btn-secondary {
+  background-color: #ecf0f1;
+  color: #333;
+}
+
+.btn-secondary:hover {
+  background-color: #bdc3c7;
+}
+
+.btn-danger {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: #c0392b;
+}
+
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-edit {
+  background-color: #f8f9fa;
+  color: #3498db;
+}
+
+.btn-edit:hover {
+  background-color: #e9ecef;
+}
+
+.btn-delete {
+  background-color: #f8f9fa;
+  color: #e74c3c;
+}
+
+.btn-delete:hover {
+  background-color: #e9ecef;
+}
+
+/* Error message */
+.error-message {
+  background-color: #ffecec;
+  color: #e74c3c;
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+/* Filters bar */
+.filters-bar {
+  display: flex;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.search-box {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+
+.search-box input {
+  width: 100%;
+  padding: 10px 10px 10px 36px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #777;
+  pointer-events: none;
+}
+
+.category-filter {
+  position: relative;
+  min-width: 180px;
+}
+
+.category-filter select {
+  width: 100%;
+  padding: 10px 10px 10px 36px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  appearance: none;
+  background-color: white;
+  cursor: pointer;
+}
+
+.filter-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #777;
+  pointer-events: none;
+}
+
+/* Loading spinner */
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 30px;
+  color: #777;
+  font-size: 0.9rem;
+}
+
+/* Table styles */
+.table-responsive {
+  overflow-x: auto;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.agents-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.agents-table th,
+.agents-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.agents-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #555;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+  position: relative;
+}
+
+.agents-table th:hover {
+  background-color: #eaeaea;
+}
+
+.agents-table tbody tr {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.agents-table tbody tr:hover {
+  background-color: #f5f5f5;
+}
+
+.sort-icon {
+  margin-left: 8px;
+  font-size: 0.8rem;
+}
+
+.sort-icon.asc {
+  transform: rotate(0deg);
+}
+
+.sort-icon.desc {
+  transform: rotate(180deg);
+}
+
+.empty-table {
+  text-align: center;
+  color: #777;
+  padding: 30px !important;
+}
+
+/* Agent info in table */
+.agent-name-cell {
+  min-width: 200px;
+}
+
+.agent-info {
+  display: flex;
+  align-items: center;
+}
+
+.agent-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 5px;
+  margin-right: 12px;
+  object-fit: cover;
+}
+
+.agent-title {
+  font-weight: 500;
+  margin-bottom: 3px;
+}
+
+.agent-subtitle {
+  font-size: 0.8rem;
+  color: #777;
+}
+
+/* Status indicators */
+.status-indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.status.featured {
+  background-color: #d4edff;
+  color: #0070d2;
+}
+
+.status.bestseller {
+  background-color: #ffeccc;
+  color: #ff8800;
+}
+
+.status.new {
+  background-color: #d1f7c4;
+  color: #2e7d32;
+}
+
+/* Actions cell */
+.actions-cell {
+  white-space: nowrap;
+  display: flex;
+  gap: 8px;
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background-color: white;
+  border-radius: 5px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+}
+
+.modal h2 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 1.3rem;
+  color: #333;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+  gap: 12px;
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #777;
+}
+
+.agent-form-modal {
+  max-width: 800px;
+  position: relative;
+}
+
+/* Responsive adjustments */
+@media (max-width: 992px) {
+  .agents-table th, 
+  .agents-table td {
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .filters-bar {
+    flex-direction: column;
+  }
+  
+  .search-box, 
+  .category-filter {
+    width: 100%;
+  }
+  
+  .agent-name-cell {
+    min-width: 150px;
+  }
+} 

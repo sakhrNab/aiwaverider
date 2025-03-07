@@ -308,9 +308,174 @@ const getPriceHistory = async (req, res) => {
   }
 };
 
+/**
+ * Get price for a specific agent
+ */
+const getAgentPrice = async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    
+    // Find price by agent ID
+    const priceQuery = await db.collection('prices')
+      .where('agentId', '==', agentId)
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
+    
+    if (priceQuery.empty) {
+      // No price found, check if agent exists
+      const agentDoc = await db.collection('agents').doc(agentId).get();
+      
+      if (!agentDoc.exists) {
+        return res.status(404).json({ error: 'Agent not found' });
+      }
+      
+      // Agent exists but no price record, check for price in agent document
+      const agentData = agentDoc.data();
+      
+      // Create a default price based on agent data
+      const defaultPrice = {
+        id: `price_${agentId}`,
+        agentId: agentId,
+        basePrice: agentData.price || 0,
+        discountedPrice: agentData.discountedPrice || agentData.price || 0,
+        discountPercentage: agentData.discountPercentage || 0,
+        currency: agentData.currency || 'USD',
+        isFree: agentData.isFree || agentData.price === 0 || agentData.price === '0',
+        isSubscription: agentData.isSubscription || false,
+        billingCycle: agentData.billingCycle || 'one-time',
+        createdAt: agentData.createdAt || new Date().toISOString(),
+        updatedAt: agentData.updatedAt || new Date().toISOString()
+      };
+      
+      return res.status(200).json(defaultPrice);
+    }
+    
+    // Return the found price data
+    const priceDoc = priceQuery.docs[0];
+    const priceData = {
+      id: priceDoc.id,
+      ...priceDoc.data()
+    };
+    
+    return res.status(200).json(priceData);
+  } catch (error) {
+    console.error('Error fetching agent price:', error);
+    return res.status(500).json({ error: 'Failed to fetch agent price' });
+  }
+};
+
+/**
+ * Update price for a specific agent
+ */
+const updateAgentPrice = async (req, res) => {
+  try {
+    // Check if user is an admin
+    const isAdmin = req.user && req.user.role === 'admin';
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Only administrators can update agent prices' });
+    }
+    
+    const { agentId } = req.params;
+    const priceData = req.body;
+    
+    // Check if agent exists
+    const agentDoc = await db.collection('agents').doc(agentId).get();
+    if (!agentDoc.exists) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    
+    // Find existing price by agent ID
+    const priceQuery = await db.collection('prices')
+      .where('agentId', '==', agentId)
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
+    
+    // Calculate discounted price if needed
+    const basePrice = priceData.basePrice || 0;
+    const discountPercentage = priceData.discountPercentage || 0;
+    const discountedPrice = discountPercentage > 0 
+      ? basePrice - (basePrice * (discountPercentage / 100)) 
+      : basePrice;
+    
+    // Add required fields
+    const updatedPriceData = {
+      ...priceData,
+      agentId,
+      basePrice,
+      discountedPrice,
+      discountPercentage,
+      currency: priceData.currency || 'USD',
+      isFree: basePrice === 0,
+      updatedAt: new Date().toISOString()
+    };
+    
+    let priceId;
+    
+    if (priceQuery.empty) {
+      // No existing price, create new one
+      updatedPriceData.createdAt = updatedPriceData.updatedAt;
+      const newPriceRef = await db.collection('prices').add(updatedPriceData);
+      priceId = newPriceRef.id;
+      
+      // Also update agent with price information
+      await db.collection('agents').doc(agentId).update({
+        price: basePrice,
+        discountedPrice,
+        discountPercentage,
+        isFree: basePrice === 0,
+        updatedAt: updatedPriceData.updatedAt
+      });
+    } else {
+      // Update existing price
+      const priceDoc = priceQuery.docs[0];
+      priceId = priceDoc.id;
+      
+      // Update the price document
+      await db.collection('prices').doc(priceId).update(updatedPriceData);
+      
+      // Also update agent with price information
+      await db.collection('agents').doc(agentId).update({
+        price: basePrice,
+        discountedPrice,
+        discountPercentage,
+        isFree: basePrice === 0,
+        updatedAt: updatedPriceData.updatedAt
+      });
+    }
+    
+    // Create price history record
+    await db.collection('price_history').add({
+      priceId,
+      agentId,
+      basePrice,
+      discountedPrice,
+      discountPercentage,
+      currency: updatedPriceData.currency,
+      changedAt: updatedPriceData.updatedAt,
+      changedBy: req.user.uid
+    });
+    
+    // Get the updated price data
+    const updatedPriceDoc = await db.collection('prices').doc(priceId).get();
+    const updatedPrice = {
+      id: updatedPriceDoc.id,
+      ...updatedPriceDoc.data()
+    };
+    
+    return res.status(200).json(updatedPrice);
+  } catch (error) {
+    console.error('Error updating agent price:', error);
+    return res.status(500).json({ error: 'Failed to update agent price' });
+  }
+};
+
 module.exports = {
   getPriceById,
   updatePrice,
   applyDiscount,
-  getPriceHistory
+  getPriceHistory,
+  getAgentPrice,
+  updateAgentPrice
 }; 
