@@ -1635,4 +1635,54 @@ export const removeFromWishlist = async (agentId) => {
   }
 };
 
+/**
+ * Check if the backend API is accessible
+ * @returns {Promise<{isOnline: boolean, status: number, message: string}>} Status of the API
+ */
+export const checkApiStatus = async () => {
+  try {
+    console.log(`Checking API status at ${API_URL}/api/status`);
+    
+    // Make a simple GET request to the status endpoint
+    const response = await fetch(`${API_URL}/api/status`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log(`API status response: ${response.status}`);
+    
+    if (response.ok) {
+      return {
+        isOnline: true,
+        status: response.status,
+        message: 'API is online and working correctly'
+      };
+    }
+    
+    // If not OK, try to get more details
+    let message = `API returned status ${response.status}`;
+    try {
+      const data = await response.json();
+      message = data.message || data.error || message;
+    } catch (e) {
+      // Not JSON or couldn't parse
+    }
+    
+    return {
+      isOnline: false,
+      status: response.status,
+      message
+    };
+  } catch (error) {
+    console.error('Error checking API status:', error);
+    return {
+      isOnline: false,
+      status: 0,
+      message: `API is unreachable: ${error.message}`
+    };
+  }
+};
+
 export default api;

@@ -1,82 +1,95 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   FaHome, 
-  FaRobot, 
   FaUsers, 
-  FaMoneyBillWave, 
-  FaChartLine, 
-  FaCog,
+  FaRobot, 
+  FaChartBar, 
+  FaCog, 
+  FaSignOutAlt, 
+  FaDollarSign,
   FaBars,
   FaTimes
 } from 'react-icons/fa';
 import './AdminLayout.css';
 
 /**
- * Layout component for the admin panel
- * @param {Object} props - Component props
- * @param {ReactNode} props.children - Child components to render in the main content area
+ * Admin Layout component for admin pages
+ * @param {Object} props Component props
+ * @param {React.ReactNode} props.children Content to render inside layout
+ * @returns {JSX.Element} Admin layout with sidebar and content area
  */
 const AdminLayout = ({ children }) => {
   const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = React.useState(false);
   
-  // Toggle sidebar visibility (for mobile)
+  const navItems = [
+    { path: '/admin', icon: <FaHome />, label: 'Dashboard' },
+    { path: '/admin/agents', icon: <FaRobot />, label: 'Manage Agents' },
+    { path: '/admin/users', icon: <FaUsers />, label: 'Manage Users' },
+    { path: '/admin/analytics', icon: <FaChartBar />, label: 'Analytics' },
+    { path: '/admin/pricing', icon: <FaDollarSign />, label: 'Pricing' },
+    { path: '/admin/settings', icon: <FaCog />, label: 'Settings' },
+  ];
+  
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
   
-  // Navigation items for the sidebar
-  const navItems = [
-    { path: '/admin/dashboard', icon: <FaHome />, label: 'Dashboard' },
-    { path: '/admin/agents', icon: <FaRobot />, label: 'Manage Agents' },
-    { path: '/admin/users', icon: <FaUsers />, label: 'Manage Users' },
-    { path: '/admin/pricing', icon: <FaMoneyBillWave />, label: 'Pricing' },
-    { path: '/admin/analytics', icon: <FaChartLine />, label: 'Analytics' },
-    { path: '/admin/settings', icon: <FaCog />, label: 'Settings' }
-  ];
-  
   return (
     <div className="admin-layout">
-      {/* Mobile toggle button */}
-      <button className="sidebar-toggle" onClick={toggleSidebar}>
+      {/* Mobile menu button */}
+      <button 
+        className="mobile-menu-button"
+        onClick={toggleSidebar}
+        aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
+      >
         {sidebarOpen ? <FaTimes /> : <FaBars />}
       </button>
       
       {/* Sidebar */}
-      <aside className={`admin-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
-        <div className="admin-logo">
-          <h2>Admin Panel</h2>
+      <div className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="sidebar-header">
+          <h1>Admin Panel</h1>
         </div>
         
-        <nav className="admin-nav">
+        <nav className="sidebar-nav">
           <ul>
             {navItems.map((item) => (
               <li key={item.path}>
-                <Link 
-                  to={item.path} 
+                <Link
+                  to={item.path}
                   className={location.pathname === item.path ? 'active' : ''}
+                  onClick={() => setSidebarOpen(false)}
                 >
                   <span className="nav-icon">{item.icon}</span>
-                  <span className="nav-label">{item.label}</span>
+                  <span className="nav-text">{item.label}</span>
                 </Link>
               </li>
             ))}
           </ul>
         </nav>
         
-        <div className="admin-sidebar-footer">
-          <p>Logged in as: <strong>Admin</strong></p>
-          <Link to="/logout" className="logout-btn">Logout</Link>
+        <div className="sidebar-footer">
+          <Link to="/signout" className="signout-button">
+            <FaSignOutAlt />
+            <span>Sign Out</span>
+          </Link>
         </div>
-      </aside>
+      </div>
       
       {/* Main content */}
-      <main className="admin-main">
-        <div className="admin-content">
-          {children}
-        </div>
-      </main>
+      <div className="admin-content">
+        {children}
+      </div>
+      
+      {/* Backdrop for mobile */}
+      {sidebarOpen && (
+        <div 
+          className="sidebar-backdrop"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
     </div>
   );
 };

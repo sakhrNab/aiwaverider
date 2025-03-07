@@ -5,158 +5,90 @@
  * for retrieving and managing agent pricing information.
  */
 
-import api from '../utils/api';
+import { API_URL } from '../utils/api';
+import { getAuthHeaders } from '../utils/auth';
 
 /**
- * Get authentication headers
- * @returns {Object} - Authentication headers
- */
-const getAuthHeaders = () => {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  
-  // Get token from localStorage or sessionStorage
-  const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-  if (token) {
-    // Always use Bearer format for auth token
-    headers['Authorization'] = `Bearer ${token}`;
-    console.log('PriceService: Auth token set', headers['Authorization'].substring(0, 20) + '...');
-  } else {
-    console.warn('PriceService: No auth token found');
-    
-    // For development, generate a mock token if one doesn't exist
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('PriceService: Generating mock token for development');
-      
-      // Create a basic mock JWT
-      const mockJwt = {
-        header: { alg: "HS256", typ: "JWT" },
-        payload: {
-          sub: "price-service-mock-user",
-          iat: Math.floor(Date.now() / 1000),
-          exp: Math.floor(Date.now() / 1000) + 3600,
-          user_id: "price-service-mock-user"
-        }
-      };
-      
-      // Encode the JWT parts
-      const encodeBase64 = (obj) => {
-        return btoa(JSON.stringify(obj))
-          .replace(/=/g, '')
-          .replace(/\+/g, '-')
-          .replace(/\//g, '_');
-      };
-      
-      const header = encodeBase64(mockJwt.header);
-      const payload = encodeBase64(mockJwt.payload);
-      const signature = encodeBase64("priceservicemock");
-      
-      const mockToken = `${header}.${payload}.${signature}`;
-      localStorage.setItem('authToken', mockToken);
-      
-      // Update headers with the new token
-      headers['Authorization'] = `Bearer ${mockToken}`;
-      console.log('PriceService: Generated and set mock token');
-    }
-  }
-  
-  return headers;
-};
-
-/**
- * Get price for a specific agent
- * @param {string} agentId - ID of the agent
- * @returns {Promise<Object>} - Price information
+ * Get the price for a specific agent
+ * @param {string} agentId - The ID of the agent to get the price for
+ * @returns {Promise<Object>} - The agent's price data
  */
 export const getAgentPrice = async (agentId) => {
   try {
-    console.log(`Fetching price for agent: ${agentId}`);
+    // Get auth headers
+    const headers = getAuthHeaders();
     
-    // First, check if we have a valid token
-    const token = localStorage.getItem('authToken');
-    if (!token && process.env.NODE_ENV === 'development') {
-      // If no token, we'll immediately return mock data in dev mode
-      console.warn('No token available for price request - using mock data');
-      return getMockPriceData(agentId);
-    }
-    
-    const response = await fetch(`http://localhost:4000/api/agent/${agentId}/price`, {
+    // Make request to fetch agent price
+    const response = await fetch(`${API_URL}/api/agent/${agentId}/price`, {
       method: 'GET',
-      headers: getAuthHeaders()
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
     });
     
-    if (response.status === 500) {
-      console.error(`Server error (500) when fetching price for agent ${agentId}`);
-      console.warn('Using mock price data due to server error');
-      return getMockPriceData(agentId);
-    }
-    
+    // Handle non-OK responses
     if (!response.ok) {
-      throw new Error(`Failed to get price for agent ${agentId} (${response.status})`);
+      throw new Error(`Failed to fetch price data. Status: ${response.status}`);
     }
     
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      console.warn('Response is not JSON, using mock data');
-      return getMockPriceData(agentId);
-    }
-    
+    // Parse and return price data
     return await response.json();
   } catch (error) {
-    console.error('Error getting agent price:', error);
+    console.error('Error fetching agent price:', error);
     
-    // Return mock data for development if API fails
-    return getMockPriceData(agentId);
+    // Return mock data for development
+    return {
+      id: agentId,
+      price: 9.99,
+      currency: 'USD',
+      subscription: true,
+      interval: 'month',
+      mock: true
+    };
   }
 };
 
 /**
- * Update price for a specific agent
- * @param {string} agentId - ID of the agent
- * @param {Object} priceData - Price data to update
- * @returns {Promise<Object>} - Updated price information
+ * Update the price for a specific agent
+ * @param {string} agentId - The ID of the agent to update the price for
+ * @param {Object} priceData - The new price data
+ * @returns {Promise<Object>} - The updated agent's price data
  */
 export const updateAgentPrice = async (agentId, priceData) => {
   try {
-    console.log(`Updating price for agent: ${agentId}`, priceData);
+    // Get auth headers
+    const headers = getAuthHeaders();
     
-    // First, check if we have a valid token
-    const token = localStorage.getItem('authToken');
-    if (!token && process.env.NODE_ENV === 'development') {
-      // If no token, we'll immediately return mock data in dev mode
-      console.warn('No token available for price update - using mock data');
-      return getMockPriceData(agentId, priceData);
-    }
-    
-    const response = await fetch(`http://localhost:4000/api/agent/${agentId}/price`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
+    // Make request to update agent price
+    const response = await fetch(`${API_URL}/api/agent/${agentId}/price`, {
+      method: 'PUT',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
       body: JSON.stringify(priceData)
     });
     
-    if (response.status === 500) {
-      console.error(`Server error (500) when updating price for agent ${agentId}`);
-      console.warn('Using mock price data due to server error');
-      return getMockPriceData(agentId, priceData);
-    }
-    
+    // Handle non-OK responses
     if (!response.ok) {
-      throw new Error(`Failed to update price for agent ${agentId} (${response.status})`);
+      throw new Error(`Failed to update price data. Status: ${response.status}`);
     }
     
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      console.warn('Response is not JSON, using mock data');
-      return getMockPriceData(agentId, priceData);
-    }
-    
+    // Parse and return updated price data
     return await response.json();
   } catch (error) {
     console.error('Error updating agent price:', error);
     
-    // Return mock data for development if API fails
-    return getMockPriceData(agentId, priceData);
+    // Return mock data for development
+    return {
+      ...priceData,
+      id: agentId,
+      updated: new Date().toISOString(),
+      mock: true
+    };
   }
 };
 

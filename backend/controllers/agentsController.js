@@ -776,19 +776,28 @@ const deleteAgent = async (req, res) => {
       return res.status(403).json({ error: 'Only administrators can delete agents' });
     }
 
-    const { agentId } = req.params;
+    // Extract agentId from either req.params.agentId or req.params.id
+    const agentId = req.params.agentId || req.params.id;
+    
+    // Validate agent ID to prevent Firestore errors
+    if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
+      console.error('Invalid agent ID:', agentId);
+      return res.status(400).json({ error: 'Invalid agent ID provided' });
+    }
+
+    const sanitizedAgentId = agentId.trim();
     
     // Check if agent exists
-    const agentDoc = await db.collection('agents').doc(agentId).get();
+    const agentDoc = await db.collection('agents').doc(sanitizedAgentId).get();
     if (!agentDoc.exists) {
       return res.status(404).json({ error: 'Agent not found' });
     }
     
     // Delete the agent
-    await db.collection('agents').doc(agentId).delete();
+    await db.collection('agents').doc(sanitizedAgentId).delete();
     
     // Delete associated prices
-    const priceQuery = await db.collection('prices').where('agentId', '==', agentId).get();
+    const priceQuery = await db.collection('prices').where('agentId', '==', sanitizedAgentId).get();
     const batch = db.batch();
     priceQuery.forEach(doc => {
       batch.delete(doc.ref);
@@ -798,7 +807,7 @@ const deleteAgent = async (req, res) => {
     return res.status(200).json({ 
       success: true, 
       message: 'Agent deleted successfully',
-      id: agentId
+      id: sanitizedAgentId
     });
   } catch (error) {
     console.error('Error deleting agent:', error);

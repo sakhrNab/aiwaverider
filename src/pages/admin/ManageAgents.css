@@ -373,4 +373,41 @@
   .agent-name-cell {
     min-width: 150px;
   }
+}
+
+/* Add these new styles */
+
+.api-status-warning {
+  display: flex;
+  align-items: center;
+  background-color: #fff3cd;
+  border: 1px solid #ffeeba;
+  color: #856404;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+}
+
+.api-status-warning .status-icon {
+  margin-right: 0.5rem;
+  font-size: 1.25rem;
+}
+
+.api-status-warning .status-icon.error {
+  color: #dc3545;
+}
+
+.api-status-warning .retry-button {
+  margin-left: auto;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 0.375rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.api-status-warning .retry-button:hover {
+  background-color: #5a6268;
 } 

@@ -9,9 +9,14 @@ import {
   FaCheck,
   FaTimes 
 } from 'react-icons/fa';
+import Modal from '../../components/Modal';
 import AdminLayout from '../../components/admin/AdminLayout';
 import AgentForm from '../../components/admin/AgentForm';
 import './ManageAgents.css';
+import { getAuthHeaders, validateAndRefreshToken } from '../../utils/auth';
+import { deleteAgent as deleteAgentHelper } from '../../utils/agent-helper';
+import { toast } from 'react-hot-toast';
+import { checkApiStatus } from '../../utils/api';
 
 /**
  * Admin page for managing agents with CRUD functionality
@@ -31,78 +36,68 @@ const ManageAgents = () => {
   // State for confirmation modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [agentToDelete, setAgentToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // State for selected agent and form visibility
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [showAgentForm, setShowAgentForm] = useState(false);
   
+  // State for API status
+  const [apiStatus, setApiStatus] = useState({ checked: false, isOnline: true, message: '' });
+  
   // Add mock auth token for development - REMOVE IN PRODUCTION!
   useEffect(() => {
-    // Set a mock token for development purposes
-    if (process.env.NODE_ENV === 'development') {
-      // Create a mock JWT that resembles a Firebase token format
-      // This is for DEVELOPMENT ONLY and should be removed in production
-      const mockJwt = {
-        // Header
-        header: {
-          alg: "HS256",
-          typ: "JWT"
-        },
-        // Payload with fields that Firebase tokens typically have
-        payload: {
-          sub: "mock-user-123",
-          name: "Test User",
-          email: "test@example.com",
-          iat: Math.floor(Date.now() / 1000),
-          exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
-          aud: "ai-wave-rider",
-          iss: "https://securetoken.google.com/ai-wave-rider",
-          auth_time: Math.floor(Date.now() / 1000),
-          user_id: "mock-user-123"
-        }
-      };
-      
-      // Encode the JWT parts
-      const encodeBase64 = (obj) => {
-        return btoa(JSON.stringify(obj))
-          .replace(/=/g, '')
-          .replace(/\+/g, '-')
-          .replace(/\//g, '_');
-      };
-      
-      const header = encodeBase64(mockJwt.header);
-      const payload = encodeBase64(mockJwt.payload);
-      const signature = encodeBase64("mocksignature12345"); // Not a real signature
-      
-      // Create the complete JWT token
-      const mockToken = `${header}.${payload}.${signature}`;
-      
-      localStorage.setItem('authToken', mockToken);
-      console.log('Mock Firebase-like JWT token set for development:', mockToken.substring(0, 20) + '...');
+    // Validate and refresh token if needed
+    if (!validateAndRefreshToken() && process.env.NODE_ENV === 'development') {
+      // Token is invalid or missing, import and use the auth utility
+      import('../../utils/auth').then(({ generateMockFirebaseToken }) => {
+        const mockToken = generateMockFirebaseToken();
+        localStorage.setItem('authToken', mockToken);
+        console.log('Mock Firebase-like JWT token set for development');
+        
+        // After setting token, fetch agents
+        fetchAgents();
+      });
+    } else {
+      // Token is valid, fetch agents
+      fetchAgents();
     }
   }, []);
   
-  // Helper function to get auth headers
-  const getAuthHeaders = () => {
-    const headers = {
-      'Content-Type': 'application/json',
+  // Check API status on component load
+  useEffect(() => {
+    const checkBackendStatus = async () => {
+      try {
+        const status = await checkApiStatus();
+        setApiStatus({
+          checked: true,
+          isOnline: status.isOnline,
+          message: status.message
+        });
+        
+        if (!status.isOnline) {
+          console.warn('Backend API is not available:', status.message);
+          toast.error(`Backend API issue: ${status.message}. Using mock data.`);
+        }
+      } catch (error) {
+        console.error('Error checking API status:', error);
+        setApiStatus({
+          checked: true,
+          isOnline: false,
+          message: error.message
+        });
+        toast.error('Could not connect to backend. Using mock data.');
+      }
     };
     
-    // Get token from localStorage or sessionStorage
-    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-    if (token) {
-      // Always use Bearer format for Firebase tokens
-      headers['Authorization'] = `Bearer ${token}`;
-      console.log('Auth header set:', headers['Authorization'].substring(0, 20) + '...');
-    }
-    
-    return headers;
-  };
+    checkBackendStatus();
+  }, []);
   
   // Helper function for API requests with consistent error handling
   const apiRequest = async (url, method, data = null) => {
     console.log(`🔄 ${method} request to ${url}`);
     
+    // Use our imported getAuthHeaders utility
     const options = {
       method,
       headers: getAuthHeaders(),
@@ -116,39 +111,8 @@ const ManageAgents = () => {
       // Log full request details
       console.log(`API Request: ${method} ${url}`, options);
       
-      // Before making the request, ensure we have a token
-      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-      if (!token && process.env.NODE_ENV === 'development') {
-        console.warn('No auth token found before request - regenerating mock token');
-        // Generate a fresh token
-        const mockJwt = {
-          header: { alg: "HS256", typ: "JWT" },
-          payload: {
-            sub: "mock-user-123",
-            iat: Math.floor(Date.now() / 1000),
-            exp: Math.floor(Date.now() / 1000) + 3600,
-            user_id: "mock-user-123"
-          }
-        };
-        
-        const encodeBase64 = (obj) => {
-          return btoa(JSON.stringify(obj))
-            .replace(/=/g, '')
-            .replace(/\+/g, '-')
-            .replace(/\//g, '_');
-        };
-        
-        const header = encodeBase64(mockJwt.header);
-        const payload = encodeBase64(mockJwt.payload);
-        const signature = encodeBase64("mocksignature12345");
-        
-        const newMockToken = `${header}.${payload}.${signature}`;
-        localStorage.setItem('authToken', newMockToken);
-        
-        // Update headers with new token
-        options.headers['Authorization'] = `Bearer ${newMockToken}`;
-        console.log('Regenerated token and updated headers');
-      }
+      // Ensure token is valid before making request
+      validateAndRefreshToken();
       
       const response = await fetch(url, options);
       
@@ -218,8 +182,17 @@ const ManageAgents = () => {
   // Function to fetch agents from the API
   const fetchAgents = async () => {
     setLoading(true);
-    console.log('⏳ Fetching agents from API...');
+    setError(null);
+    
     try {
+      // If API is offline, go straight to mock data
+      if (apiStatus.checked && !apiStatus.isOnline) {
+        console.log('Using mock data because API is offline');
+        const mockData = generateMockAgents();
+        setAgents(mockData);
+        return;
+      }
+      
       // Use our apiRequest helper with fallback to mock data
       const data = await apiRequest('http://localhost:4000/api/agents', 'GET')
         .catch(error => {
@@ -265,43 +238,52 @@ const ManageAgents = () => {
     setShowDeleteModal(true);
   };
   
-  // Function to delete an agent
+  /**
+   * Function to delete an agent
+   */
   const deleteAgent = async () => {
-    if (!agentToDelete) return;
+    if (!agentToDelete || !agentToDelete.id) {
+      toast.error('Cannot delete: Missing agent ID');
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      return;
+    }
+    
+    setIsDeleting(true);
     
     try {
-      console.log('Deleting agent:', agentToDelete.id);
+      // Call the helper function to delete the agent
+      const result = await deleteAgentHelper(agentToDelete.id);
+      console.log('Delete result from helper:', result);
       
-      try {
-        // Try the DELETE method first
-        await apiRequest(`http://localhost:4000/api/agent/${agentToDelete.id}`, 'DELETE');
-      } catch (deleteError) {
-        console.error('DELETE method failed, trying POST workaround:', deleteError);
+      // Only show success if the operation was actually successful
+      if (result.success) {
+        // Remove the agent from the local state
+        setAgents(agents.filter(agent => agent.id !== agentToDelete.id));
         
-        // If DELETE fails due to CORS, try a POST with _method=DELETE
-        try {
-          await apiRequest(`http://localhost:4000/api/agent/${agentToDelete.id}/delete`, 'POST', {
-            _method: 'DELETE'
+        // Show success notification
+        toast.success('Agent deleted successfully');
+        console.log('✅ Agent deleted successfully');
+      } else {
+        // Show error notification
+        toast.error(result.message || 'Failed to delete agent');
+        console.error('❌ Failed to delete agent:', result.message);
+        
+        // Special case for the Firestore error we identified
+        if (result.message && result.message.includes('not a valid resource path')) {
+          toast.error('Database error: The agent ID format is invalid', {
+            duration: 6000
           });
-        } catch (postError) {
-          console.error('POST workaround also failed:', postError);
-          // Continue anyway for development - pretend the delete succeeded
-          console.warn('Simulating successful delete for development');
+          console.error('Firestore path error detected - agent ID format issue');
         }
       }
-      
-      // Remove agent from state
-      setAgents(agents.filter(agent => agent.id !== agentToDelete.id));
-      
-      // Close modal
-      setShowDeleteModal(false);
-      setAgentToDelete(null);
-      
-      // Show success message
-      console.log('✅ Agent deleted successfully');
-    } catch (err) {
-      console.error('❌ Error deleting agent:', err);
-      setError('Failed to delete agent. ' + err.message);
+    } catch (error) {
+      console.error('Error deleting agent:', error);
+      toast.error(`Error deleting agent: ${error.message}`);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false); // Close the modal
+      setAgentToDelete(null); // Reset the agent to delete
     }
   };
   
@@ -464,15 +446,39 @@ const ManageAgents = () => {
   
   return (
     <AdminLayout>
-      <div className="manage-agents-page">
+      <div className="manage-agents-container">
         <header className="page-header">
           <h1>Manage Agents</h1>
-          <button 
-            className="btn btn-primary" 
-            onClick={handleCreateClick}
-          >
-            <FaPlus /> Create New Agent
-          </button>
+          {!apiStatus.isOnline && (
+            <div className="api-status-warning">
+              <FaTimes className="status-icon error" />
+              <span>Backend API unavailable: {apiStatus.message}</span>
+              <button 
+                className="retry-button"
+                onClick={async () => {
+                  const status = await checkApiStatus();
+                  setApiStatus({
+                    checked: true,
+                    isOnline: status.isOnline,
+                    message: status.message
+                  });
+                  if (status.isOnline) {
+                    fetchAgents();
+                  }
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          <div className="header-actions">
+            <button 
+              className="btn btn-primary" 
+              onClick={handleCreateClick}
+            >
+              <FaPlus /> Create New Agent
+            </button>
+          </div>
         </header>
         
         {error && (
@@ -611,56 +617,62 @@ const ManageAgents = () => {
         
         {/* Delete Confirmation Modal */}
         {showDeleteModal && (
-          <div className="modal-overlay">
-            <div className="modal">
-              <h2>Confirm Delete</h2>
-              <p>
-                Are you sure you want to delete <strong>{agentToDelete?.name}</strong>?
-                This action cannot be undone.
-              </p>
+          <Modal
+            title="Confirm Delete"
+            onClose={() => {
+              if (!isDeleting) {
+                setShowDeleteModal(false);
+                setAgentToDelete(null);
+              }
+            }}
+            size="small"
+          >
+            <div className="confirm-delete-modal">
+              <p>Are you sure you want to delete the agent <strong>{agentToDelete?.name}</strong>?</p>
+              <p>This action cannot be undone.</p>
+              
               <div className="modal-actions">
                 <button 
-                  className="btn btn-secondary"
+                  className="btn btn-secondary" 
                   onClick={() => {
-                    setShowDeleteModal(false);
-                    setAgentToDelete(null);
+                    if (!isDeleting) {
+                      setShowDeleteModal(false);
+                      setAgentToDelete(null);
+                    }
                   }}
+                  disabled={isDeleting}
                 >
                   Cancel
                 </button>
                 <button 
-                  className="btn btn-danger"
+                  className="btn btn-danger" 
                   onClick={deleteAgent}
+                  disabled={isDeleting}
                 >
-                  Delete
+                  {isDeleting ? 'Deleting...' : 'Delete Agent'}
                 </button>
               </div>
             </div>
-          </div>
+          </Modal>
         )}
         
         {/* Agent Form Modal */}
         {showAgentForm && (
-          <div className="modal-overlay">
-            <div className="modal agent-form-modal">
-              <h2>{selectedAgent ? 'Edit Agent' : 'Create New Agent'}</h2>
-              <button 
-                className="modal-close-btn"
-                onClick={() => setShowAgentForm(false)}
-              >
-                <FaTimes />
-              </button>
-              <AgentForm 
-                agent={selectedAgent}
-                onSubmit={handleFormSubmit}
-                onCancel={() => setShowAgentForm(false)}
-              />
-            </div>
-          </div>
+          <Modal
+            title={selectedAgent ? 'Edit Agent' : 'Create New Agent'}
+            onClose={() => setShowAgentForm(false)}
+            size="large"
+          >
+            <AgentForm 
+              agent={selectedAgent}
+              onSubmit={handleFormSubmit}
+              onCancel={() => setShowAgentForm(false)}
+            />
+          </Modal>
         )}
       </div>
     </AdminLayout>
   );
 };
 
-export default ManageAgents; 
+export default ManageAgents;
