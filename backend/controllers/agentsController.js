@@ -736,11 +736,27 @@ const updateAgent = async (req, res) => {
       return res.status(403).json({ error: 'Only administrators can update agents' });
     }
 
-    const { agentId } = req.params;
+    // Extract agentId from either params.agentId or params.id
+    let agentId = req.params.agentId || req.params.id;
+    
+    // Check if the ID contains extra path segments
+    if (agentId && agentId.includes('/')) {
+      // Extract just the agent ID part
+      agentId = agentId.split('/')[0];
+    }
+    
+    // Validate agent ID to prevent Firestore errors
+    if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
+      console.error('Invalid agent ID for update:', agentId);
+      return res.status(400).json({ error: 'Invalid agent ID provided' });
+    }
+
+    const sanitizedAgentId = agentId.trim();
+    console.log('Processing agent update for ID:', sanitizedAgentId);
     const updateData = req.body;
     
     // Check if agent exists
-    const agentDoc = await db.collection('agents').doc(agentId).get();
+    const agentDoc = await db.collection('agents').doc(sanitizedAgentId).get();
     if (!agentDoc.exists) {
       return res.status(404).json({ error: 'Agent not found' });
     }
@@ -749,10 +765,10 @@ const updateAgent = async (req, res) => {
     updateData.updatedAt = new Date().toISOString();
     
     // Update the agent
-    await db.collection('agents').doc(agentId).update(updateData);
+    await db.collection('agents').doc(sanitizedAgentId).update(updateData);
     
     // Get the updated agent data
-    const updatedAgentDoc = await db.collection('agents').doc(agentId).get();
+    const updatedAgentDoc = await db.collection('agents').doc(sanitizedAgentId).get();
     const updatedAgent = {
       id: updatedAgentDoc.id,
       ...updatedAgentDoc.data()
@@ -777,15 +793,22 @@ const deleteAgent = async (req, res) => {
     }
 
     // Extract agentId from either req.params.agentId or req.params.id
-    const agentId = req.params.agentId || req.params.id;
+    let agentId = req.params.agentId || req.params.id;
+    
+    // Check if the ID contains extra path segments
+    if (agentId && agentId.includes('/')) {
+      // Extract just the agent ID part
+      agentId = agentId.split('/')[0];
+    }
     
     // Validate agent ID to prevent Firestore errors
     if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
-      console.error('Invalid agent ID:', agentId);
+      console.error('Invalid agent ID for deletion:', agentId);
       return res.status(400).json({ error: 'Invalid agent ID provided' });
     }
 
     const sanitizedAgentId = agentId.trim();
+    console.log('Processing agent deletion for ID:', sanitizedAgentId);
     
     // Check if agent exists
     const agentDoc = await db.collection('agents').doc(sanitizedAgentId).get();

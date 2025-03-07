@@ -386,7 +386,13 @@ const updateAgentPrice = async (req, res) => {
     }
     
     // Extract agentId from either req.params.agentId or req.params.id
-    const agentId = req.params.agentId || req.params.id;
+    let agentId = req.params.agentId || req.params.id;
+    
+    // Check if the ID contains extra path segments (like agent-34/price)
+    if (agentId && agentId.includes('/')) {
+      // Extract just the agent ID part
+      agentId = agentId.split('/')[0];
+    }
     
     // Validate agent ID to prevent Firestore errors
     if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
@@ -395,6 +401,7 @@ const updateAgentPrice = async (req, res) => {
     }
 
     const sanitizedAgentId = agentId.trim();
+    console.log('Processing price update for agent ID:', sanitizedAgentId);
     const priceData = req.body;
     
     // Check if agent exists

@@ -312,12 +312,14 @@ const ManageAgents = () => {
           _method: 'PATCH' // Some backends support this convention
         };
         
-        console.log('Updating agent:', selectedAgent.id, updateData);
+        // Ensure agent ID is sanitized (no slashes or spaces)
+        const sanitizedAgentId = selectedAgent.id.trim().split('/')[0];
+        console.log('Updating agent:', sanitizedAgentId, updateData);
         
         try {
           // Try POST with _method first
           savedAgent = await apiRequest(
-            `http://localhost:4000/api/agent/${selectedAgent.id}`, 
+            `http://localhost:4000/api/agent/${sanitizedAgentId}`, 
             'POST',
             updateData
           );
@@ -327,7 +329,7 @@ const ManageAgents = () => {
           // Option 2: Try PUT method instead of PATCH
           try {
             savedAgent = await apiRequest(
-              `http://localhost:4000/api/agent/${selectedAgent.id}`, 
+              `http://localhost:4000/api/agent/${sanitizedAgentId}`, 
               'PUT',
               agentData
             );
