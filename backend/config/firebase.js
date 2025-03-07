@@ -18,7 +18,7 @@ const initializeFirebase = () => {
       Buffer.from(serviceAccountJson, 'base64').toString('utf-8')
     );
   } else {
-    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || 'path/to/local/serviceAccountKey.json';
+    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || '../server/aiwaverider8-privatekey.json';
     try {
       serviceAccount = require(path.resolve(serviceAccountPath));
     } catch (error) {

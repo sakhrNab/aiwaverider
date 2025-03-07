@@ -313,18 +313,27 @@ const getPriceHistory = async (req, res) => {
  */
 const getAgentPrice = async (req, res) => {
   try {
-    const { agentId } = req.params;
+    // Extract agentId from either req.params.agentId or req.params.id
+    const agentId = req.params.agentId || req.params.id;
+    
+    // Validate agent ID to prevent Firestore errors
+    if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
+      console.error('Invalid agent ID for price fetch:', agentId);
+      return res.status(400).json({ error: 'Invalid agent ID provided' });
+    }
+
+    const sanitizedAgentId = agentId.trim();
     
     // Find price by agent ID
     const priceQuery = await db.collection('prices')
-      .where('agentId', '==', agentId)
+      .where('agentId', '==', sanitizedAgentId)
       .orderBy('createdAt', 'desc')
       .limit(1)
       .get();
     
     if (priceQuery.empty) {
       // No price found, check if agent exists
-      const agentDoc = await db.collection('agents').doc(agentId).get();
+      const agentDoc = await db.collection('agents').doc(sanitizedAgentId).get();
       
       if (!agentDoc.exists) {
         return res.status(404).json({ error: 'Agent not found' });
@@ -335,8 +344,8 @@ const getAgentPrice = async (req, res) => {
       
       // Create a default price based on agent data
       const defaultPrice = {
-        id: `price_${agentId}`,
-        agentId: agentId,
+        id: `price_${sanitizedAgentId}`,
+        agentId: sanitizedAgentId,
         basePrice: agentData.price || 0,
         discountedPrice: agentData.discountedPrice || agentData.price || 0,
         discountPercentage: agentData.discountPercentage || 0,
@@ -376,18 +385,27 @@ const updateAgentPrice = async (req, res) => {
       return res.status(403).json({ error: 'Only administrators can update agent prices' });
     }
     
-    const { agentId } = req.params;
+    // Extract agentId from either req.params.agentId or req.params.id
+    const agentId = req.params.agentId || req.params.id;
+    
+    // Validate agent ID to prevent Firestore errors
+    if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
+      console.error('Invalid agent ID for price update:', agentId);
+      return res.status(400).json({ error: 'Invalid agent ID provided' });
+    }
+
+    const sanitizedAgentId = agentId.trim();
     const priceData = req.body;
     
     // Check if agent exists
-    const agentDoc = await db.collection('agents').doc(agentId).get();
+    const agentDoc = await db.collection('agents').doc(sanitizedAgentId).get();
     if (!agentDoc.exists) {
       return res.status(404).json({ error: 'Agent not found' });
     }
     
     // Find existing price by agent ID
     const priceQuery = await db.collection('prices')
-      .where('agentId', '==', agentId)
+      .where('agentId', '==', sanitizedAgentId)
       .orderBy('createdAt', 'desc')
       .limit(1)
       .get();
@@ -402,7 +420,7 @@ const updateAgentPrice = async (req, res) => {
     // Add required fields
     const updatedPriceData = {
       ...priceData,
-      agentId,
+      agentId: sanitizedAgentId,
       basePrice,
       discountedPrice,
       discountPercentage,
@@ -420,7 +438,7 @@ const updateAgentPrice = async (req, res) => {
       priceId = newPriceRef.id;
       
       // Also update agent with price information
-      await db.collection('agents').doc(agentId).update({
+      await db.collection('agents').doc(sanitizedAgentId).update({
         price: basePrice,
         discountedPrice,
         discountPercentage,
@@ -436,7 +454,7 @@ const updateAgentPrice = async (req, res) => {
       await db.collection('prices').doc(priceId).update(updatedPriceData);
       
       // Also update agent with price information
-      await db.collection('agents').doc(agentId).update({
+      await db.collection('agents').doc(sanitizedAgentId).update({
         price: basePrice,
         discountedPrice,
         discountPercentage,
@@ -448,7 +466,7 @@ const updateAgentPrice = async (req, res) => {
     // Create price history record
     await db.collection('price_history').add({
       priceId,
-      agentId,
+      agentId: sanitizedAgentId,
       basePrice,
       discountedPrice,
       discountPercentage,
