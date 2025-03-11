@@ -1,3 +1,5 @@
+console.log('Loading agentsController.js');
+
 // Import necessary modules
 const { db, admin } = require('../config/firebase');
 
@@ -240,27 +242,51 @@ const getFeaturedAgents = async (req, res) => {
 };
 
 /**
- * Get agent details by ID
+ * Get a single agent by ID
+ * @param {object} req - Express request object
+ * @param {object} res - Express response object
  */
 const getAgentById = async (req, res) => {
   try {
-    const { agentId } = req.params;
-
-    // Get agent from Firestore
+    // Get agentId and sanitize it to ensure it's a valid document path
+    const agentId = req.params.id;
+    
+    // Log the request details for debugging
+    console.log(`Attempting to get agent with ID: "${agentId}"`);
+    
+    // Validate the ID format
+    if (!agentId || typeof agentId !== 'string' || agentId.includes('/')) {
+      console.error('Invalid agent ID format:', agentId);
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid agent ID format',
+        error: 'Agent ID must be a valid string without path separators' 
+      });
+    }
+    
+    // Fetch the agent document
     const agentDoc = await db.collection('agents').doc(agentId).get();
     
     if (!agentDoc.exists) {
-      return res.status(404).json({ error: 'Agent not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Agent not found',
+        error: `No agent exists with ID: ${agentId}` 
+      });
     }
     
-    const agent = {
+    // Get agent data
+    const agentData = {
       id: agentDoc.id,
       ...agentDoc.data()
     };
     
-    // Get reviews for this agent
-    const reviewsSnapshot = await db.collection('agents').doc(agentId)
-      .collection('reviews').get();
+    // Fetch reviews related to this agent
+    const reviewsSnapshot = await db.collection('reviews')
+      .where('agentId', '==', agentId)
+      .orderBy('createdAt', 'desc')
+      .limit(5)
+      .get();
     
     const reviews = [];
     reviewsSnapshot.forEach(doc => {
@@ -270,13 +296,36 @@ const getAgentById = async (req, res) => {
       });
     });
     
-    // Attach reviews to agent object
-    agent.reviews = reviews;
+    // Add reviews to the agent data
+    agentData.reviews = reviews;
     
-    return res.status(200).json(agent);
+    // Calculate average rating if there are reviews
+    if (reviews.length > 0) {
+      const totalRating = reviews.reduce((sum, review) => sum + (review.rating || 0), 0);
+      agentData.averageRating = totalRating / reviews.length;
+      agentData.reviewCount = reviews.length;
+    }
+    
+    // Return successful response
+    return res.status(200).json({
+      success: true,
+      message: 'Agent retrieved successfully',
+      data: agentData
+    });
+    
   } catch (error) {
-    console.error('Error fetching agent:', error);
-    return res.status(500).json({ error: 'Failed to fetch agent details' });
+    console.error('Error getting agent by ID:', error);
+    // Return structured error response
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve agent',
+      error: error.message,
+      details: {
+        code: error.code,
+        path: req.path,
+        params: req.params
+      }
+    });
   }
 };
 
@@ -285,17 +334,36 @@ const getAgentById = async (req, res) => {
  */
 const toggleWishlist = async (req, res) => {
   try {
-    const { agentId } = req.params;
+    // Extract agentId and sanitize it
+    let agentId = req.params.agentId;
+    
+    // Check if the ID contains extra path segments
+    if (agentId && agentId.includes('/')) {
+      agentId = agentId.split('/')[0];
+    }
+    
+    // Check if the ID contains query parameters
+    if (agentId && agentId.includes('?')) {
+      agentId = agentId.split('?')[0];
+    }
+    
+    // Validate agent ID
+    if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
+      console.error('Invalid agent ID for wishlist toggle:', agentId);
+      return res.status(400).json({ error: 'Invalid agent ID provided' });
+    }
+
+    const sanitizedAgentId = agentId.trim();
     const { uid } = req.user; // From auth middleware
     
     // Check if agent exists
-    const agentDoc = await db.collection('agents').doc(agentId).get();
+    const agentDoc = await db.collection('agents').doc(sanitizedAgentId).get();
     if (!agentDoc.exists) {
       return res.status(404).json({ error: 'Agent not found' });
     }
     
     // Wishlist ID is a combination of user ID and agent ID
-    const wishlistId = `${uid}_${agentId}`;
+    const wishlistId = `${uid}_${sanitizedAgentId}`;
     const wishlistRef = db.collection('wishlists').doc(wishlistId);
     
     // Check if wishlist item exists
@@ -306,7 +374,7 @@ const toggleWishlist = async (req, res) => {
       await wishlistRef.delete();
       
       // Decrement wishlist count on agent
-      const agentRef = db.collection('agents').doc(agentId);
+      const agentRef = db.collection('agents').doc(sanitizedAgentId);
       await db.runTransaction(async (transaction) => {
         const agentDoc = await transaction.get(agentRef);
         if (agentDoc.exists) {
@@ -325,12 +393,12 @@ const toggleWishlist = async (req, res) => {
       // If it doesn't exist, add it
       await wishlistRef.set({
         userId: uid,
-        agentId: agentId,
+        agentId: sanitizedAgentId,
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
       
       // Increment wishlist count on agent
-      const agentRef = db.collection('agents').doc(agentId);
+      const agentRef = db.collection('agents').doc(sanitizedAgentId);
       await db.runTransaction(async (transaction) => {
         const agentDoc = await transaction.get(agentRef);
         if (agentDoc.exists) {
@@ -405,10 +473,29 @@ const getWishlists = async (req, res) => {
  */
 const getWishlistById = async (req, res) => {
   try {
-    const { wishlistId } = req.params;
+    // Extract wishlistId and sanitize it
+    let wishlistId = req.params.wishlistId;
+    
+    // Check if the ID contains extra path segments
+    if (wishlistId && wishlistId.includes('/')) {
+      wishlistId = wishlistId.split('/')[0];
+    }
+    
+    // Check if the ID contains query parameters
+    if (wishlistId && wishlistId.includes('?')) {
+      wishlistId = wishlistId.split('?')[0];
+    }
+    
+    // Validate wishlist ID
+    if (!wishlistId || typeof wishlistId !== 'string' || wishlistId.trim() === '') {
+      console.error('Invalid wishlist ID:', wishlistId);
+      return res.status(400).json({ error: 'Invalid wishlist ID provided' });
+    }
+
+    const sanitizedWishlistId = wishlistId.trim();
     
     // Fetch the wishlist document
-    const wishlistDoc = await db.collection('wishlists').doc(wishlistId).get();
+    const wishlistDoc = await db.collection('wishlists').doc(sanitizedWishlistId).get();
     
     if (!wishlistDoc.exists) {
       return res.status(404).json({ error: 'Wishlist not found' });
@@ -745,6 +832,7 @@ const updateAgent = async (req, res) => {
       agentId = agentId.split('/')[0];
     }
     
+
     // Validate agent ID to prevent Firestore errors
     if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
       console.error('Invalid agent ID for update:', agentId);
@@ -838,6 +926,151 @@ const deleteAgent = async (req, res) => {
   }
 };
 
+/**
+ * Combined update for agent and price data in a single request
+ * This reduces the number of API calls needed from the frontend
+ */
+const combinedUpdate = async (req, res) => {
+  try {
+    // Extract and sanitize agentId
+    let agentId = req.params.agentId || req.params.id;
+    console.log('Combined update requested for raw ID:', agentId);
+    
+    // Check if the ID contains extra path segments
+    if (agentId && agentId.includes('/')) {
+      agentId = agentId.split('/')[0];
+    }
+    
+    // Check if the ID contains query parameters
+    if (agentId && agentId.includes('?')) {
+      agentId = agentId.split('?')[0];
+    }
+    
+    // Add "agent-" prefix if it's missing and it's numeric
+    if (agentId && !isNaN(agentId) && !agentId.startsWith('agent-')) {
+      agentId = `agent-${agentId}`;
+      console.log('Added agent- prefix to numeric ID:', agentId);
+    }
+    
+    // Validate agent ID
+    if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
+      console.error('Invalid agent ID for combined update:', agentId);
+      return res.status(400).json({ error: 'Invalid agent ID provided' });
+    }
+    
+    const sanitizedAgentId = agentId.trim();
+    console.log('Processing combined update for agent ID:', sanitizedAgentId);
+    
+    // Extract price data from the request body
+    const { priceData, _method, ...agentData } = req.body;
+    
+    // Get agent document reference
+    const agentRef = db.collection('agents').doc(sanitizedAgentId);
+    const agentDoc = await agentRef.get();
+    
+    if (!agentDoc.exists) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    
+    // Update agent data
+    console.log(`Updating agent ${sanitizedAgentId} with data:`, agentData);
+    await agentRef.update({
+      ...agentData,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    
+    // If price data is provided, update price
+    let priceUpdateResult = null;
+    if (priceData) {
+      console.log(`Updating price data for agent ${sanitizedAgentId}:`, priceData);
+      // Get price document reference
+      const priceRef = db.collection('prices').doc(`price_${sanitizedAgentId}`);
+      const priceDoc = await priceRef.get();
+      
+      if (priceDoc.exists) {
+        // Update existing price document
+        await priceRef.update({
+          ...priceData,
+          agentId: sanitizedAgentId,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      } else {
+        // Create new price document
+        await priceRef.set({
+          ...priceData,
+          agentId: sanitizedAgentId,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+      
+      // Get the updated price document
+      const updatedPriceDoc = await priceRef.get();
+      priceUpdateResult = {
+        id: updatedPriceDoc.id,
+        ...updatedPriceDoc.data()
+      };
+    }
+    
+    // Get the updated agent document
+    const updatedAgentDoc = await agentRef.get();
+    const updatedAgent = {
+      id: updatedAgentDoc.id,
+      ...updatedAgentDoc.data()
+    };
+    
+    // Add price data to the response if it was updated
+    if (priceUpdateResult) {
+      updatedAgent.priceDetails = {
+        basePrice: priceUpdateResult.basePrice || 0,
+        discountedPrice: priceUpdateResult.discountedPrice || priceUpdateResult.finalPrice || 0,
+        currency: priceUpdateResult.currency || 'USD'
+      };
+      updatedAgent.isFree = priceUpdateResult.isFree || false;
+      updatedAgent.isSubscription = priceUpdateResult.isSubscription || false;
+    }
+    
+    // Clear any Redis cache for this agent
+    try {
+      const redisClient = req.app.get('redisClient');
+      if (redisClient) {
+        await redisClient.del(`agent:${sanitizedAgentId}`);
+        await redisClient.del(`price:${sanitizedAgentId}`);
+        console.log(`Cleared Redis cache for agent:${sanitizedAgentId} and price:${sanitizedAgentId}`);
+      }
+    } catch (redisError) {
+      console.warn('Redis cache clear error:', redisError);
+      // Continue processing even if Redis fails
+    }
+    
+    return res.status(200).json(updatedAgent);
+  } catch (error) {
+    console.error('Error in combined update:', error);
+    return res.status(500).json({ error: 'Failed to update agent and price data' });
+  }
+};
+
+/**
+ * Creates an agent with price data in a single request
+ * This helps avoid making multiple API calls from the frontend
+ */
+const createAgentWithPrice = (req, res) => {
+  // Very simple implementation to test if routing works
+  console.log('Simple createAgentWithPrice called', req.body);
+  return res.status(200).json({
+    success: true,
+    message: 'Create agent with price handler reached successfully',
+    receivedData: req.body
+  });
+};
+
+// Log the status of each function before exporting
+console.log("Before export - function status:");
+console.log("- getAgents:", typeof getAgents === 'function');
+console.log("- combinedUpdate:", typeof combinedUpdate === 'function');
+console.log("- createAgentWithPrice:", typeof createAgentWithPrice === 'function');
+
+// Export all controller functions
 module.exports = {
   getAgents,
   getFeaturedAgents,
@@ -849,5 +1082,7 @@ module.exports = {
   generateMockAgents,
   createAgent,
   updateAgent,
-  deleteAgent
+  deleteAgent,
+  combinedUpdate,
+  createAgentWithPrice
 }; 

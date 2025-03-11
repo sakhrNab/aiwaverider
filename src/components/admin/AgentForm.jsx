@@ -15,7 +15,7 @@ import './AgentForm.css';
 /**
  * Form component for creating and editing agents
  */
-const AgentForm = ({ agent, onSubmit, onCancel }) => {
+const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
   // Default form data for a new agent
   const defaultFormData = {
     name: '',
@@ -38,6 +38,14 @@ const AgentForm = ({ agent, onSubmit, onCancel }) => {
     status: 'active'
   };
   
+  // Default price data to prevent uncontrolled to controlled component warnings
+  const defaultPriceData = {
+    basePrice: 0,
+    discountedPrice: 0,
+    currency: 'USD',
+    isFree: false
+  };
+  
   // State for form data
   const [formData, setFormData] = useState(agent ? {
     ...defaultFormData,
@@ -49,16 +57,114 @@ const AgentForm = ({ agent, onSubmit, onCancel }) => {
     features: Array.isArray(agent.features) && agent.features.length > 0 ? agent.features : [''],
     tags: Array.isArray(agent.tags) && agent.tags.length > 0 ? agent.tags : ['']
   } : {...defaultFormData});
-  const [priceData, setPriceData] = useState(null);
+  
+  // Track original values to detect actual changes
+  const [originalData, setOriginalData] = useState({});
+  
+  // Initialize priceData with default values to prevent uncontrolled inputs
+  const [priceData, setPriceData] = useState(defaultPriceData);
   const [errors, setErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
   const [formError, setFormError] = useState(null);
   
-  // Fetch price data if editing an existing agent
+  // Handle blob URLs in image fields more safely
+  const isBlobUrl = (url) => {
+    return url && typeof url === 'string' && url.startsWith('blob:');
+  };
+
+  // Safe image URL validator
+  const isValidImageUrl = (url) => {
+    if (!url) return false;
+    if (typeof url !== 'string') return false;
+    
+    // Handle blob URLs separately
+    if (isBlobUrl(url)) {
+      // We can't really validate blob URLs, so we'll just return true
+      // and handle errors with the onError handler on the image
+      return true;
+    }
+    
+    // For regular URLs, do basic validation
+    try {
+      const parsedUrl = new URL(url);
+      return ['http:', 'https:', 'data:'].includes(parsedUrl.protocol);
+    } catch (error) {
+      return false;
+    }
+  };
+  
+  // Reset form data when agent prop changes
+  useEffect(() => {
+    if (agent) {
+      console.log('Agent form received new agent data:', agent);
+      
+      // Store original data for change detection
+      setOriginalData({
+        ...agent,
+        ...(agent.priceDetails ? {
+          basePrice: agent.priceDetails.basePrice,
+          discountedPrice: agent.priceDetails.discountedPrice || agent.priceDetails.finalPrice,
+          currency: agent.priceDetails.currency,
+          isFree: agent.isFree,
+          isSubscription: agent.isSubscription
+        } : {})
+      });
+      
+      // Clean imageUrl if it's a blob that might be invalid
+      const cleanedImageUrl = isBlobUrl(agent.imageUrl) ? '' : agent.imageUrl;
+      
+      setFormData({
+        ...defaultFormData,
+        ...agent,
+        imageUrl: cleanedImageUrl, // Use cleaned URL
+        creator: {
+          ...defaultFormData.creator,
+          ...(agent.creator || {})
+        },
+        features: Array.isArray(agent.features) && agent.features.length > 0 ? agent.features : [''],
+        tags: Array.isArray(agent.tags) && agent.tags.length > 0 ? agent.tags : ['']
+      });
+      
+      // If agent has priceDetails, use them to initialize price data
+      if (agent.priceDetails) {
+        const initialPriceData = {
+          basePrice: agent.priceDetails.basePrice || 0,
+          discountedPrice: agent.priceDetails.discountedPrice || agent.priceDetails.finalPrice || agent.priceDetails.basePrice || 0, 
+          currency: agent.priceDetails.currency || 'USD',
+          isFree: agent.isFree || false,
+          isSubscription: agent.isSubscription || false
+        };
+        console.log('Setting initial price data from agent:', initialPriceData);
+        setPriceData(initialPriceData);
+      }
+    } else {
+      // Reset to defaults for new agent
+      setFormData({...defaultFormData});
+      setPriceData(defaultPriceData);
+      setOriginalData({});
+    }
+  }, [agent]); // Only re-run if agent changes
+  
+  // Skip separate price data fetch if we already have it in the agent object
   useEffect(() => {
     if (agent && agent.id) {
-      fetchAgentPrice(agent.id);
+      if (agent.priceDetails) {
+        console.log('Using price data from agent object, skipping API call');
+        // We already have price data from the agent object
+        setPriceData({
+          basePrice: agent.priceDetails.basePrice || 0,
+          discountedPrice: agent.priceDetails.discountedPrice || 
+                          agent.priceDetails.finalPrice || 
+                          agent.priceDetails.basePrice || 0,
+          currency: agent.priceDetails.currency || 'USD',
+          isFree: agent.isFree || false,
+          isSubscription: agent.isSubscription || false
+        });
+      } else {
+        // Only fetch price if we don't have it already
+        fetchAgentPrice(agent.id);
+      }
     } else {
       // For new agents, set default price data
       setPriceData({
@@ -68,36 +174,46 @@ const AgentForm = ({ agent, onSubmit, onCancel }) => {
         isFree: true
       });
     }
-  }, [agent]);
+  }, [agent?.id]); // Only rerun if agent ID changes
   
   // Fetch price data from API
   const fetchAgentPrice = async (agentId) => {
     try {
+      console.log('Fetching price data for agent:', agentId);
       const data = await getAgentPrice(agentId);
-      setPriceData(data);
+      console.log('Retrieved price data:', data);
+      
+      // Ensure we have default values for all price fields to prevent controlled/uncontrolled input issues
+      setPriceData({
+        basePrice: data.basePrice || 0,
+        discountedPrice: data.discountedPrice || data.finalPrice || data.basePrice || 0,
+        currency: data.currency || 'USD',
+        isFree: data.isFree || false,
+        isSubscription: data.isSubscription || false
+      });
+      
+      // Update form data with price-related flags
+      setFormData(prevData => ({
+        ...prevData,
+        isFree: data.isFree || data.basePrice === 0,
+        isSubscription: data.isSubscription || false
+      }));
     } catch (err) {
       console.error('Error fetching price data:', err);
+      // If we have pricing data in the agent object, use that as a fallback
+      if (agent && agent.priceDetails) {
+        console.log('Using price data from agent object as fallback');
+        const fallbackData = {
+          basePrice: agent.priceDetails.basePrice || 0,
+          discountedPrice: agent.priceDetails.discountedPrice || agent.priceDetails.basePrice || 0,
+          currency: agent.priceDetails.currency || 'USD',
+          isFree: agent.isFree || false,
+          isSubscription: agent.isSubscription || false
+        };
+        setPriceData(fallbackData);
+      }
     }
   };
-  
-  // Ensure all needed form fields have defined values
-  useEffect(() => {
-    setFormData(prev => ({
-      ...prev,
-      name: prev.name || '',
-      title: prev.title || '',
-      description: prev.description || '',
-      category: prev.category || '',
-      imageUrl: prev.imageUrl || 'https://placehold.co/300x200?text=Agent+Image',
-      iconUrl: prev.iconUrl || 'https://placehold.co/100x100?text=Agent+Icon',
-      creator: {
-        name: prev.creator?.name || '',
-        email: prev.creator?.email || '',
-      },
-      features: Array.isArray(prev.features) && prev.features.length > 0 ? prev.features : [''],
-      tags: Array.isArray(prev.tags) && prev.tags.length > 0 ? prev.tags : [''],
-    }));
-  }, []);
   
   // Handle form field changes
   const handleChange = (e) => {
@@ -106,6 +222,11 @@ const AgentForm = ({ agent, onSubmit, onCancel }) => {
       ...prev,
       [name]: value
     }));
+    
+    // Notify parent about field change for tracking modified fields
+    if (onFieldChange) {
+      onFieldChange(name, value, originalData[name]);
+    }
   };
   
   // Handle checkbox changes
@@ -116,13 +237,42 @@ const AgentForm = ({ agent, onSubmit, onCancel }) => {
       [name]: checked
     }));
     
+    // Notify parent about field change
+    if (onFieldChange) {
+      onFieldChange(name, checked, originalData[name]);
+    }
+    
     // Special handling for isFree to update pricing
-    if (name === 'isFree' && checked) {
-      setPriceData(prev => ({
-        ...prev,
-        basePrice: 0,
-        discountedPrice: 0
-      }));
+    if (name === 'isFree') {
+      if (checked) {
+        // If setting agent to free, reset price data
+        setPriceData(prev => ({
+          ...prev,
+          basePrice: 0,
+          discountedPrice: 0,
+          isFree: true
+        }));
+        
+        // Also notify about price changes
+        if (onFieldChange) {
+          onFieldChange('basePrice', 0, originalData.basePrice);
+          onFieldChange('discountedPrice', 0, originalData.discountedPrice);
+        }
+      } else {
+        // If setting to paid, ensure we have default prices
+        setPriceData(prev => ({
+          ...prev,
+          basePrice: prev.basePrice || 9.99,
+          discountedPrice: prev.discountedPrice || prev.basePrice || 9.99,
+          isFree: false
+        }));
+        
+        // Notify about price changes
+        if (onFieldChange) {
+          onFieldChange('basePrice', 9.99, originalData.basePrice);
+          onFieldChange('discountedPrice', 9.99, originalData.discountedPrice);
+        }
+      }
     }
   };
   
@@ -135,6 +285,11 @@ const AgentForm = ({ agent, onSubmit, onCancel }) => {
         [field]: value
       }
     }));
+    
+    // Notify parent about nested field change
+    if (onFieldChange) {
+      onFieldChange(`${parent}.${field}`, value, originalData[parent]?.[field]);
+    }
   };
   
   // Handle tags and features (comma-separated values)
@@ -150,10 +305,58 @@ const AgentForm = ({ agent, onSubmit, onCancel }) => {
   // Handle price changes
   const handlePriceChange = (e) => {
     const { name, value } = e.target;
-    setPriceData(prev => ({
-      ...prev,
-      [name]: parseFloat(value) || 0
-    }));
+    const numericValue = parseFloat(value) || 0;
+    
+    if (name === 'basePrice') {
+      // When base price changes, update discounted price only if they were previously equal
+      // (meaning no discount was applied)
+      setPriceData(prev => {
+        const wasEqual = prev.basePrice === prev.discountedPrice;
+        return {
+          ...prev,
+          basePrice: numericValue,
+          // Update discounted price only if it was previously equal to base price
+          discountedPrice: wasEqual ? numericValue : prev.discountedPrice,
+          // If price is 0, mark as free
+          isFree: numericValue === 0
+        };
+      });
+      
+      // If price becomes 0, update the isFree checkbox
+      if (numericValue === 0) {
+        setFormData(prev => ({
+          ...prev,
+          isFree: true
+        }));
+        
+        // Notify about isFree change
+        if (onFieldChange) {
+          onFieldChange('isFree', true, originalData.isFree);
+        }
+      } else if (formData.isFree) {
+        // If agent was free but now has a price, update isFree
+        setFormData(prev => ({
+          ...prev,
+          isFree: false
+        }));
+        
+        // Notify about isFree change
+        if (onFieldChange) {
+          onFieldChange('isFree', false, originalData.isFree);
+        }
+      }
+    } else {
+      // For other price fields, just update the value
+      setPriceData(prev => ({
+        ...prev,
+        [name]: numericValue
+      }));
+    }
+    
+    // Notify parent about price field change
+    if (onFieldChange) {
+      onFieldChange(name, numericValue, originalData[name]);
+    }
   };
   
   // Form validation
@@ -192,7 +395,16 @@ const AgentForm = ({ agent, onSubmit, onCancel }) => {
         // Ensure dates are ISO strings
         createdAt: formData.createdAt || new Date().toISOString(),
         dateCreated: formData.dateCreated || new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        // Include price details for better data consistency
+        priceDetails: {
+          basePrice: priceData.basePrice || 0,
+          discountedPrice: priceData.discountedPrice || priceData.basePrice || 0,
+          currency: priceData.currency || 'USD'
+        },
+        // Pass pricing flags to agent data
+        basePrice: priceData.basePrice || 0,
+        discountedPrice: priceData.discountedPrice || priceData.basePrice || 0
       };
       
       // Submit the form data
@@ -203,7 +415,18 @@ const AgentForm = ({ agent, onSubmit, onCancel }) => {
         try {
           // Update agent price if needed
           if (priceData) {
-            await updateAgentPrice(savedAgent.id, priceData);
+            // Make sure we're updating with the most current price data
+            // IMPORTANT: Ensure discountedPrice is explicitly included
+            const updatedPriceData = {
+              ...priceData,
+              basePrice: priceData.basePrice,
+              discountedPrice: priceData.discountedPrice, // Explicitly include this
+              isFree: formData.isFree,
+              isSubscription: formData.isSubscription
+            };
+            
+            console.log('Submitting price data to backend:', updatedPriceData);
+            await updateAgentPrice(savedAgent.id, updatedPriceData);
           }
         } catch (priceError) {
           // Log the error but don't fail the whole submission
@@ -462,6 +685,19 @@ const AgentForm = ({ agent, onSubmit, onCancel }) => {
                   src={formData.imageUrl} 
                   alt="Agent image preview" 
                   onError={(e) => {
+                    console.log('Image failed to load:', formData.imageUrl);
+                    // Check if it's a blob URL that might be invalid
+                    if (isBlobUrl(formData.imageUrl)) {
+                      console.log('Detected blob URL that may be invalid, reverting to placeholder');
+                      // Revoke the invalid blob URL to free up memory
+                      URL.revokeObjectURL(formData.imageUrl);
+                      // Update the form data to remove the invalid URL
+                      setFormData(prev => ({
+                        ...prev,
+                        imageUrl: ''
+                      }));
+                    }
+                    // Set a placeholder image
                     e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%23f0f0f0'/%3E%3Cpath d='M100 80 L200 120 M200 80 L100 120' stroke='%23999' stroke-width='2'/%3E%3C/svg%3E";
                   }}
                 />
@@ -482,6 +718,19 @@ const AgentForm = ({ agent, onSubmit, onCancel }) => {
                   src={formData.iconUrl} 
                   alt="Agent icon preview" 
                   onError={(e) => {
+                    console.log('Icon failed to load:', formData.iconUrl);
+                    // Check if it's a blob URL that might be invalid
+                    if (isBlobUrl(formData.iconUrl)) {
+                      console.log('Detected blob URL that may be invalid, reverting to placeholder');
+                      // Revoke the invalid blob URL to free up memory
+                      URL.revokeObjectURL(formData.iconUrl);
+                      // Update the form data to remove the invalid URL
+                      setFormData(prev => ({
+                        ...prev,
+                        iconUrl: ''
+                      }));
+                    }
+                    // Set a placeholder image
                     e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Cpath d='M35 40 L65 60 M65 40 L35 60' stroke='%23999' stroke-width='2'/%3E%3C/svg%3E";
                   }}
                 />
@@ -538,11 +787,10 @@ const AgentForm = ({ agent, onSubmit, onCancel }) => {
                       type="number"
                       id="basePrice"
                       name="basePrice"
-                      value={priceData?.basePrice || 0}
+                      value={priceData.basePrice || 0}
                       onChange={handlePriceChange}
                       step="0.01"
                       min="0"
-                      disabled={formData.isFree}
                       className={errors.basePrice ? 'has-error' : ''}
                     />
                   </div>
@@ -557,11 +805,10 @@ const AgentForm = ({ agent, onSubmit, onCancel }) => {
                       type="number"
                       id="discountedPrice"
                       name="discountedPrice"
-                      value={priceData?.discountedPrice || 0}
+                      value={priceData.discountedPrice || 0}
                       onChange={handlePriceChange}
                       step="0.01"
                       min="0"
-                      disabled={formData.isFree}
                     />
                   </div>
                 </div>
@@ -572,14 +819,12 @@ const AgentForm = ({ agent, onSubmit, onCancel }) => {
                 <select
                   id="currency"
                   name="currency"
-                  value={priceData?.currency || 'USD'}
-                  onChange={(e) => setPriceData({...priceData, currency: e.target.value})}
-                  disabled={formData.isFree}
+                  value={priceData.currency || 'USD'}
+                  onChange={handlePriceChange}
                 >
                   <option value="USD">USD ($)</option>
                   <option value="EUR">EUR (€)</option>
                   <option value="GBP">GBP (£)</option>
-                  <option value="JPY">JPY (¥)</option>
                 </select>
               </div>
             </>

@@ -18,8 +18,14 @@ export const getAgentPrice = async (agentId) => {
     // Get auth headers
     const headers = getAuthHeaders();
     
+    // Extract the base ID if it contains a cache-busting query
+    const baseAgentId = agentId.split('?')[0];
+    
+    // Add cache-busting parameter to prevent browsers from using cached data
+    const cacheBuster = agentId.includes('?') ? '' : `?_=${Date.now()}`;
+    
     // Make request to fetch agent price
-    const response = await fetch(`${API_URL}/api/agent/${agentId}/price`, {
+    const response = await fetch(`${API_URL}/api/agent/${baseAgentId}/price${cacheBuster}`, {
       method: 'GET',
       headers: {
         ...headers,
@@ -40,7 +46,7 @@ export const getAgentPrice = async (agentId) => {
     
     // Return mock data for development
     return {
-      id: agentId,
+      id: agentId.split('?')[0], // Remove any query parameters
       price: 9.99,
       currency: 'USD',
       subscription: true,
@@ -61,15 +67,36 @@ export const updateAgentPrice = async (agentId, priceData) => {
     // Get auth headers
     const headers = getAuthHeaders();
     
+    // Extract the base ID if it contains any query parameters
+    const baseAgentId = agentId.split('?')[0];
+    
+    // Add cache-busting parameter
+    const cacheBuster = `?_=${Date.now()}`;
+    
+    // Normalize the price data to ensure it has expected properties
+    const normalizedPriceData = {
+      ...priceData,
+      basePrice: parseFloat(priceData.basePrice) || 0,
+      // IMPORTANT: If discountedPrice is provided, use it directly
+      // This is crucial for manual price adjustments
+      discountedPrice: priceData.discountedPrice !== undefined 
+        ? parseFloat(priceData.discountedPrice) 
+        : (parseFloat(priceData.basePrice) || 0),
+      currency: priceData.currency || 'USD',
+      isFree: priceData.isFree || parseFloat(priceData.basePrice) === 0
+    };
+    
+    console.log('Sending normalized price data to backend:', normalizedPriceData);
+    
     // Make request to update agent price
-    const response = await fetch(`${API_URL}/api/agent/${agentId}/price`, {
+    const response = await fetch(`${API_URL}/api/agent/${baseAgentId}/price${cacheBuster}`, {
       method: 'PUT',
       headers: {
         ...headers,
         'Content-Type': 'application/json'
       },
       credentials: 'include',
-      body: JSON.stringify(priceData)
+      body: JSON.stringify(normalizedPriceData)
     });
     
     // Handle non-OK responses
@@ -78,14 +105,16 @@ export const updateAgentPrice = async (agentId, priceData) => {
     }
     
     // Parse and return updated price data
-    return await response.json();
+    const updatedPrice = await response.json();
+    console.log('Received updated price from backend:', updatedPrice);
+    return updatedPrice;
   } catch (error) {
     console.error('Error updating agent price:', error);
     
     // Return mock data for development
     return {
       ...priceData,
-      id: agentId,
+      id: agentId.split('?')[0],
       updated: new Date().toISOString(),
       mock: true
     };

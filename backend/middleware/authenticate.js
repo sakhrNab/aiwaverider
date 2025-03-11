@@ -71,9 +71,39 @@ const validateFirebaseToken = async (req, res, next) => {
     }
     
     if (error.code === 'auth/argument-error') {
+      // Check for network connectivity errors
+      if (error.message && (
+          error.message.includes('ENOTFOUND') || 
+          error.message.includes('getaddrinfo') ||
+          error.message.includes('connect ETIMEDOUT') ||
+          error.message.includes('network error')
+        )) {
+        return res.status(503).json({ 
+          error: 'Firebase authentication service is currently unreachable',
+          code: 'AUTH_SERVICE_UNREACHABLE',
+          details: 'The application cannot connect to Google authentication servers. This may be due to network connectivity issues.',
+          networkError: true,
+          originalError: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+      
       return res.status(401).json({ 
         error: 'Invalid token format',
         code: 'INVALID_TOKEN_FORMAT'
+      });
+    }
+
+    // Generic network errors
+    if (error.code === 'ENOTFOUND' || 
+        error.code === 'ETIMEDOUT' ||
+        error.code === 'ENETUNREACH' ||
+        error.code === 'ECONNREFUSED') {
+      return res.status(503).json({ 
+        error: 'Network connectivity issue',
+        code: 'NETWORK_ERROR',
+        details: 'Could not connect to authentication services. Please check your internet connection.',
+        networkError: true,
+        originalError: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
 

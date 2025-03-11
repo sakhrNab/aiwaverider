@@ -417,20 +417,70 @@ const updateAgentPrice = async (req, res) => {
       .limit(1)
       .get();
     
-    // Calculate discounted price if needed
+    // Get the base price and handle the discounted price properly
     const basePrice = priceData.basePrice || 0;
-    const discountPercentage = priceData.discountPercentage || 0;
-    const discountedPrice = discountPercentage > 0 
-      ? basePrice - (basePrice * (discountPercentage / 100)) 
-      : basePrice;
+    
+    // IMPORTANT: Check if discountedPrice was explicitly provided in the request
+    // If so, use it directly instead of calculating from discountPercentage
+    let discountedPrice;
+    let discountPercentage;
+    let finalPrice;
+    
+    if (priceData.discountedPrice !== undefined) {
+      // Use the explicitly provided discountedPrice
+      discountedPrice = parseFloat(priceData.discountedPrice);
+      
+      // Calculate the implied discount percentage
+      discountPercentage = basePrice > 0 
+        ? Math.round(((basePrice - discountedPrice) / basePrice) * 100) 
+        : 0;
+      
+      finalPrice = discountedPrice;
+      
+      // If there's a significant discount, create/update a discount object
+      if (discountPercentage > 0) {
+        // Create a discount object that reflects the manually set discounted price
+        const now = new Date();
+        const oneMonthLater = new Date(now);
+        oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+        
+        // Set up the discount object to match the manual discounted price
+        priceData.discount = {
+          amount: basePrice - discountedPrice,
+          percentage: discountPercentage,
+          validFrom: now.toISOString(),
+          validUntil: oneMonthLater.toISOString(),
+          reason: 'Manual discount adjustment'
+        };
+      } else {
+        // If discount is zero or negative, remove any existing discount
+        priceData.discount = null;
+      }
+    } else {
+      // No explicit discountedPrice provided, use the percentage-based calculation
+      discountPercentage = priceData.discountPercentage || 0;
+      discountedPrice = discountPercentage > 0 
+        ? basePrice - (basePrice * (discountPercentage / 100)) 
+        : basePrice;
+      finalPrice = discountedPrice;
+    }
+    
+    console.log('Price calculation debug:', {
+      basePrice,
+      requestedDiscountedPrice: priceData.discountedPrice,
+      calculatedDiscountedPrice: discountedPrice,
+      discountPercentage,
+      finalPrice
+    });
     
     // Add required fields
     const updatedPriceData = {
       ...priceData,
       agentId: sanitizedAgentId,
       basePrice,
-      discountedPrice,
-      discountPercentage,
+      discountedPrice,      // Store the discounted price (either provided or calculated)
+      finalPrice,           // Store the final price (same as discounted price for now)
+      discountPercentage,   // Store the discount percentage (either calculated or provided)
       currency: priceData.currency || 'USD',
       isFree: basePrice === 0,
       updatedAt: new Date().toISOString()
@@ -448,6 +498,7 @@ const updateAgentPrice = async (req, res) => {
       await db.collection('agents').doc(sanitizedAgentId).update({
         price: basePrice,
         discountedPrice,
+        finalPrice,
         discountPercentage,
         isFree: basePrice === 0,
         updatedAt: updatedPriceData.updatedAt
@@ -464,6 +515,7 @@ const updateAgentPrice = async (req, res) => {
       await db.collection('agents').doc(sanitizedAgentId).update({
         price: basePrice,
         discountedPrice,
+        finalPrice,
         discountPercentage,
         isFree: basePrice === 0,
         updatedAt: updatedPriceData.updatedAt
@@ -479,7 +531,8 @@ const updateAgentPrice = async (req, res) => {
       discountPercentage,
       currency: updatedPriceData.currency,
       changedAt: updatedPriceData.updatedAt,
-      changedBy: req.user.uid
+      changedBy: req.user.uid,
+      changeType: priceData.discountedPrice !== undefined ? 'manual_price_change' : 'discount_adjustment'
     });
     
     // Get the updated price data

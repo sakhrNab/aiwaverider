@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FaPlus, 
   FaEdit, 
@@ -44,6 +44,198 @@ const ManageAgents = () => {
   
   // State for API status
   const [apiStatus, setApiStatus] = useState({ checked: false, isOnline: true, message: '' });
+  
+  // Add state for authentication status
+  const [authStatus, setAuthStatus] = useState({ 
+    isAuthenticated: true, 
+    networkError: false,
+    errorMessage: null,
+    errorCode: null 
+  });
+  
+  // Add a cache for individual agent data with timestamps
+  const [agentCache, setAgentCache] = useState({});
+  
+  // Cache constants
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  const EDIT_MODE_CACHE_TTL = 30 * 1000; // 30 seconds for more frequent refreshes during editing
+  
+  // Function to check if cache is valid
+  const isCacheValid = (cachedData, isEditMode = false) => {
+    if (!cachedData || !cachedData.timestamp) return false;
+    
+    const now = Date.now();
+    const ttl = isEditMode ? EDIT_MODE_CACHE_TTL : CACHE_TTL;
+    return (now - cachedData.timestamp) < ttl;
+  };
+  
+  // Function to track modified fields to avoid unnecessary updates
+  const [modifiedFields, setModifiedFields] = useState({});
+  
+  // Function to sanitize and prepare agent ID for API calls
+  const prepareAgentIdForApi = (agentId) => {
+    if (!agentId) return null;
+    
+    // Remove any 'agent-' prefix for the API call
+    let apiId = agentId;
+    if (apiId.startsWith('agent-')) {
+      apiId = apiId.substring(6); // Remove 'agent-' prefix
+    }
+    
+    console.log(`Preparing agent ID for API: ${agentId} → ${apiId}`);
+    return apiId;
+  };
+  
+  // Function to get agent with cache management
+  const getAgentWithCache = async (agentId, skipPriceRequest = false, forceRefresh = false) => {
+    try {
+      if (!agentId) {
+        console.error('getAgentWithCache called with null/undefined agentId');
+        return null;
+      }
+      
+      // Sanitize agent ID for consistent cache keys
+      const sanitizedAgentId = typeof agentId === 'string' ? agentId.trim() : String(agentId);
+      
+      // Prepare agent ID for API - important to do this correctly to avoid 404s
+      const apiAgentId = prepareAgentIdForApi(sanitizedAgentId);
+      if (!apiAgentId) {
+        console.error('Failed to prepare valid API agent ID');
+        return null;
+      }
+      
+      // Check if we have a valid cached version (use shorter TTL when in edit mode)
+      const cachedAgent = agentCache[sanitizedAgentId];
+      const isEditMode = !!selectedAgent;
+      
+      if (!forceRefresh && isCacheValid(cachedAgent, isEditMode)) {
+        console.log(`Using cached data for agent ${sanitizedAgentId} (${Math.round((Date.now() - cachedAgent.timestamp)/1000)}s old)`);
+        return cachedAgent.data;
+      }
+      
+      // No valid cache, fetch from server
+      console.log(`Fetching fresh data for agent ${sanitizedAgentId}, API ID: ${apiAgentId}`);
+      try {
+        // Important: Use the prepared API ID for the request
+        const agent = await apiRequest(
+          `http://localhost:4000/api/agent/${apiAgentId}`, 
+          'GET',
+          null,
+          skipPriceRequest ? {} : { includePrice: 'true' }
+        );
+        
+        // Store in cache with timestamp
+        setAgentCache(prev => ({
+          ...prev,
+          [sanitizedAgentId]: {
+            data: agent,
+            timestamp: Date.now()
+          }
+        }));
+        
+        // If we don't need to make a separate price request
+        if (skipPriceRequest || agent.priceDetails) {
+          return agent;
+        }
+        
+        // If we need price data and it wasn't included in the main response
+        try {
+          // Use the prepared API ID for this request too
+          const priceResponse = await apiRequest(
+            `http://localhost:4000/api/agent/${apiAgentId}/price`, 
+            'GET'
+          );
+          
+          if (priceResponse) {
+            // Merge price data with agent data
+            const agentWithPrice = {
+              ...agent,
+              priceDetails: {
+                basePrice: priceResponse.basePrice || 0,
+                discountedPrice: priceResponse.discountedPrice || priceResponse.finalPrice || 0,
+                currency: priceResponse.currency || 'USD'
+              },
+              isFree: priceResponse.isFree || priceResponse.basePrice === 0,
+              isSubscription: priceResponse.isSubscription || false
+            };
+            
+            // Update the cache with the combined data
+            setAgentCache(prev => ({
+              ...prev,
+              [sanitizedAgentId]: {
+                data: agentWithPrice,
+                timestamp: Date.now()
+              }
+            }));
+            
+            return agentWithPrice;
+          }
+        } catch (priceError) {
+          console.error(`Error fetching price data for agent ${apiAgentId}:`, priceError);
+          // Continue with just the agent data
+        }
+        
+        return agent;
+      } catch (error) {
+        // Check if it's a 404 (agent not found)
+        if (error?.status === 404) {
+          console.warn(`Agent not found with ID ${apiAgentId}, using mock data`);
+          // Return a mock agent with basic properties for the form
+          const mockAgent = {
+            id: sanitizedAgentId,
+            error: 'Endpoint not found',
+            message: 'This API endpoint is not yet available. Try implementing it on the backend.',
+            name: `Test Agent ${sanitizedAgentId}`,
+            description: 'This is a mock agent for testing',
+            priceDetails: {
+              basePrice: 9.99,
+              discountedPrice: 7.99,
+              currency: 'USD'
+            },
+            isFree: false,
+            isSubscription: false
+          };
+          
+          // Store the mock data in cache
+          setAgentCache(prev => ({
+            ...prev,
+            [sanitizedAgentId]: {
+              data: mockAgent,
+              timestamp: Date.now()
+            }
+          }));
+          
+          return mockAgent;
+        }
+        
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error in getAgentWithCache:', error);
+      throw error;
+    }
+  };
+  
+  // Function to track which fields are modified to avoid unnecessary API calls
+  const handleFieldChange = (field, value, originalValue) => {
+    // Check if the field value is actually different from the original
+    const isModified = value !== originalValue;
+    
+    setModifiedFields(prev => ({
+      ...prev,
+      [field]: isModified
+    }));
+  };
+  
+  // Function to invalidate cache for an agent
+  const invalidateAgentCache = (agentId) => {
+    console.log(`Invalidating cache for agent ${agentId}`);
+    setAgentCache(prev => {
+      const newCache = {...prev};
+      delete newCache[agentId];
+      return newCache;
+    });
+  };
   
   // Add mock auth token for development - REMOVE IN PRODUCTION!
   useEffect(() => {
@@ -93,28 +285,40 @@ const ManageAgents = () => {
     checkBackendStatus();
   }, []);
   
-  // Helper function for API requests with consistent error handling
-  const apiRequest = async (url, method, data = null) => {
-    console.log(`🔄 ${method} request to ${url}`);
+  // Enhanced apiRequest function to handle network and auth errors
+  const apiRequest = async (url, method, data = null, queryParams = {}) => {
+    // Append query parameters to URL if provided
+    let finalUrl = url;
+    if (queryParams && Object.keys(queryParams).length > 0) {
+      const queryString = Object.entries(queryParams)
+        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+        .join('&');
+      finalUrl = `${url}${url.includes('?') ? '&' : '?'}${queryString}`;
+    }
     
-    // Use our imported getAuthHeaders utility
     const options = {
       method,
       headers: getAuthHeaders(),
+      credentials: 'include'
     };
     
     if (data) {
       options.body = JSON.stringify(data);
+      // Ensure content-type is set for requests with bodies
+      options.headers = {
+        ...options.headers,
+        'Content-Type': 'application/json'
+      };
     }
     
     try {
       // Log full request details
-      console.log(`API Request: ${method} ${url}`, options);
+      console.log(`API Request: ${method} ${finalUrl}`, options);
       
       // Ensure token is valid before making request
       validateAndRefreshToken();
       
-      const response = await fetch(url, options);
+      const response = await fetch(finalUrl, options);
       
       // Log response status and headers
       console.log(`API Response: ${response.status} ${response.statusText}`);
@@ -123,7 +327,68 @@ const ManageAgents = () => {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`API Error: ${response.status} - ${errorText}`);
+        
+        // Try to parse the error as JSON
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: errorText };
+        }
+        
+        // Handle auth service unreachable errors
+        if (response.status === 503 && 
+            (errorData.code === 'AUTH_SERVICE_UNREACHABLE' || 
+             errorData.code === 'NETWORK_ERROR')) {
+          
+          setAuthStatus({
+            isAuthenticated: false,
+            networkError: true,
+            errorMessage: errorData.error || 'Authentication service is unreachable',
+            errorCode: errorData.code
+          });
+          
+          // Show a toast notification
+          toast.error(
+            <div>
+              <strong>Network Error</strong>
+              <p>Cannot connect to authentication services.</p>
+              <p>Please check your internet connection.</p>
+            </div>,
+            { duration: 6000 }
+          );
+        }
+        
+        // Handle auth errors
+        if (response.status === 401) {
+          setAuthStatus({
+            isAuthenticated: false,
+            networkError: false,
+            errorMessage: errorData.error || 'Authentication failed',
+            errorCode: errorData.code
+          });
+        }
+        
+        // Check if this is a 404 for our new endpoints
+        if (response.status === 404 && 
+            (finalUrl.includes('/combined-update') || finalUrl.includes('?includePrice='))) {
+          return {
+            error: 'Endpoint not found',
+            message: 'This API endpoint is not yet available. Try implementing it on the backend.'
+          };
+        }
+        
         throw new Error(errorText || `${method} request failed with status ${response.status}`);
+      }
+      
+      // On successful requests, reset auth error state if previously set
+      if (authStatus.networkError || !authStatus.isAuthenticated) {
+        setAuthStatus({
+          isAuthenticated: true,
+          networkError: false,
+          errorMessage: null,
+          errorCode: null
+        });
       }
       
       // Try to parse JSON, but handle text responses too
@@ -136,17 +401,41 @@ const ManageAgents = () => {
         return { message: text };
       }
     } catch (error) {
-      console.error(`API Error in ${method} ${url}:`, error);
+      console.error(`API Error in ${method} ${finalUrl}:`, error);
+      
+      // Check for network errors
+      if (error.message && (
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('NetworkError') || 
+        error.message.includes('Network request failed')
+      )) {
+        setAuthStatus({
+          isAuthenticated: false,
+          networkError: true,
+          errorMessage: 'Cannot connect to server. Please check your internet connection.',
+          errorCode: 'NETWORK_ERROR'
+        });
+        
+        // Show toast for network error
+        toast.error(
+          <div>
+            <strong>Network Error</strong>
+            <p>Cannot connect to server.</p>
+            <p>Please check your internet connection.</p>
+          </div>,
+          { duration: 6000 }
+        );
+      }
       
       // For development environment, create mock successful responses
       if (process.env.NODE_ENV === 'development') {
-        console.warn(`Generating mock response for ${method} ${url}`);
+        console.warn(`Generating mock response for ${method} ${finalUrl}`);
         
         // Generate appropriate mock responses based on the request
-        if (url.includes('/api/agents') && method === 'GET') {
+        if (finalUrl.includes('/api/agents') && method === 'GET') {
           return { agents: generateMockAgents() };
-        } else if (url.includes('/price') && method === 'GET') {
-          const agentId = url.split('/')[4]; // Extract agent ID from URL
+        } else if (finalUrl.includes('/price') && method === 'GET') {
+          const agentId = finalUrl.split('/')[4]; // Extract agent ID from URL
           return {
             id: `price-${agentId}`,
             basePrice: 99.99,
@@ -204,7 +493,26 @@ const ManageAgents = () => {
       // Check if data has agents property
       if (data.agents) {
         console.log('✅ Agents fetched successfully:', data.agents.length, 'agents');
-        setAgents(data.agents);
+        
+        // Update cache for all agents
+        const newCache = {...agentCache};
+        data.agents.forEach(agent => {
+          newCache[agent.id] = {
+            data: agent,
+            timestamp: Date.now()
+          };
+        });
+        setAgentCache(newCache);
+        
+        // Sort agents by id to maintain consistent order
+        const sortedAgents = [...data.agents].sort((a, b) => {
+          // Extract numeric part for natural sorting
+          const aNum = parseInt(a.id.replace(/\D/g, '')) || 0;
+          const bNum = parseInt(b.id.replace(/\D/g, '')) || 0;
+          return aNum - bNum;
+        });
+        
+        setAgents(sortedAgents);
       } else {
         console.warn('⚠️ Response does not contain agents array, using empty array');
         setAgents([]);
@@ -287,10 +595,80 @@ const ManageAgents = () => {
     }
   };
   
-  // Function to edit an agent
+  // Function to handle agent edit button click
   const handleEditClick = (agent) => {
-    setSelectedAgent(agent);
-    setShowAgentForm(true);
+    try {
+      console.log('Edit clicked for agent:', agent);
+      if (!agent || !agent.id) {
+        console.error('Cannot edit agent: Missing agent ID');
+        showToast('Invalid agent data. Cannot edit.', 'error');
+        return;
+      }
+      
+      // Sanitize the agent ID to prevent issues
+      const sanitizedAgentId = typeof agent.id === 'string' ? agent.id.trim() : String(agent.id);
+      
+      // Create a sanitized agent object with the correct ID for the form
+      const sanitizedAgent = {
+        ...agent,
+        id: sanitizedAgentId
+      };
+      
+      // Check if we have a recent cache entry for this agent
+      const cachedAgent = agentCache[sanitizedAgentId];
+      const isRecentCache = cachedAgent && (Date.now() - cachedAgent.timestamp < 30000); // 30 seconds
+      
+      if (isRecentCache) {
+        // If we have recent cache data, use it immediately and open the form
+        console.log('Using recently cached data for edit form');
+        setSelectedAgent(cachedAgent.data);
+        setShowAgentForm(true);
+        
+        // Only fetch fresh data in the background if cache is older than 10 seconds
+        const cacheAge = Date.now() - cachedAgent.timestamp;
+        if (cacheAge > 10000) { // 10 seconds
+          console.log('Cache is older than 10 seconds, refreshing in background');
+          refreshAgentInBackground(sanitizedAgentId);
+        }
+      } else {
+        // If no recent cache, still show the form with what we have
+        // while loading fresh data
+        setSelectedAgent(sanitizedAgent);
+        setShowAgentForm(true);
+        
+        // Then load fresh data
+        refreshAgentInBackground(sanitizedAgentId);
+      }
+    } catch (error) {
+      console.error('Error in handleEditClick:', error);
+      showToast('An error occurred while preparing to edit the agent.', 'error');
+    }
+  };
+  
+  // Function to refresh agent data in the background
+  const refreshAgentInBackground = async (agentId) => {
+    try {
+      if (!agentId) {
+        console.error('refreshAgentInBackground: missing agentId parameter');
+        return;
+      }
+      
+      console.log(`Refreshing agent data in background for ID: ${agentId}`);
+      // Get fresh agent data with price included to minimize API calls
+      // Pass true for skipPriceRequest parameter to get price in the main call
+      const refreshedAgent = await getAgentWithCache(agentId, true, true);
+      
+      if (refreshedAgent) {
+        console.log('Got refreshed agent data:', refreshedAgent);
+        // Update the form with the refreshed data
+        setSelectedAgent(refreshedAgent);
+      } else {
+        console.warn('No data returned when refreshing agent in background');
+      }
+    } catch (error) {
+      console.warn('Error refreshing agent data:', error);
+      // Form is already open with the initial data, so user can still proceed
+    }
   };
   
   // Function to create a new agent
@@ -303,85 +681,248 @@ const ManageAgents = () => {
   const handleFormSubmit = async (agentData) => {
     try {
       let savedAgent;
+      let agentId = selectedAgent?.id;
+      
+      // Extract price data from agent data to avoid duplication in payload
+      const { basePrice, discountedPrice, isFree, isSubscription, ...agentDataWithoutPrice } = agentData;
+      
+      // Create a price payload if pricing data is provided
+      const pricePayload = {
+        basePrice: basePrice || 0,
+        discountedPrice: discountedPrice || 0,
+        isFree: isFree || false,
+        isSubscription: isSubscription || false,
+        currency: agentData.currency || 'USD'
+      };
       
       if (selectedAgent) {
-        // Update existing agent - Work around CORS issues with PATCH
-        // Option 1: Use POST with a special field to indicate it's an update
-        const updateData = {
-          ...agentData,
+        // Update existing agent
+        // Ensure agent ID is sanitized (no slashes or spaces)
+        const sanitizedAgentId = selectedAgent.id.trim().split('/')[0];
+        
+        // Extract the numeric part for API calls if ID starts with "agent-"
+        const apiAgentId = sanitizedAgentId.startsWith('agent-') 
+          ? sanitizedAgentId.substring(6) // Remove "agent-" prefix
+          : sanitizedAgentId;
+        
+        console.log('Updating agent:', sanitizedAgentId, 'API ID:', apiAgentId);
+        
+        // Combined payload that includes price data to reduce API calls
+        const combinedUpdateData = {
+          ...agentDataWithoutPrice,
+          priceData: pricePayload,
           _method: 'PATCH' // Some backends support this convention
         };
         
-        // Ensure agent ID is sanitized (no slashes or spaces)
-        const sanitizedAgentId = selectedAgent.id.trim().split('/')[0];
-        console.log('Updating agent:', sanitizedAgentId, updateData);
-        
         try {
-          // Try POST with _method first
+          // Use a single API call to update both agent and price
           savedAgent = await apiRequest(
-            `http://localhost:4000/api/agent/${sanitizedAgentId}`, 
+            `http://localhost:4000/api/agent/${apiAgentId}/combined-update`, 
             'POST',
-            updateData
+            combinedUpdateData
           );
-        } catch (patchError) {
-          console.error('POST with _method failed, trying alternative:', patchError);
           
-          // Option 2: Try PUT method instead of PATCH
+          // If the combined endpoint doesn't exist yet, fall back to separate calls
+          if (!savedAgent || savedAgent.error === 'Endpoint not found') {
+            console.log('Combined update endpoint not available, falling back to separate calls');
+            console.log('Using separate calls for agent and price update');
+            
+            // Update agent data
+            savedAgent = await apiRequest(
+              `http://localhost:4000/api/agent/${sanitizedAgentId}`, 
+              'POST',
+              { ...agentDataWithoutPrice, _method: 'PATCH' }
+            );
+            
+            // Only make price API call if price data was actually changed
+            if (basePrice !== undefined || discountedPrice !== undefined || 
+                isFree !== undefined || isSubscription !== undefined) {
+              
+              // Update price data with a single call
+              const priceResponse = await apiRequest(
+                `http://localhost:4000/api/agent/${sanitizedAgentId}/price`,
+                'PUT',
+                pricePayload
+              );
+              
+              // Merge price data with the agent data for UI consistency
+              if (priceResponse) {
+                savedAgent = {
+                  ...savedAgent,
+                  priceDetails: {
+                    basePrice: priceResponse.basePrice || 0,
+                    discountedPrice: priceResponse.discountedPrice || priceResponse.finalPrice || priceResponse.basePrice || 0,
+                    currency: priceResponse.currency || 'USD'
+                  },
+                  isFree: priceResponse.isFree || false,
+                  isSubscription: priceResponse.isSubscription || false
+                };
+              }
+            }
+          }
+        } catch (updateError) {
+          console.error('Update failed, trying alternative approach:', updateError);
+          
+          // Fallback to PUT method 
           try {
             savedAgent = await apiRequest(
               `http://localhost:4000/api/agent/${sanitizedAgentId}`, 
               'PUT',
-              agentData
+              agentDataWithoutPrice
             );
+            
+            // Update price with PUT if needed
+            if (basePrice !== undefined || discountedPrice !== undefined || 
+                isFree !== undefined || isSubscription !== undefined) {
+              
+              const priceResponse = await apiRequest(
+                `http://localhost:4000/api/agent/${sanitizedAgentId}/price`,
+                'PUT',
+                pricePayload
+              );
+              
+              // Merge price data
+              if (priceResponse) {
+                savedAgent = {
+                  ...savedAgent,
+                  priceDetails: {
+                    basePrice: priceResponse.basePrice || 0,
+                    discountedPrice: priceResponse.discountedPrice || priceResponse.finalPrice || 0,
+                    currency: priceResponse.currency || 'USD'
+                  },
+                  isFree: priceResponse.isFree || false,
+                  isSubscription: priceResponse.isSubscription || false
+                };
+              }
+            }
           } catch (putError) {
-            console.error('PUT method failed, using mock data:', putError);
+            console.error('PUT method failed, using local data:', putError);
             
             // Fallback to mock data if both methods fail
             savedAgent = {
               ...selectedAgent,
-              ...agentData,
+              ...agentDataWithoutPrice,
+              priceDetails: {
+                basePrice: basePrice || selectedAgent.priceDetails?.basePrice || 0,
+                discountedPrice: discountedPrice || selectedAgent.priceDetails?.discountedPrice || 0,
+                currency: agentData.currency || selectedAgent.priceDetails?.currency || 'USD'
+              },
+              isFree: isFree ?? selectedAgent.isFree ?? false,
+              isSubscription: isSubscription ?? selectedAgent.isSubscription ?? false,
               updatedAt: new Date().toISOString()
             };
-            console.log('Using mock data for update:', savedAgent);
           }
         }
       } else {
-        // Create new agent
-        console.log('Creating new agent:', agentData);
+        // Create new agent with price data in one request
+        console.log('Creating new agent with pricing data');
+        
+        // Combined payload for creation
+        const combinedCreateData = {
+          ...agentDataWithoutPrice,
+          priceData: pricePayload
+        };
         
         try {
+          // Try to use a single endpoint that handles both agent and price creation
           savedAgent = await apiRequest(
-            'http://localhost:4000/api/agent', 
+            'http://localhost:4000/api/agent/with-price', 
             'POST',
-            agentData
+            combinedCreateData
           );
+          
+          // Fall back to separate calls if needed
+          if (!savedAgent || savedAgent.error === 'Endpoint not found') {
+            console.log('Combined creation endpoint not available, using separate calls');
+            console.log('FALLBACK: Using separate API calls for agent creation and price update');
+            
+            savedAgent = await apiRequest(
+              'http://localhost:4000/api/agent', 
+              'POST',
+              agentDataWithoutPrice
+            );
+            
+            // Only if we have a valid agent ID from creation, update price
+            if (savedAgent && savedAgent.id) {
+              const priceResponse = await apiRequest(
+                `http://localhost:4000/api/agent/${savedAgent.id}/price`,
+                'PUT',
+                pricePayload
+              );
+              
+              // Merge price data
+              if (priceResponse) {
+                savedAgent = {
+                  ...savedAgent,
+                  priceDetails: {
+                    basePrice: priceResponse.basePrice || 0,
+                    discountedPrice: priceResponse.discountedPrice || priceResponse.finalPrice || 0,
+                    currency: priceResponse.currency || 'USD'
+                  },
+                  isFree: priceResponse.isFree || false,
+                  isSubscription: priceResponse.isSubscription || false
+                };
+              }
+            }
+          }
         } catch (createError) {
           console.error('Failed to create agent, using mock data:', createError);
           
           // Fallback to mock data
           savedAgent = {
-            ...agentData,
+            ...agentDataWithoutPrice,
             id: `mock-agent-${Date.now()}`,
+            priceDetails: {
+              basePrice: basePrice || 0,
+              discountedPrice: discountedPrice || 0,
+              currency: agentData.currency || 'USD'
+            },
+            isFree: isFree || false,
+            isSubscription: isSubscription || false,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           };
-          console.log('Using mock data for creation:', savedAgent);
         }
       }
       
-      // Update the agents list
-      if (selectedAgent) {
-        setAgents(agents.map(agent => agent.id === savedAgent.id ? savedAgent : agent));
-      } else {
-        setAgents([...agents, savedAgent]);
+      // Invalidate the cache for this agent
+      if (agentId) {
+        invalidateAgentCache(agentId);
       }
+      
+      // Update the agents list - ensure we're using the freshest data but maintain order
+      if (selectedAgent) {
+        // Replace the agent in the list while maintaining the same position
+        setAgents(prevAgents => {
+          const updatedAgents = prevAgents.map(agent => 
+            agent.id === savedAgent.id ? savedAgent : agent
+          );
+          return updatedAgents;
+        });
+      } else {
+        // Add new agent to the list
+        setAgents(prevAgents => [...prevAgents, savedAgent]);
+      }
+      
+      // Update the cache with the new data
+      setAgentCache(prev => ({
+        ...prev,
+        [savedAgent.id]: {
+          data: savedAgent,
+          timestamp: Date.now()
+        }
+      }));
       
       setShowAgentForm(false);
       setSelectedAgent(null);
       
+      // Show a success message
+      toast.success(`Agent ${selectedAgent ? 'updated' : 'created'} successfully!`);
+      
       return savedAgent;
     } catch (err) {
       console.error('Error saving agent:', err);
+      toast.error(`Error ${selectedAgent ? 'updating' : 'creating'} agent: ${err.message}`);
       throw err;
     }
   };
@@ -402,8 +943,8 @@ const ManageAgents = () => {
   const filteredAgents = agents.filter(agent => {
     // Search filter
     const matchesSearch = searchQuery === '' || 
-      agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      agent.title.toLowerCase().includes(searchQuery.toLowerCase());
+      agent.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      agent.title?.toLowerCase().includes(searchQuery.toLowerCase());
     
     // Category filter
     const matchesCategory = categoryFilter === '' || agent.category === categoryFilter;
@@ -411,25 +952,46 @@ const ManageAgents = () => {
     return matchesSearch && matchesCategory;
   });
   
-  // Sort filtered agents
-  const sortedAgents = [...filteredAgents].sort((a, b) => {
-    // Handle numeric sorting
-    if (sortField === 'priceDetails.basePrice') {
-      const aPrice = a.priceDetails?.basePrice || 0;
-      const bPrice = b.priceDetails?.basePrice || 0;
-      return sortDirection === 'asc' ? aPrice - bPrice : bPrice - aPrice;
-    }
-    
-    // Handle string sorting
-    const aValue = a[sortField] || '';
-    const bValue = b[sortField] || '';
-    
-    if (sortDirection === 'asc') {
-      return aValue.localeCompare(bValue);
-    } else {
-      return bValue.localeCompare(aValue);
-    }
-  });
+  // Sort filtered agents - with consistent ordering
+  const sortedAgents = useMemo(() => {
+    // Create a stable sort by first sorting by ID to maintain consistent order
+    // Then apply the user-selected sort
+    return [...filteredAgents].sort((a, b) => {
+      // First sort by the user-selected field
+      let comparison = 0;
+      
+      // Handle numeric sorting for price fields
+      if (sortField === 'priceDetails.basePrice' || sortField === 'basePrice') {
+        const aPrice = a.priceDetails?.basePrice || a.basePrice || 0;
+        const bPrice = b.priceDetails?.basePrice || b.basePrice || 0;
+        comparison = sortDirection === 'asc' ? aPrice - bPrice : bPrice - aPrice;
+      } 
+      // Handle date sorting
+      else if (sortField === 'createdAt' || sortField === 'updatedAt') {
+        const aDate = new Date(a[sortField] || 0).getTime();
+        const bDate = new Date(b[sortField] || 0).getTime();
+        comparison = sortDirection === 'asc' ? aDate - bDate : bDate - aDate;
+      }
+      // Handle string sorting
+      else {
+        const aValue = a[sortField]?.toString() || '';
+        const bValue = b[sortField]?.toString() || '';
+        comparison = sortDirection === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      }
+      
+      // If the primary sort field values are equal, fall back to sorting by ID
+      // This ensures a consistent ordering regardless of how many times you edit
+      if (comparison === 0) {
+        const aNum = parseInt(a.id.replace(/\D/g, '')) || 0;
+        const bNum = parseInt(b.id.replace(/\D/g, '')) || 0;
+        return aNum - bNum;
+      }
+      
+      return comparison;
+    });
+  }, [filteredAgents, sortField, sortDirection]);
   
   // Get unique categories for filter dropdown
   const categories = [...new Set(agents.map(agent => agent.category))];
@@ -451,7 +1013,55 @@ const ManageAgents = () => {
       <div className="manage-agents-container">
         <header className="page-header">
           <h1>Manage Agents</h1>
-          {!apiStatus.isOnline && (
+          
+          {/* Auth Network Error Banner */}
+          {authStatus.networkError && (
+            <div className="auth-error-banner">
+              <FaTimes className="status-icon error" />
+              <div className="auth-error-content">
+                <h3>Authentication Service Unreachable</h3>
+                <p>{authStatus.errorMessage || "Cannot connect to authentication service"}</p>
+                <ul className="error-troubleshooting">
+                  <li>Check your internet connection</li>
+                  <li>Verify that you're not behind a restrictive firewall or proxy</li>
+                  <li>Try refreshing the page</li>
+                  <li>Contact your system administrator if the problem persists</li>
+                </ul>
+                <button 
+                  className="retry-button"
+                  onClick={async () => {
+                    try {
+                      // Attempt to make a simple API request to check connectivity
+                      const status = await checkApiStatus();
+                      setApiStatus({
+                        checked: true,
+                        isOnline: status.isOnline,
+                        message: status.message
+                      });
+                      
+                      if (status.isOnline) {
+                        setAuthStatus({
+                          isAuthenticated: true,
+                          networkError: false,
+                          errorMessage: null,
+                          errorCode: null
+                        });
+                        fetchAgents();
+                      }
+                    } catch (error) {
+                      console.error('Retry failed:', error);
+                      toast.error('Still unable to connect. Please check your network.');
+                    }
+                  }}
+                >
+                  Retry Connection
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {/* API Offline Banner (existing code) */}
+          {!apiStatus.isOnline && !authStatus.networkError && (
             <div className="api-status-warning">
               <FaTimes className="status-icon error" />
               <span>Backend API unavailable: {apiStatus.message}</span>
@@ -473,10 +1083,12 @@ const ManageAgents = () => {
               </button>
             </div>
           )}
+          
           <div className="header-actions">
             <button 
               className="btn btn-primary" 
               onClick={handleCreateClick}
+              disabled={authStatus.networkError}
             >
               <FaPlus /> Create New Agent
             </button>

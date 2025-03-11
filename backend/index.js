@@ -57,6 +57,7 @@ const profileRoutes = require('./routes/profile');
 const agentsRoutes = require('./routes/agents'); // Add this import
 const wishlistsRoutes = require('./routes/wishlists'); // Add wishlists routes
 const pricesRoutes = require('./routes/prices'); // Add prices routes
+const testRoutes = require('./routes/test'); // Add test routes
 
 // Initialize express
 const app = express();
@@ -566,6 +567,18 @@ app.use('/api/agents', agentsRoutes);
 
 // Mount single agent routes at /api/agent
 app.use('/api/agent', require('./routes/agent'));
+
+// Add a test route
+app.get('/api/test', (req, res) => {
+  console.log('Test route hit');
+  return res.status(200).json({
+    success: true,
+    message: 'Test route working correctly'
+  });
+});
+
+// Mount the test routes
+app.use('/api/test', testRoutes);
 
 // Mount the wishlists routes at /api/wishlists
 app.use('/api/wishlists', wishlistsRoutes);
