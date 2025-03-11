@@ -16,4 +16,13 @@ router.patch('/:id/discount', validateFirebaseToken, priceController.applyDiscou
 router.get('/agent/:agentId/price', publicCacheMiddleware({ duration: 300 }), priceController.getAgentPrice);
 router.post('/agent/:agentId/price', validateFirebaseToken, priceController.updateAgentPrice);
 
+// Get price history for all agents 
+router.get('/history', priceController.getPriceHistory);
+
+// Get price history for specific agent
+router.get('/:agentId/history', priceController.getPriceHistory);
+
+// Migration route to fix price data inconsistencies
+router.post('/migrate', validateFirebaseToken, priceController.migratePriceData);
+
 module.exports = router; 

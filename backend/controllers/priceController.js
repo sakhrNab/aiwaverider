@@ -21,6 +21,113 @@ const pricesCollection = db.collection('prices');
 const agentsCollection = db.collection('agents');
 
 /**
+ * Normalize agent ID by removing the 'agent-' prefix when needed
+ * @param {string} agentId - The agent ID to normalize
+ * @returns {string} Normalized agent ID
+ */
+const normalizeAgentId = (agentId) => {
+  if (!agentId) return null;
+  
+  // First, sanitize the ID
+  let sanitizedId = agentId.trim();
+  
+  // Extract numerical ID if it has the agent- prefix
+  if (sanitizedId.startsWith('agent-')) {
+    return sanitizedId; // Keep the agent- prefix for document IDs
+  }
+  
+  // If it's just a number, add the agent- prefix
+  if (!isNaN(sanitizedId) && !sanitizedId.startsWith('agent-')) {
+    return `agent-${sanitizedId}`;
+  }
+  
+  return sanitizedId;
+};
+
+/**
+ * Create a consistent price object from request data
+ * @param {object} priceData - Price data from request
+ * @param {string} agentId - Agent ID
+ * @returns {object} Normalized price object
+ */
+const createNormalizedPriceObject = (priceData, agentId) => {
+  const normalizedAgentId = normalizeAgentId(agentId);
+  const timestamp = new Date().toISOString();
+  
+  // Ensure basePrice is a number
+  const basePrice = typeof priceData.basePrice === 'number' 
+    ? priceData.basePrice 
+    : parseFloat(priceData.basePrice) || 0;
+  
+  // Calculate or use provided discounted price
+  let discountedPrice = basePrice;
+  if (typeof priceData.discountedPrice === 'number' || priceData.discountedPrice) {
+    discountedPrice = typeof priceData.discountedPrice === 'number'
+      ? priceData.discountedPrice
+      : parseFloat(priceData.discountedPrice) || basePrice;
+  } else if (typeof priceData.finalPrice === 'number' || priceData.finalPrice) {
+    discountedPrice = typeof priceData.finalPrice === 'number'
+      ? priceData.finalPrice
+      : parseFloat(priceData.finalPrice) || basePrice;
+  }
+  
+  // Calculate discount percentage
+  const discountPercentage = basePrice > 0 
+    ? Math.round(((basePrice - discountedPrice) / basePrice) * 100) 
+    : 0;
+  
+  return {
+    agentId: normalizedAgentId,
+    basePrice,
+    discountedPrice,
+    finalPrice: discountedPrice, // For backwards compatibility
+    discountPercentage,
+    currency: priceData.currency || 'USD',
+    isFree: basePrice === 0 || !!priceData.isFree,
+    isSubscription: !!priceData.isSubscription,
+    createdAt: priceData.createdAt || timestamp,
+    updatedAt: timestamp
+  };
+};
+
+/**
+ * Record a price change in price_history collection
+ * @param {object} priceData - The price data
+ * @param {string} agentId - The agent ID
+ * @param {string} userId - The user ID making the change
+ * @param {string} changeType - The type of change
+ * @returns {Promise<string>} The ID of the new price history record
+ */
+const recordPriceHistory = async (priceData, agentId, userId = null, changeType = 'manual_price_change') => {
+  try {
+    const normalizedAgentId = normalizeAgentId(agentId);
+    const timestamp = new Date().toISOString();
+    
+    const historyData = {
+      agentId: normalizedAgentId,
+      basePrice: priceData.basePrice,
+      discountedPrice: priceData.discountedPrice,
+      discountPercentage: priceData.discountPercentage,
+      currency: priceData.currency,
+      isFree: priceData.isFree,
+      isSubscription: priceData.isSubscription,
+      changedAt: timestamp,
+      changedBy: userId || 'system',
+      changeType
+    };
+    
+    // Add to the main price_history collection (source of truth for price history)
+    const historyRef = await db.collection('price_history').add(historyData);
+    console.log(`Price history recorded with ID: ${historyRef.id}`);
+    
+    return historyRef.id;
+  } catch (error) {
+    console.error('Error recording price history:', error);
+    throw error;
+  }
+};
+
+/**
  * Get the price details for a specific agent
  */
 const getPriceById = async (req, res) => {
@@ -309,243 +416,248 @@ const getPriceHistory = async (req, res) => {
 };
 
 /**
- * Get price for a specific agent
+ * Get agent price by ID
+ * @param {object} req - Express request object
+ * @param {object} res - Express response object
  */
 const getAgentPrice = async (req, res) => {
   try {
-    // Extract agentId from either req.params.agentId or req.params.id
-    const agentId = req.params.agentId || req.params.id;
+    let agentId = req.params.id;
+    console.log('Getting price for agent ID:', agentId);
     
-    // Validate agent ID to prevent Firestore errors
-    if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
-      console.error('Invalid agent ID for price fetch:', agentId);
-      return res.status(400).json({ error: 'Invalid agent ID provided' });
-    }
-
-    const sanitizedAgentId = agentId.trim();
-    
-    // Find price by agent ID
-    const priceQuery = await db.collection('prices')
-      .where('agentId', '==', sanitizedAgentId)
-      .orderBy('createdAt', 'desc')
-      .limit(1)
-      .get();
-    
-    if (priceQuery.empty) {
-      // No price found, check if agent exists
-      const agentDoc = await db.collection('agents').doc(sanitizedAgentId).get();
-      
-      if (!agentDoc.exists) {
-        return res.status(404).json({ error: 'Agent not found' });
-      }
-      
-      // Agent exists but no price record, check for price in agent document
-      const agentData = agentDoc.data();
-      
-      // Create a default price based on agent data
-      const defaultPrice = {
-        id: `price_${sanitizedAgentId}`,
-        agentId: sanitizedAgentId,
-        basePrice: agentData.price || 0,
-        discountedPrice: agentData.discountedPrice || agentData.price || 0,
-        discountPercentage: agentData.discountPercentage || 0,
-        currency: agentData.currency || 'USD',
-        isFree: agentData.isFree || agentData.price === 0 || agentData.price === '0',
-        isSubscription: agentData.isSubscription || false,
-        billingCycle: agentData.billingCycle || 'one-time',
-        createdAt: agentData.createdAt || new Date().toISOString(),
-        updatedAt: agentData.updatedAt || new Date().toISOString()
-      };
-      
-      return res.status(200).json(defaultPrice);
+    // Normalize the agent ID
+    agentId = normalizeAgentId(agentId);
+    if (!agentId) {
+      return res.status(400).json({ error: 'Invalid agent ID' });
     }
     
-    // Return the found price data
-    const priceDoc = priceQuery.docs[0];
-    const priceData = {
-      id: priceDoc.id,
-      ...priceDoc.data()
-    };
+    // Get the price document from the prices collection
+    const priceDoc = await db.collection('prices').doc(agentId).get();
     
-    return res.status(200).json(priceData);
+    if (!priceDoc.exists) {
+      console.log(`No price found for agent: ${agentId}`);
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    
+    // Return the price data
+    const priceData = priceDoc.data();
+    
+    // Clean up response - don't return the priceHistory array in the price object
+    // This should be queried separately if needed
+    const { priceHistory, ...cleanPriceData } = priceData;
+    
+    return res.status(200).json(cleanPriceData);
+    
   } catch (error) {
-    console.error('Error fetching agent price:', error);
-    return res.status(500).json({ error: 'Failed to fetch agent price' });
+    console.error('Error getting agent price:', error);
+    return res.status(500).json({ error: 'Failed to get agent price', details: error.message });
   }
 };
 
 /**
- * Update price for a specific agent
+ * Update agent price
+ * @param {object} req - Express request object
+ * @param {object} res - Express response object
  */
 const updateAgentPrice = async (req, res) => {
+  try {
+    // Start a Firestore transaction for data consistency
+    const result = await db.runTransaction(async (transaction) => {
+      // Get agent ID and normalize it
+      let agentId = req.params.id;
+      agentId = normalizeAgentId(agentId);
+      
+      if (!agentId) {
+        throw new Error('Invalid agent ID');
+      }
+      
+      console.log(`Updating price for agent: ${agentId}`);
+      
+      // Validate the request body
+      const priceData = req.body;
+      if (!priceData) {
+        throw new Error('Price data is required');
+      }
+      
+      // Create a normalized price object
+      const normalizedPrice = createNormalizedPriceObject(priceData, agentId);
+      
+      // Reference to the price document
+      const priceRef = db.collection('prices').doc(agentId);
+      const priceDoc = await transaction.get(priceRef);
+      
+      // Reference to the agent document
+      const agentRef = db.collection('agents').doc(agentId);
+      const agentDoc = await transaction.get(agentRef);
+      
+      if (!agentDoc.exists) {
+        throw new Error(`Agent with ID ${agentId} not found`);
+      }
+      
+      // If price document doesn't exist, create it
+      if (!priceDoc.exists) {
+        transaction.set(priceRef, {
+          ...normalizedPrice,
+          priceHistory: [] // Empty array for backwards compatibility
+        });
+      } else {
+        // Update the existing price document
+        transaction.update(priceRef, {
+          ...normalizedPrice,
+          // Don't update the priceHistory array in the price document
+        });
+      }
+      
+      // Update the price-related fields in the agent document
+      transaction.update(agentRef, {
+        // Set the priceDetails object
+        priceDetails: {
+          basePrice: normalizedPrice.basePrice,
+          discountedPrice: normalizedPrice.discountedPrice,
+          currency: normalizedPrice.currency
+        },
+        // Also update the direct price fields for backwards compatibility
+        basePrice: normalizedPrice.basePrice,
+        discountedPrice: normalizedPrice.discountedPrice,
+        price: normalizedPrice.discountedPrice, // Legacy field
+        isFree: normalizedPrice.isFree,
+        isSubscription: normalizedPrice.isSubscription,
+        discountPercentage: normalizedPrice.discountPercentage,
+        updatedAt: normalizedPrice.updatedAt
+      });
+      
+      // Record the price change in the price_history collection
+      const userId = req.user?.uid || null;
+      await recordPriceHistory(normalizedPrice, agentId, userId);
+      
+      return {
+        success: true,
+        price: normalizedPrice
+      };
+    });
+    
+    return res.status(200).json(result);
+    
+  } catch (error) {
+    console.error('Error updating agent price:', error);
+    return res.status(500).json({ error: 'Failed to update agent price', details: error.message });
+  }
+};
+
+/**
+ * Migration script to fix price data inconsistencies
+ * This will:
+ * 1. Ensure all agents have consistent price data
+ * 2. Ensure all prices documents match their agent counterparts
+ * 3. Record current prices in price_history collection
+ * @param {object} req - Express request object
+ * @param {object} res - Express response object
+ */
+const migratePriceData = async (req, res) => {
   try {
     // Check if user is an admin
     const isAdmin = req.user && req.user.role === 'admin';
     if (!isAdmin) {
-      return res.status(403).json({ error: 'Only administrators can update agent prices' });
+      return res.status(403).json({ error: 'Only administrators can run migrations' });
     }
     
-    // Extract agentId from either req.params.agentId or req.params.id
-    let agentId = req.params.agentId || req.params.id;
+    console.log('Starting price data migration...');
     
-    // Check if the ID contains extra path segments (like agent-34/price)
-    if (agentId && agentId.includes('/')) {
-      // Extract just the agent ID part
-      agentId = agentId.split('/')[0];
-    }
+    // Get all agents
+    const agentsSnapshot = await db.collection('agents').get();
+    const results = {
+      success: true,
+      totalAgents: agentsSnapshot.size,
+      updated: 0,
+      errors: []
+    };
     
-    // Validate agent ID to prevent Firestore errors
-    if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
-      console.error('Invalid agent ID for price update:', agentId);
-      return res.status(400).json({ error: 'Invalid agent ID provided' });
-    }
-
-    const sanitizedAgentId = agentId.trim();
-    console.log('Processing price update for agent ID:', sanitizedAgentId);
-    const priceData = req.body;
-    
-    // Check if agent exists
-    const agentDoc = await db.collection('agents').doc(sanitizedAgentId).get();
-    if (!agentDoc.exists) {
-      return res.status(404).json({ error: 'Agent not found' });
-    }
-    
-    // Find existing price by agent ID
-    const priceQuery = await db.collection('prices')
-      .where('agentId', '==', sanitizedAgentId)
-      .orderBy('createdAt', 'desc')
-      .limit(1)
-      .get();
-    
-    // Get the base price and handle the discounted price properly
-    const basePrice = priceData.basePrice || 0;
-    
-    // IMPORTANT: Check if discountedPrice was explicitly provided in the request
-    // If so, use it directly instead of calculating from discountPercentage
-    let discountedPrice;
-    let discountPercentage;
-    let finalPrice;
-    
-    if (priceData.discountedPrice !== undefined) {
-      // Use the explicitly provided discountedPrice
-      discountedPrice = parseFloat(priceData.discountedPrice);
-      
-      // Calculate the implied discount percentage
-      discountPercentage = basePrice > 0 
-        ? Math.round(((basePrice - discountedPrice) / basePrice) * 100) 
-        : 0;
-      
-      finalPrice = discountedPrice;
-      
-      // If there's a significant discount, create/update a discount object
-      if (discountPercentage > 0) {
-        // Create a discount object that reflects the manually set discounted price
-        const now = new Date();
-        const oneMonthLater = new Date(now);
-        oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+    // Process each agent
+    for (const agentDoc of agentsSnapshot.docs) {
+      try {
+        const agentId = agentDoc.id;
+        const agentData = agentDoc.data();
         
-        // Set up the discount object to match the manual discounted price
-        priceData.discount = {
-          amount: basePrice - discountedPrice,
-          percentage: discountPercentage,
-          validFrom: now.toISOString(),
-          validUntil: oneMonthLater.toISOString(),
-          reason: 'Manual discount adjustment'
-        };
-      } else {
-        // If discount is zero or negative, remove any existing discount
-        priceData.discount = null;
+        // Get existing price data
+        const priceRef = db.collection('prices').doc(agentId);
+        const priceDoc = await priceRef.get();
+        
+        // Determine the correct price data
+        let priceData = {};
+        
+        if (priceDoc.exists) {
+          // If price document exists, use it as the base
+          priceData = priceDoc.data();
+        } else if (agentData.priceDetails) {
+          // Otherwise use priceDetails from agent
+          priceData = {
+            basePrice: agentData.priceDetails.basePrice || 0,
+            discountedPrice: agentData.priceDetails.discountedPrice || agentData.priceDetails.basePrice || 0,
+            currency: agentData.priceDetails.currency || 'USD',
+            isFree: agentData.isFree || agentData.priceDetails.basePrice === 0,
+            isSubscription: agentData.isSubscription || false
+          };
+        } else {
+          // Fall back to direct price fields on agent
+          priceData = {
+            basePrice: agentData.basePrice || 0,
+            discountedPrice: agentData.discountedPrice || agentData.price || agentData.basePrice || 0,
+            currency: 'USD',
+            isFree: agentData.isFree || agentData.basePrice === 0 || agentData.price === 0,
+            isSubscription: agentData.isSubscription || false
+          };
+        }
+        
+        // Create a normalized price object
+        const normalizedPrice = createNormalizedPriceObject(priceData, agentId);
+        
+        // Update the price document
+        await priceRef.set({
+          ...normalizedPrice,
+          priceHistory: [] // Empty array for backwards compatibility
+        }, { merge: true });
+        
+        // Update the agent document
+        await db.collection('agents').doc(agentId).update({
+          priceDetails: {
+            basePrice: normalizedPrice.basePrice,
+            discountedPrice: normalizedPrice.discountedPrice,
+            currency: normalizedPrice.currency
+          },
+          basePrice: normalizedPrice.basePrice,
+          discountedPrice: normalizedPrice.discountedPrice,
+          price: normalizedPrice.discountedPrice, // Legacy field
+          isFree: normalizedPrice.isFree,
+          isSubscription: normalizedPrice.isSubscription,
+          discountPercentage: normalizedPrice.discountPercentage,
+          updatedAt: normalizedPrice.updatedAt
+        });
+        
+        // Record in price history
+        await recordPriceHistory(normalizedPrice, agentId, 'migration', 'data_migration');
+        
+        results.updated++;
+        console.log(`Migrated price data for agent: ${agentId}`);
+        
+      } catch (error) {
+        console.error(`Error migrating price data for agent ${agentDoc.id}:`, error);
+        results.errors.push({
+          agentId: agentDoc.id,
+          error: error.message
+        });
       }
-    } else {
-      // No explicit discountedPrice provided, use the percentage-based calculation
-      discountPercentage = priceData.discountPercentage || 0;
-      discountedPrice = discountPercentage > 0 
-        ? basePrice - (basePrice * (discountPercentage / 100)) 
-        : basePrice;
-      finalPrice = discountedPrice;
     }
     
-    console.log('Price calculation debug:', {
-      basePrice,
-      requestedDiscountedPrice: priceData.discountedPrice,
-      calculatedDiscountedPrice: discountedPrice,
-      discountPercentage,
-      finalPrice
-    });
+    console.log('Price data migration completed.');
+    return res.status(200).json(results);
     
-    // Add required fields
-    const updatedPriceData = {
-      ...priceData,
-      agentId: sanitizedAgentId,
-      basePrice,
-      discountedPrice,      // Store the discounted price (either provided or calculated)
-      finalPrice,           // Store the final price (same as discounted price for now)
-      discountPercentage,   // Store the discount percentage (either calculated or provided)
-      currency: priceData.currency || 'USD',
-      isFree: basePrice === 0,
-      updatedAt: new Date().toISOString()
-    };
-    
-    let priceId;
-    
-    if (priceQuery.empty) {
-      // No existing price, create new one
-      updatedPriceData.createdAt = updatedPriceData.updatedAt;
-      const newPriceRef = await db.collection('prices').add(updatedPriceData);
-      priceId = newPriceRef.id;
-      
-      // Also update agent with price information
-      await db.collection('agents').doc(sanitizedAgentId).update({
-        price: basePrice,
-        discountedPrice,
-        finalPrice,
-        discountPercentage,
-        isFree: basePrice === 0,
-        updatedAt: updatedPriceData.updatedAt
-      });
-    } else {
-      // Update existing price
-      const priceDoc = priceQuery.docs[0];
-      priceId = priceDoc.id;
-      
-      // Update the price document
-      await db.collection('prices').doc(priceId).update(updatedPriceData);
-      
-      // Also update agent with price information
-      await db.collection('agents').doc(sanitizedAgentId).update({
-        price: basePrice,
-        discountedPrice,
-        finalPrice,
-        discountPercentage,
-        isFree: basePrice === 0,
-        updatedAt: updatedPriceData.updatedAt
-      });
-    }
-    
-    // Create price history record
-    await db.collection('price_history').add({
-      priceId,
-      agentId: sanitizedAgentId,
-      basePrice,
-      discountedPrice,
-      discountPercentage,
-      currency: updatedPriceData.currency,
-      changedAt: updatedPriceData.updatedAt,
-      changedBy: req.user.uid,
-      changeType: priceData.discountedPrice !== undefined ? 'manual_price_change' : 'discount_adjustment'
-    });
-    
-    // Get the updated price data
-    const updatedPriceDoc = await db.collection('prices').doc(priceId).get();
-    const updatedPrice = {
-      id: updatedPriceDoc.id,
-      ...updatedPriceDoc.data()
-    };
-    
-    return res.status(200).json(updatedPrice);
   } catch (error) {
-    console.error('Error updating agent price:', error);
-    return res.status(500).json({ error: 'Failed to update agent price' });
+    console.error('Error in price data migration:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Failed to migrate price data', 
+      details: error.message 
+    });
   }
 };
 
@@ -555,5 +667,9 @@ module.exports = {
   applyDiscount,
   getPriceHistory,
   getAgentPrice,
-  updateAgentPrice
+  updateAgentPrice,
+  migratePriceData,
+  normalizeAgentId,
+  createNormalizedPriceObject,
+  recordPriceHistory
 }; 

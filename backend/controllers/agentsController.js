@@ -927,8 +927,7 @@ const deleteAgent = async (req, res) => {
 };
 
 /**
- * Combined update for agent and price data in a single request
- * This reduces the number of API calls needed from the frontend
+ * Combined update for agent and price data
  */
 const combinedUpdate = async (req, res) => {
   try {
@@ -983,8 +982,9 @@ const combinedUpdate = async (req, res) => {
     let priceUpdateResult = null;
     if (priceData) {
       console.log(`Updating price data for agent ${sanitizedAgentId}:`, priceData);
-      // Get price document reference
-      const priceRef = db.collection('prices').doc(`price_${sanitizedAgentId}`);
+      
+      // Use the agentId as the price document ID for consistency with priceController
+      const priceRef = db.collection('prices').doc(sanitizedAgentId);
       const priceDoc = await priceRef.get();
       
       if (priceDoc.exists) {
@@ -1028,6 +1028,9 @@ const combinedUpdate = async (req, res) => {
       };
       updatedAgent.isFree = priceUpdateResult.isFree || false;
       updatedAgent.isSubscription = priceUpdateResult.isSubscription || false;
+      
+      // Include the full price data in the response
+      updatedAgent.priceData = priceUpdateResult;
     }
     
     // Clear any Redis cache for this agent
@@ -1043,10 +1046,28 @@ const combinedUpdate = async (req, res) => {
       // Continue processing even if Redis fails
     }
     
-    return res.status(200).json(updatedAgent);
+    // Make sure we always send a proper response with status 200
+    console.log('Combined update successful, returning updated agent data with status 200');
+    
+    // Create a properly structured response
+    const responseBody = {
+      success: true,
+      data: updatedAgent,
+      message: 'Agent and price data updated successfully'
+    };
+    
+    // Set the Content-Type header to ensure the response is treated as JSON
+    res.setHeader('Content-Type', 'application/json');
+    
+    // Send a 200 response with the JSON body
+    return res.status(200).json(responseBody);
   } catch (error) {
     console.error('Error in combined update:', error);
-    return res.status(500).json({ error: 'Failed to update agent and price data' });
+    return res.status(500).json({ 
+      success: false,
+      error: 'Failed to update agent and price data',
+      message: error.message
+    });
   }
 };
 

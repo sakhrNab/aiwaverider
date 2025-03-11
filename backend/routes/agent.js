@@ -17,13 +17,30 @@ console.log('publicCacheMiddleware type:', typeof publicCacheMiddleware);
 
 // Create a safe wrapper for controller methods
 const safeHandler = (controllerFn, name) => {
-  return function(req, res) {
+  return async function(req, res, next) {
     console.log(`Safe handler called for: ${name}`);
     if (typeof controllerFn === 'function') {
       try {
-        return controllerFn(req, res);
+        // Use await to ensure the controller function completes
+        const result = await controllerFn(req, res, next);
+        
+        // If the response has already been sent, don't try to send it again
+        if (res.headersSent) {
+          console.log(`Response already sent from ${name}`);
+          return;
+        }
+        
+        // Otherwise, return the result
+        return result;
       } catch (error) {
         console.error(`Error executing ${name}:`, error);
+        
+        // If the response has already been sent, don't try to send it again
+        if (res.headersSent) {
+          console.log(`Response already sent from ${name} despite error`);
+          return;
+        }
+        
         return res.status(500).json({
           success: false,
           message: `Server error in ${name}`,
@@ -32,6 +49,13 @@ const safeHandler = (controllerFn, name) => {
       }
     } else {
       console.error(`Handler function '${name}' is not defined`);
+      
+      // If the response has already been sent, don't try to send it again
+      if (res.headersSent) {
+        console.log(`Response already sent despite missing handler ${name}`);
+        return;
+      }
+      
       return res.status(500).json({
         success: false,
         message: 'Server configuration error',
@@ -54,8 +78,15 @@ router.get('/test', (req, res) => {
 router.post('/with-price', validateFirebaseToken, safeHandler(agentsController.createAgentWithPrice, 'createAgentWithPrice'));
 
 // === Combined update routes (with an explicit path to avoid conflict with /:id) ===
-router.post('/:id/combined-update', validateFirebaseToken, safeHandler(agentsController.combinedUpdate, 'combinedUpdate'));
-router.put('/:id/combined-update', validateFirebaseToken, safeHandler(agentsController.combinedUpdate, 'combinedUpdate'));
+router.post('/:id/combined-update', (req, res, next) => {
+  console.log('Combined update route hit with POST method');
+  return next();
+}, validateFirebaseToken, safeHandler(agentsController.combinedUpdate, 'combinedUpdate'));
+
+router.put('/:id/combined-update', (req, res, next) => {
+  console.log('Combined update route hit with PUT method');
+  return next();
+}, validateFirebaseToken, safeHandler(agentsController.combinedUpdate, 'combinedUpdate'));
 
 // === Single agent CRUD operations ===
 router.post('/', validateFirebaseToken, safeHandler(agentsController.createAgent, 'createAgent'));

@@ -285,182 +285,236 @@ const ManageAgents = () => {
     checkBackendStatus();
   }, []);
   
-  // Enhanced apiRequest function to handle network and auth errors
+  // Send API request with authentication and error handling
   const apiRequest = async (url, method, data = null, queryParams = {}) => {
-    // Append query parameters to URL if provided
-    let finalUrl = url;
-    if (queryParams && Object.keys(queryParams).length > 0) {
-      const queryString = Object.entries(queryParams)
-        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-        .join('&');
-      finalUrl = `${url}${url.includes('?') ? '&' : '?'}${queryString}`;
-    }
-    
-    const options = {
-      method,
-      headers: getAuthHeaders(),
-      credentials: 'include'
-    };
-    
-    if (data) {
-      options.body = JSON.stringify(data);
-      // Ensure content-type is set for requests with bodies
-      options.headers = {
-        ...options.headers,
-        'Content-Type': 'application/json'
-      };
-    }
-    
     try {
-      // Log full request details
-      console.log(`API Request: ${method} ${finalUrl}`, options);
+      // Log all API requests for debugging
+      console.log(`API Request: ${method} ${url}`, { data, queryParams });
       
-      // Ensure token is valid before making request
-      validateAndRefreshToken();
+      // Generate auth headers for every request
+      const headers = await getAuthHeaders();
       
-      const response = await fetch(finalUrl, options);
+      // Build the request options
+      const options = {
+        method,
+        headers,
+        credentials: 'include'
+      };
       
-      // Log response status and headers
+      // Add body for non-GET requests
+      if (data && method !== 'GET') {
+        options.headers['Content-Type'] = 'application/json';
+        options.body = JSON.stringify(data);
+      }
+      
+      // Add query parameters if provided
+      let requestUrl = url;
+      if (Object.keys(queryParams).length > 0) {
+        const params = new URLSearchParams();
+        Object.entries(queryParams).forEach(([key, value]) => {
+          params.append(key, value);
+        });
+        requestUrl = `${url}?${params.toString()}`;
+      }
+      
+      // Send the request
+      console.log(`API Request: ${method} ${requestUrl}`, options);
+      const response = await fetch(requestUrl, options);
+      
+      // Log the response status and headers
       console.log(`API Response: ${response.status} ${response.statusText}`);
-      console.log('Response headers:', Object.fromEntries([...response.headers.entries()]));
+      console.log(`Response headers:`, Object.fromEntries([...response.headers.entries()]));
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`API Error: ${response.status} - ${errorText}`);
-        
-        // Try to parse the error as JSON
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch (e) {
-          errorData = { error: errorText };
-        }
-        
-        // Handle auth service unreachable errors
-        if (response.status === 503 && 
-            (errorData.code === 'AUTH_SERVICE_UNREACHABLE' || 
-             errorData.code === 'NETWORK_ERROR')) {
-          
-          setAuthStatus({
-            isAuthenticated: false,
-            networkError: true,
-            errorMessage: errorData.error || 'Authentication service is unreachable',
-            errorCode: errorData.code
-          });
-          
-          // Show a toast notification
-          toast.error(
-            <div>
-              <strong>Network Error</strong>
-              <p>Cannot connect to authentication services.</p>
-              <p>Please check your internet connection.</p>
-            </div>,
-            { duration: 6000 }
-          );
-        }
-        
-        // Handle auth errors
-        if (response.status === 401) {
-          setAuthStatus({
-            isAuthenticated: false,
-            networkError: false,
-            errorMessage: errorData.error || 'Authentication failed',
-            errorCode: errorData.code
-          });
-        }
-        
-        // Check if this is a 404 for our new endpoints
-        if (response.status === 404 && 
-            (finalUrl.includes('/combined-update') || finalUrl.includes('?includePrice='))) {
-          return {
-            error: 'Endpoint not found',
-            message: 'This API endpoint is not yet available. Try implementing it on the backend.'
-          };
-        }
-        
-        throw new Error(errorText || `${method} request failed with status ${response.status}`);
+      // Special handling for 204 No Content responses
+      if (response.status === 204) {
+        console.log('Received 204 No Content response, treating as success');
+        return { 
+          success: true, 
+          message: 'Operation completed successfully',
+          status: 204
+        };
       }
       
-      // On successful requests, reset auth error state if previously set
-      if (authStatus.networkError || !authStatus.isAuthenticated) {
-        setAuthStatus({
-          isAuthenticated: true,
-          networkError: false,
-          errorMessage: null,
-          errorCode: null
-        });
-      }
-      
-      // Try to parse JSON, but handle text responses too
+      // Parse the response JSON (or return null if no content)
       const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        return await response.json();
+      const hasJsonContent = contentType && contentType.includes('application/json');
+      
+      let responseData;
+      if (hasJsonContent) {
+        responseData = await response.json();
       } else {
-        const text = await response.text();
-        console.log('Response is not JSON:', text);
-        return { message: text };
+        responseData = { 
+          status: response.status, 
+          text: await response.text(),
+          success: response.ok // Add success flag based on HTTP status
+        };
       }
+      
+      // If the response is not ok (status >= 400)
+      if (!response.ok) {
+        // Log the error response
+        console.error(` API Error: ${response.status} - ${JSON.stringify(responseData)}`);
+        
+        // Throw a structured error
+        const error = new Error(JSON.stringify(responseData));
+        error.status = response.status;
+        error.statusText = response.statusText;
+        error.response = responseData;
+        throw error;
+      }
+      
+      // Normalize price data if it's a price-related endpoint
+      if (url.includes('/price') && responseData) {
+        // Make sure we have consistent price properties
+        const normalizedPrice = normalizePriceData(responseData);
+        return normalizedPrice;
+      }
+      
+      // If it's an agent response, normalize any price data inside it
+      if (url.includes('/agent/') && !url.includes('/price') && responseData) {
+        return normalizeAgentPriceData(responseData);
+      }
+      
+      return responseData;
     } catch (error) {
-      console.error(`API Error in ${method} ${finalUrl}:`, error);
+      // Log the full error
+      console.error(`API Error in ${method} ${url}:`, error);
       
-      // Check for network errors
-      if (error.message && (
-        error.message.includes('Failed to fetch') || 
-        error.message.includes('NetworkError') || 
-        error.message.includes('Network request failed')
-      )) {
-        setAuthStatus({
-          isAuthenticated: false,
-          networkError: true,
-          errorMessage: 'Cannot connect to server. Please check your internet connection.',
-          errorCode: 'NETWORK_ERROR'
-        });
-        
-        // Show toast for network error
-        toast.error(
-          <div>
-            <strong>Network Error</strong>
-            <p>Cannot connect to server.</p>
-            <p>Please check your internet connection.</p>
-          </div>,
-          { duration: 6000 }
-        );
+      // Check for specific error conditions
+      if (error.message === 'Failed to fetch') {
+        // Network error
+        toast.error('Network error. Please check your connection and try again.');
+      } else if (error.status === 401) {
+        // Authentication error
+        toast.error('Authentication error. Please log in again.');
+      } else if (error.status === 403) {
+        // Permission error
+        toast.error('Permission denied. You do not have access to this resource.');
       }
       
-      // For development environment, create mock successful responses
-      if (process.env.NODE_ENV === 'development') {
-        console.warn(`Generating mock response for ${method} ${finalUrl}`);
-        
-        // Generate appropriate mock responses based on the request
-        if (finalUrl.includes('/api/agents') && method === 'GET') {
-          return { agents: generateMockAgents() };
-        } else if (finalUrl.includes('/price') && method === 'GET') {
-          const agentId = finalUrl.split('/')[4]; // Extract agent ID from URL
-          return {
-            id: `price-${agentId}`,
-            basePrice: 99.99,
-            discount: 0,
-            finalPrice: 99.99,
-            currency: 'USD',
-            agentId
-          };
-        } else if (method === 'DELETE') {
-          return { success: true, message: 'Agent deleted successfully (mock)' };
-        } else if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
-          return { 
-            ...data, 
-            id: data.id || `mock-agent-${Date.now()}`,
-            updatedAt: new Date().toISOString(),
-            message: 'Operation completed successfully (mock)'
-          };
-        }
-        
-        // Generic mock response
-        return { success: true, mockData: true };
+      // Generate a mock response for development purposes
+      if (process.env.NODE_ENV === 'development' && url.includes('/price')) {
+        console.log(` Generating mock response for ${method} ${url}`);
+        return generateMockPriceData();
       }
       
+      // Re-throw the error for the caller to handle
       throw error;
     }
+  };
+  
+  /**
+   * Normalize price data to ensure consistent structure
+   * @param {object} priceData - Raw price data from API
+   * @returns {object} Normalized price data
+   */
+  const normalizePriceData = (priceData) => {
+    if (!priceData) return null;
+    
+    // Ensure base price is a number
+    const basePrice = typeof priceData.basePrice === 'number' 
+      ? priceData.basePrice 
+      : parseFloat(priceData.basePrice) || 0;
+    
+    // Get discounted price from various possible sources
+    let discountedPrice = basePrice;
+    if (typeof priceData.discountedPrice === 'number' || priceData.discountedPrice) {
+      discountedPrice = typeof priceData.discountedPrice === 'number'
+        ? priceData.discountedPrice
+        : parseFloat(priceData.discountedPrice) || basePrice;
+    } else if (typeof priceData.finalPrice === 'number' || priceData.finalPrice) {
+      discountedPrice = typeof priceData.finalPrice === 'number'
+        ? priceData.finalPrice
+        : parseFloat(priceData.finalPrice) || basePrice;
+    }
+    
+    // Calculate discount percentage
+    const discountPercentage = basePrice > 0 
+      ? Math.round(((basePrice - discountedPrice) / basePrice) * 100) 
+      : 0;
+    
+    return {
+      ...priceData,
+      basePrice,
+      discountedPrice,
+      finalPrice: discountedPrice, // For backwards compatibility
+      discountPercentage,
+      currency: priceData.currency || 'USD',
+      isFree: basePrice === 0 || !!priceData.isFree,
+      isSubscription: !!priceData.isSubscription
+    };
+  };
+  
+  /**
+   * Normalize agent data to ensure consistent price information
+   * @param {object} agentData - Raw agent data from API
+   * @returns {object} Normalized agent data with consistent price information
+   */
+  const normalizeAgentPriceData = (agentData) => {
+    if (!agentData) return null;
+    
+    // Clone the agent data to avoid modifying the original
+    const normalizedAgent = { ...agentData };
+    
+    // If agent has priceDetails, normalize them
+    if (normalizedAgent.priceDetails) {
+      // Use our price normalization function
+      const normalizedPrice = normalizePriceData(normalizedAgent.priceDetails);
+      
+      // Update the priceDetails object
+      normalizedAgent.priceDetails = normalizedPrice;
+      
+      // Also update direct price fields for backwards compatibility
+      normalizedAgent.basePrice = normalizedPrice.basePrice;
+      normalizedAgent.discountedPrice = normalizedPrice.discountedPrice;
+      normalizedAgent.price = normalizedPrice.discountedPrice; // Legacy field
+      normalizedAgent.isFree = normalizedPrice.isFree;
+      normalizedAgent.isSubscription = normalizedPrice.isSubscription;
+      normalizedAgent.discountPercentage = normalizedPrice.discountPercentage;
+    } else {
+      // If no priceDetails, create them from direct price fields
+      const priceData = {
+        basePrice: normalizedAgent.basePrice || 0,
+        discountedPrice: normalizedAgent.discountedPrice || normalizedAgent.price || 0,
+        currency: normalizedAgent.currency || 'USD',
+        isFree: normalizedAgent.isFree || normalizedAgent.basePrice === 0 || normalizedAgent.price === 0,
+        isSubscription: normalizedAgent.isSubscription || false
+      };
+      
+      // Normalize the collected price data
+      const normalizedPrice = normalizePriceData(priceData);
+      
+      // Add priceDetails object
+      normalizedAgent.priceDetails = normalizedPrice;
+      
+      // Update direct price fields for consistency
+      normalizedAgent.basePrice = normalizedPrice.basePrice;
+      normalizedAgent.discountedPrice = normalizedPrice.discountedPrice;
+      normalizedAgent.price = normalizedPrice.discountedPrice; // Legacy field
+      normalizedAgent.isFree = normalizedPrice.isFree;
+      normalizedAgent.isSubscription = normalizedPrice.isSubscription;
+      normalizedAgent.discountPercentage = normalizedPrice.discountPercentage;
+    }
+    
+    return normalizedAgent;
+  };
+  
+  /**
+   * Generate mock price data for development
+   * @returns {object} Mock price data
+   */
+  const generateMockPriceData = () => {
+    return {
+      basePrice: 29.99,
+      discountedPrice: 19.99,
+      finalPrice: 19.99,
+      discountPercentage: 33,
+      currency: 'USD',
+      isFree: false,
+      isSubscription: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
   };
   
   // Fetch agents on component mount
@@ -716,15 +770,32 @@ const ManageAgents = () => {
         
         try {
           // Use a single API call to update both agent and price
-          savedAgent = await apiRequest(
+          const response = await apiRequest(
             `http://localhost:4000/api/agent/${apiAgentId}/combined-update`, 
             'POST',
             combinedUpdateData
           );
           
-          // If the combined endpoint doesn't exist yet, fall back to separate calls
-          if (!savedAgent || savedAgent.error === 'Endpoint not found') {
-            console.log('Combined update endpoint not available, falling back to separate calls');
+          // Check if the combined update succeeded
+          if (response && (response.success || response.status === 204)) {
+            console.log('Combined update successful:', response);
+            
+            // Use the data field from the response if available
+            if (response.data) {
+              savedAgent = response.data;
+            } else {
+              // If no data in response (e.g., for 204 responses), fetch the agent again
+              console.log('No data in response, fetching updated agent data');
+              savedAgent = await getAgentWithCache(sanitizedAgentId, true, true);
+            }
+            
+            // Display success message
+            toast.success(response.message || 'Agent updated successfully');
+          } else {
+            console.log('Combined update failed or returned error:', 
+              response?.error || response?.message || 'No valid response');
+            
+            // Fall back to separate calls
             console.log('Using separate calls for agent and price update');
             
             // Update agent data
@@ -738,9 +809,10 @@ const ManageAgents = () => {
             if (basePrice !== undefined || discountedPrice !== undefined || 
                 isFree !== undefined || isSubscription !== undefined) {
               
-              // Update price data with a single call
+              // Important: Use the same API ID format as in the combined update call
+              // to prevent duplicate calls to different endpoints
               const priceResponse = await apiRequest(
-                `http://localhost:4000/api/agent/${sanitizedAgentId}/price`,
+                `http://localhost:4000/api/agent/${apiAgentId}/price`,
                 'PUT',
                 pricePayload
               );
@@ -775,8 +847,9 @@ const ManageAgents = () => {
             if (basePrice !== undefined || discountedPrice !== undefined || 
                 isFree !== undefined || isSubscription !== undefined) {
               
+              // Use the same API ID format consistently
               const priceResponse = await apiRequest(
-                `http://localhost:4000/api/agent/${sanitizedAgentId}/price`,
+                `http://localhost:4000/api/agent/${apiAgentId}/price`,
                 'PUT',
                 pricePayload
               );
@@ -920,10 +993,10 @@ const ManageAgents = () => {
       toast.success(`Agent ${selectedAgent ? 'updated' : 'created'} successfully!`);
       
       return savedAgent;
-    } catch (err) {
-      console.error('Error saving agent:', err);
-      toast.error(`Error ${selectedAgent ? 'updating' : 'creating'} agent: ${err.message}`);
-      throw err;
+    } catch (error) {
+      console.error('Error saving agent:', error);
+      toast.error(`Error ${selectedAgent ? 'updating' : 'creating'} agent: ${error.message}`);
+      throw error;
     }
   };
   
@@ -1006,6 +1079,49 @@ const ManageAgents = () => {
     }
     
     return 'N/A';
+  };
+  
+  // Add a function to run the price data migration
+  const runPriceMigration = async () => {
+    try {
+      // Show confirmation toast
+      toast.loading('Starting price data migration. This may take a while...', { id: 'migration' });
+      
+      // Call the migration API endpoint
+      const result = await apiRequest(
+        'http://localhost:4000/api/agent-prices/migrate',
+        'POST'
+      );
+      
+      // Show success toast with results
+      toast.success(
+        <div>
+          <strong>Price Migration Completed</strong>
+          <p>Total agents: {result.totalAgents}</p>
+          <p>Updated: {result.updated}</p>
+          <p>Errors: {result.errors?.length || 0}</p>
+        </div>,
+        { duration: 5000, id: 'migration' }
+      );
+      
+      // If there were errors, show them in the console
+      if (result.errors?.length > 0) {
+        console.warn('Migration completed with errors:', result.errors);
+      }
+      
+      // Refresh agent data after migration
+      fetchAgents();
+      
+    } catch (error) {
+      console.error('Error running price migration:', error);
+      toast.error(
+        <div>
+          <strong>Migration Failed</strong>
+          <p>{error.message || 'An unknown error occurred'}</p>
+        </div>,
+        { duration: 5000, id: 'migration' }
+      );
+    }
   };
   
   return (
@@ -1091,6 +1207,9 @@ const ManageAgents = () => {
               disabled={authStatus.networkError}
             >
               <FaPlus /> Create New Agent
+            </button>
+            <button className="btn btn-secondary" onClick={runPriceMigration}>
+              <FaSort /> Normalize Price Data
             </button>
           </div>
         </header>
