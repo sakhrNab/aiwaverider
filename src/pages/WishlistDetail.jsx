@@ -16,7 +16,7 @@ const WishlistDetail = () => {
         creator: {
           id: 'creator-1',
           name: 'zil',
-          avatar: 'https://via.placeholder.com/50x50?text=zil'
+          avatar: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50"%3E%3Ccircle cx="25" cy="25" r="25" fill="%23e0e0e0"/%3E%3Ctext x="25" y="30" font-family="Arial" font-size="20" text-anchor="middle" fill="%23999"%3Ez%3C/text%3E%3C/svg%3E'
         },
         products: 563,
         followers: 16,
@@ -25,11 +25,11 @@ const WishlistDetail = () => {
           id: `item-${i}`,
           title: `Item ${i + 1}`,
           price: i % 3 === 0 ? 'Free' : `$${(Math.random() * 50).toFixed(2)}`,
-          image: `https://via.placeholder.com/300x300?text=Item+${i+1}`,
+          image: `data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"%3E%3Crect width="300" height="300" fill="%23f0f0f0"/%3E%3Ctext x="150" y="150" font-family="Arial" font-size="24" text-anchor="middle" fill="%23999"%3EItem ${i+1}%3C/text%3E%3C/svg%3E`,
           creator: {
             id: `creator-${i}`,
             name: `Creator ${i + 1}`,
-            avatar: `https://via.placeholder.com/50x50?text=C${i+1}`
+            avatar: `data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50"%3E%3Ccircle cx="25" cy="25" r="25" fill="%23e0e0e0"/%3E%3Ctext x="25" y="30" font-family="Arial" font-size="20" text-anchor="middle" fill="%23999"%3EC${i+1}%3C/text%3E%3C/svg%3E`
           },
           rating: {
             average: (3 + Math.random() * 2).toFixed(1),

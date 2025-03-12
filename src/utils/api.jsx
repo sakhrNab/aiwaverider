@@ -1641,10 +1641,10 @@ export const removeFromWishlist = async (agentId) => {
  */
 export const checkApiStatus = async () => {
   try {
-    console.log(`Checking API status at ${API_URL}/api/status`);
+    console.log(`Checking API status at ${API_URL}/api/health`);
     
     // Make a simple GET request to the status endpoint
-    const response = await fetch(`${API_URL}/api/status`, {
+    const response = await fetch(`${API_URL}/api/health`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'

@@ -97,12 +97,9 @@ const ManageAgents = () => {
       // Sanitize agent ID for consistent cache keys
       const sanitizedAgentId = typeof agentId === 'string' ? agentId.trim() : String(agentId);
       
-      // Prepare agent ID for API - important to do this correctly to avoid 404s
-      const apiAgentId = prepareAgentIdForApi(sanitizedAgentId);
-      if (!apiAgentId) {
-        console.error('Failed to prepare valid API agent ID');
-        return null;
-      }
+      // Check if this is a mock agent ID (has agent- prefix)
+      // If so, we can skip the API call entirely
+      const isMockAgent = sanitizedAgentId.toString().startsWith('agent-');
       
       // Check if we have a valid cached version (use shorter TTL when in edit mode)
       const cachedAgent = agentCache[sanitizedAgentId];
@@ -113,7 +110,46 @@ const ManageAgents = () => {
         return cachedAgent.data;
       }
       
-      // No valid cache, fetch from server
+      // If this is a mock agent, we know the backend doesn't have it
+      // So we'll create a mock agent without making an API call
+      if (isMockAgent) {
+        console.log(`Creating/refreshing mock data for agent ${sanitizedAgentId}`);
+        // Create a mock agent with basic properties
+        const mockAgent = {
+          id: sanitizedAgentId,
+          error: 'Endpoint not found',
+          message: 'This API endpoint is not yet available. Try implementing it on the backend.',
+          name: `Test Agent ${sanitizedAgentId}`,
+          description: 'This is a mock agent for testing',
+          priceDetails: {
+            basePrice: 9.99,
+            discountedPrice: 7.99,
+            currency: 'USD'
+          },
+          isFree: false,
+          isSubscription: false
+        };
+        
+        // Store the mock data in cache
+        setAgentCache(prev => ({
+          ...prev,
+          [sanitizedAgentId]: {
+            data: mockAgent,
+            timestamp: Date.now()
+          }
+        }));
+        
+        return mockAgent;
+      }
+      
+      // Prepare agent ID for API - important to do this correctly to avoid 404s
+      const apiAgentId = prepareAgentIdForApi(sanitizedAgentId);
+      if (!apiAgentId) {
+        console.error('Failed to prepare valid API agent ID');
+        return null;
+      }
+      
+      // No valid cache and not a mock agent, fetch from server
       console.log(`Fetching fresh data for agent ${sanitizedAgentId}, API ID: ${apiAgentId}`);
       try {
         // Important: Use the prepared API ID for the request
@@ -662,6 +698,9 @@ const ManageAgents = () => {
       // Sanitize the agent ID to prevent issues
       const sanitizedAgentId = typeof agent.id === 'string' ? agent.id.trim() : String(agent.id);
       
+      // Determine if this is a mock agent 
+      const isMockAgent = sanitizedAgentId.toString().startsWith('agent-');
+      
       // Create a sanitized agent object with the correct ID for the form
       const sanitizedAgent = {
         ...agent,
@@ -678,6 +717,12 @@ const ManageAgents = () => {
         setSelectedAgent(cachedAgent.data);
         setShowAgentForm(true);
         
+        // For mock agents, skip the refresh entirely
+        if (isMockAgent) {
+          console.log('Skipping background refresh for mock agent:', sanitizedAgentId);
+          return;
+        }
+        
         // Only fetch fresh data in the background if cache is older than 10 seconds
         const cacheAge = Date.now() - cachedAgent.timestamp;
         if (cacheAge > 10000) { // 10 seconds
@@ -690,8 +735,11 @@ const ManageAgents = () => {
         setSelectedAgent(sanitizedAgent);
         setShowAgentForm(true);
         
-        // Then load fresh data
-        refreshAgentInBackground(sanitizedAgentId);
+        // Skip refresh for mock agents
+        if (!isMockAgent) {
+          // Then load fresh data
+          refreshAgentInBackground(sanitizedAgentId);
+        }
       }
     } catch (error) {
       console.error('Error in handleEditClick:', error);
@@ -705,6 +753,22 @@ const ManageAgents = () => {
       if (!agentId) {
         console.error('refreshAgentInBackground: missing agentId parameter');
         return;
+      }
+      
+      // Check if this is a mock agent (has the agent- prefix)
+      // If so, there's no need to make API calls since we know the backend doesn't have it
+      const isMockAgent = agentId.toString().startsWith('agent-');
+      
+      if (isMockAgent) {
+        console.log(`Agent ${agentId} is a mock agent, skipping backend refresh`);
+        
+        // Get the agent from cache directly
+        const cachedAgent = agentCache[agentId];
+        if (cachedAgent && cachedAgent.data) {
+          console.log('Using cached mock agent data:', cachedAgent.data);
+          setSelectedAgent(cachedAgent.data);
+          return;
+        }
       }
       
       console.log(`Refreshing agent data in background for ID: ${agentId}`);
@@ -1297,7 +1361,7 @@ const ManageAgents = () => {
                         <td className="agent-name-cell">
                           <div className="agent-info">
                             <img 
-                              src={agent.iconUrl || "https://via.placeholder.com/40?text=AI"} 
+                              src={agent.iconUrl || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%234a4de7'/%3E%3Ctext x='20' y='24' font-family='Arial' font-size='14' text-anchor='middle' fill='white'%3EAI%3C/text%3E%3C/svg%3E"}
                               alt={agent.name}
                               className="agent-icon"
                               onError={(e) => {

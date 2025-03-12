@@ -415,4 +415,22 @@ input[type="file"] {
 input[type="file"]:hover {
   background-color: #f0f7ff;
   border-color: #1890ff;
+}
+
+/* Add this to your existing CSS */
+.mock-agent-notice {
+  background-color: #f8f9fa;
+  border-left: 4px solid #17a2b8;
+  padding: 10px 15px;
+  margin-bottom: 15px;
+  font-size: 14px;
+  color: #495057;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+}
+
+.mock-agent-notice svg {
+  margin-right: 8px;
+  color: #17a2b8;
 } 
