@@ -55,23 +55,14 @@ const WishlistCard = ({ wishlist }) => {
 };
 
 const WishlistSection = ({ wishlists, isLoading }) => {
-  const [isMockData, setIsMockData] = useState(false);
-  
-  useEffect(() => {
-    // Check if the data is likely mock data
-    if (wishlists && wishlists.length > 0) {
-      // Mock data typically has these patterns
-      const hasMockPatterns = wishlists.some(wishlist => 
-        wishlist.id && wishlist.id.startsWith('wishlist-') || 
-        (wishlist.creator && wishlist.creator.avatar && wishlist.creator.avatar.includes('picsum.photos')) ||
-        (wishlist.items && Array.isArray(wishlist.items) && wishlist.items.some(item => item && item.imageUrl && item.imageUrl.includes('picsum.photos')))
-      );
-      setIsMockData(hasMockPatterns);
-    }
-  }, [wishlists]);
-
   if (isLoading) {
-    return <div>Loading wishlists...</div>;
+    return (
+      <div className="wishlists-section">
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+        </div>
+      </div>
+    );
   }
 
   if (!wishlists || wishlists.length === 0) {
@@ -82,13 +73,6 @@ const WishlistSection = ({ wishlists, isLoading }) => {
     <div className="wishlists-section">
       <h2 className="wishlists-title">Wishlists you might like</h2>
       <p className="wishlists-subtitle">Based on your interests and activity</p>
-      
-      {isMockData && (
-        <div className="mock-data-warning">
-          <FaExclamationTriangle className="warning-icon" />
-          <span>Showing mock data - not fetched from database</span>
-        </div>
-      )}
       
       <div className="wishlists-grid">
         {wishlists.map(wishlist => (

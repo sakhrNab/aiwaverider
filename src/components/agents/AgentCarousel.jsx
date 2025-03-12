@@ -165,22 +165,6 @@ const RecommendationCard = ({ agent }) => {
 };
 
 const AgentCarousel = ({ title, agents = [] }) => {
-  const [isMockData, setIsMockData] = useState(false);
-  
-  useEffect(() => {
-    // Check if the data is likely mock data
-    if (agents && agents.length > 0) {
-      // Mock data typically has these patterns
-      const hasMockPatterns = agents.some(agent => 
-        (agent.id && agent.id.startsWith('mock-')) || 
-        (agent.title && agent.title.includes('Agent')) ||
-        (agent.imageUrl && agent.imageUrl.includes('picsum.photos')) ||
-        (agent.creator && agent.creator.name && agent.creator.name.includes('Creator'))
-      );
-      setIsMockData(hasMockPatterns);
-    }
-  }, [agents]);
-  
   console.log('AgentCarousel props:', { title, agentsCount: agents?.length || 0 });
   
   // If no agents are provided, show a loading message
@@ -190,7 +174,7 @@ const AgentCarousel = ({ title, agents = [] }) => {
       <div className="agent-recommendations">
         <h2 className="recommendations-title">{title}</h2>
         <div className="recommendations-carousel" style={{ padding: '20px', textAlign: 'center' }}>
-          <p>Loading recommendations...</p>
+          <p>No recommendations available at this time.</p>
         </div>
       </div>
     );
@@ -235,13 +219,6 @@ const AgentCarousel = ({ title, agents = [] }) => {
   return (
     <div className="agent-recommendations">
       <h2 className="recommendations-title">{title}</h2>
-      
-      {isMockData && (
-        <div className="mock-data-warning">
-          <FaExclamationTriangle className="warning-icon" />
-          <span>Showing mock data - not fetched from database</span>
-        </div>
-      )}
       
       <div className="recommendations-carousel">
         <Slider {...settings}>

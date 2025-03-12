@@ -8,6 +8,24 @@ const publicCacheMiddleware = require('../middleware/publicCacheMiddleware');
 // Public endpoints (cached)
 router.get('/', publicCacheMiddleware({ duration: 300 }), agentsController.getAgents);
 router.get('/featured', publicCacheMiddleware({ duration: 900 }), agentsController.getFeaturedAgents);
+
+// Add a specific route for Firebase document IDs
+router.get('/doc/:docId', publicCacheMiddleware({ duration: 600 }), (req, res) => {
+  // Set the agentId parameter to the docId and forward to the getAgentById controller
+  req.params.id = req.params.docId;
+  return agentsController.getAgentById(req, res);
+});
+
+// Add a specific route for the 'agent-XX' format IDs
+router.get('/agent-:numericId([0-9]+)', publicCacheMiddleware({ duration: 600 }), (req, res) => {
+  // Set the agentId parameter and forward to the getAgentById controller
+  // This captures 'agent-41' format directly using route parameter
+  const agentId = `agent-${req.params.numericId}`;
+  console.log(`Special route captured agent-XX format: ${agentId}`);
+  req.params.id = agentId;
+  return agentsController.getAgentById(req, res);
+});
+
 router.get('/:agentId', publicCacheMiddleware({ duration: 600 }), agentsController.getAgentById);
 
 // Protected endpoints (require authentication)

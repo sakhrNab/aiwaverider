@@ -1191,193 +1191,67 @@ export const fetchAgents = async (
     if (features && features.length > 0) params.append('features', features.join(','));
     if (search) params.append('search', search);
     
-    console.log(`Attempting to fetch agents from API with params: ${params.toString()}`);
+    console.log(`Fetching agents from API with params: ${params.toString()}`);
     
-    // Try to fetch from backend API first
-    try {
-      // Use the axios instance with proper credentials handling
-      const response = await api.get(`/api/agents?${params.toString()}`);
-      console.log('Successfully fetched agents from API:', response.data.agents.length);
-      return response.data.agents;
-    } catch (error) {
-      console.warn('Backend API fetch for agents failed, falling back to mock data:', error);
-      // Make it very clear in the console that we're using mock data
-      console.warn('%c ⚠️ USING MOCK AGENTS DATA - NOT REAL DATA ⚠️', 'background: #FFF3CD; color: #856404; font-size: 14px; font-weight: bold; padding: 5px;');
+    // Fetch from backend API
+    const response = await api.get(`/api/agents?${params.toString()}`);
+    console.log('Successfully fetched agents from API:', response.data.agents.length);
+    
+    // Validate agents to ensure they exist and have valid IDs
+    // This removes any potentially corrupted data that could cause errors
+    const validAgents = response.data.agents.filter(agent => {
+      return agent && agent.id && typeof agent.id === 'string';
+    });
+    
+    if (validAgents.length !== response.data.agents.length) {
+      console.warn(`Filtered out ${response.data.agents.length - validAgents.length} invalid agents from results`);
     }
     
-    // If the API request failed, fall back to mock data
-    const mockAgents = generateMockAgents(30); // Generate 30 mock agents
-    
-    // Apply client-side filtering for mock data
-    let filteredAgents = [...mockAgents];
-    
-    // Apply all filters
-    
-    // Special filter types: Hot & Now, Free, Newest, Top Rated
-    if (filter === 'Free') {
-      filteredAgents = filteredAgents.filter(agent => {
-        // Check if isFree property exists
-        if (agent.isFree !== undefined) {
-          return agent.isFree;
-        }
-        // Otherwise check price
-        if (typeof agent.price === 'number') {
-          return agent.price === 0;
-        }
-        if (typeof agent.price === 'string') {
-          const lowerPrice = agent.price.toLowerCase();
-          return lowerPrice === 'free' || lowerPrice === '$0' || lowerPrice === '0';
-        }
-        return false;
-      });
-    }
-    
-    // Category filter
-    if (category && category !== 'All') {
-      filteredAgents = filteredAgents.filter(agent => agent.category === category);
-    }
-    
-    // Price filter
-    if (priceRange) {
-      filteredAgents = filteredAgents.filter(agent => {
-        let price = agent.price;
-        if (typeof price === 'string') {
-          const numericPrice = parseFloat(price.replace(/[^0-9.]/g, ''));
-          if (!isNaN(numericPrice)) {
-            price = numericPrice;
-          }
-        }
-        return price >= priceRange.min && price <= priceRange.max;
-      });
-    }
-    
-    // Rating filter
-    if (rating > 0) {
-      filteredAgents = filteredAgents.filter(agent => {
-        const agentRating = agent.rating?.average ? parseFloat(agent.rating.average) : 0;
-        return agentRating >= rating;
-      });
-    }
-    
-    // Tags filter
-    if (tags && tags.length > 0) {
-      filteredAgents = filteredAgents.filter(agent => {
-        if (!agent.tags) return false;
-        return tags.some(tag => agent.tags.includes(tag));
-      });
-    }
-    
-    // Features filter
-    if (features && features.length > 0) {
-      filteredAgents = filteredAgents.filter(agent => {
-        // Handle special features like 'Free' and 'Subscription'
-        if (features.includes('Free') && (agent.price === 0 || agent.price === 'Free' || agent.price === '$0')) {
-          return true;
-        }
-        if (features.includes('Subscription') && typeof agent.price === 'string' && agent.price.includes('/month')) {
-          return true;
-        }
-        
-        // Regular features
-        if (!agent.features) return false;
-        return features.some(feature => agent.features.includes(feature));
-      });
-    }
-    
-    // Search filter
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filteredAgents = filteredAgents.filter(agent => {
-        return (
-          (agent.name && agent.name.toLowerCase().includes(searchLower)) ||
-          (agent.description && agent.description.toLowerCase().includes(searchLower)) ||
-          (agent.category && agent.category.toLowerCase().includes(searchLower))
-        );
-      });
-    }
-    
-    // Apply sort based on filter
-    if (filter === 'Hot & Now') {
-      filteredAgents.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-    } else if (filter === 'Top Rated') {
-      filteredAgents.sort((a, b) => {
-        const ratingA = a.rating?.average ? parseFloat(a.rating.average) : 0;
-        const ratingB = b.rating?.average ? parseFloat(b.rating.average) : 0;
-        return ratingB - ratingA;
-      });
-    } else if (filter === 'Newest') {
-      filteredAgents.sort((a, b) => {
-        // Use dateCreated if available, otherwise fallback to createdAt
-        const dateA = a.dateCreated ? new Date(a.dateCreated) : 
-                     (a.createdAt ? new Date(a.createdAt) : new Date(0));
-        const dateB = b.dateCreated ? new Date(b.dateCreated) : 
-                     (b.createdAt ? new Date(b.createdAt) : new Date(0));
-        return dateB - dateA;
-      });
-    }
-    
-    // Apply pagination
-    const startIndex = (page - 1) * limit;
-    const paginatedAgents = filteredAgents.slice(startIndex, startIndex + limit);
-    
-    return paginatedAgents;
+    return validAgents;
   } catch (error) {
-    console.error('Error fetching agents:', error);
+    console.error('Error fetching agents from API:', error);
+    // Return empty array on error
     return [];
   }
 };
 
 /**
- * Fetch featured agents from the API or fallback to mock data
+ * Fetch featured agents from the API
  */
 export const fetchFeaturedAgents = async (limit = 8) => {
   try {
-    // Try to fetch from backend API first
-    console.log(`Attempting to fetch featured agents from API with limit: ${limit}`);
-    try {
-      // Use the axios instance with proper credentials handling
-      const response = await api.get(`/api/agents/featured?limit=${limit}`);
-      console.log('Successfully fetched featured agents from API:', response.data.agents.length);
-      return response.data.agents;
-    } catch (error) {
-      console.warn('Backend featured agents fetch failed, falling back to mock data:', error);
-      // Make it very clear in the console that we're using mock data
-      console.warn('%c ⚠️ USING MOCK FEATURED AGENTS DATA - NOT REAL DATA ⚠️', 'background: #FFF3CD; color: #856404; font-size: 14px; font-weight: bold; padding: 5px;');
+    console.log(`Fetching featured agents from API with limit: ${limit}`);
+    const response = await api.get(`/api/agents/featured?limit=${limit}`);
+    console.log('Successfully fetched featured agents from API:', response.data.agents.length);
+    
+    // Validate agents to ensure they exist and have valid IDs
+    const validAgents = response.data.agents.filter(agent => {
+      return agent && agent.id && typeof agent.id === 'string';
+    });
+    
+    if (validAgents.length !== response.data.agents.length) {
+      console.warn(`Filtered out ${response.data.agents.length - validAgents.length} invalid featured agents`);
     }
     
-    // If the API request failed, fall back to mock data
-    const mockAgents = generateMockAgents(20);
-    
-    // Select bestsellers and new agents
-    const bestsellers = mockAgents.filter(agent => agent.isBestseller).slice(0, Math.floor(limit / 2));
-    const newAgents = mockAgents.filter(agent => agent.isNew && !agent.isBestseller).slice(0, limit - bestsellers.length);
-    
-    return [...bestsellers, ...newAgents];
+    return validAgents;
   } catch (error) {
-    console.error('Error fetching featured agents:', error);
+    console.error('Error fetching featured agents from API:', error);
+    // Return empty array on error
     return [];
   }
 };
 
 export const fetchWishlists = async () => {
   try {
-    // Always attempt to fetch from the API first, even in development
-    try {
-      console.log('Attempting to fetch wishlists from API');
-      const response = await api.get('/api/wishlists');
-      console.log('Successfully fetched wishlists from API:', response.data);
-      return response.data;
-    } catch (error) {
-      console.warn(`API fetch for wishlists failed, falling back to mock data: ${error.message}`);
-      // Make it very clear in the console that we're using mock data
-      console.warn('%c ⚠️ USING MOCK WISHLISTS DATA - NOT REAL DATA ⚠️', 'background: #FFF3CD; color: #856404; font-size: 14px; font-weight: bold; padding: 5px;');
-    }
-    
-    // Fallback to mock data if API fails
-    return generateMockWishlists();
+    // Always attempt to fetch from the API
+    console.log('Attempting to fetch wishlists from API');
+    const response = await api.get('/api/wishlists');
+    console.log('Successfully fetched wishlists from API:', response.data);
+    return response.data;
   } catch (error) {
     console.error('Error fetching wishlists:', error);
-    throw new Error(`Error fetching wishlists: ${error.message}`);
+    // Return empty array instead of falling back to mock data
+    return [];
   }
 };
 
@@ -1682,6 +1556,83 @@ export const checkApiStatus = async () => {
       status: 0,
       message: `API is unreachable: ${error.message}`
     };
+  }
+};
+
+/**
+ * Fetch a single agent by ID from the backend API
+ * @param {string} agentId - The ID of the agent to fetch
+ * @returns {Promise<Object>} - Agent data
+ */
+export const fetchAgentById = async (agentId) => {
+  try {
+    console.log(`Attempting to fetch agent with ID: ${agentId}`);
+    
+    // Validate agent ID format
+    if (!agentId || typeof agentId !== 'string') {
+      console.error('Invalid agent ID format:', agentId);
+      throw new Error('Invalid agent ID format');
+    }
+    
+    // Special handling for different ID formats
+    
+    // 1. Detect Firebase-style document IDs (typically 20+ chars, alphanumeric)
+    const isFirebaseId = /^[a-zA-Z0-9]{20,}$/.test(agentId);
+    
+    // 2. Detect standard agent-XX format
+    const isStandardAgentId = /^agent-\d+$/.test(agentId);
+    
+    // Default endpoint uses the ID directly
+    let endpoint = `/api/agents/${agentId}`;
+    
+    if (isFirebaseId) {
+      console.log('Detected Firebase-style document ID, using doc endpoint');
+      endpoint = `/api/agents/doc/${agentId}`;
+    } else if (isStandardAgentId) {
+      console.log('Detected standard agent-XX format ID, using specific route');
+      // For agent-XX format, just use it directly
+      // The backend has a special route to handle this format
+      // No need to modify the endpoint
+    }
+    
+    try {
+      // Make the API request
+      console.log(`Making request to: ${endpoint}`);
+      const response = await api.get(endpoint);
+      console.log('Successfully fetched agent from API');
+      
+      if (response.data && response.data.data) {
+        // Format and return the agent data
+        return {
+          ...response.data.data,
+          // Ensure the rating is formatted correctly
+          rating: {
+            average: response.data.data.averageRating || 0,
+            count: response.data.data.reviewCount || 0
+          }
+        };
+      } else if (response.data) {
+        // Some APIs might return the data directly
+        return response.data;
+      }
+      
+      throw new Error('Invalid response structure from API');
+    } catch (apiError) {
+      // Handle specific error cases
+      if (apiError.response && apiError.response.status === 400) {
+        console.error(`API returned 400 Bad Request for agent ID: ${agentId}`);
+        console.error('Error response:', apiError.response.data);
+        throw new Error(`Agent with ID "${agentId}" not found. It may have been removed or doesn't exist.`);
+      }
+      
+      // Re-throw other errors
+      throw apiError;
+    }
+  } catch (error) {
+    console.error('Error fetching agent from API:', error);
+    
+    // Throw the error to be handled by the component
+    throw error;
   }
 };
 

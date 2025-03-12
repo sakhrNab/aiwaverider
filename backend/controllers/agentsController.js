@@ -248,26 +248,71 @@ const getFeaturedAgents = async (req, res) => {
  */
 const getAgentById = async (req, res) => {
   try {
-    // Get agentId and sanitize it to ensure it's a valid document path
-    const agentId = req.params.id;
+    // Get agentId from either params.id or params.agentId
+    const agentId = req.params.id || req.params.agentId;
     
     // Log the request details for debugging
     console.log(`Attempting to get agent with ID: "${agentId}"`);
     
-    // Validate the ID format
-    if (!agentId || typeof agentId !== 'string' || agentId.includes('/')) {
+    // Basic validation - only check if it exists and is a string
+    if (!agentId || typeof agentId !== 'string') {
       console.error('Invalid agent ID format:', agentId);
       return res.status(400).json({ 
         success: false,
         message: 'Invalid agent ID format',
-        error: 'Agent ID must be a valid string without path separators' 
+        error: 'Agent ID must be a valid string' 
       });
     }
     
-    // Fetch the agent document
-    const agentDoc = await db.collection('agents').doc(agentId).get();
+    // Clean the agent ID - accept more formats
+    let cleanAgentId = agentId.trim();
+    
+    // Only check for actual path separators (/ or \), NOT hyphens
+    // Hyphens are valid in IDs like "agent-41"
+    if (cleanAgentId.includes('/') || cleanAgentId.includes('\\')) {
+      console.log(`Agent ID contains actual path separators, extracting ID portion`);
+      const parts = cleanAgentId.split(/[/\\]/);
+      cleanAgentId = parts[parts.length - 1];
+      console.log(`Extracted ID from path: ${cleanAgentId}`);
+      
+      // Check again for path separators after extraction to prevent directory traversal
+      if (cleanAgentId.includes('/') || cleanAgentId.includes('\\')) {
+        console.error('Agent ID still contains path separators after cleaning:', cleanAgentId);
+        return res.status(400).json({ 
+          success: false,
+          message: 'Invalid agent ID format',
+          error: 'Agent ID must be a valid string without path separators' 
+        });
+      }
+    }
+    
+    // For standard "agent-X" format, we have two options:
+    // 1. Use the ID as is (agent-41)
+    // 2. Strip the prefix and use just the number (41)
+    
+    let originalId = cleanAgentId; // Save original ID before any transformations
+    
+    // Check if it's prefixed with 'agent-' and strip it if needed
+    if (cleanAgentId.startsWith('agent-')) {
+      const numericPart = cleanAgentId.substring(6);
+      // Only use the numeric part if it looks valid
+      if (/^\d+$/.test(numericPart)) {
+        cleanAgentId = numericPart;
+        console.log(`Stripped 'agent-' prefix, using numeric ID: ${cleanAgentId}`);
+      }
+    }
+    
+    // Fetch the agent document - first try with cleaned ID
+    let agentDoc = await db.collection('agents').doc(cleanAgentId).get();
+    
+    // If not found and we modified the ID, try with the original format
+    if (!agentDoc.exists && cleanAgentId !== originalId) {
+      console.log(`Agent not found with cleaned ID: ${cleanAgentId}, trying original ID: ${originalId}`);
+      agentDoc = await db.collection('agents').doc(originalId).get();
+    }
     
     if (!agentDoc.exists) {
+      console.error(`Agent not found with either ID format: ${cleanAgentId} or ${originalId}`);
       return res.status(404).json({ 
         success: false,
         message: 'Agent not found',
@@ -283,7 +328,7 @@ const getAgentById = async (req, res) => {
     
     // Fetch reviews related to this agent
     const reviewsSnapshot = await db.collection('reviews')
-      .where('agentId', '==', agentId)
+      .where('agentId', '==', cleanAgentId)
       .orderBy('createdAt', 'desc')
       .limit(5)
       .get();

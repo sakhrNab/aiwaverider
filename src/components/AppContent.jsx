@@ -12,6 +12,7 @@ import PostDetail from '../posts/PostDetail';
 import CreatePost from '../posts/CreatePost';
 import Profile from '../pages/Profile';
 import Agents from '../pages/Agents';
+import AgentDetail from '../pages/agent/AgentDetail';
 // Import admin pages
 import Dashboard from '../pages/admin/Dashboard';
 import ManageAgents from '../pages/admin/ManageAgents';
@@ -39,6 +40,7 @@ const AppContent = () => {
           <Route path="/sign-up" element={<SignUp />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/agents" element={<Agents />} />
+          <Route path="/agents/:agentId" element={<AgentDetail />} />
 
           {/* Protected: Admin only */}
           {/* Create Post route */}

@@ -221,4 +221,11 @@
   .marketplace-agent-image-container {
     padding-top: 65%; /* Slightly higher aspect ratio for mobile */
   }
+}
+
+.marketplace-agent-card-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  height: 100%;
 } 

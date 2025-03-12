@@ -127,31 +127,24 @@ const Agents = () => {
       const featuredData = await fetchFeaturedAgents(8);
       setFeaturedAgents(featuredData || []);
       
-      // Create recommended agents
+      // Create recommended agents - try to get from API
       let recommendedData = await fetchAgents('All', 'Top Rated', 1, 6);
       
-      // Ensure we always have some recommended agents
+      // Ensure we have some recommended agents, but no mocking
       if (!recommendedData || recommendedData.length === 0) {
-        console.log('No recommended agents from API, using mock or featured data');
+        console.log('No recommended agents from API');
         // Try to use featured agents if we have them
         if (featuredData && featuredData.length > 0) {
-          recommendedData = [...featuredData].sort(() => 0.5 - Math.random()).slice(0, 6);
+          console.log('Using featured agents as recommendations');
+          recommendedData = [...featuredData].sort(() => 0.5 - Math.random()).slice(0, Math.min(6, featuredData.length));
         } else if (allAgentsData && allAgentsData.length > 0) {
           // Otherwise use some random agents from allAgents
-          recommendedData = [...allAgentsData].sort(() => 0.5 - Math.random()).slice(0, 6);
+          console.log('Using random agents from all agents as recommendations');
+          recommendedData = [...allAgentsData].sort(() => 0.5 - Math.random()).slice(0, Math.min(6, allAgentsData.length));
         } else {
-          // Last resort: create completely mock data
-          console.log('Creating mock recommended agents');
-          const mockRecommendedAgents = Array(6).fill().map((_, i) => ({
-            id: `rec-agent-${i+1}`,
-            title: `Recommended Agent ${i+1}`,
-            name: `Recommended Agent ${i+1}`,
-            price: Math.random() > 0.2 ? (Math.floor(Math.random() * 100) + 5) : 0,
-            imageUrl: `https://picsum.photos/300/200?random=${i+500}`,
-            creator: { name: `Creator ${i+1}` },
-            rating: { average: (3 + Math.random() * 2).toFixed(1), count: Math.floor(Math.random() * 100) + 5 }
-          }));
-          recommendedData = mockRecommendedAgents;
+          // No agents available at all
+          console.log('No agents available for recommendations');
+          recommendedData = [];
         }
       }
       
@@ -168,6 +161,10 @@ const Agents = () => {
       setIsLoading(false);
     } catch (error) {
       console.error('Error loading initial data:', error);
+      setRecommendedAgents([]);
+      setFeaturedAgents([]);
+      setWishlists([]);
+      setAllAgents([]);
       setIsRecommendationsLoading(false);
       setIsLoading(false);
     }
