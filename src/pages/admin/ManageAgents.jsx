@@ -48,8 +48,8 @@ const ManageAgents = () => {
   const {
     posts,
     fetchAllPosts,
-    loadingPosts,
-    errorPosts,
+    loading: postsLoading,
+    error: postsError,
     removePostFromCache,
   } = useContext(PostsContext);
 
@@ -1424,8 +1424,10 @@ const ManageAgents = () => {
           await fetchAllPosts("All", 10);
         } else if (viewMode === "agents" && agents.length === 0 && !loading) {
           fetchAgents();
+        } else if (viewMode === "users") {
+          // Fetch users when users tab is selected
+          await fetchUsers();
         }
-        // For users tab, would add user fetching here
       } catch (err) {
         if (mounted) {
           setError(err.message);
@@ -1438,7 +1440,7 @@ const ManageAgents = () => {
     return () => {
       mounted = false;
     };
-  }, [viewMode, fetchAllPosts, agents.length, loading]);
+  }, [viewMode, fetchAllPosts, agents.length, loading, usersPage, userSortBy, userSortDirection]);
 
   // Create a function to deduplicate posts
   const getUniquePosts = (posts) => {
@@ -1508,6 +1510,297 @@ const ManageAgents = () => {
     const d = new Date(isoString);
     return d.toLocaleString();
   };
+
+  // Users Management
+  {viewMode === "users" && (
+    <div className="users-management-section">
+      <h2 className="section-title">Users Management</h2>
+      <div className="users-controls">
+        <div className="search-filter-row">
+          <div className="search-bar">
+            <input 
+              type="text" 
+              placeholder="Search users..." 
+              className="search-input"
+              value={userSearchQuery || ''}
+              onChange={(e) => setUserSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && fetchUsers()}
+            />
+            <button className="search-button" onClick={fetchUsers}>
+              Search
+            </button>
+          </div>
+          <div className="filter-controls">
+            <select 
+              className="filter-select"
+              value={userSortBy}
+              onChange={(e) => setUserSortBy(e.target.value)}
+            >
+              <option value="createdAt">Date Joined</option>
+              <option value="lastName">Last Name</option>
+              <option value="email">Email</option>
+              <option value="role">Role</option>
+            </select>
+            <select 
+              className="filter-select"
+              value={userSortDirection}
+              onChange={(e) => setUserSortDirection(e.target.value)}
+            >
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </div>
+        </div>
+        <button 
+          className="create-user-btn"
+          onClick={() => {
+            setSelectedUser(null);
+            setShowUserForm(true);
+          }}
+        >
+          <span className="btn-icon">+</span> Create New User
+        </button>
+      </div>
+
+      {userLoading ? (
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>Loading users...</p>
+        </div>
+      ) : userError ? (
+        <div className="error-display">
+          <p className="error-message">Error loading users: {userError}</p>
+          <button onClick={fetchUsers} className="retry-btn">Retry</button>
+        </div>
+      ) : (
+        <>
+          <div className="users-table-container">
+            <table className="users-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Joined</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.length > 0 ? (
+                  users.map(user => (
+                    <tr key={user.id} className={`user-row ${user.status === 'inactive' ? 'inactive' : ''}`}>
+                      <td className="user-name-cell">
+                        {user.photoURL ? (
+                          <img src={user.photoURL} alt={user.firstName} className="user-avatar" />
+                        ) : (
+                          <div className="user-avatar-placeholder">
+                            {(user.firstName?.[0] || '') + (user.lastName?.[0] || '')}
+                          </div>
+                        )}
+                        <div className="user-name">
+                          <span className="full-name">{`${user.firstName || ''} ${user.lastName || ''}`}</span>
+                          <span className="username">@{user.username || 'user'}</span>
+                        </div>
+                      </td>
+                      <td>{user.email}</td>
+                      <td>
+                        <span className={`role-badge ${user.role}`}>
+                          {user.role || 'user'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`status-indicator ${user.status || 'active'}`}>
+                          {user.status || 'active'}
+                        </span>
+                      </td>
+                      <td>
+                        {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
+                      </td>
+                      <td className="actions-cell">
+                        <button 
+                          className="action-btn edit-btn"
+                          onClick={() => handleEditUser(user)}
+                          title="Edit user"
+                        >
+                          Edit
+                        </button>
+                        {user.role !== 'admin' && (
+                          <button 
+                            className="action-btn delete-btn"
+                            onClick={() => handleDeleteUserClick(user)}
+                            title="Delete user"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="no-data">
+                      No users found. Try adjusting your search or create a new user.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          
+          {usersTotalPages > 1 && (
+            <div className="pagination">
+              <button 
+                className="pagination-btn" 
+                onClick={() => setUsersPage(prev => Math.max(1, prev - 1))}
+                disabled={usersPage === 1}
+              >
+                Previous
+              </button>
+              <span className="page-info">
+                Page {usersPage} of {usersTotalPages}
+              </span>
+              <button 
+                className="pagination-btn" 
+                onClick={() => setUsersPage(prev => Math.min(usersTotalPages, prev + 1))}
+                disabled={usersPage === usersTotalPages}
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* User Form Modal */}
+      {showUserForm && (
+        <div className="modal-overlay">
+          <div className="modal-content user-form-modal">
+            <h2>{selectedUser ? 'Edit User' : 'Create New User'}</h2>
+            <form onSubmit={handleUserFormSubmit}>
+              <div className="form-group">
+                <label htmlFor="username">Username</label>
+                <input 
+                  type="text"
+                  id="username"
+                  name="username"
+                  value={userForm.username || ''}
+                  onChange={handleUserFormChange}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="email">Email</label>
+                <input 
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={userForm.email || ''}
+                  onChange={handleUserFormChange}
+                  required
+                />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="firstName">First Name</label>
+                  <input 
+                    type="text"
+                    id="firstName"
+                    name="firstName"
+                    value={userForm.firstName || ''}
+                    onChange={handleUserFormChange}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="lastName">Last Name</label>
+                  <input 
+                    type="text"
+                    id="lastName"
+                    name="lastName"
+                    value={userForm.lastName || ''}
+                    onChange={handleUserFormChange}
+                  />
+                </div>
+              </div>
+              {!selectedUser && (
+                <div className="form-group">
+                  <label htmlFor="password">Password</label>
+                  <input 
+                    type="password"
+                    id="password"
+                    name="password"
+                    value={userForm.password || ''}
+                    onChange={handleUserFormChange}
+                    required={!selectedUser}
+                  />
+                </div>
+              )}
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="role">Role</label>
+                  <select
+                    id="role"
+                    name="role"
+                    value={userForm.role || 'user'}
+                    onChange={handleUserFormChange}
+                  >
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                    <option value="moderator">Moderator</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="status">Status</label>
+                  <select
+                    id="status"
+                    name="status"
+                    value={userForm.status || 'active'}
+                    onChange={handleUserFormChange}
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="suspended">Suspended</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-buttons">
+                <button type="button" className="cancel-btn" onClick={() => setShowUserForm(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="submit-btn" disabled={userFormSubmitting}>
+                  {userFormSubmitting ? 'Saving...' : (selectedUser ? 'Update User' : 'Create User')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete User Confirmation Modal */}
+      {showDeleteUserConfirm && (
+        <div className="modal-overlay">
+          <div className="modal-content delete-confirm-modal">
+            <h2>Delete User</h2>
+            <p>Are you sure you want to delete the user "{selectedUser?.username || selectedUser?.email}"?</p>
+            <p className="warning-text">This action cannot be undone.</p>
+            <div className="form-buttons">
+              <button type="button" className="cancel-btn" onClick={() => setShowDeleteUserConfirm(false)}>
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="delete-btn" 
+                onClick={handleDeleteUser}
+                disabled={deleteUserLoading}
+              >
+                {deleteUserLoading ? 'Deleting...' : 'Delete User'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )}
 
   return (
     <AdminLayout>
@@ -1600,22 +1893,22 @@ const ManageAgents = () => {
             </div>
 
             {/* Loading state */}
-            {loadingPosts && (
+            {postsLoading && (
               <div className="text-center py-8">
                 <p className="text-gray-600">Loading posts...</p>
               </div>
             )}
 
             {/* Error state */}
-            {errorPosts && (
+            {postsError && (
               <div className="text-center py-4">
-                <p className="text-red-500">{errorPosts}</p>
+                <p className="text-red-500">{postsError}</p>
               </div>
             )}
 
             {/* Posts List in 3-column grid */}
-            {!loadingPosts &&
-            !errorPosts &&
+            {!postsLoading &&
+            !postsError &&
             uniqueFilteredPosts.length === 0 ? (
               <p className="text-gray-600 text-center">
                 No posts match your filter/search.
@@ -1678,9 +1971,292 @@ const ManageAgents = () => {
 
         {/* Users Management */}
         {viewMode === "users" && (
-          <div className="text-center p-4">
-            <h2 className="text-xl font-semibold mb-2">Users List</h2>
-            <p className="text-gray-600">Placeholder for now. (No DB calls.)</p>
+          <div className="users-management-section">
+            <h2 className="section-title">Users Management</h2>
+            <div className="users-controls">
+              <div className="search-filter-row">
+                <div className="search-bar">
+                  <input 
+                    type="text" 
+                    placeholder="Search users..." 
+                    className="search-input"
+                    value={userSearchQuery || ''}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && fetchUsers()}
+                  />
+                  <button className="search-button" onClick={fetchUsers}>
+                    Search
+                  </button>
+                </div>
+                <div className="filter-controls">
+                  <select 
+                    className="filter-select"
+                    value={userSortBy}
+                    onChange={(e) => setUserSortBy(e.target.value)}
+                  >
+                    <option value="createdAt">Date Joined</option>
+                    <option value="lastName">Last Name</option>
+                    <option value="email">Email</option>
+                    <option value="role">Role</option>
+                  </select>
+                  <select 
+                    className="filter-select"
+                    value={userSortDirection}
+                    onChange={(e) => setUserSortDirection(e.target.value)}
+                  >
+                    <option value="desc">Descending</option>
+                    <option value="asc">Ascending</option>
+                  </select>
+                </div>
+              </div>
+              <button 
+                className="create-user-btn"
+                onClick={() => {
+                  setSelectedUser(null);
+                  setShowUserForm(true);
+                }}
+              >
+                <span className="btn-icon">+</span> Create New User
+              </button>
+            </div>
+
+            {userLoading ? (
+              <div className="loading-container">
+                <div className="loading-spinner"></div>
+                <p>Loading users...</p>
+              </div>
+            ) : userError ? (
+              <div className="error-display">
+                <p className="error-message">Error loading users: {userError}</p>
+                <button onClick={fetchUsers} className="retry-btn">Retry</button>
+              </div>
+            ) : (
+              <>
+                <div className="users-table-container">
+                  <table className="users-table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Joined</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.length > 0 ? (
+                        users.map(user => (
+                          <tr key={user.id} className={`user-row ${user.status === 'inactive' ? 'inactive' : ''}`}>
+                            <td className="user-name-cell">
+                              {user.photoURL ? (
+                                <img src={user.photoURL} alt={user.firstName} className="user-avatar" />
+                              ) : (
+                                <div className="user-avatar-placeholder">
+                                  {(user.firstName?.[0] || '') + (user.lastName?.[0] || '')}
+                                </div>
+                              )}
+                              <div className="user-name">
+                                <span className="full-name">{`${user.firstName || ''} ${user.lastName || ''}`}</span>
+                                <span className="username">@{user.username || 'user'}</span>
+                              </div>
+                            </td>
+                            <td>{user.email}</td>
+                            <td>
+                              <span className={`role-badge ${user.role}`}>
+                                {user.role || 'user'}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`status-indicator ${user.status || 'active'}`}>
+                                {user.status || 'active'}
+                              </span>
+                            </td>
+                            <td>
+                              {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
+                            </td>
+                            <td className="actions-cell">
+                              <button 
+                                className="action-btn edit-btn"
+                                onClick={() => handleEditUser(user)}
+                                title="Edit user"
+                              >
+                                Edit
+                              </button>
+                              {user.role !== 'admin' && (
+                                <button 
+                                  className="action-btn delete-btn"
+                                  onClick={() => handleDeleteUserClick(user)}
+                                  title="Delete user"
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="no-data">
+                            No users found. Try adjusting your search or create a new user.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {usersTotalPages > 1 && (
+                  <div className="pagination">
+                    <button 
+                      className="pagination-btn" 
+                      onClick={() => setUsersPage(prev => Math.max(1, prev - 1))}
+                      disabled={usersPage === 1}
+                    >
+                      Previous
+                    </button>
+                    <span className="page-info">
+                      Page {usersPage} of {usersTotalPages}
+                    </span>
+                    <button 
+                      className="pagination-btn" 
+                      onClick={() => setUsersPage(prev => Math.min(usersTotalPages, prev + 1))}
+                      disabled={usersPage === usersTotalPages}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* User Form Modal */}
+            {showUserForm && (
+              <div className="modal-overlay">
+                <div className="modal-content user-form-modal">
+                  <h2>{selectedUser ? 'Edit User' : 'Create New User'}</h2>
+                  <form onSubmit={handleUserFormSubmit}>
+                    <div className="form-group">
+                      <label htmlFor="username">Username</label>
+                      <input 
+                        type="text"
+                        id="username"
+                        name="username"
+                        value={userForm.username || ''}
+                        onChange={handleUserFormChange}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="email">Email</label>
+                      <input 
+                        type="email"
+                        id="email"
+                        name="email"
+                        value={userForm.email || ''}
+                        onChange={handleUserFormChange}
+                        required
+                      />
+                    </div>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label htmlFor="firstName">First Name</label>
+                        <input 
+                          type="text"
+                          id="firstName"
+                          name="firstName"
+                          value={userForm.firstName || ''}
+                          onChange={handleUserFormChange}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="lastName">Last Name</label>
+                        <input 
+                          type="text"
+                          id="lastName"
+                          name="lastName"
+                          value={userForm.lastName || ''}
+                          onChange={handleUserFormChange}
+                        />
+                      </div>
+                    </div>
+                    {!selectedUser && (
+                      <div className="form-group">
+                        <label htmlFor="password">Password</label>
+                        <input 
+                          type="password"
+                          id="password"
+                          name="password"
+                          value={userForm.password || ''}
+                          onChange={handleUserFormChange}
+                          required={!selectedUser}
+                        />
+                      </div>
+                    )}
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label htmlFor="role">Role</label>
+                        <select
+                          id="role"
+                          name="role"
+                          value={userForm.role || 'user'}
+                          onChange={handleUserFormChange}
+                        >
+                          <option value="user">User</option>
+                          <option value="admin">Admin</option>
+                          <option value="moderator">Moderator</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="status">Status</label>
+                        <select
+                          id="status"
+                          name="status"
+                          value={userForm.status || 'active'}
+                          onChange={handleUserFormChange}
+                        >
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                          <option value="suspended">Suspended</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="form-buttons">
+                      <button type="button" className="cancel-btn" onClick={() => setShowUserForm(false)}>
+                        Cancel
+                      </button>
+                      <button type="submit" className="submit-btn" disabled={userFormSubmitting}>
+                        {userFormSubmitting ? 'Saving...' : (selectedUser ? 'Update User' : 'Create User')}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Delete User Confirmation Modal */}
+            {showDeleteUserConfirm && (
+              <div className="modal-overlay">
+                <div className="modal-content delete-confirm-modal">
+                  <h2>Delete User</h2>
+                  <p>Are you sure you want to delete the user "{selectedUser?.username || selectedUser?.email}"?</p>
+                  <p className="warning-text">This action cannot be undone.</p>
+                  <div className="form-buttons">
+                    <button type="button" className="cancel-btn" onClick={() => setShowDeleteUserConfirm(false)}>
+                      Cancel
+                    </button>
+                    <button 
+                      type="button" 
+                      className="delete-btn" 
+                      onClick={handleDeleteUser}
+                      disabled={deleteUserLoading}
+                    >
+                      {deleteUserLoading ? 'Deleting...' : 'Delete User'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

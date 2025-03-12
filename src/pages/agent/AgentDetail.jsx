@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { FaStar, FaRegStar, FaCheck, FaDownload, FaHeart, FaRegHeart } from 'react-icons/fa';
+import { FaStar, FaRegStar, FaCheck, FaDownload, FaHeart, FaRegHeart, FaLink, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
 import { fetchAgentById, toggleWishlist } from '../../utils/api';
 import './AgentDetail.css';
 
@@ -12,6 +12,12 @@ const AgentDetail = () => {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [customPrice, setCustomPrice] = useState('');
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [copySuccess, setCopySuccess] = useState('');
+  
+  // Image slider refs
+  const sliderRef = useRef(null);
 
   useEffect(() => {
     const loadAgent = async () => {
@@ -29,17 +35,22 @@ const AgentDetail = () => {
         // Try to load the agent data
         const data = await fetchAgentById(agentId);
         setAgent(data);
+        
+        // Set initial price value if agent data is available
+        if (data && data.price) {
+          const basePrice = typeof data.price === 'number' ? data.price : 
+                            typeof data.price === 'string' ? parseFloat(data.price.replace(/[^0-9.]/g, '')) || 0 : 0;
+          setCustomPrice(basePrice.toString());
+        }
+        
         setIsWishlisted(data.isWishlisted || false);
       } catch (err) {
         console.error('Error loading agent:', err);
-        // Set a specific error message if it's a 400 error (not found)
         if (err.response && err.response.status === 400) {
           setError(`Agent with ID "${agentId}" not found. It may have been removed or doesn't exist.`);
         } else if (err.message && err.message.includes('not found')) {
-          // Error message from our enhanced fetchAgentById function
           setError(err.message);
         } else {
-          // Generic error message for other cases
           setError('Failed to load agent. Please try again later.');
         }
       } finally {
@@ -63,15 +74,64 @@ const AgentDetail = () => {
       setWishlistLoading(false);
     }
   };
+  
+  const handleCopyLink = () => {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url)
+      .then(() => {
+        setCopySuccess('Link copied!');
+        setTimeout(() => setCopySuccess(''), 2000);
+      })
+      .catch(err => {
+        console.error('Could not copy link:', err);
+      });
+  };
 
   // Format price for display
   const formatPrice = (price) => {
     if (!price && price !== 0) return 'Free';
-    if (typeof price === 'string') return price;
+    if (typeof price === 'string') {
+      if (price.toLowerCase() === 'free') return 'Free';
+      return price.startsWith('$') ? price : `$${price}`;
+    }
     if (typeof price === 'number') {
       return price === 0 ? 'Free' : `$${price.toFixed(2)}`;
     }
     return 'Price unavailable';
+  };
+  
+  // Get minimum price
+  const getMinimumPrice = () => {
+    if (!agent) return 0;
+    
+    if (agent.priceDetails && agent.priceDetails.minimumPrice !== undefined) {
+      return agent.priceDetails.minimumPrice;
+    }
+    
+    // Fall back to regular price if minimum not specified
+    if (typeof agent.price === 'number') {
+      return agent.price;
+    }
+    
+    if (typeof agent.price === 'string') {
+      const parsed = parseFloat(agent.price.replace(/[^0-9.]/g, '')) || 0;
+      return parsed;
+    }
+    
+    return 0;
+  };
+  
+  // Handle custom price change
+  const handlePriceChange = (e) => {
+    const value = e.target.value;
+    setCustomPrice(value);
+  };
+  
+  // Validate if price is valid (at or above minimum)
+  const isPriceValid = () => {
+    const minPrice = getMinimumPrice();
+    const price = parseFloat(customPrice) || 0;
+    return price >= minPrice;
   };
 
   // Safely format rating for display
@@ -101,6 +161,69 @@ const AgentDetail = () => {
     
     return stars;
   };
+  
+  // Get file type data display
+  const getFileDetails = () => {
+    if (!agent) return null;
+    
+    if (agent.fileType === 'pdf' || (agent.fileDetails && agent.fileDetails.type === 'pdf')) {
+      const pageCount = agent.fileDetails?.pageCount || agent.pageCount || 50;
+      return `${pageCount} pages (PDF)`;
+    }
+    
+    if (agent.fileType === 'audio' || (agent.fileDetails && agent.fileDetails.type === 'audio')) {
+      const duration = agent.fileDetails?.duration || agent.duration || '30 mins';
+      return `${duration} (Audio)`;
+    }
+    
+    if (agent.fileType === 'video' || (agent.fileDetails && agent.fileDetails.type === 'video')) {
+      const duration = agent.fileDetails?.duration || agent.duration || '15 mins';
+      return `${duration} (Video)`;
+    }
+    
+    if (agent.fileType === 'template' || (agent.fileDetails && agent.fileDetails.type === 'template')) {
+      return 'Template - ready to use';
+    }
+    
+    // Default case
+    return 'Digital download';
+  };
+  
+  // Navigate through slider
+  const showSlide = (index) => {
+    if (!agent || !agent.images) return;
+    
+    // Handle wrap-around
+    let newIndex = index;
+    if (newIndex >= agent.images.length) {
+      newIndex = 0;
+    } else if (newIndex < 0) {
+      newIndex = agent.images.length - 1;
+    }
+    
+    setCurrentSlide(newIndex);
+  };
+  
+  const nextSlide = () => {
+    showSlide(currentSlide + 1);
+  };
+  
+  const prevSlide = () => {
+    showSlide(currentSlide - 1);
+  };
+  
+  // Get image url array for slider
+  const getImageUrls = () => {
+    if (!agent) return [null];
+    
+    // If agent has images array, use it
+    if (agent.images && Array.isArray(agent.images) && agent.images.length > 0) {
+      return agent.images;
+    }
+    
+    // Otherwise use the main image or fallback
+    return [agent.imageUrl || null];
+  };
 
   if (loading) {
     return (
@@ -124,6 +247,11 @@ const AgentDetail = () => {
       </div>
     );
   }
+  
+  const imageUrls = getImageUrls();
+  const minPrice = getMinimumPrice();
+  const downloads = agent.downloadCount || agent.statistics?.downloads || 6453;
+  const fileDetails = getFileDetails();
 
   return (
     <div className="agent-detail-container">
@@ -132,228 +260,210 @@ const AgentDetail = () => {
       </div>
 
       <div className="agent-detail-content">
-        {/* Left Column - Agent Image and Main Info */}
-        <div className="agent-detail-left">
-          <div className="agent-detail-image-container">
-            <img 
-              src={agent.imageUrl || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"%3E%3Crect width="300" height="200" fill="%234a4de7"/%3E%3Ctext x="150" y="100" font-family="Arial" font-size="24" text-anchor="middle" fill="white"%3EAgent%3C/text%3E%3C/svg%3E'} 
-              alt={agent.title} 
-              className="agent-detail-image" 
-            />
-            {agent.isBestseller && <div className="agent-badge bestseller">Bestseller</div>}
-            {agent.isNew && <div className="agent-badge new">New</div>}
-          </div>
-
-          <div className="agent-meta-info">
-            <div className="agent-creator">
-              <img 
-                src={agent.creator?.avatarUrl || "https://via.placeholder.com/40?text=?"} 
-                alt={agent.creator?.name || "Creator"} 
-                className="creator-avatar"
-              />
-              <div className="creator-info">
-                <span className="created-by">Created by</span>
-                <span className="creator-name">{agent.creator?.name || "Unknown Creator"}</span>
+        {/* Image Slider Section */}
+        <div className="image-slider-section">
+          <div className="image-slider" ref={sliderRef}>
+            <div className="slider-container">
+              {imageUrls.length > 1 && (
+                <button className="slider-arrow left-arrow" onClick={prevSlide}>
+                  <FaArrowLeft />
+                </button>
+              )}
+              
+              <div className="slide">
+                <img 
+                  src={imageUrls[currentSlide] || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"%3E%3Crect width="300" height="200" fill="%234a4de7"/%3E%3Ctext x="150" y="100" font-family="Arial" font-size="24" text-anchor="middle" fill="white"%3EAgent%3C/text%3E%3C/svg%3E'} 
+                  alt={`${agent.title} - slide ${currentSlide + 1}`} 
+                  className="slide-image" 
+                />
               </div>
-            </div>
-
-            <div className="agent-rating-container">
-              <div className="stars-container">
-                {renderStars(agent.rating?.average || 0)}
-              </div>
-              <span className="rating-text">
-                {formatRating(agent.rating?.average)} ({agent.rating?.count || 0} ratings)
-              </span>
-            </div>
-
-            <div className="agent-stats">
-              <div className="stat-item">
-                <span className="stat-label">Category</span>
-                <span className="stat-value">{agent.category || 'Uncategorized'}</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">Last Update</span>
-                <span className="stat-value">{agent.updatedAt ? new Date(agent.updatedAt).toLocaleDateString() : 'Unknown'}</span>
-              </div>
-              {agent.version && (
-                <div className="stat-item">
-                  <span className="stat-label">Version</span>
-                  <span className="stat-value">{agent.version}</span>
-                </div>
+              
+              {imageUrls.length > 1 && (
+                <button className="slider-arrow right-arrow" onClick={nextSlide}>
+                  <FaArrowRight />
+                </button>
               )}
             </div>
+            
+            {imageUrls.length > 1 && (
+              <div className="slide-indicators">
+                {imageUrls.map((_, index) => (
+                  <button 
+                    key={index} 
+                    className={`indicator ${index === currentSlide ? 'active' : ''}`}
+                    onClick={() => showSlide(index)}
+                  ></button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Right Column - Details and Actions */}
-        <div className="agent-detail-right">
+        {/* Agent Info and Purchase Section */}
+        <div className="agent-info-section">
           <h1 className="agent-title">{agent.title}</h1>
           
-          <div className="agent-price-section">
-            <div className="agent-price">{formatPrice(agent.price)}</div>
+          <div className="agent-meta-row">
+            <div className="price-display">
+              <span className="price-value">{formatPrice(agent.price)}</span>
+              {agent.priceDetails?.discountPercentage > 0 && (
+                <span className="original-price">{formatPrice(agent.priceDetails.originalPrice)}</span>
+              )}
+            </div>
             
-            <div className="agent-action-buttons">
-              <button className="btn-primary">
-                <FaDownload className="btn-icon" /> Download
-              </button>
-              <button 
-                className={`btn-wishlist ${isWishlisted ? 'active' : ''}`}
-                onClick={handleWishlistToggle}
-                disabled={wishlistLoading}
-              >
-                {isWishlisted ? <FaHeart /> : <FaRegHeart />}
-              </button>
+            <div className="creator-info">
+              <span className="by-text">by</span>
+              <a href="#" className="creator-name">{agent.creator?.name || "Unknown Creator"}</a>
+            </div>
+            
+            <div className="rating-display">
+              <div className="stars">
+                {renderStars(agent.rating?.average || 0)}
+              </div>
+              <span className="rating-count">({agent.rating?.count || 0})</span>
             </div>
           </div>
-
-          <div className="agent-tabs">
+          
+          <div className="agent-description">
+            <p>{agent.description || 'No description available for this agent.'}</p>
+          </div>
+          
+          <div className="price-purchase-container">
+            <div className="name-your-price">
+              <label htmlFor="custom-price">Name a fair price:</label>
+              <div className="price-input-container">
+                <span className="currency-symbol">$</span>
+                <input 
+                  type="number" 
+                  id="custom-price" 
+                  className="custom-price-input" 
+                  value={customPrice}
+                  onChange={handlePriceChange}
+                  min={minPrice}
+                  step="0.01"
+                />
+              </div>
+              <p className="minimum-price-note">
+                The minimum price is {formatPrice(minPrice)}
+              </p>
+            </div>
+            
             <button 
-              className={`tab-button ${activeTab === 'overview' ? 'active' : ''}`}
-              onClick={() => setActiveTab('overview')}
+              className={`add-to-cart-btn ${!isPriceValid() ? 'disabled' : ''}`}
+              disabled={!isPriceValid()}
             >
-              Overview
+              Add to cart
             </button>
+            
+            <div className="downloads-info">
+              <FaDownload className="download-icon" />
+              <span className="download-count">{downloads} downloads</span>
+            </div>
+          </div>
+          
+          <div className="file-details-section">
+            <div className="file-info">
+              <span className="file-detail">{fileDetails}</span>
+            </div>
+          </div>
+          
+          <div className="agent-actions">
             <button 
-              className={`tab-button ${activeTab === 'reviews' ? 'active' : ''}`}
-              onClick={() => setActiveTab('reviews')}
+              className={`wishlist-btn ${isWishlisted ? 'active' : ''}`}
+              onClick={handleWishlistToggle}
+              disabled={wishlistLoading}
             >
-              Reviews
+              {isWishlisted ? <FaHeart /> : <FaRegHeart />}
+              <span>Add to wishlist</span>
             </button>
-            <button 
-              className={`tab-button ${activeTab === 'features' ? 'active' : ''}`}
-              onClick={() => setActiveTab('features')}
-            >
-              Features
-            </button>
-            <button 
-              className={`tab-button ${activeTab === 'faq' ? 'active' : ''}`}
-              onClick={() => setActiveTab('faq')}
-            >
-              FAQ
+            
+            <button className="copy-link-btn" onClick={handleCopyLink}>
+              <FaLink />
+              <span>{copySuccess || 'Copy link'}</span>
             </button>
           </div>
-
-          <div className="tab-content">
-            {activeTab === 'overview' && (
-              <div className="tab-pane overview">
-                <h2 className="section-title">Description</h2>
-                <div className="agent-description">
-                  <p>{agent.description || 'No description available for this agent.'}</p>
-                </div>
-
-                {agent.features && agent.features.length > 0 && (
-                  <div className="agent-features-highlight">
-                    <h3>Key Features</h3>
-                    <ul className="features-list">
-                      {agent.features.map((feature, index) => (
-                        <li key={index}><FaCheck className="check-icon" /> {feature}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'reviews' && (
-              <div className="tab-pane reviews">
-                <h2 className="section-title">Customer Reviews</h2>
-                
-                <div className="reviews-summary">
-                  <div className="rating-average">
-                    <span className="rating-big">{formatRating(agent.rating?.average)}</span>
-                    <div className="rating-stars">
-                      {renderStars(agent.rating?.average || 0)}
-                      <span className="rating-count">({agent.rating?.count || 0} ratings)</span>
-                    </div>
-                  </div>
-                </div>
-
-                {agent.reviews && agent.reviews.length > 0 ? (
-                  <div className="reviews-list">
-                    {agent.reviews.map((review) => (
-                      <div key={review.id} className="review-item">
-                        <div className="review-header">
-                          <div className="reviewer-info">
-                            <span className="reviewer-name">{review.userName || 'Anonymous'}</span>
-                            <span className="review-date">
-                              {review.createdAt ? new Date(review.createdAt).toLocaleDateString() : 'Unknown date'}
-                            </span>
-                          </div>
-                          <div className="review-rating">
-                            {renderStars(review.rating || 0)}
-                          </div>
-                        </div>
-                        <div className="review-content">
-                          <p>{review.content || 'No comments provided.'}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="no-reviews">
-                    <p>No reviews yet. Be the first to review this agent!</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'features' && (
-              <div className="tab-pane features">
-                <h2 className="section-title">Features</h2>
-                
-                {agent.features && agent.features.length > 0 ? (
-                  <div className="features-detailed">
-                    <ul className="features-list detailed">
-                      {agent.features.map((feature, index) => (
-                        <li key={index}>
-                          <FaCheck className="check-icon" />
-                          <div className="feature-detail">
-                            <h4>{feature}</h4>
-                            <p>This agent includes {feature.toLowerCase()} functionality.</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <p>No detailed features available for this agent.</p>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'faq' && (
-              <div className="tab-pane faq">
-                <h2 className="section-title">Frequently Asked Questions</h2>
-                
-                <div className="faq-list">
-                  <div className="faq-item">
-                    <h3>How do I install this agent?</h3>
-                    <p>After purchasing, you will receive download instructions. Simply follow them to install the agent.</p>
-                  </div>
-                  <div className="faq-item">
-                    <h3>What systems does this agent work with?</h3>
-                    <p>This agent is compatible with most modern operating systems including Windows, macOS, and Linux.</p>
-                  </div>
-                  <div className="faq-item">
-                    <h3>Is there a refund policy?</h3>
-                    <p>Yes, we offer a 30-day money-back guarantee if you're not satisfied with your purchase.</p>
-                  </div>
-                  <div className="faq-item">
-                    <h3>How often is this agent updated?</h3>
-                    <p>We provide regular updates to ensure optimal performance and compatibility.</p>
-                  </div>
-                </div>
-              </div>
-            )}
+          
+          <div className="guarantee-info">
+            <p>30-day money back guarantee</p>
           </div>
         </div>
       </div>
 
-      {/* Related Agents Section */}
-      <div className="related-agents-section">
-        <h2 className="section-title">You might also like</h2>
-        <div className="related-agents-placeholder">
-          <p>Related agents will be displayed here</p>
+      {/* Reviews Section */}
+      <div className="reviews-section">
+        <h2 className="section-heading">Customer Reviews</h2>
+        
+        <div className="ratings-summary">
+          <div className="rating-box">
+            <span className="big-rating">{formatRating(agent.rating?.average || 0)}</span>
+            <div className="rating-stars">{renderStars(agent.rating?.average || 0)}</div>
+            <span className="rating-total">({agent.rating?.count || 0} ratings)</span>
+          </div>
+          
+          <div className="rating-breakdown">
+            <div className="breakdown-row">
+              <span>5 stars</span>
+              <div className="progress-bar">
+                <div className="progress" style={{ width: `${agent.rating?.distribution?.['5'] || 100}%` }}></div>
+              </div>
+              <span className="percentage">{agent.rating?.distribution?.['5'] || 100}%</span>
+            </div>
+            <div className="breakdown-row">
+              <span>4 stars</span>
+              <div className="progress-bar">
+                <div className="progress" style={{ width: `${agent.rating?.distribution?.['4'] || 0}%` }}></div>
+              </div>
+              <span className="percentage">{agent.rating?.distribution?.['4'] || 0}%</span>
+            </div>
+            <div className="breakdown-row">
+              <span>3 stars</span>
+              <div className="progress-bar">
+                <div className="progress" style={{ width: `${agent.rating?.distribution?.['3'] || 0}%` }}></div>
+              </div>
+              <span className="percentage">{agent.rating?.distribution?.['3'] || 0}%</span>
+            </div>
+            <div className="breakdown-row">
+              <span>2 stars</span>
+              <div className="progress-bar">
+                <div className="progress" style={{ width: `${agent.rating?.distribution?.['2'] || 0}%` }}></div>
+              </div>
+              <span className="percentage">{agent.rating?.distribution?.['2'] || 0}%</span>
+            </div>
+            <div className="breakdown-row">
+              <span>1 star</span>
+              <div className="progress-bar">
+                <div className="progress" style={{ width: `${agent.rating?.distribution?.['1'] || 0}%` }}></div>
+              </div>
+              <span className="percentage">{agent.rating?.distribution?.['1'] || 0}%</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="reviews-list">
+          {agent.reviews && agent.reviews.length > 0 ? (
+            agent.reviews.map((review) => (
+              <div key={review.id} className="review-item">
+                <div className="review-header">
+                  <div className="reviewer-info">
+                    <span className="reviewer-name">{review.userName || 'Anonymous'}</span>
+                    <span className="review-date">
+                      {review.createdAt ? new Date(review.createdAt).toLocaleDateString() : 'Unknown date'}
+                    </span>
+                  </div>
+                  <div className="review-rating">
+                    {renderStars(review.rating || 0)}
+                  </div>
+                </div>
+                <div className="review-content">
+                  <p>{review.content || 'No comments provided.'}</p>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="no-reviews-message">
+              <p>No reviews yet. Be the first to review this product!</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

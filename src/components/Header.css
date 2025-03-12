@@ -1,12 +1,13 @@
 .main-header {
   /* background-color: var(--text-color-light); */
   color: white;
+  padding-bottom: 30px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 1.5rem;
   height: 64px;
-  position: fixed;
+  position: relative;
   top: 0;
   left: 0;
   right: 0;
