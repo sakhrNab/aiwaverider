@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { FaStar, FaRegStar, FaCheck, FaDownload, FaHeart, FaRegHeart, FaLink, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
-import { fetchAgentById, toggleWishlist } from '../../utils/api';
+import { fetchAgentById, toggleWishlist, getDownloadCount, incrementDownloadCount } from '../../utils/api';
 import './AgentDetail.css';
 
 const AgentDetail = () => {
@@ -15,6 +15,7 @@ const AgentDetail = () => {
   const [customPrice, setCustomPrice] = useState('');
   const [currentSlide, setCurrentSlide] = useState(0);
   const [copySuccess, setCopySuccess] = useState('');
+  const [downloadCount, setDownloadCount] = useState(0);
   
   // Image slider refs
   const sliderRef = useRef(null);
@@ -35,6 +36,10 @@ const AgentDetail = () => {
         // Try to load the agent data
         const data = await fetchAgentById(agentId);
         setAgent(data);
+        
+        // Fetch the download count
+        const downloads = await getDownloadCount(agentId);
+        setDownloadCount(downloads);
         
         // Set initial price value if agent data is available
         if (data && data.price) {
@@ -225,6 +230,23 @@ const AgentDetail = () => {
     return [agent.imageUrl || null];
   };
 
+  // Handle download click
+  const handleDownloadClick = async () => {
+    try {
+      // Increment the download count in the backend
+      await incrementDownloadCount(agentId);
+      
+      // Update the local state
+      setDownloadCount(prev => prev + 1);
+      
+      // Simulate download start
+      // In a real app, this would trigger the actual file download
+      alert('Download started!');
+    } catch (err) {
+      console.error('Error incrementing download count:', err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="agent-detail-container">
@@ -250,7 +272,6 @@ const AgentDetail = () => {
   
   const imageUrls = getImageUrls();
   const minPrice = getMinimumPrice();
-  const downloads = agent.downloadCount || agent.statistics?.downloads || 6453;
   const fileDetails = getFileDetails();
 
   return (
@@ -351,13 +372,14 @@ const AgentDetail = () => {
             <button 
               className={`add-to-cart-btn ${!isPriceValid() ? 'disabled' : ''}`}
               disabled={!isPriceValid()}
+              onClick={handleDownloadClick}
             >
               Add to cart
             </button>
             
             <div className="downloads-info">
               <FaDownload className="download-icon" />
-              <span className="download-count">{downloads} downloads</span>
+              <span className="download-count">{downloadCount} downloads</span>
             </div>
           </div>
           

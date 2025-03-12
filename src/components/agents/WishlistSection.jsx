@@ -11,8 +11,8 @@ const WishlistCard = ({ wishlist }) => {
     e.target.onerror = null; // Prevent infinite error loops
   };
 
-  // Generate a default avatar if creator or avatar is missing
-  const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23e0e0e0'/%3E%3Ctext x='50' y='55' font-family='Arial' font-size='40' text-anchor='middle' fill='%23999'%3E?%3C/text%3E%3C/svg%3E";
+  // Generate a default avatar using data URI instead of via.placeholder.com
+  const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23e0e0e0'/%3E%3Ctext x='50' y='55' font-family='Arial' font-size='24' text-anchor='middle' fill='%23999'%3EAW%3C/text%3E%3C/svg%3E";
   
   // Check if creator exists, otherwise provide defaults
   const creator = wishlist.creator || { name: 'Unknown Creator', avatar: defaultAvatar };
@@ -37,11 +37,11 @@ const WishlistCard = ({ wishlist }) => {
       </div>
       <div className="wishlist-items">
         {wishlist.items && wishlist.items.length > 0 ? (
-          wishlist.items.map(item => (
+          wishlist.items.map((item, index) => (
             <img 
-              key={item.id || `item-${Math.random()}`}
+              key={item.id || `item-${index}`}
               src={item.imageUrl || defaultAvatar} 
-              alt={item.name || 'Item'}
+              alt={item.title || 'Agent'}
               className="wishlist-item"
               onError={handleImageError}
             />
@@ -49,6 +49,12 @@ const WishlistCard = ({ wishlist }) => {
         ) : (
           <div className="no-items">No items in this wishlist</div>
         )}
+      </div>
+      <div className="wishlist-footer">
+        <span className="wishlist-item-count">{wishlist.itemCount || 0} items</span>
+        <span className="wishlist-date">
+          {wishlist.updatedAt ? new Date(wishlist.updatedAt).toLocaleDateString() : 'N/A'}
+        </span>
       </div>
     </Link>
   );

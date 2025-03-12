@@ -28,6 +28,12 @@ router.get('/agent-:numericId([0-9]+)', publicCacheMiddleware({ duration: 600 })
 
 router.get('/:agentId', publicCacheMiddleware({ duration: 600 }), agentsController.getAgentById);
 
+// GET /api/agents/:agentId/downloads - Get download count for an agent
+router.get('/:agentId/downloads', agentsController.getDownloadCount);
+
+// POST /api/agents/:agentId/downloads - Increment download count
+router.post('/:agentId/downloads', validateFirebaseToken, agentsController.incrementDownloadCount);
+
 // Protected endpoints (require authentication)
 router.get('/wishlists', validateFirebaseToken, agentsController.getWishlists);
 router.post('/wishlists/:agentId', validateFirebaseToken, agentsController.toggleWishlist);

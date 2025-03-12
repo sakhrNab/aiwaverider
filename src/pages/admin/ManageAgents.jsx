@@ -66,6 +66,12 @@ const ManageAgents = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
 
+  // User state for pagination and sorting
+  const [usersPage, setUsersPage] = useState(1);
+  const [usersTotalPages, setUsersTotalPages] = useState(1);
+  const [userSortBy, setUserSortBy] = useState("username");
+  const [userSortDirection, setUserSortDirection] = useState("asc");
+
   // Shared state
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -99,6 +105,12 @@ const ManageAgents = () => {
     errorCode: null,
   });
 
+  // User state
+  const [users, setUsers] = useState([]);
+  const [userLoading, setUserLoading] = useState(false);
+  const [userError, setUserError] = useState(null);
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  
   // Add a cache for individual agent data with timestamps
   const [agentCache, setAgentCache] = useState({});
 
@@ -1516,65 +1528,55 @@ const ManageAgents = () => {
     <div className="users-management-section">
       <h2 className="section-title">Users Management</h2>
       <div className="users-controls">
-        <div className="search-filter-row">
-          <div className="search-bar">
-            <input 
-              type="text" 
-              placeholder="Search users..." 
-              className="search-input"
-              value={userSearchQuery || ''}
-              onChange={(e) => setUserSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && fetchUsers()}
-            />
-            <button className="search-button" onClick={fetchUsers}>
-              Search
-            </button>
-          </div>
-          <div className="filter-controls">
-            <select 
-              className="filter-select"
-              value={userSortBy}
-              onChange={(e) => setUserSortBy(e.target.value)}
-            >
-              <option value="createdAt">Date Joined</option>
-              <option value="lastName">Last Name</option>
-              <option value="email">Email</option>
-              <option value="role">Role</option>
-            </select>
-            <select 
-              className="filter-select"
-              value={userSortDirection}
-              onChange={(e) => setUserSortDirection(e.target.value)}
-            >
-              <option value="desc">Descending</option>
-              <option value="asc">Ascending</option>
-            </select>
-          </div>
+        <div className="users-search">
+          <input
+            type="text"
+            placeholder="Search users..."
+            value={userSearchQuery}
+            onChange={(e) => setUserSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && fetchUsers()}
+          />
+          <button className="search-button" onClick={fetchUsers}>
+            <FaSearch />
+          </button>
         </div>
-        <button 
-          className="create-user-btn"
-          onClick={() => {
-            setSelectedUser(null);
-            setShowUserForm(true);
-          }}
-        >
-          <span className="btn-icon">+</span> Create New User
+        <div className="sort-controls">
+          <select 
+            value={userSortBy}
+            onChange={(e) => setUserSortBy(e.target.value)}
+            className="sort-select"
+          >
+            <option value="username">Username</option>
+            <option value="email">Email</option>
+            <option value="role">Role</option>
+            <option value="status">Status</option>
+            <option value="createdAt">Join Date</option>
+          </select>
+          <button 
+            className={`sort-direction ${userSortDirection === 'desc' ? 'desc' : 'asc'}`}
+            onClick={() => setUserSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+          >
+            <FaSort />
+          </button>
+        </div>
+        <button className="create-user-btn primary-btn" onClick={handleCreateUserClick}>
+          <FaPlus /> Create User
         </button>
       </div>
-
-      {userLoading ? (
-        <div className="loading-container">
-          <div className="loading-spinner"></div>
-          <p>Loading users...</p>
-        </div>
-      ) : userError ? (
-        <div className="error-display">
-          <p className="error-message">Error loading users: {userError}</p>
-          <button onClick={fetchUsers} className="retry-btn">Retry</button>
-        </div>
-      ) : (
-        <>
-          <div className="users-table-container">
+      
+      <div className="users-table-container">
+        {userLoading ? (
+          <div className="loading-container">
+            <div className="loading-spinner"></div>
+            <p>Loading users...</p>
+          </div>
+        ) : userError ? (
+          <div className="error-display">
+            <p className="error-message">Error loading users: {userError}</p>
+            <button onClick={fetchUsers} className="retry-btn">Retry</button>
+          </div>
+        ) : (
+          <>
             <table className="users-table">
               <thead>
                 <tr>
@@ -1646,31 +1648,31 @@ const ManageAgents = () => {
                 )}
               </tbody>
             </table>
-          </div>
-          
-          {usersTotalPages > 1 && (
-            <div className="pagination">
-              <button 
-                className="pagination-btn" 
-                onClick={() => setUsersPage(prev => Math.max(1, prev - 1))}
-                disabled={usersPage === 1}
-              >
-                Previous
-              </button>
-              <span className="page-info">
-                Page {usersPage} of {usersTotalPages}
-              </span>
-              <button 
-                className="pagination-btn" 
-                onClick={() => setUsersPage(prev => Math.min(usersTotalPages, prev + 1))}
-                disabled={usersPage === usersTotalPages}
-              >
-                Next
-              </button>
-            </div>
-          )}
-        </>
-      )}
+            
+            {usersTotalPages > 1 && (
+              <div className="pagination">
+                <button 
+                  className="pagination-btn" 
+                  onClick={() => setUsersPage(prev => Math.max(1, prev - 1))}
+                  disabled={usersPage === 1}
+                >
+                  Previous
+                </button>
+                <span className="page-info">
+                  Page {usersPage} of {usersTotalPages}
+                </span>
+                <button 
+                  className="pagination-btn" 
+                  onClick={() => setUsersPage(prev => Math.min(usersTotalPages, prev + 1))}
+                  disabled={usersPage === usersTotalPages}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       {/* User Form Modal */}
       {showUserForm && (
@@ -1801,6 +1803,171 @@ const ManageAgents = () => {
       )}
     </div>
   )}
+
+  // Fetch users with pagination and sorting
+  const fetchUsers = async () => {
+    if (!token) return;
+    
+    setUserLoading(true);
+    setUserError(null);
+    
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users?page=${usersPage}&limit=10&search=${userSearchQuery}&sortBy=${userSortBy}&sortDirection=${userSortDirection}`, {
+        headers: getAuthHeaders(),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch users: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setUsers(data.users || []);
+      setUsersTotalPages(data.totalPages || 1);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      setUserError(error.message);
+    } finally {
+      setUserLoading(false);
+    }
+  };
+  
+  // User management state
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [userForm, setUserForm] = useState({
+    username: '',
+    email: '',
+    firstName: '',
+    lastName: '',
+    role: 'user',
+    status: 'active'
+  });
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [showDeleteUserModal, setShowDeleteUserModal] = useState(false);
+  
+  // Handle editing a user
+  const handleEditUser = (user) => {
+    setSelectedUser(user);
+    setUserForm({
+      username: user.username || '',
+      email: user.email || '',
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      role: user.role || 'user',
+      status: user.status || 'active'
+    });
+    setShowUserForm(true);
+  };
+  
+  // Handle user form changes
+  const handleUserFormChange = (e) => {
+    const { name, value } = e.target;
+    setUserForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  // Handle user form submission
+  const handleUserFormSubmit = async (e) => {
+    e.preventDefault();
+    
+    try {
+      if (selectedUser) {
+        // Update existing user
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${selectedUser.id}`, {
+          method: 'PUT',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(userForm)
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to update user: ${response.status}`);
+        }
+        
+        toast.success('User updated successfully');
+      } else {
+        // Create new user
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users`, {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(userForm)
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to create user: ${response.status}`);
+        }
+        
+        toast.success('User created successfully');
+      }
+      
+      // Reset form and fetch updated user list
+      setShowUserForm(false);
+      setSelectedUser(null);
+      setUserForm({
+        username: '',
+        email: '',
+        firstName: '',
+        lastName: '',
+        role: 'user',
+        status: 'active'
+      });
+      fetchUsers();
+    } catch (error) {
+      console.error('Error submitting user form:', error);
+      toast.error(error.message);
+    }
+  };
+  
+  // Handle clicking delete user button
+  const handleDeleteUserClick = (user) => {
+    setUserToDelete(user);
+    setShowDeleteUserModal(true);
+  };
+  
+  // Handle confirming user deletion
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${userToDelete.id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to delete user: ${response.status}`);
+      }
+      
+      toast.success('User deleted successfully');
+      setShowDeleteUserModal(false);
+      setUserToDelete(null);
+      fetchUsers();
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast.error(error.message);
+    }
+  };
+  
+  // Handle creating a new user
+  const handleCreateUserClick = () => {
+    setSelectedUser(null);
+    setUserForm({
+      username: '',
+      email: '',
+      firstName: '',
+      lastName: '',
+      role: 'user',
+      status: 'active'
+    });
+    setShowUserForm(true);
+  };
 
   return (
     <AdminLayout>
@@ -1974,65 +2141,55 @@ const ManageAgents = () => {
           <div className="users-management-section">
             <h2 className="section-title">Users Management</h2>
             <div className="users-controls">
-              <div className="search-filter-row">
-                <div className="search-bar">
-                  <input 
-                    type="text" 
-                    placeholder="Search users..." 
-                    className="search-input"
-                    value={userSearchQuery || ''}
-                    onChange={(e) => setUserSearchQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && fetchUsers()}
-                  />
-                  <button className="search-button" onClick={fetchUsers}>
-                    Search
-                  </button>
-                </div>
-                <div className="filter-controls">
-                  <select 
-                    className="filter-select"
-                    value={userSortBy}
-                    onChange={(e) => setUserSortBy(e.target.value)}
-                  >
-                    <option value="createdAt">Date Joined</option>
-                    <option value="lastName">Last Name</option>
-                    <option value="email">Email</option>
-                    <option value="role">Role</option>
-                  </select>
-                  <select 
-                    className="filter-select"
-                    value={userSortDirection}
-                    onChange={(e) => setUserSortDirection(e.target.value)}
-                  >
-                    <option value="desc">Descending</option>
-                    <option value="asc">Ascending</option>
-                  </select>
-                </div>
+              <div className="users-search">
+                <input
+                  type="text"
+                  placeholder="Search users..."
+                  value={userSearchQuery}
+                  onChange={(e) => setUserSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && fetchUsers()}
+                />
+                <button className="search-button" onClick={fetchUsers}>
+                  <FaSearch />
+                </button>
               </div>
-              <button 
-                className="create-user-btn"
-                onClick={() => {
-                  setSelectedUser(null);
-                  setShowUserForm(true);
-                }}
-              >
-                <span className="btn-icon">+</span> Create New User
+              <div className="sort-controls">
+                <select 
+                  value={userSortBy}
+                  onChange={(e) => setUserSortBy(e.target.value)}
+                  className="sort-select"
+                >
+                  <option value="username">Username</option>
+                  <option value="email">Email</option>
+                  <option value="role">Role</option>
+                  <option value="status">Status</option>
+                  <option value="createdAt">Join Date</option>
+                </select>
+                <button 
+                  className={`sort-direction ${userSortDirection === 'desc' ? 'desc' : 'asc'}`}
+                  onClick={() => setUserSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                >
+                  <FaSort />
+                </button>
+              </div>
+              <button className="create-user-btn primary-btn" onClick={handleCreateUserClick}>
+                <FaPlus /> Create User
               </button>
             </div>
-
-            {userLoading ? (
-              <div className="loading-container">
-                <div className="loading-spinner"></div>
-                <p>Loading users...</p>
-              </div>
-            ) : userError ? (
-              <div className="error-display">
-                <p className="error-message">Error loading users: {userError}</p>
-                <button onClick={fetchUsers} className="retry-btn">Retry</button>
-              </div>
-            ) : (
-              <>
-                <div className="users-table-container">
+            
+            <div className="users-table-container">
+              {userLoading ? (
+                <div className="loading-container">
+                  <div className="loading-spinner"></div>
+                  <p>Loading users...</p>
+                </div>
+              ) : userError ? (
+                <div className="error-display">
+                  <p className="error-message">Error loading users: {userError}</p>
+                  <button onClick={fetchUsers} className="retry-btn">Retry</button>
+                </div>
+              ) : (
+                <>
                   <table className="users-table">
                     <thead>
                       <tr>
@@ -2104,31 +2261,31 @@ const ManageAgents = () => {
                       )}
                     </tbody>
                   </table>
-                </div>
-                
-                {usersTotalPages > 1 && (
-                  <div className="pagination">
-                    <button 
-                      className="pagination-btn" 
-                      onClick={() => setUsersPage(prev => Math.max(1, prev - 1))}
-                      disabled={usersPage === 1}
-                    >
-                      Previous
-                    </button>
-                    <span className="page-info">
-                      Page {usersPage} of {usersTotalPages}
-                    </span>
-                    <button 
-                      className="pagination-btn" 
-                      onClick={() => setUsersPage(prev => Math.min(usersTotalPages, prev + 1))}
-                      disabled={usersPage === usersTotalPages}
-                    >
-                      Next
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
+                  
+                  {usersTotalPages > 1 && (
+                    <div className="pagination">
+                      <button 
+                        className="pagination-btn" 
+                        onClick={() => setUsersPage(prev => Math.max(1, prev - 1))}
+                        disabled={usersPage === 1}
+                      >
+                        Previous
+                      </button>
+                      <span className="page-info">
+                        Page {usersPage} of {usersTotalPages}
+                      </span>
+                      <button 
+                        className="pagination-btn" 
+                        onClick={() => setUsersPage(prev => Math.min(usersTotalPages, prev + 1))}
+                        disabled={usersPage === usersTotalPages}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
 
             {/* User Form Modal */}
             {showUserForm && (
@@ -2480,6 +2637,21 @@ const ManageAgents = () => {
               onCancel={() => setShowAgentForm(false)}
             />
           </Modal>
+        )}
+
+        {/* User Deletion Confirmation Modal */}
+        {showDeleteUserModal && (
+          <ConfirmationModal
+            title="Delete User"
+            message={`Are you sure you want to delete the user "${userToDelete?.username || 'Unknown'}"? This action cannot be undone.`}
+            confirmText="Delete"
+            cancelText="Cancel"
+            onConfirm={handleDeleteUser}
+            onCancel={() => {
+              setShowDeleteUserModal(false);
+              setUserToDelete(null);
+            }}
+          />
         )}
       </div>
     </AdminLayout>

@@ -11,7 +11,7 @@ const AgentCard = ({ agent }) => {
   // Function to handle image errors and use a default placeholder
   const handleImageError = (e) => {
     // Use a data URI for the placeholder instead of a missing file
-    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='24' text-anchor='middle' fill='white'%3EAgent Image%3C/text%3E%3C/svg%3E";
+    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='24' text-anchor='middle' fill='white'%3EAgent%3C/text%3E%3C/svg%3E";
     e.target.onerror = null;
   };
   
@@ -43,7 +43,7 @@ const AgentCard = ({ agent }) => {
       <div className="marketplace-agent-card-inner">
         <div className="agent-card-banner">
           <img 
-            src={agent.imageUrl || "https://via.placeholder.com/300x200?text=Agent"} 
+            src={agent.imageUrl || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='24' text-anchor='middle' fill='white'%3EAgent%3C/text%3E%3C/svg%3E"} 
             alt={agent.title} 
             className="agent-banner-img"
             onError={handleImageError}
@@ -58,7 +58,7 @@ const AgentCard = ({ agent }) => {
           <h3 className="marketplace-agent-title">{agent.title}</h3>
           <div className="agent-creator-info">
             <img 
-              src={agent.creator?.avatarUrl || "https://via.placeholder.com/40?text=?"} 
+              src={agent.creator?.avatarUrl || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23e0e0e0'/%3E%3Ctext x='20' y='25' font-family='Arial' font-size='20' text-anchor='middle' fill='%23999'%3E?%3C/text%3E%3C/svg%3E"} 
               alt={agent.creator?.name || "Creator"} 
               className="creator-avatar"
               onError={handleAvatarError}

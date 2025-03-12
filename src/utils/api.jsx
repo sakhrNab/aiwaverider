@@ -1247,11 +1247,31 @@ export const fetchWishlists = async () => {
     console.log('Attempting to fetch wishlists from API');
     const response = await api.get('/api/wishlists');
     console.log('Successfully fetched wishlists from API:', response.data);
-    return response.data;
+    return response.data.wishlists || [];
   } catch (error) {
     console.error('Error fetching wishlists:', error);
     // Return empty array instead of falling back to mock data
     return [];
+  }
+};
+
+export const fetchUserWishlists = async () => {
+  try {
+    const response = await api.get('/api/wishlists/user');
+    return response.data.wishlists || [];
+  } catch (error) {
+    console.error('Error fetching user wishlists:', error);
+    return [];
+  }
+};
+
+export const fetchWishlistById = async (wishlistId) => {
+  try {
+    const response = await api.get(`/api/wishlists/${wishlistId}`);
+    return response.data.wishlist;
+  } catch (error) {
+    console.error(`Error fetching wishlist ${wishlistId}:`, error);
+    return null;
   }
 };
 
@@ -1262,6 +1282,16 @@ export const toggleWishlist = async (agentId) => {
   } catch (error) {
     console.error('Error toggling wishlist:', error);
     throw error;
+  }
+};
+
+export const checkWishlistStatus = async (agentId) => {
+  try {
+    const response = await api.get(`/api/wishlists/check/${agentId}`);
+    return response.data.isWishlisted;
+  } catch (error) {
+    console.error('Error checking wishlist status:', error);
+    return false;
   }
 };
 
@@ -1488,24 +1518,57 @@ const generateMockAgents = (count) => {
 // Add agent to wishlist
 export const addToWishlist = async (agentId) => {
   try {
-    const response = await api.post('/api/wishlists/add', { agentId });
+    // We're now using the toggle endpoint for both adding and removing
+    const response = await api.post('/api/wishlists/toggle', { agentId });
     return response.data;
   } catch (error) {
     console.error('Error adding to wishlist:', error);
-    // Simulate success for development
-    return { success: true, message: 'Added to wishlist (mocked)' };
+    throw error;
   }
 };
 
 // Remove agent from wishlist
 export const removeFromWishlist = async (agentId) => {
   try {
-    const response = await api.delete(`/api/wishlists/remove/${agentId}`);
+    // We're now using the toggle endpoint for both adding and removing
+    const response = await api.post('/api/wishlists/toggle', { agentId });
     return response.data;
   } catch (error) {
     console.error('Error removing from wishlist:', error);
-    // Simulate success for development
-    return { success: true, message: 'Removed from wishlist (mocked)' };
+    throw error;
+  }
+};
+
+// Create a new wishlist
+export const createWishlist = async (wishlistData) => {
+  try {
+    const response = await api.post('/api/wishlists', wishlistData);
+    return response.data;
+  } catch (error) {
+    console.error('Error creating wishlist:', error);
+    throw error;
+  }
+};
+
+// Update a wishlist
+export const updateWishlist = async (wishlistId, wishlistData) => {
+  try {
+    const response = await api.put(`/api/wishlists/${wishlistId}`, wishlistData);
+    return response.data;
+  } catch (error) {
+    console.error('Error updating wishlist:', error);
+    throw error;
+  }
+};
+
+// Delete a wishlist
+export const deleteWishlist = async (wishlistId) => {
+  try {
+    const response = await api.delete(`/api/wishlists/${wishlistId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error deleting wishlist:', error);
+    throw error;
   }
 };
 
@@ -1727,6 +1790,33 @@ export const deleteUser = async (userId) => {
     return response.data;
   } catch (error) {
     console.error(`Error deleting user with ID ${userId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Get download count for an agent
+ */
+export const getDownloadCount = async (agentId) => {
+  try {
+    const response = await api.get(`/api/agents/${agentId}/downloads`);
+    return response.data.downloads;
+  } catch (error) {
+    console.error('Error getting download count:', error);
+    // Fallback to a default to prevent UI breaking
+    return 0;
+  }
+};
+
+/**
+ * Increment download count for an agent
+ */
+export const incrementDownloadCount = async (agentId) => {
+  try {
+    const response = await api.post(`/api/agents/${agentId}/downloads`);
+    return response.data;
+  } catch (error) {
+    console.error('Error incrementing download count:', error);
     throw error;
   }
 };

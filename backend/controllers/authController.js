@@ -221,7 +221,26 @@ exports.verifyUser = async (req, res) => {
  */
 exports.refreshToken = async (req, res) => {
   try {
-    const refreshToken = req.cookies.refreshToken;
+    // Get refresh token from cookies, headers, or request body
+    let refreshToken = null;
+    
+    // Try to get from cookies
+    if (req.cookies && req.cookies.refreshToken) {
+      refreshToken = req.cookies.refreshToken;
+    }
+    
+    // If not in cookies, try Authorization header
+    if (!refreshToken && req.headers.authorization) {
+      const authHeader = req.headers.authorization;
+      if (authHeader.startsWith('Bearer ')) {
+        refreshToken = authHeader.substring(7);
+      }
+    }
+    
+    // If still not found, try request body
+    if (!refreshToken && req.body && req.body.refreshToken) {
+      refreshToken = req.body.refreshToken;
+    }
     
     if (!refreshToken) {
       return res.status(401).json({ 

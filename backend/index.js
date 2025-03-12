@@ -100,6 +100,25 @@ const apiRoutes = require('./routes/index');
 // Mount API routes
 app.use('/api', apiRoutes);
 
+// Add a specific route handler for wishlist API to help debug 404 errors
+app.use('/api/wishlists*', (req, res, next) => {
+  logger.warn(`Wishlist API 404: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ 
+    error: 'Wishlist route not found. Please check the URL and method.',
+    requestedPath: req.originalUrl,
+    availableRoutes: [
+      'GET /api/wishlists',
+      'GET /api/wishlists/user',
+      'GET /api/wishlists/:wishlistId',
+      'POST /api/wishlists',
+      'PUT /api/wishlists/:wishlistId',
+      'DELETE /api/wishlists/:wishlistId',
+      'POST /api/wishlists/toggle',
+      'GET /api/wishlists/check/:agentId'
+    ]
+  });
+});
+
 // Enhanced logging
 app.use((req, res, next) => {
   let start = Date.now();
@@ -112,13 +131,23 @@ app.use((req, res, next) => {
 
 // Catch-all 404 handler
 app.use((req, res) => {
+  // Log the 404 error with more details
+  logger.warn(`404 Not Found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({ error: 'Route not found.' });
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+  // Log the error with more details
+  logger.error(`Error processing ${req.method} ${req.originalUrl}: ${err.message}`);
   console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+  
+  // Send appropriate error response
+  const statusCode = err.statusCode || 500;
+  res.status(statusCode).json({ 
+    error: err.message || 'Something went wrong!',
+    path: req.originalUrl
+  });
 });
 
 // Check if agents collection exists in development mode

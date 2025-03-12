@@ -1130,6 +1130,80 @@ const createAgentWithPrice = (req, res) => {
   });
 };
 
+/**
+ * Get the download count for an agent
+ * @route GET /api/agents/:agentId/downloads
+ */
+const getDownloadCount = async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    
+    if (!agentId) {
+      return res.status(400).json({ error: 'Agent ID is required' });
+    }
+    
+    // Get the agent document
+    const agentRef = db.collection('agents').doc(agentId);
+    const agentDoc = await agentRef.get();
+    
+    if (!agentDoc.exists) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    
+    const agentData = agentDoc.data();
+    
+    // Return the download count (default to 0 if not set)
+    return res.json({ 
+      downloads: agentData.downloadCount || 0,
+      agentId
+    });
+  } catch (error) {
+    console.error('Error getting download count:', error);
+    return res.status(500).json({ error: 'Failed to get download count' });
+  }
+};
+
+/**
+ * Increment the download count for an agent
+ * @route POST /api/agents/:agentId/downloads
+ */
+const incrementDownloadCount = async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    
+    if (!agentId) {
+      return res.status(400).json({ error: 'Agent ID is required' });
+    }
+    
+    // Get the agent document
+    const agentRef = db.collection('agents').doc(agentId);
+    const agentDoc = await agentRef.get();
+    
+    if (!agentDoc.exists) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    
+    // Increment the download count using an atomic operation
+    await agentRef.update({
+      downloadCount: admin.firestore.FieldValue.increment(1),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    
+    // Get the updated agent document
+    const updatedAgentDoc = await agentRef.get();
+    const updatedAgentData = updatedAgentDoc.data();
+    
+    return res.json({ 
+      downloads: updatedAgentData.downloadCount || 1,
+      agentId,
+      message: 'Download count incremented successfully'
+    });
+  } catch (error) {
+    console.error('Error incrementing download count:', error);
+    return res.status(500).json({ error: 'Failed to increment download count' });
+  }
+};
+
 // Log the status of each function before exporting
 console.log("Before export - function status:");
 console.log("- getAgents:", typeof getAgents === 'function');
@@ -1150,5 +1224,7 @@ module.exports = {
   updateAgent,
   deleteAgent,
   combinedUpdate,
-  createAgentWithPrice
+  createAgentWithPrice,
+  getDownloadCount,
+  incrementDownloadCount
 }; 
