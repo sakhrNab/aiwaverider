@@ -1818,7 +1818,7 @@ const ManageAgents = () => {
                                     <li key={index}>{feature}</li>
                                   ))}
                                   {agent.features.length > 3 && (
-                                    <li>+{agent.features.length - 3} more...</li>
+                                    <li key="more-features">+{agent.features.length - 3} more...</li>
                                   )}
                                 </ul>
                               </div>
