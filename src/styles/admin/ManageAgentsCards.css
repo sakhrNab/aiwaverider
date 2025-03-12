@@ -1,0 +1,251 @@
+/* Manage Agents Card Styling */
+.manage-agents-list {
+  margin-top: 20px;
+}
+
+.manage-no-agents-message {
+  text-align: center;
+  padding: 30px;
+  color: #777;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.manage-agents-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  width: 100%;
+  margin-top: 20px;
+}
+
+.manage-agent-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: transform 0.3s, box-shadow 0.3s;
+  background-color: #fff;
+  height: 100%;
+  border: 1px solid #eaeaea;
+  min-height: 300px;
+}
+
+.manage-agent-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.manage-agent-header {
+  display: flex;
+  align-items: flex-start;
+  padding: 16px;
+  border-bottom: 1px solid #eaeaea;
+  background-color: #f8f9fa;
+  min-height: 80px;
+  position: relative;
+}
+
+.manage-agent-image {
+  width: 50px;
+  height: 50px;
+  min-width: 50px;
+  margin-right: 30px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f0f0f0;
+  position: relative;
+}
+
+.manage-agent-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.manage-agent-icon-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #4a69bd;
+  color: white;
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.manage-agent-name {
+  margin: 0;
+  padding: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  flex: 1;
+  line-height: 1.4;
+  width: calc(100% - 80px);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.manage-agent-details {
+  padding: 16px;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.manage-agent-description {
+  margin: 0 0 16px;
+  color: #555;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.manage-agent-info-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.manage-agent-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.manage-info-label {
+  font-size: 0.75rem;
+  color: #777;
+  font-weight: 500;
+}
+
+.manage-info-value {
+  font-size: 0.85rem;
+  color: #333;
+}
+
+.manage-info-value.price {
+  font-weight: 600;
+  color: #2e7d32;
+  font-size: 0.95rem;
+}
+
+.manage-info-value.id {
+  font-family: monospace;
+  background-color: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+.manage-agent-info-item.features {
+  margin-top: 5px;
+}
+
+.manage-features-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.8rem;
+  color: #555;
+}
+
+.manage-features-list li {
+  margin-bottom: 3px;
+}
+
+.manage-agent-actions {
+  padding: 12px 16px;
+  border-top: 1px solid #eaeaea;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.manage-agent-actions .btn {
+  flex: 1;
+  font-size: 0.85rem;
+  padding: 8px 0;
+  border: none;
+  background-color: transparent;
+  transition: all 0.2s;
+}
+
+/* Media queries for responsiveness */
+@media (min-width: 992px) {
+  .manage-agent-info-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .manage-agent-info-item.features {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 1100px) {
+  .manage-agents-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .manage-agents-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .manage-agent-card {
+    border-radius: 6px;
+  }
+  
+  .manage-agent-header {
+    padding: 12px;
+    min-height: 65px;
+  }
+
+  .manage-agent-details {
+    padding: 12px;
+  }
+  
+  .manage-agent-actions {
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 576px) {
+  .manage-agents-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .manage-agent-image {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    margin-right: 20px;
+  }
+  
+  .manage-agent-name {
+    font-size: 0.95rem;
+    line-height: 1.3;
+    width: calc(100% - 60px);
+  }
+  
+  .manage-agent-icon-placeholder {
+    font-size: 1.2rem;
+  }
+} 

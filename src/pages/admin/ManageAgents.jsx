@@ -11,6 +11,12 @@ import {
   FaRobot,
   FaUsers,
   FaNewspaper,
+  FaEye,
+  FaLock,
+  FaLockOpen,
+  FaExclamationTriangle,
+  FaVial,
+  FaExclamationCircle,
 } from "react-icons/fa";
 import Modal from "../../components/Modal";
 import AdminLayout from "../../components/admin/AdminLayout";
@@ -26,6 +32,7 @@ import { PostsContext } from "../../contexts/PostsContext";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import { Link, useNavigate } from "react-router-dom";
 import { CATEGORIES } from "../../constants/categories";
+import '../../styles/admin/ManageAgentsCards.css';
 
 /**
  * Admin page for managing agents, posts, and users with CRUD functionality
@@ -1769,15 +1776,15 @@ const ManageAgents = () => {
 
             {/* Display agents list */}
             {!loading && !error && (
-              <div className="agents-list">
+              <div className="manage-agents-list">
                 {sortedAgents.length === 0 ? (
-                  <p className="no-agents-message">No agents found.</p>
+                  <p className="manage-no-agents-message">No agents found.</p>
                 ) : (
-                  <div className="agents-grid">
+                  <div className="manage-agents-grid">
                     {sortedAgents.map((agent) => (
-                      <div key={agent.id} className="agent-card">
-                        <div className="agent-header">
-                          <div className="agent-image">
+                      <div key={agent.id} className="manage-agent-card">
+                        <div className="manage-agent-header">
+                          <div className="manage-agent-image">
                             {agent.imageUrl && isSafeImageUrl(agent.imageUrl) ? (
                               <img 
                                 src={agent.imageUrl} 
@@ -1788,32 +1795,32 @@ const ManageAgents = () => {
                                 }}
                               />
                             ) : (
-                              <div className="agent-icon-placeholder">
+                              <div className="manage-agent-icon-placeholder">
                                 {agent.name ? agent.name.charAt(0).toUpperCase() : 'A'}
                               </div>
                             )}
                           </div>
-                          <h3 className="agent-name">{agent.name || "Assistant Pro"}</h3>
+                          <h3 className="manage-agent-name">{agent.name || "Assistant Pro"}</h3>
                         </div>
                         
-                        <div className="agent-details">
-                          <p className="agent-description">{agent.description || "An innovative AI tool for enthusiasts, combining cutting-edge technology with intuitive design."}</p>
+                        <div className="manage-agent-details">
+                          <p className="manage-agent-description">{agent.description || "An innovative AI tool for enthusiasts, combining cutting-edge technology with intuitive design."}</p>
                           
-                          <div className="agent-info-grid">
-                            <div className="agent-info-item">
-                              <span className="info-label">Category:</span>
-                              <span className="info-value">{agent.category || 'All'}</span>
+                          <div className="manage-agent-info-grid">
+                            <div className="manage-agent-info-item">
+                              <span className="manage-info-label">Category:</span>
+                              <span className="manage-info-value">{agent.category || 'All'}</span>
                             </div>
                             
-                            <div className="agent-info-item">
-                              <span className="info-label">Price:</span>
-                              <span className="info-value price">{formatPrice(agent)}</span>
+                            <div className="manage-agent-info-item">
+                              <span className="manage-info-label">Price:</span>
+                              <span className="manage-info-value price">{formatPrice(agent)}</span>
                             </div>
                             
                             {agent.features && agent.features.length > 0 && (
-                              <div className="agent-info-item features">
-                                <span className="info-label">Features:</span>
-                                <ul className="features-list">
+                              <div className="manage-agent-info-item features">
+                                <span className="manage-info-label">Features:</span>
+                                <ul className="manage-features-list">
                                   {agent.features.slice(0, 3).map((feature, index) => (
                                     <li key={index}>{feature}</li>
                                   ))}
@@ -1824,26 +1831,26 @@ const ManageAgents = () => {
                               </div>
                             )}
                             
-                            <div className="agent-info-item">
-                              <span className="info-label">Created:</span>
-                              <span className="info-value">{formatDate(agent.createdAt)}</span>
+                            <div className="manage-agent-info-item">
+                              <span className="manage-info-label">Created:</span>
+                              <span className="manage-info-value">{formatDate(agent.createdAt)}</span>
                             </div>
                             
                             {agent.updatedAt && (
-                              <div className="agent-info-item">
-                                <span className="info-label">Updated:</span>
-                                <span className="info-value">{formatDate(agent.updatedAt)}</span>
+                              <div className="manage-agent-info-item">
+                                <span className="manage-info-label">Updated:</span>
+                                <span className="manage-info-value">{formatDate(agent.updatedAt)}</span>
                               </div>
                             )}
                             
-                            <div className="agent-info-item">
-                              <span className="info-label">ID:</span>
-                              <span className="info-value id">{agent.id}</span>
+                            <div className="manage-agent-info-item">
+                              <span className="manage-info-label">ID:</span>
+                              <span className="manage-info-value id">{agent.id}</span>
                             </div>
                           </div>
                         </div>
                         
-                        <div className="agent-actions">
+                        <div className="manage-agent-actions">
                           <button 
                             className="btn btn-edit" 
                             onClick={() => handleEditClick(agent)}

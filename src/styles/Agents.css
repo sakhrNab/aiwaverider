@@ -110,14 +110,14 @@
 }
 
 /* Agent grid */
-.agents-grid {
+.marketplace-agents-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 20px;
 }
 
 /* Ensure the agent image containers in the marketplace have proper sizing */
-.agents-grid .agent-image-container {
+.marketplace-agents-grid .marketplace-agent-image-container {
   position: relative;
   width: 100%;
   padding-top: 56.25%; /* 16:9 aspect ratio */
@@ -125,7 +125,7 @@
   background-color: #f5f5f5;
 }
 
-.agents-grid .agent-image {
+.marketplace-agents-grid .marketplace-agent-image {
   position: absolute;
   top: 0;
   left: 0;
@@ -135,7 +135,7 @@
 }
 
 /* Ensure the fallback image properly fills the container */
-.agents-grid .fallback-image {
+.marketplace-agents-grid .marketplace-fallback-image {
   position: absolute;
   top: 0;
   left: 0;
@@ -221,7 +221,7 @@
 }
 
 @media (max-width: 1041px) {
-  .agents-grid {
+  .marketplace-agents-grid {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 16px;
   }
@@ -242,7 +242,7 @@
     margin-bottom: 24px;
   }
   
-  .agents-grid {
+  .marketplace-agents-grid {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   }
 }
@@ -252,14 +252,15 @@
     font-size: 24px;
   }
   
-  .agents-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
+  .marketplace-agents-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
   }
   
   .filter-bar {
     flex-direction: column;
     align-items: flex-start;
+    gap: 12px;
   }
   
   .results-count {
@@ -267,39 +268,55 @@
   }
   
   .featured-title, 
-  .section-title,
-  .wishlists-title {
+  .wishlists-title,
+  .recommendations-title,
+  .curated-title {
     font-size: 20px;
+  }
+  
+  .agents-page-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 480px) {
   .agents-page {
-    padding: 0 16px;
+    padding: 16px;
   }
   
   .page-title {
-    font-size: 22px;
+    font-size: 20px;
   }
   
-  .agents-grid {
+  .agents-page-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .agents-page-grid-small {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
   }
   
   .featured-title, 
-  .section-title,
-  .wishlists-title {
+  .wishlists-title,
+  .recommendations-title,
+  .curated-title {
     font-size: 18px;
+  }
+  
+  .agents-page-grid {
+    grid-template-columns: 1fr;
   }
 }
 
 /* Extra tall viewport */
 @media (min-height: 1500px) {
-  .agents-grid {
+  .marketplace-agents-grid {
     gap: 24px;
   }
   
-  .agent-image-container {
+  .marketplace-agent-image-container {
     height: 0;
     padding-top: 60%; /* Slightly taller for better viewing in tall viewports */
   }
@@ -376,13 +393,14 @@
   flex-shrink: 0;
 }
 
-.agents-grid-column {
-  flex: 1;
+.agents-page-grid-column {
+  display: flex;
+  flex-direction: column;
 }
 
-.agents-grid {
+.agents-page-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
 }
 
@@ -429,8 +447,8 @@
     margin-bottom: 16px;
   }
   
-  .agents-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  .agents-page-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -439,7 +457,11 @@
     padding: 16px;
   }
   
-  .agents-grid {
+  .agents-page-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .agents-page-grid-small {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 16px;
   }

@@ -5,6 +5,7 @@ import { useContext } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 import { toggleWishlist } from '../../utils/api';
 import { toast } from 'react-toastify';
+import '../../styles/MarketplaceAgentCard.css';
 
 const AgentCard = ({ agent }) => {
   const { user } = useContext(AuthContext);
@@ -13,53 +14,75 @@ const AgentCard = ({ agent }) => {
   
   const handleWishlist = async (e) => {
     e.preventDefault();
-    e.stopPropagation();
     
     if (!user) {
-      toast.info('Please sign in to add items to your wishlist');
+      toast.error("Please log in to add to wishlist");
       return;
     }
     
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      const result = await toggleWishlist(agent.id);
-      setIsWishlisted(result.wishlisted);
-      toast.success(result.wishlisted ? 'Added to wishlist' : 'Removed from wishlist');
+      await toggleWishlist(agent.id);
+      setIsWishlisted(!isWishlisted);
+      toast.success(isWishlisted ? "Removed from wishlist" : "Added to wishlist");
     } catch (error) {
-      console.error('Error toggling wishlist:', error);
-      toast.error('Failed to update wishlist');
+      toast.error("Failed to update wishlist");
+      console.error(error);
     } finally {
       setIsLoading(false);
     }
   };
   
+  const formatPrice = (price) => {
+    if (!price && price !== 0) return 'Free';
+    if (typeof price === 'string') return price;
+    return price === 0 ? 'Free' : `$${price.toFixed(2)}`;
+  };
+  
   return (
-    <div className="agent-card">
-      <Link to={`/agents/${agent.id}`} className="agent-link">
-        <div className="agent-image-container">
-          <img src={agent.image} alt={agent.title} className="agent-image" />
+    <div className="marketplace-agent-card">
+      <Link to={`/agents/${agent.id}`} className="marketplace-agent-card-inner">
+        <div className="marketplace-agent-image-container">
+          <img 
+            src={agent.imageUrl || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"%3E%3Crect width="300" height="200" fill="%234a4de7"/%3E%3Ctext x="150" y="100" font-family="Arial" font-size="24" text-anchor="middle" fill="white"%3EAgent%3C/text%3E%3C/svg%3E'} 
+            alt={agent.title} 
+            className="marketplace-agent-image"
+          />
+          
           <button 
-            className={`wishlist-button ${isWishlisted ? 'active' : ''} ${isLoading ? 'loading' : ''}`} 
+            className={`marketplace-wishlist-button ${isWishlisted ? 'active' : ''} ${isLoading ? 'loading' : ''}`}
             onClick={handleWishlist}
-            disabled={isLoading}
+            aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
           >
             {isWishlisted ? <FaHeart /> : <FaRegHeart />}
           </button>
+          
+          {agent.isBestseller && <div className="marketplace-badge bestseller">Bestseller</div>}
+          {agent.isNew && <div className="marketplace-badge new">New</div>}
         </div>
-        <div className="agent-content">
-          <h3 className="agent-title">{agent.title}</h3>
-          <div className="agent-creator">
-            <img src={agent.creator.avatar} alt={agent.creator.name} className="creator-avatar" />
-            <span className="creator-name">{agent.creator.name}</span>
+        
+        <div className="marketplace-agent-content">
+          <h3 className="marketplace-agent-title">{agent.title}</h3>
+          <p className="marketplace-agent-description">{agent.description}</p>
+          
+          <div className="marketplace-agent-creator">
+            By {agent.creator?.name || 'Unknown Creator'}
           </div>
-          <div className="agent-footer">
-            <div className="agent-price">{agent.price}</div>
-            {agent.rating && (
-              <div className="agent-rating">
-                <FaStar className="rating-star" />
-                <span>{agent.rating.average} ({agent.rating.count})</span>
-              </div>
+          
+          <div className="marketplace-agent-rating">
+            {agent.rating ? (
+              <>
+                <span className="marketplace-rating-score">{parseFloat(agent.rating.average).toFixed(1)}</span>
+                <FaStar className="marketplace-star-icon" />
+                <span className="marketplace-rating-count">({agent.rating.count})</span>
+              </>
+            ) : (
+              <span className="marketplace-no-rating">No ratings yet</span>
             )}
+          </div>
+          
+          <div className="marketplace-agent-price">
+            {formatPrice(agent.price)}
           </div>
         </div>
       </Link>
@@ -107,7 +130,7 @@ const MarketplaceSection = ({ agents, isLoading, currentFilter, onFilterChange, 
           <p>No agents found. Try adjusting your filters or search query.</p>
         </div>
       ) : (
-        <div className="agents-grid">
+        <div className="marketplace-agents-grid">
           {filteredAgents.map((agent) => (
             <AgentCard key={agent.id} agent={agent} />
           ))}

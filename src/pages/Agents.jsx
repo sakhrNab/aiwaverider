@@ -363,7 +363,7 @@ const Agents = () => {
             <span>Showing mock data - not fetched from database</span>
           </div>
         )}
-        <div className="agents-grid">
+        <div className="marketplace-agents-grid">
           {agents.map(agent => (
             <AgentCard key={agent.id} agent={agent} />
           ))}
@@ -506,7 +506,7 @@ const Agents = () => {
           </div>
           
           {/* Right Column - Agent Grid */}
-          <div className="agents-grid-column">
+          <div className="agents-page-grid-column">
             <div className="results-count">
               {agents.length} results
             </div>

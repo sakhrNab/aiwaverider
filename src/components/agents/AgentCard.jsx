@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FaStar, FaHeart, FaRegHeart } from 'react-icons/fa';
 import { addToWishlist, removeFromWishlist } from '../../utils/api';
-import './AgentCard.css';
+import '../../styles/MarketplaceAgentCard.css';
 
 const AgentCard = ({ agent }) => {
   const [isWishlisted, setIsWishlisted] = useState(agent.isWishlisted || false);
@@ -29,7 +29,7 @@ const AgentCard = ({ agent }) => {
   };
 
   // Format the price for display
-  const formatPrice = (price) => {
+  const formatPrice = () => {
     // First check if agent is marked as free
     if (agent.isFree) return 'Free';
     
@@ -53,10 +53,10 @@ const AgentCard = ({ agent }) => {
     }
     
     // Legacy format handling
-    if (!price && price !== 0) return 'Free';
-    if (typeof price === 'string') return price;
-    if (typeof price === 'number') {
-      return price === 0 ? 'Free' : `$${price.toFixed(2)}`;
+    if (!agent.price && agent.price !== 0) return 'Free';
+    if (typeof agent.price === 'string') return agent.price;
+    if (typeof agent.price === 'number') {
+      return agent.price === 0 ? 'Free' : `$${agent.price.toFixed(2)}`;
     }
     
     // Fallback
@@ -87,18 +87,18 @@ const AgentCard = ({ agent }) => {
   };
 
   return (
-    <div className="agent-card">
-      <div className="agent-card-inner">
+    <div className="marketplace-agent-card">
+      <div className="marketplace-agent-card-inner">
         {/* Card image with wishlist button */}
-        <div className="agent-image-container">
+        <div className="marketplace-agent-image-container">
           <img 
             src={getImageUrl()} 
             alt={agent.title || agent.name} 
-            className="agent-image" 
+            className="marketplace-agent-image" 
             onError={handleImageError}
           />
           <button 
-            className={`wishlist-button ${isWishlisted ? 'active' : ''} ${isLoading ? 'loading' : ''}`}
+            className={`marketplace-wishlist-button ${isWishlisted ? 'active' : ''} ${isLoading ? 'loading' : ''}`}
             onClick={handleWishlist}
             disabled={isLoading}
             aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
@@ -107,38 +107,38 @@ const AgentCard = ({ agent }) => {
           </button>
           
           {/* Badges */}
-          {agent.isBestseller && <div className="badge bestseller">Bestseller</div>}
-          {agent.isNew && <div className="badge new">New</div>}
-          {agent.isTrending && <div className="badge trending">Trending</div>}
+          {agent.isBestseller && <div className="marketplace-badge bestseller">Bestseller</div>}
+          {agent.isNew && <div className="marketplace-badge new">New</div>}
+          {agent.isTrending && <div className="marketplace-badge trending">Trending</div>}
         </div>
 
         {/* Card content */}
-        <div className="agent-content">
-          <h3 className="agent-title">{agent.title || agent.name}</h3>
-          <p className="agent-description">{agent.description || "No description available"}</p>
+        <div className="marketplace-agent-content">
+          <h3 className="marketplace-agent-title">{agent.title || agent.name}</h3>
+          <p className="marketplace-agent-description">{agent.description || "No description available"}</p>
           
-          <div className="agent-creator">
+          <div className="marketplace-agent-creator">
             By {agent.creator?.name || "Unknown Creator"}
           </div>
           
-          <div className="agent-rating">
+          <div className="marketplace-agent-rating">
             {agent.rating?.average ? (
               <>
-                <span className="rating-score">{formatRating(agent.rating.average)}</span>
-                <FaStar className="star-icon" />
-                <span className="rating-count">({agent.rating.count || 0})</span>
+                <span className="marketplace-rating-score">{formatRating(agent.rating.average)}</span>
+                <FaStar className="marketplace-star-icon" />
+                <span className="marketplace-rating-count">({agent.rating.count || 0})</span>
               </>
             ) : (
-              <span className="no-rating">No ratings yet</span>
+              <span className="marketplace-no-rating">No ratings yet</span>
             )}
           </div>
           
-          <div className="agent-price">
+          <div className="marketplace-agent-price">
             {formatPrice()}
           </div>
           
           {agent.version && 
-            <div className="agent-version">v{agent.version}</div>
+            <div className="marketplace-agent-version">v{agent.version}</div>
           }
         </div>
       </div>

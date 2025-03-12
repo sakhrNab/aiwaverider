@@ -38,7 +38,7 @@
   color: white;
 }
 
-.agents-grid {
+.marketplace-agents-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
@@ -175,13 +175,13 @@
     align-items: flex-start;
   }
   
-  .agents-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .marketplace-agents-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   }
 }
 
 @media (max-width: 480px) {
-  .agents-grid {
+  .marketplace-agents-grid {
     grid-template-columns: 1fr;
   }
 }
