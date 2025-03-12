@@ -88,8 +88,23 @@ const RecommendationCard = ({ agent }) => {
     return typeof rating === 'number' ? rating.toFixed(1) : parseFloat(rating).toFixed(1);
   };
 
-  // Default placeholder image as data URI
-  const placeholderImage = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23f0f0f0'/%3E%3Cpath d='M80 80 L120 120 M120 80 L80 120' stroke='%23999' stroke-width='4'/%3E%3Ctext x='100' y='160' font-family='Arial' font-size='12' text-anchor='middle' fill='%23999'%3ENo Image%3C/text%3E%3C/svg%3E";
+  // Better placeholder image with agent's first letter and consistent styling
+  const generatePlaceholderImage = () => {
+    // Get initial from agent title or name
+    const initial = agent.title ? agent.title.charAt(0).toUpperCase() : 
+                  agent.name ? agent.name.charAt(0).toUpperCase() : 'A';
+    const color = '#4a4de7'; // Nice blue-purple color
+    
+    return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='160' viewBox='0 0 300 160'%3E%3Crect width='300' height='160' fill='${color.replace('#', '%23')}'/%3E%3Ctext x='150' y='90' font-family='Arial' font-size='60' font-weight='bold' text-anchor='middle' fill='white'%3E${initial}%3C/text%3E%3C/svg%3E`;
+  };
+
+  // Get appropriate image URL with fallback
+  const getImageUrl = () => {
+    if (!agent.iconUrl) {
+      return generatePlaceholderImage();
+    }
+    return agent.iconUrl;
+  };
 
   return (
     <div className="recommendation-card">
@@ -97,11 +112,11 @@ const RecommendationCard = ({ agent }) => {
         <div className="recommendation-card-inner">
           <div className="recommendation-image-container">
             <img 
-              src={agent.iconUrl || placeholderImage} 
+              src={getImageUrl()} 
               alt={agent.title || agent.name || 'Agent'} 
               className="recommendation-image"
               onError={(e) => {
-                e.target.src = placeholderImage;
+                e.target.src = generatePlaceholderImage();
                 e.target.onerror = null; // Prevent infinite error loops
               }}
             />
