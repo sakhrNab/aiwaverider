@@ -30,26 +30,36 @@ const AgentCard = ({ agent }) => {
 
   // Format the price for display
   const formatPrice = (price) => {
+    // First check if agent is marked as free
+    if (agent.isFree) return 'Free';
+    
     // Check if we have price details object
     if (agent.priceDetails) {
-      if (agent.isFree) return 'Free';
-      
       const { basePrice, discountedPrice, currency } = agent.priceDetails;
       const currencySymbol = currency === 'USD' ? '$' : currency;
       
-      if (discountedPrice !== null && discountedPrice !== basePrice) {
-        return `${currencySymbol}${discountedPrice.toFixed(2)}`;
+      // Check for discounted price
+      if (discountedPrice !== null && discountedPrice !== undefined && discountedPrice !== basePrice) {
+        return `${currencySymbol}${Number(discountedPrice).toFixed(2)}`;
       }
       
-      return basePrice ? `${currencySymbol}${basePrice.toFixed(2)}` : 'Free';
+      // Check for base price
+      if (basePrice !== null && basePrice !== undefined) {
+        return `${currencySymbol}${Number(basePrice).toFixed(2)}`;
+      }
+      
+      // If no valid prices in priceDetails
+      return 'Free';
     }
     
-    // Legacy format
-    if (!price) return 'Free';
+    // Legacy format handling
+    if (!price && price !== 0) return 'Free';
     if (typeof price === 'string') return price;
     if (typeof price === 'number') {
       return price === 0 ? 'Free' : `$${price.toFixed(2)}`;
     }
+    
+    // Fallback
     return 'Price unavailable';
   };
 
@@ -120,7 +130,7 @@ const AgentCard = ({ agent }) => {
           </div>
           
           <div className="agent-price">
-            {formatPrice(agent.priceDetails?.basePrice)}
+            {formatPrice()}
           </div>
           
           {agent.version && 
