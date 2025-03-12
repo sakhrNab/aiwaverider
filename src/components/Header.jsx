@@ -1,9 +1,10 @@
 // src/components/Header.jsx
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import logo from '../assets/v6.webp';
 import { AuthContext } from '../contexts/AuthContext';
 import { toast } from 'react-toastify';
+import './Header.css'; // Import custom Header CSS
 
 const Header = ({ openSignUpModal }) => {
   const { user, signOut } = useContext(AuthContext);
@@ -18,6 +19,23 @@ const Header = ({ openSignUpModal }) => {
 
   // Helper to highlight active route (optional)
   const isActive = (path) => location.pathname === path;
+  
+  // Check if current page is an admin page
+  const isAdminPage = location.pathname.startsWith('/admin');
+  
+  // Add/remove admin-page class to body
+  useEffect(() => {
+    if (isAdminPage) {
+      document.body.classList.add('admin-page');
+    } else {
+      document.body.classList.remove('admin-page');
+    }
+    
+    // Cleanup function
+    return () => {
+      document.body.classList.remove('admin-page');
+    };
+  }, [isAdminPage]);
 
   // Handle search
   const handleSearch = () => {
@@ -48,7 +66,7 @@ const Header = ({ openSignUpModal }) => {
   };
 
   return (
-    <header className="bg-gray-800 text-white px-4 py-3 shadow-lg">
+    <header className="bg-gray-800 text-white px-4 py-3 shadow-lg main-header">
       <div className="container mx-auto flex items-center justify-between">
         {/* Left group: Logo and main nav */}
         <div className="flex items-center flex-1 space-x-2 md:space-x-4">
@@ -61,48 +79,48 @@ const Header = ({ openSignUpModal }) => {
           </div>
 
           {/* Main Nav (hidden on mobile, shown on md and up) */}
-          <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
-            <Link to="/agents" className="px-2 lg:px-3 py-2 hover:bg-blue-600 rounded text-sm lg:text-base font-medium">
+          <nav className="hidden md:flex items-center space-x-1 lg:space-x-3 xl:space-x-4 nav-links">
+            <Link to="/agents" className="px-2 lg:px-3 py-2 hover:bg-blue-600 rounded text-sm lg:text-base font-medium nav-link">
               Agents
             </Link>
-            <Link to="/ai-tools" className="px-2 lg:px-3 py-2 hover:bg-blue-600 rounded text-sm lg:text-base">
+            <Link to="/ai-tools" className="px-2 lg:px-3 py-2 hover:bg-blue-600 rounded text-sm lg:text-base nav-link">
               AI Tools
             </Link>
-            <Link to="/trends" className="px-2 lg:px-3 py-2 hover:bg-blue-600 rounded text-sm lg:text-base">
+            <Link to="/trends" className="px-2 lg:px-3 py-2 hover:bg-blue-600 rounded text-sm lg:text-base nav-link">
               Trends
             </Link>
-            <Link to="/latest-tech" className="px-2 lg:px-3 py-2 hover:bg-blue-600 rounded text-sm lg:text-base">
+            <Link to="/latest-tech" className="px-2 lg:px-3 py-2 hover:bg-blue-600 rounded text-sm lg:text-base nav-link">
               Latest Tech
             </Link>
           </nav>
         </div>
 
         {/* Center group: Search (hidden on mobile) */}
-        <div className="hidden md:flex items-center justify-center flex-1 max-w-md px-4">
+        <div className="hidden md:flex items-center justify-center flex-1 max-w-md px-2 lg:px-4">
           <div className="w-full flex items-center space-x-2">
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search..."
-              className="w-full px-3 py-2 rounded-l border border-gray-300 text-gray-800"
+              className="w-full px-3 py-2 rounded-l border border-gray-300 text-gray-800 search-input"
             />
-            <button onClick={handleSearch} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-r whitespace-nowrap">
+            <button onClick={handleSearch} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-r whitespace-nowrap search-button">
               Search
             </button>
           </div>
         </div>
 
         {/* Right group: Auth buttons and profile */}
-        <div className="flex items-center justify-end space-x-2 flex-shrink-0">
+        <div className="flex items-center justify-end space-x-2 md:space-x-3 flex-shrink-0 auth-buttons">
           {!user && (
-            <div className="hidden md:flex items-center space-x-2">
-              <Link to="/sign-in" className="px-3 py-2 hover:bg-blue-600 rounded">
+            <div className="hidden md:flex items-center space-x-2 md:space-x-3">
+              <Link to="/sign-in" className="px-3 py-2 hover:bg-blue-600 rounded auth-link">
                 Sign In
               </Link>
               <button
                 onClick={handleSignUp}
-                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded font-medium"
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded font-medium auth-button"
               >
                 Sign Up
               </button>
@@ -110,15 +128,15 @@ const Header = ({ openSignUpModal }) => {
           )}
 
           {user && (
-            <div className="hidden md:flex items-center space-x-2">
+            <div className="hidden md:flex items-center space-x-2 md:space-x-3">
               {user.role === 'admin' && (
-                <Link to="/admin" className="px-3 py-2 hover:bg-blue-600 rounded">
+                <Link to="/admin/agents" className="px-3 py-2 hover:bg-blue-600 rounded auth-link">
                   Admin
                 </Link>
               )}
               <button
                 onClick={handleSignOut}
-                className="px-3 py-2 bg-red-600 hover:bg-red-700 rounded font-medium"
+                className="px-3 py-2 bg-red-600 hover:bg-red-700 rounded font-medium auth-button"
               >
                 Sign Out
               </button>
@@ -146,7 +164,7 @@ const Header = ({ openSignUpModal }) => {
 
           {/* Hamburger menu icon */}
           <button 
-            className="md:hidden p-2 hover:bg-gray-700 rounded"
+            className="md:hidden p-2 hover:bg-gray-700 rounded mobile-menu-toggle"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
           >
             <svg
@@ -154,13 +172,23 @@ const Header = ({ openSignUpModal }) => {
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d={isMenuOpen ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'}
-              />
+              {isMenuOpen ? (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              ) : (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              )}
             </svg>
           </button>
         </div>
@@ -201,7 +229,7 @@ const Header = ({ openSignUpModal }) => {
                   Profile
                 </Link>
                 {user.role === 'admin' && (
-                  <Link to="/admin" className="px-3 py-2 hover:bg-blue-600 rounded">
+                  <Link to="/admin/agents" className="px-3 py-2 hover:bg-blue-600 rounded">
                     Admin Dashboard
                   </Link>
                 )}

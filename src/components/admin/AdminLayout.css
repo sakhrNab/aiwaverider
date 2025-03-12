@@ -11,29 +11,37 @@
   color: #fff;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: calc(100vh - 60px); /* Match header height exactly */
   position: fixed;
   left: 0;
-  top: 0;
-  z-index: 100;
+  top: 60px; /* Match header height exactly */
+  z-index: 95; /* Just below header but above most content */
   transition: transform 0.3s ease;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
 }
 
 .sidebar-header {
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: #151525; /* Slightly darker than sidebar */
+  display: flex;
+  align-items: center;
+  height: 70px; /* Fixed height for consistency */
 }
 
 .sidebar-header h1 {
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   margin: 0;
   color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.5px;
 }
 
 .sidebar-nav {
   flex: 1;
   padding: 1rem 0;
   overflow-y: auto;
+  margin-top: 0.5rem;
 }
 
 .sidebar-nav ul {
@@ -93,40 +101,56 @@
 }
 
 .admin-content {
-  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   margin-left: 250px;
   padding: 2rem;
+  padding-top: 80px; /* Ensure content starts below header */
   background-color: #f8f9fa;
-  min-height: 100vh;
+  min-height: calc(100vh - 60px);
 }
 
-/* Mobile menu button */
+/* Mobile menu button - only show in admin pages */
 .mobile-menu-button {
   position: fixed;
-  top: 1rem;
-  right: 1rem;
+  top: 8px;
+  right: 16px;
   z-index: 200;
-  background-color: #4361ee;
+  background-color: rgba(0, 0, 0, 0.2);
   color: white;
   border: none;
   border-radius: 4px;
   width: 40px;
   height: 40px;
-  display: none;
+  display: none; /* Hidden by default */
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.mobile-menu-button:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Special styles for the hamburger icon */
+.mobile-menu-button svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 2px;
 }
 
 /* Backdrop overlay for mobile */
 .sidebar-backdrop {
   position: fixed;
-  top: 0;
+  top: 56px; /* Mobile header height */
   left: 0;
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.5);
-  z-index: 90;
+  z-index: 40;
   display: none;
 }
 
@@ -135,22 +159,37 @@
   .admin-sidebar {
     transform: translateX(-100%);
     box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+    z-index: 90;
+    top: 56px; /* Mobile header height */
+    height: calc(100vh - 56px);
   }
   
   .admin-sidebar.open {
     transform: translateX(0);
   }
   
-  .mobile-menu-button {
+  /* Only display the admin menu button on small screens */
+  body.admin-page .admin-layout .mobile-menu-button {
     display: flex;
   }
   
   .sidebar-backdrop {
     display: block;
+    top: 56px; /* Mobile header height */
   }
   
   .admin-content {
     margin-left: 0;
     padding: 1rem;
+    padding-top: 76px; /* Slightly higher to account for mobile header */
+  }
+}
+
+/* Additional small screen adjustments */
+@media (max-width: 576px) {
+  .admin-content {
+    padding-top: 65px;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
   }
 } 

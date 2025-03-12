@@ -1,0 +1,261 @@
+.main-header {
+  /* background-color: var(--text-color-light); */
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 1.5rem;
+  height: 64px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.logo {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: white;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+}
+
+.logo img {
+  height: 32px;
+  margin-right: 0.5rem;
+}
+
+.nav-links {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.nav-links a {
+  color: white;
+  text-decoration: none;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+
+.nav-links a:hover {
+  opacity: 0.8;
+}
+
+.auth-buttons .auth-link,
+.auth-buttons .auth-button {
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.search-input {
+  min-width: 100px;
+}
+
+.search-button {
+  min-width: 70px;
+}
+
+/* Extra large screens */
+@media (min-width: 1280px) {
+  .nav-link {
+    font-size: 16px;
+    padding: 0.5rem 1rem;
+  }
+}
+
+/* Large screens */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .nav-link {
+    padding: 0.5rem 0.75rem;
+  }
+}
+
+/* Medium screens */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .nav-links {
+    gap: 2px;
+  }
+  
+  .nav-link {
+    padding: 0.5rem 0.5rem;
+    font-size: 12px;
+  }
+  
+  .auth-buttons .auth-link,
+  .auth-buttons .auth-button {
+    padding: 0.5rem 0.5rem;
+    font-size: 12px;
+  }
+  
+  .search-input {
+    min-width: 80px;
+  }
+  
+  .search-button {
+    min-width: 60px;
+    padding: 0.5rem;
+  }
+}
+
+/* Extra breakpoint for medium-small screens */
+@media (min-width: 768px) and (max-width: 890px) {
+  .nav-link {
+    padding: 0.25rem 0.35rem;
+    font-size: 11px;
+  }
+  
+  .auth-buttons .auth-link,
+  .auth-buttons .auth-button {
+    padding: 0.25rem 0.35rem;
+    font-size: 11px;
+  }
+  
+  .search-button {
+    padding: 0.25rem 0.35rem;
+    font-size: 11px;
+  }
+}
+
+/* Small screens - Mobile */
+@media (max-width: 767px) {
+  .main-header {
+    padding: 0 1rem;
+    height: 56px;
+  }
+  
+  .logo {
+    font-size: 1.25rem;
+  }
+  
+  .logo img {
+    height: 28px;
+  }
+  
+  .nav-links {
+    display: none;
+  }
+  
+  .nav-links.open {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 56px;
+    left: 0;
+    right: 0;
+    background-color: var(--primary-color);
+    padding: 1rem;
+    gap: 1rem;
+  }
+  
+  /* Show the hamburger menu only on non-admin pages in mobile */
+  .mobile-menu-toggle {
+    display: flex;
+  }
+  
+  /* Hide the header hamburger when on admin pages */
+  body.admin-page .mobile-menu-toggle {
+    display: none;
+  }
+}
+
+/* Hamburger menu toggle button */
+.mobile-menu-toggle {
+  display: none; /* Hidden by default */
+  position: relative;
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 0;
+}
+
+.mobile-menu-toggle svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* User menu styling */
+.user-menu {
+  position: relative;
+}
+
+.user-menu-button {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+
+.user-menu-button img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-menu-options {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  background-color: white;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  width: 200px;
+  z-index: 50;
+  overflow: hidden;
+  display: none;
+}
+
+.user-menu-options.open {
+  display: block;
+}
+
+.user-menu-options a,
+.user-menu-options button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  text-decoration: none;
+  color: var(--text-color);
+  transition: background-color 0.2s;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.user-menu-options a:hover,
+.user-menu-options button:hover {
+  background-color: var(--light-gray);
+}
+
+.user-menu-options svg {
+  width: 18px;
+  height: 18px;
+  color: var(--text-color-light);
+}
+
+/* Admin mobile menu button rules */
+body .mobile-menu-button {
+  display: none !important; /* Always hide by default */
+}
+
+/* Only show Admin mobile menu in admin pages on mobile */
+@media (max-width: 768px) {
+  body.admin-page .mobile-menu-button {
+    display: flex !important;
+  }
+} 
