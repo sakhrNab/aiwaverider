@@ -33,6 +33,12 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
       return true;
     }
     
+    // Detect example.com URLs which we know will fail
+    if (url.includes('example.com')) {
+      console.log('Detected example.com URL which is likely to fail:', url);
+      return false;
+    }
+    
     // For regular URLs, do basic validation
     try {
       const parsedUrl = new URL(url);
@@ -42,14 +48,26 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
     }
   };
   
+  // Generate a safe placeholder image for icons and images
+  const generatePlaceholderImage = (type = 'icon', text = 'AI') => {
+    const isIcon = type === 'icon';
+    const width = isIcon ? 100 : 300;
+    const height = isIcon ? 100 : 200;
+    const bgColor = '4a4de7';
+    const textColor = 'ffffff';
+    const fontSize = isIcon ? 14 : 24;
+    
+    return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${width}' height='${height}' viewBox='0 0 ${width} ${height}'%3E%3Crect width='${width}' height='${height}' fill='%23${bgColor}'/%3E%3Ctext x='${width/2}' y='${height/2}' font-family='Arial' font-size='${fontSize}' text-anchor='middle' dominant-baseline='middle' fill='%23${textColor}'%3E${text}%3C/text%3E%3C/svg%3E`;
+  };
+  
   // Default form data for a new agent
   const defaultFormData = {
     name: '',
     title: '',
     description: '',
     category: '',
-    imageUrl: 'https://placehold.co/300x200?text=Agent+Image',
-    iconUrl: 'https://placehold.co/100x100?text=Agent+Icon',
+    imageUrl: generatePlaceholderImage('image', 'Agent Image'),
+    iconUrl: generatePlaceholderImage('icon', 'AI'),
     creator: {
       name: '',
       email: ''
@@ -79,6 +97,23 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
     // Ensure agent is treated as an object even if it's undefined or null
     const safeAgent = agent || {};
     
+    // Helper functions for safe image handling
+    const safeImageUrl = (url) => {
+      // If it's a blob URL, empty string, or not valid (including example.com), use a placeholder
+      if (!url || isBlobUrl(url) || !isValidImageUrl(url)) {
+        return generatePlaceholderImage('image', safeAgent.name?.charAt(0) || 'A');
+      }
+      return url;
+    };
+    
+    const safeIconUrl = (url) => {
+      // If it's a blob URL, empty string, or not valid (including example.com), use a placeholder
+      if (!url || isBlobUrl(url) || !isValidImageUrl(url)) {
+        return generatePlaceholderImage('icon', safeAgent.name?.charAt(0) || 'A');
+      }
+      return url;
+    };
+    
     return {
       ...defaultFormData,
       ...safeAgent,
@@ -87,8 +122,8 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
       title: safeAgent.title || '',
       description: safeAgent.description || '',
       category: safeAgent.category || '',
-      imageUrl: isBlobUrl(safeAgent.imageUrl) ? '' : (safeAgent.imageUrl || ''),
-      iconUrl: isBlobUrl(safeAgent.iconUrl) ? '' : (safeAgent.iconUrl || ''),
+      imageUrl: safeImageUrl(safeAgent.imageUrl),
+      iconUrl: safeIconUrl(safeAgent.iconUrl),
       version: safeAgent.version || '',
       creator: {
         ...defaultFormData.creator,
@@ -141,9 +176,22 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
         } : {})
       });
       
-      // Clean imageUrl if it's a blob that might be invalid
-      const cleanedImageUrl = isBlobUrl(agent.imageUrl) ? '' : (agent.imageUrl || '');
-      const cleanedIconUrl = isBlobUrl(agent.iconUrl) ? '' : (agent.iconUrl || '');
+      // Clean up potentially problematic image URLs
+      const safeImageUrl = (url) => {
+        // If it's a blob URL, empty string, or not valid (including example.com), use a placeholder
+        if (isBlobUrl(url) || !url || !isValidImageUrl(url)) {
+          return generatePlaceholderImage('image', agent.name?.charAt(0) || 'A');
+        }
+        return url;
+      };
+      
+      const safeIconUrl = (url) => {
+        // If it's a blob URL, empty string, or not valid (including example.com), use a placeholder
+        if (isBlobUrl(url) || !url || !isValidImageUrl(url)) {
+          return generatePlaceholderImage('icon', agent.name?.charAt(0) || 'A');
+        }
+        return url;
+      };
       
       setFormData({
         ...defaultFormData, // Start with default values for all fields
@@ -154,8 +202,8 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
         description: agent.description || '',
         category: agent.category || '',
         version: agent.version || '',
-        imageUrl: cleanedImageUrl,
-        iconUrl: cleanedIconUrl,
+        imageUrl: safeImageUrl(agent.imageUrl),
+        iconUrl: safeIconUrl(agent.iconUrl),
         creator: {
           ...defaultFormData.creator,
           ...(agent.creator || {}),
@@ -737,13 +785,22 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
               accept="image/*"
               onChange={(e) => {
                 if (e.target.files && e.target.files[0]) {
-                  // For preview only - in a real implementation you would upload to a server
-                  const imageUrl = URL.createObjectURL(e.target.files[0]);
-                  setFormData({
-                    ...formData,
-                    imageUrl: imageUrl,
-                    _imageFile: e.target.files[0] // Store the file for later upload
-                  });
+                  try {
+                    // For preview only - in a real implementation you would upload to a server
+                    const imageUrl = URL.createObjectURL(e.target.files[0]);
+                    setFormData({
+                      ...formData,
+                      imageUrl: imageUrl,
+                      _imageFile: e.target.files[0] // Store the file for later upload
+                    });
+                  } catch (error) {
+                    console.error('Error creating object URL:', error);
+                    // Fallback to placeholder if createObjectURL fails
+                    setFormData({
+                      ...formData,
+                      imageUrl: generatePlaceholderImage('image', formData.name?.charAt(0) || 'A')
+                    });
+                  }
                 }
               }}
             />
@@ -753,7 +810,7 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
           <div className="image-preview">
             <h4>Image Preview</h4>
             <div className="preview-container">
-              {formData.imageUrl ? (
+              {formData.imageUrl && isValidImageUrl(formData.imageUrl) ? (
                 <img 
                   src={formData.imageUrl} 
                   alt="Agent image preview" 
@@ -767,17 +824,19 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
                       // Update the form data to remove the invalid URL
                       setFormData(prev => ({
                         ...prev,
-                        imageUrl: ''
+                        imageUrl: generatePlaceholderImage('image', formData.name?.charAt(0) || 'A')
                       }));
+                    } else {
+                      // Set a placeholder image directly on the element
+                      e.target.src = generatePlaceholderImage('image', formData.name?.charAt(0) || 'A');
+                      e.target.onerror = null; // Prevent infinite error loops
                     }
-                    // Set a placeholder image
-                    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%23f0f0f0'/%3E%3Cpath d='M100 80 L200 120 M200 80 L100 120' stroke='%23999' stroke-width='2'/%3E%3C/svg%3E";
                   }}
                 />
               ) : (
                 <div className="no-image">
                   <FaImage />
-                  <span>No image provided</span>
+                  <span>No valid image provided</span>
                 </div>
               )}
             </div>
@@ -786,7 +845,7 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
           <div className="image-preview">
             <h4>Icon Preview</h4>
             <div className="preview-container">
-              {formData.iconUrl ? (
+              {formData.iconUrl && isValidImageUrl(formData.iconUrl) ? (
                 <img 
                   src={formData.iconUrl} 
                   alt="Agent icon preview" 
@@ -800,17 +859,19 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
                       // Update the form data to remove the invalid URL
                       setFormData(prev => ({
                         ...prev,
-                        iconUrl: ''
+                        iconUrl: generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A')
                       }));
+                    } else {
+                      // Set a placeholder image directly on the element
+                      e.target.src = generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A');
+                      e.target.onerror = null; // Prevent infinite error loops
                     }
-                    // Set a placeholder image
-                    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Cpath d='M35 40 L65 60 M65 40 L35 60' stroke='%23999' stroke-width='2'/%3E%3C/svg%3E";
                   }}
                 />
               ) : (
                 <div className="no-image">
                   <FaImage />
-                  <span>No icon provided</span>
+                  <span>No valid icon provided</span>
                 </div>
               )}
             </div>

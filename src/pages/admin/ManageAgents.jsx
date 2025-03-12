@@ -1188,6 +1188,30 @@ const ManageAgents = () => {
     }
   };
   
+  // Helper function to generate placeholder image for agent icons
+  const generateAgentIconPlaceholder = (agent) => {
+    const text = agent?.name?.charAt(0) || 'AI';
+    const width = 40;
+    const height = 40;
+    const bgColor = '4a4de7';
+    const textColor = 'ffffff';
+    
+    return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${width}' height='${height}' viewBox='0 0 ${width} ${height}'%3E%3Crect width='${width}' height='${height}' fill='%23${bgColor}'/%3E%3Ctext x='${width/2}' y='${height/2}' font-family='Arial' font-size='16' text-anchor='middle' dominant-baseline='middle' fill='%23${textColor}'%3E${text}%3C/text%3E%3C/svg%3E`;
+  };
+  
+  // Function to check if an image URL is valid (not example.com)
+  const isSafeImageUrl = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    if (url.includes('example.com')) return false;
+    
+    try {
+      new URL(url);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+  
   return (
     <AdminLayout>
       <div className="manage-agents-container">
@@ -1361,11 +1385,13 @@ const ManageAgents = () => {
                         <td className="agent-name-cell">
                           <div className="agent-info">
                             <img 
-                              src={agent.iconUrl || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%234a4de7'/%3E%3Ctext x='20' y='24' font-family='Arial' font-size='14' text-anchor='middle' fill='white'%3EAI%3C/text%3E%3C/svg%3E"}
+                              src={isSafeImageUrl(agent.iconUrl) ? agent.iconUrl : generateAgentIconPlaceholder(agent)}
                               alt={agent.name}
                               className="agent-icon"
                               onError={(e) => {
-                                e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Cpath d='M35 40 L65 60 M65 40 L35 60' stroke='%23999' stroke-width='2'/%3E%3C/svg%3E";
+                                // If image fails to load, use the placeholder
+                                e.target.src = generateAgentIconPlaceholder(agent);
+                                e.target.onerror = null; // Prevent infinite error loops
                               }}
                             />
                             <div>
