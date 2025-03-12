@@ -1636,4 +1636,99 @@ export const fetchAgentById = async (agentId) => {
   }
 };
 
+// =================================================================
+// User Management API Functions
+// =================================================================
+
+/**
+ * Fetch users with pagination
+ * @param {number} page - Page number (starts from 1)
+ * @param {number} limit - Number of users per page
+ * @param {string} search - Search query for filtering users
+ * @param {string} sortBy - Field to sort by
+ * @param {string} sortDirection - Sort direction (asc or desc)
+ * @returns {Promise<Object>} - Users data with pagination info
+ */
+export const fetchUsers = async (page = 1, limit = 10, search = '', sortBy = 'createdAt', sortDirection = 'desc') => {
+  try {
+    // Build query parameters
+    const params = new URLSearchParams();
+    params.append('page', page);
+    params.append('limit', limit);
+    
+    if (search) params.append('search', search);
+    if (sortBy) params.append('sortBy', sortBy);
+    if (sortDirection) params.append('sortDirection', sortDirection);
+    
+    console.log(`[API] Fetching users with params: ${params.toString()}`);
+    
+    const response = await api.get(`/api/users?${params.toString()}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get a single user by ID
+ * @param {string} userId - User ID
+ * @returns {Promise<Object>} - User data
+ */
+export const getUserById = async (userId) => {
+  try {
+    const response = await api.get(`/api/users/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error getting user with ID ${userId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Create a new user
+ * @param {Object} userData - User data to create
+ * @returns {Promise<Object>} - Created user data
+ */
+export const createUser = async (userData) => {
+  try {
+    const response = await api.post('/api/users', userData);
+    return response.data;
+  } catch (error) {
+    console.error('Error creating user:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update an existing user
+ * @param {string} userId - User ID
+ * @param {Object} userData - User data to update
+ * @returns {Promise<Object>} - Updated user data
+ */
+export const updateUser = async (userId, userData) => {
+  try {
+    const response = await api.put(`/api/users/${userId}`, userData);
+    return response.data;
+  } catch (error) {
+    console.error(`Error updating user with ID ${userId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a user
+ * @param {string} userId - User ID to delete
+ * @returns {Promise<Object>} - Response data
+ */
+export const deleteUser = async (userId) => {
+  try {
+    const response = await api.delete(`/api/users/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error deleting user with ID ${userId}:`, error);
+    throw error;
+  }
+};
+
 export default api;

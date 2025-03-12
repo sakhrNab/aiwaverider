@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { FaUser, FaEdit, FaTrash, FaExclamationTriangle } from 'react-icons/fa';
+import { FaUser, FaEdit, FaTrash, FaExclamationTriangle, FaSearch, FaPlus, FaSpinner, FaAngleLeft, FaAngleRight } from 'react-icons/fa';
 import AdminLayout from '../../components/admin/AdminLayout';
+import { fetchUsers, createUser, updateUser, deleteUser } from '../../utils/api';
 import './ManageUsers.css';
 
 /**
  * Admin page for managing users
  */
 const ManageUsers = () => {
+  // State for users data and UI
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -14,56 +16,111 @@ const ManageUsers = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   
-  // Fetch users on component mount
+  // State for pagination
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalUsers: 0,
+    limit: 10
+  });
+  
+  // State for sorting
+  const [sortConfig, setSortConfig] = useState({
+    sortBy: 'createdAt',
+    sortDirection: 'desc'
+  });
+  
+  // Load users on component mount or when pagination/sorting/search changes
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    loadUsers();
+  }, [pagination.currentPage, pagination.limit, sortConfig, searchQuery]);
   
-  // Function to fetch users
-  const fetchUsers = async () => {
+  // Function to fetch users with current filters and pagination
+  const loadUsers = async () => {
     setLoading(true);
+    setError(null);
+    
     try {
-      // In a real application, this would be an API call
-      // For now, we'll simulate with a timeout and mock data
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Call API with current pagination, search, and sort parameters
+      const result = await fetchUsers(
+        pagination.currentPage,
+        pagination.limit,
+        searchQuery,
+        sortConfig.sortBy,
+        sortConfig.sortDirection
+      );
       
-      // Mock data
-      const mockUsers = [
-        { id: 1, username: 'john_doe', email: 'john.doe@example.com', role: 'user', status: 'active', createdAt: '2023-05-10T08:30:00Z' },
-        { id: 2, username: 'jane_smith', email: 'jane.smith@example.com', role: 'user', status: 'active', createdAt: '2023-05-12T14:45:00Z' },
-        { id: 3, username: 'admin_user', email: 'admin@example.com', role: 'admin', status: 'active', createdAt: '2023-04-01T10:00:00Z' },
-        { id: 4, username: 'sam_wilson', email: 'sam.wilson@example.com', role: 'user', status: 'inactive', createdAt: '2023-05-15T09:20:00Z' },
-        { id: 5, username: 'alex_johnson', email: 'alex.johnson@example.com', role: 'user', status: 'active', createdAt: '2023-05-18T16:10:00Z' }
-      ];
+      setUsers(result.users || []);
       
-      setUsers(mockUsers);
-      setError(null);
+      // Update pagination information
+      setPagination({
+        ...pagination,
+        totalPages: result.totalPages || 1,
+        totalUsers: result.total || 0
+      });
+      
     } catch (err) {
-      console.error('Error fetching users:', err);
-      setError('Failed to load users. Please try again later.');
+      console.error('Error loading users:', err);
+      setError(err.message || 'Failed to load users. Please try again.');
     } finally {
       setLoading(false);
     }
   };
   
-  // Filter users based on search query
-  const filteredUsers = users.filter(user => {
-    const query = searchQuery.toLowerCase();
-    return (
-      user.username.toLowerCase().includes(query) ||
-      user.email.toLowerCase().includes(query) ||
-      user.role.toLowerCase().includes(query)
-    );
-  });
+  // Handle search input change with debounce
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    
+    // Reset to first page when search changes
+    if (pagination.currentPage !== 1) {
+      setPagination({
+        ...pagination,
+        currentPage: 1
+      });
+    }
+  };
+  
+  // Handle sort column click
+  const handleSort = (field) => {
+    setSortConfig(prevSort => {
+      // If clicking the same column, toggle direction
+      if (prevSort.sortBy === field) {
+        return {
+          sortBy: field,
+          sortDirection: prevSort.sortDirection === 'asc' ? 'desc' : 'asc'
+        };
+      }
+      
+      // If clicking a new column, default to ascending
+      return {
+        sortBy: field,
+        sortDirection: 'asc'
+      };
+    });
+    
+    // Reset to first page when sort changes
+    if (pagination.currentPage !== 1) {
+      setPagination({
+        ...pagination,
+        currentPage: 1
+      });
+    }
+  };
   
   // Format date for display
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    
     const date = new Date(dateString);
     return date.toLocaleString('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
   
@@ -73,6 +130,17 @@ const ManageUsers = () => {
     setIsEditModalOpen(true);
   };
   
+  // Handle create new user
+  const handleCreateClick = () => {
+    setSelectedUser({
+      username: '',
+      email: '',
+      role: 'user',
+      status: 'active'
+    });
+    setIsCreateModalOpen(true);
+  };
+  
   // Handle delete user
   const handleDeleteClick = (user) => {
     setSelectedUser(user);
@@ -80,23 +148,120 @@ const ManageUsers = () => {
   };
   
   // Delete user
-  const deleteUser = () => {
-    // In a real application, this would be an API call
-    setUsers(users.filter(user => user.id !== selectedUser.id));
-    setIsDeleteModalOpen(false);
-    setSelectedUser(null);
+  const confirmDeleteUser = async () => {
+    if (!selectedUser || !selectedUser.id) {
+      setError('Cannot delete user: Missing user ID');
+      setIsDeleteModalOpen(false);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      await deleteUser(selectedUser.id);
+      
+      // Update local state to remove the deleted user
+      setUsers(users.filter(user => user.id !== selectedUser.id));
+      
+      // Update pagination if necessary
+      if (users.length === 1 && pagination.currentPage > 1) {
+        setPagination({
+          ...pagination,
+          currentPage: pagination.currentPage - 1
+        });
+      } else {
+        // Reload users to get fresh data and correct pagination
+        loadUsers();
+      }
+      
+      setIsDeleteModalOpen(false);
+      setSelectedUser(null);
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      setError(err.message || 'Failed to delete user. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
   
-  // Edit user form submit
-  const handleEditSubmit = (e) => {
+  // Create new user
+  const handleCreateSubmit = async (e) => {
     e.preventDefault();
-    // In a real application, this would be an API call
-    const updatedUsers = users.map(user => 
-      user.id === selectedUser.id ? selectedUser : user
-    );
-    setUsers(updatedUsers);
-    setIsEditModalOpen(false);
-    setSelectedUser(null);
+    
+    if (!selectedUser) {
+      setError('Cannot create user: Missing user data');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      await createUser(selectedUser);
+      
+      // Reset and reload to show new user
+      setIsCreateModalOpen(false);
+      setSelectedUser(null);
+      
+      // Go to first page and reload
+      setPagination({
+        ...pagination,
+        currentPage: 1
+      });
+      
+      loadUsers();
+    } catch (err) {
+      console.error('Error creating user:', err);
+      setError(err.message || 'Failed to create user. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Update existing user
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!selectedUser || !selectedUser.id) {
+      setError('Cannot update user: Missing user ID');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const updatedUser = await updateUser(selectedUser.id, selectedUser);
+      
+      // Update the user in the local state
+      setUsers(users.map(user => 
+        user.id === selectedUser.id ? updatedUser : user
+      ));
+      
+      setIsEditModalOpen(false);
+      setSelectedUser(null);
+    } catch (err) {
+      console.error('Error updating user:', err);
+      setError(err.message || 'Failed to update user. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Handle pagination change
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > pagination.totalPages) return;
+    
+    setPagination({
+      ...pagination,
+      currentPage: newPage
+    });
+  };
+  
+  // Handle page size change
+  const handleLimitChange = (e) => {
+    const newLimit = parseInt(e.target.value, 10);
+    
+    setPagination({
+      ...pagination,
+      limit: newLimit,
+      currentPage: 1  // Reset to first page when changing page size
+    });
   };
   
   return (
@@ -104,7 +269,9 @@ const ManageUsers = () => {
       <div className="manage-users-page">
         <header className="page-header">
           <h1>Manage Users</h1>
-          <button className="btn-primary">Add New User</button>
+          <button className="btn-primary" onClick={handleCreateClick}>
+            <FaPlus className="mr-2" /> Add New User
+          </button>
         </header>
         
         {error && (
@@ -114,109 +281,217 @@ const ManageUsers = () => {
           </div>
         )}
         
-        <div className="search-bar">
-          <input
-            type="text"
-            placeholder="Search users by name, email, or role..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+        <div className="filters-container">
+          <div className="search-bar">
+            <FaSearch className="search-icon" />
+            <input
+              type="text"
+              placeholder="Search users by name, email, or role..."
+              value={searchQuery}
+              onChange={handleSearchChange}
+            />
+          </div>
+          
+          <div className="page-size-selector">
+            <span>Show:</span>
+            <select
+              value={pagination.limit}
+              onChange={handleLimitChange}
+            >
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+            </select>
+            <span>per page</span>
+          </div>
         </div>
         
-        {loading ? (
-          <div className="loading-message">Loading users...</div>
+        {loading && users.length === 0 ? (
+          <div className="loading-message">
+            <FaSpinner className="spinner" />
+            <span>Loading users...</span>
+          </div>
         ) : (
           <div className="users-table-container">
-            {filteredUsers.length === 0 ? (
+            {users.length === 0 ? (
               <div className="no-users-message">
-                No users found matching your search criteria.
+                {searchQuery 
+                  ? `No users found matching "${searchQuery}"`
+                  : "No users found. Create your first user by clicking 'Add New User'."
+                }
               </div>
             ) : (
-              <table className="users-table">
-                <thead>
-                  <tr>
-                    <th>Username</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th>Created</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map(user => (
-                    <tr key={user.id}>
-                      <td>
-                        <div className="user-info">
-                          <div className="user-avatar">
-                            <FaUser />
-                          </div>
-                          <span>{user.username}</span>
-                        </div>
-                      </td>
-                      <td>{user.email}</td>
-                      <td>
-                        <span className={`role-badge ${user.role}`}>
-                          {user.role}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`status-badge ${user.status}`}>
-                          {user.status}
-                        </span>
-                      </td>
-                      <td>{formatDate(user.createdAt)}</td>
-                      <td>
-                        <div className="action-buttons">
-                          <button 
-                            className="btn-edit" 
-                            onClick={() => handleEditClick(user)}
-                            title="Edit user"
-                          >
-                            <FaEdit />
-                          </button>
-                          <button 
-                            className="btn-delete" 
-                            onClick={() => handleDeleteClick(user)}
-                            title="Delete user"
-                          >
-                            <FaTrash />
-                          </button>
-                        </div>
-                      </td>
+              <>
+                <table className="users-table">
+                  <thead>
+                    <tr>
+                      <th 
+                        className={sortConfig.sortBy === 'username' ? `sorted-${sortConfig.sortDirection}` : ''}
+                        onClick={() => handleSort('username')}
+                      >
+                        Username
+                      </th>
+                      <th 
+                        className={sortConfig.sortBy === 'email' ? `sorted-${sortConfig.sortDirection}` : ''}
+                        onClick={() => handleSort('email')}
+                      >
+                        Email
+                      </th>
+                      <th 
+                        className={sortConfig.sortBy === 'role' ? `sorted-${sortConfig.sortDirection}` : ''}
+                        onClick={() => handleSort('role')}
+                      >
+                        Role
+                      </th>
+                      <th 
+                        className={sortConfig.sortBy === 'status' ? `sorted-${sortConfig.sortDirection}` : ''}
+                        onClick={() => handleSort('status')}
+                      >
+                        Status
+                      </th>
+                      <th 
+                        className={sortConfig.sortBy === 'createdAt' ? `sorted-${sortConfig.sortDirection}` : ''}
+                        onClick={() => handleSort('createdAt')}
+                      >
+                        Created
+                      </th>
+                      <th>Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {users.map(user => (
+                      <tr key={user.id}>
+                        <td>
+                          <div className="user-info">
+                            <div className="user-avatar">
+                              {user.photoURL ? (
+                                <img src={user.photoURL} alt={user.username} />
+                              ) : (
+                                <FaUser />
+                              )}
+                            </div>
+                            <span>{user.username || user.displayName}</span>
+                          </div>
+                        </td>
+                        <td>{user.email}</td>
+                        <td>
+                          <span className={`role-badge ${user.role}`}>
+                            {user.role}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`status-badge ${user.status}`}>
+                            {user.status}
+                          </span>
+                        </td>
+                        <td>{formatDate(user.createdAt)}</td>
+                        <td>
+                          <div className="action-buttons">
+                            <button 
+                              className="btn-edit" 
+                              onClick={() => handleEditClick(user)}
+                              title="Edit user"
+                            >
+                              <FaEdit />
+                            </button>
+                            <button 
+                              className="btn-delete" 
+                              onClick={() => handleDeleteClick(user)}
+                              title="Delete user"
+                              disabled={user.role === 'admin' && users.filter(u => u.role === 'admin').length <= 1}
+                            >
+                              <FaTrash />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                
+                {/* Pagination controls */}
+                <div className="pagination-controls">
+                  <div className="pagination-info">
+                    Showing {(pagination.currentPage - 1) * pagination.limit + 1} to {Math.min(pagination.currentPage * pagination.limit, pagination.totalUsers)} of {pagination.totalUsers} users
+                  </div>
+                  <div className="pagination-buttons">
+                    <button
+                      className="pagination-button"
+                      onClick={() => handlePageChange(1)}
+                      disabled={pagination.currentPage === 1}
+                      title="First page"
+                    >
+                      «
+                    </button>
+                    <button
+                      className="pagination-button"
+                      onClick={() => handlePageChange(pagination.currentPage - 1)}
+                      disabled={pagination.currentPage === 1}
+                      title="Previous page"
+                    >
+                      <FaAngleLeft />
+                    </button>
+                    
+                    {/* Page number buttons */}
+                    {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                      // If less than 5 pages, show all pages
+                      // If more than 5 pages, show a window around the current page
+                      let pageToShow;
+                      if (pagination.totalPages <= 5) {
+                        pageToShow = i + 1;
+                      } else {
+                        // Calculate the window
+                        const offset = Math.max(
+                          Math.min(
+                            pagination.currentPage - 3,
+                            pagination.totalPages - 5
+                          ),
+                          0
+                        );
+                        pageToShow = i + 1 + offset;
+                      }
+                      
+                      return (
+                        <button
+                          key={pageToShow}
+                          className={`pagination-button ${pagination.currentPage === pageToShow ? 'active' : ''}`}
+                          onClick={() => handlePageChange(pageToShow)}
+                        >
+                          {pageToShow}
+                        </button>
+                      );
+                    })}
+                    
+                    <button
+                      className="pagination-button"
+                      onClick={() => handlePageChange(pagination.currentPage + 1)}
+                      disabled={pagination.currentPage === pagination.totalPages}
+                      title="Next page"
+                    >
+                      <FaAngleRight />
+                    </button>
+                    <button
+                      className="pagination-button"
+                      onClick={() => handlePageChange(pagination.totalPages)}
+                      disabled={pagination.currentPage === pagination.totalPages}
+                      title="Last page"
+                    >
+                      »
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )}
         
-        {/* Delete Confirmation Modal */}
-        {isDeleteModalOpen && selectedUser && (
+        {/* Create User Modal */}
+        {isCreateModalOpen && selectedUser && (
           <div className="modal-overlay">
             <div className="modal-content">
-              <h2>Confirm Deletion</h2>
-              <p>Are you sure you want to delete the user <strong>{selectedUser.username}</strong>?</p>
-              <p>This action cannot be undone.</p>
-              <div className="modal-actions">
-                <button className="btn-secondary" onClick={() => setIsDeleteModalOpen(false)}>
-                  Cancel
-                </button>
-                <button className="btn-danger" onClick={deleteUser}>
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {/* Edit User Modal */}
-        {isEditModalOpen && selectedUser && (
-          <div className="modal-overlay">
-            <div className="modal-content">
-              <h2>Edit User</h2>
-              <form onSubmit={handleEditSubmit}>
+              <h2>Create New User</h2>
+              <form onSubmit={handleCreateSubmit}>
                 <div className="form-group">
                   <label htmlFor="username">Username</label>
                   <input
@@ -236,6 +511,128 @@ const ManageUsers = () => {
                     onChange={(e) => setSelectedUser({...selectedUser, email: e.target.value})}
                     required
                   />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="password">Password</label>
+                  <input
+                    type="password"
+                    id="password"
+                    value={selectedUser.password || ''}
+                    onChange={(e) => setSelectedUser({...selectedUser, password: e.target.value})}
+                    required
+                  />
+                  <small className="form-helper-text">Password must be at least 8 characters</small>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="firstName">First Name</label>
+                    <input
+                      type="text"
+                      id="firstName"
+                      value={selectedUser.firstName || ''}
+                      onChange={(e) => setSelectedUser({...selectedUser, firstName: e.target.value})}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="lastName">Last Name</label>
+                    <input
+                      type="text"
+                      id="lastName"
+                      value={selectedUser.lastName || ''}
+                      onChange={(e) => setSelectedUser({...selectedUser, lastName: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="role">Role</label>
+                  <select
+                    id="role"
+                    value={selectedUser.role}
+                    onChange={(e) => setSelectedUser({...selectedUser, role: e.target.value})}
+                  >
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="status">Status</label>
+                  <select
+                    id="status"
+                    value={selectedUser.status}
+                    onChange={(e) => setSelectedUser({...selectedUser, status: e.target.value})}
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+                <div className="modal-actions">
+                  <button type="button" className="btn-secondary" onClick={() => setIsCreateModalOpen(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={loading}>
+                    {loading ? <FaSpinner className="spinner" /> : 'Create User'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+        
+        {/* Edit User Modal */}
+        {isEditModalOpen && selectedUser && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <h2>Edit User</h2>
+              <form onSubmit={handleEditSubmit}>
+                <div className="form-group">
+                  <label htmlFor="username">Username</label>
+                  <input
+                    type="text"
+                    id="username"
+                    value={selectedUser.username || selectedUser.displayName || ''}
+                    onChange={(e) => setSelectedUser({...selectedUser, username: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="email">Email</label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={selectedUser.email}
+                    onChange={(e) => setSelectedUser({...selectedUser, email: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="password">Password (leave blank to keep unchanged)</label>
+                  <input
+                    type="password"
+                    id="password"
+                    value={selectedUser.password || ''}
+                    onChange={(e) => setSelectedUser({...selectedUser, password: e.target.value})}
+                  />
+                  <small className="form-helper-text">If provided, password must be at least 8 characters</small>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="firstName">First Name</label>
+                    <input
+                      type="text"
+                      id="firstName"
+                      value={selectedUser.firstName || ''}
+                      onChange={(e) => setSelectedUser({...selectedUser, firstName: e.target.value})}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="lastName">Last Name</label>
+                    <input
+                      type="text"
+                      id="lastName"
+                      value={selectedUser.lastName || ''}
+                      onChange={(e) => setSelectedUser({...selectedUser, lastName: e.target.value})}
+                    />
+                  </div>
                 </div>
                 <div className="form-group">
                   <label htmlFor="role">Role</label>
@@ -263,11 +660,40 @@ const ManageUsers = () => {
                   <button type="button" className="btn-secondary" onClick={() => setIsEditModalOpen(false)}>
                     Cancel
                   </button>
-                  <button type="submit" className="btn-primary">
-                    Save Changes
+                  <button type="submit" className="btn-primary" disabled={loading}>
+                    {loading ? <FaSpinner className="spinner" /> : 'Save Changes'}
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+        
+        {/* Delete Confirmation Modal */}
+        {isDeleteModalOpen && selectedUser && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <h2>Confirm Deletion</h2>
+              <p>Are you sure you want to delete the user <strong>{selectedUser.username || selectedUser.displayName}</strong>?</p>
+              <p>This action cannot be undone. All user data will be permanently removed.</p>
+              {selectedUser.role === 'admin' && (
+                <div className="warning-message">
+                  <FaExclamationTriangle />
+                  <span>Warning: You are about to delete an admin user!</span>
+                </div>
+              )}
+              <div className="modal-actions">
+                <button className="btn-secondary" onClick={() => setIsDeleteModalOpen(false)}>
+                  Cancel
+                </button>
+                <button 
+                  className="btn-danger" 
+                  onClick={confirmDeleteUser}
+                  disabled={loading}
+                >
+                  {loading ? <FaSpinner className="spinner" /> : 'Delete'}
+                </button>
+              </div>
             </div>
           </div>
         )}
