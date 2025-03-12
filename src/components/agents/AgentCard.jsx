@@ -72,8 +72,12 @@ const AgentCard = ({ agent }) => {
   // Alternative placeholder with fallbacks
   const getImageUrl = () => {
     if (!agent.iconUrl || imageError) {
-      // Use placehold.co as a fallback
-      return `https://placehold.co/300x160/4a4de7/ffffff?text=${encodeURIComponent(agent.title || 'AI Agent')}`;
+      // Return a colored background with agent initial as SVG data URI
+      const initial = agent.title ? agent.title.charAt(0).toUpperCase() : 
+                    agent.name ? agent.name.charAt(0).toUpperCase() : 'A';
+      const color = '#4a4de7'; // A nice purple-blue color
+      
+      return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='160' viewBox='0 0 300 160'%3E%3Crect width='300' height='160' fill='${color.replace('#', '%23')}'/%3E%3Ctext x='150' y='90' font-family='Arial' font-size='60' font-weight='bold' text-anchor='middle' fill='white'%3E${initial}%3C/text%3E%3C/svg%3E`;
     }
     return agent.iconUrl;
   };
