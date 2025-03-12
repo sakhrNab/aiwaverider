@@ -1,13 +1,12 @@
 // src/components/AppContent.jsx
 import React, { useState } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import '../styles/globals.css'; // Tailwind global styles
 import Header from './Header';
 import Body from './Body';
 import Footer from './Footer';
 import SignUp from './SignUp';
 import SignIn from './SignIn';
-import AdminDashboard from './AdminDashboard';
 import ProtectedRoute from './ProtectedRoute';
 import PostDetail from '../posts/PostDetail';
 import CreatePost from '../posts/CreatePost';
@@ -57,7 +56,7 @@ const AppContent = () => {
             path="/admin"
             element={
               <ProtectedRoute roles={['admin']}>
-                <AdminDashboard />
+                <Navigate to="/admin/dashboard" replace />
               </ProtectedRoute>
             }
           />

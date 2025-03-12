@@ -24,7 +24,7 @@ const AdminLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   
   const navItems = [
-    { path: '/admin', icon: <FaHome />, label: 'Dashboard' },
+    { path: '/admin/dashboard', icon: <FaHome />, label: 'Dashboard' },
     { path: '/admin/agents', icon: <FaRobot />, label: 'Manage Agents' },
     { path: '/admin/users', icon: <FaUsers />, label: 'Manage Users' },
     { path: '/admin/analytics', icon: <FaChartBar />, label: 'Analytics' },
