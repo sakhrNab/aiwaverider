@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { FaStar, FaRegStar, FaCheck, FaDownload, FaHeart, FaRegHeart, FaLink, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
 import { fetchAgentById, toggleWishlist, getDownloadCount, incrementDownloadCount } from '../../utils/api';
 import { useCart } from '../../contexts/CartContext.jsx';
+import { trackProductView } from '../../services/recommendationService';
 import { toast } from 'react-toastify';
 import './AgentDetail.css';
 
 const AgentDetail = () => {
   const { agentId } = useParams();
+  const navigate = useNavigate();
   const { addToCart } = useCart();
   const [agent, setAgent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -19,6 +21,7 @@ const AgentDetail = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [copySuccess, setCopySuccess] = useState('');
   const [downloadCount, setDownloadCount] = useState(0);
+  const [viewTracked, setViewTracked] = useState(false);
   
   // Image slider refs
   const sliderRef = useRef(null);
@@ -36,8 +39,11 @@ const AgentDetail = () => {
           return;
         }
         
+        console.log(`Loading agent detail for ID: ${agentId}, from route: ${window.location.pathname}`);
+        
         // Try to load the agent data
         const data = await fetchAgentById(agentId);
+        console.log('Successfully loaded agent data:', data ? data.id : 'No data');
         setAgent(data);
         
         // Fetch the download count
@@ -56,10 +62,8 @@ const AgentDetail = () => {
         console.error('Error loading agent:', err);
         if (err.response && err.response.status === 400) {
           setError(`Agent with ID "${agentId}" not found. It may have been removed or doesn't exist.`);
-        } else if (err.message && err.message.includes('not found')) {
-          setError(err.message);
         } else {
-          setError('Failed to load agent. Please try again later.');
+          setError(`There was a problem loading this product. Please try again later.`);
         }
       } finally {
         setLoading(false);
@@ -67,7 +71,28 @@ const AgentDetail = () => {
     };
 
     loadAgent();
-  }, [agentId]);
+    
+    // Track product view for recommendations
+    if (agentId && !viewTracked) {
+      console.log('Tracking product view for recommendations:', agentId);
+      trackProductView(agentId)
+        .then(() => {
+          console.log('Successfully tracked product view');
+          setViewTracked(true);
+        })
+        .catch(err => {
+          console.warn('Failed to track product view:', err);
+          // Don't show error to user, this is a background tracking feature
+        });
+    }
+
+    // Update the URL if needed (redirect /product/ to /agents/)
+    if (window.location.pathname.includes('/product/') && !loading) {
+      const correctPath = window.location.pathname.replace('/product/', '/agents/');
+      console.log(`Redirecting to correct agent path: ${correctPath}`);
+      navigate(correctPath, { replace: true });
+    }
+  }, [agentId, viewTracked]);
 
   const handleWishlistToggle = async () => {
     if (wishlistLoading) return;

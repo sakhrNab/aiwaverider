@@ -152,6 +152,21 @@ export const products = [
   }
 ];
 
+// Make sure each product has a compatible interface with agents
+products.forEach(product => {
+  // Ensure each product has properties expected by the agent interface
+  if (!product.rating.average && product.rating) {
+    product.rating = {
+      average: product.rating,
+      count: product.ratingCount || 0
+    };
+    delete product.ratingCount;
+  }
+  
+  // Add detailUrl property
+  product.detailUrl = `/agents/${product.id}`;
+});
+
 // Get a product by ID
 export const getProductById = (id) => {
   return products.find(product => product.id === id);
@@ -183,8 +198,26 @@ export const getRelatedProducts = (id, limit = 3) => {
 
 // Get featured products
 export const getFeaturedProducts = (limit = 4) => {
-  return products
-    .sort((a, b) => b.rating - a.rating || b.ratingCount - a.ratingCount)
+  // First make sure none of the products are debug recommendations
+  const validProducts = products.filter(
+    product => 
+      product.title && 
+      typeof product.title === 'string' && 
+      !product.title.includes('Debug Recommendation')
+  );
+  
+  // Sort by rating and return top limit
+  return validProducts
+    .sort((a, b) => {
+      // Get rating values, handling both number and object formats
+      const ratingA = a.rating?.average || a.rating || 0;
+      const ratingB = b.rating?.average || b.rating || 0;
+      
+      // Sort by rating first, then by number of ratings (popularity)
+      return ratingB - ratingA || 
+        (b.rating?.count || b.ratingCount || 0) - 
+        (a.rating?.count || a.ratingCount || 0);
+    })
     .slice(0, limit);
 };
 
@@ -197,4 +230,42 @@ export const searchProducts = (query) => {
     product.category.toLowerCase().includes(lowercaseQuery) ||
     product.creator.name.toLowerCase().includes(lowercaseQuery)
   );
-}; 
+};
+
+// Create array to add any debug recommendations we need to correct
+const debugRecommendations = products.filter(product => 
+  product.title && 
+  typeof product.title === 'string' && 
+  product.title.includes('Debug Recommendation')
+);
+
+// If we found any debug recommendations, replace them with proper data
+if (debugRecommendations.length > 0) {
+  console.log('Found and fixing debug recommendations in productData.js');
+  
+  // Replace each debug recommendation with a valid agent
+  debugRecommendations.forEach(debugRec => {
+    const index = products.findIndex(p => p.id === debugRec.id);
+    if (index !== -1) {
+      // Replace with a properly formatted product
+      products[index] = {
+        id: debugRec.id,
+        title: `AI ${debugRec.id.split('-').pop()} Assistant`,
+        description: 'An AI assistant to help with your tasks',
+        price: debugRec.price || 9.99,
+        imageUrl: debugRec.imageUrl || 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=600&auto=format&fit=crop',
+        category: 'AI Tools',
+        creator: {
+          name: 'AI Wave Rider',
+          id: 'ai-wave-rider',
+          avatar: 'https://randomuser.me/api/portraits/men/22.jpg'
+        },
+        rating: {
+          average: 4.5,
+          count: 120
+        },
+        detailUrl: `/agents/${debugRec.id}`
+      };
+    }
+  });
+} 

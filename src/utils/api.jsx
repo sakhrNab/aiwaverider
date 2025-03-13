@@ -1688,6 +1688,24 @@ export const fetchAgentById = async (agentId) => {
         throw new Error(`Agent with ID "${agentId}" not found. It may have been removed or doesn't exist.`);
       }
       
+      // Handle 404 errors specifically for product paths
+      if (apiError.response && apiError.response.status === 404) {
+        console.error(`API returned 404 Not Found for agent ID: ${agentId}`);
+        console.log('Attempting fallback route for product ID...');
+        
+        // Try the alternate endpoint to see if it works
+        try {
+          const fallbackResponse = await api.get(`/api/product/${agentId}`);
+          if (fallbackResponse.data) {
+            console.log('Successfully fetched agent from fallback product endpoint');
+            return fallbackResponse.data;
+          }
+        } catch (fallbackError) {
+          console.error('Fallback route also failed:', fallbackError);
+          // Continue with original error
+        }
+      }
+      
       // Re-throw other errors
       throw apiError;
     }

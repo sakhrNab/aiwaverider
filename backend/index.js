@@ -100,6 +100,19 @@ const apiRoutes = require('./routes/index');
 // Mount API routes
 app.use('/api', apiRoutes);
 
+// Add diagnostic route for the recommendations API
+app.get('/api-test/recommendations', (req, res) => {
+  console.log('Recommendations API test hit!');
+  return res.json({
+    status: 'ok',
+    message: 'Recommendations API test route is accessible',
+    recommendations: [
+      { id: 'test-1', title: 'Test Product 1', price: 9.99 },
+      { id: 'test-2', title: 'Test Product 2', price: 0, isFree: true }
+    ]
+  });
+});
+
 // Add a specific route handler for wishlist API to help debug 404 errors
 app.use('/api/wishlists*', (req, res, next) => {
   logger.warn(`Wishlist API 404: ${req.method} ${req.originalUrl}`);
@@ -108,13 +121,61 @@ app.use('/api/wishlists*', (req, res, next) => {
     requestedPath: req.originalUrl,
     availableRoutes: [
       'GET /api/wishlists',
-      'GET /api/wishlists/user',
-      'GET /api/wishlists/:wishlistId',
+      'GET /api/wishlists/:id',
       'POST /api/wishlists',
-      'PUT /api/wishlists/:wishlistId',
-      'DELETE /api/wishlists/:wishlistId',
-      'POST /api/wishlists/toggle',
-      'GET /api/wishlists/check/:agentId'
+      'PUT /api/wishlists/:id',
+      'DELETE /api/wishlists/:id',
+      'POST /api/wishlists/toggle'
+    ]
+  });
+});
+
+// Add catch-all handler for API routes to help debug 404 errors
+app.use('/api/*', (req, res) => {
+  console.error(`API 404: ${req.method} ${req.originalUrl}`);
+  
+  // Get all registered routes on the app
+  const routes = [];
+  function print(path, layer) {
+    if (layer.route) {
+      layer.route.stack.forEach(print.bind(null, path));
+    } else if (layer.name === 'router' && layer.handle.stack) {
+      layer.handle.stack.forEach(print.bind(null, path));
+    } else if (layer.method) {
+      routes.push(`${layer.method.toUpperCase()} ${path}`);
+    }
+  }
+  
+  app._router.stack.forEach((layer) => {
+    if (layer.route) {
+      print(layer.route.path, layer);
+    } else if (layer.name === 'router' && layer.handle.stack) {
+      layer.handle.stack.forEach((stackItem) => {
+        if (stackItem.route) {
+          print(stackItem.route.path, stackItem);
+        }
+      });
+    }
+  });
+  
+  res.status(404).json({
+    error: 'API route not found',
+    message: 'The requested API endpoint does not exist or is not properly configured.',
+    requestedPath: req.originalUrl,
+    method: req.method,
+    suggestedFixes: [
+      'Check that the URL is correctly formatted',
+      'Make sure the API route is registered in the routes/index.js file',
+      'Verify that the API controller and route files exist',
+      'Check if your backend server is running'
+    ],
+    availableEndpoints: [
+      '/api/recommendations',
+      '/api/recommendations/track-view',
+      '/api/agents',
+      '/api/payments',
+      '/api/wishlists',
+      '/api-test/recommendations'
     ]
   });
 });

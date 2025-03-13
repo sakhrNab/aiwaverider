@@ -12,6 +12,7 @@ const wishlistsRoutes = require('./wishlists');
 const pricesRoutes = require('./prices');
 const testRoutes = require('./test');
 const paymentsRoutes = require('./payments');
+const recommendationsRoutes = require('./recommendations');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -24,6 +25,24 @@ router.use('/wishlists', wishlistsRoutes);
 router.use('/agent-prices', pricesRoutes);
 router.use('/test', testRoutes);
 router.use('/payments', paymentsRoutes);
+router.use('/recommendations', recommendationsRoutes);
+
+// Add redirect for product routes to the agents routes
+// This handles legacy or alternative product URLs
+router.get('/product/:productId', (req, res) => {
+  console.log(`Redirecting /product/${req.params.productId} to /agents/${req.params.productId}`);
+  res.redirect(`/agents/${req.params.productId}`);
+});
+
+// Add API endpoint for product/:id that forwards to agents/:id
+router.get('/api/product/:productId', (req, res) => {
+  const productId = req.params.productId;
+  console.log(`Forwarding API request from /api/product/${productId} to /api/agents/${productId}`);
+  
+  // Forward the request to the agents API endpoint
+  req.url = `/api/agents/${productId}`;
+  router.handle(req, res);
+});
 
 // Health check endpoint
 router.get('/health', (req, res) => {
