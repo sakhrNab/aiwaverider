@@ -3,11 +3,14 @@ import React, { useState, useContext, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import logo from '../assets/v6.webp';
 import { AuthContext } from '../contexts/AuthContext';
+import { useCart } from '../contexts/CartContext.jsx';
 import { toast } from 'react-toastify';
+import { FaShoppingCart } from 'react-icons/fa';
 import './Header.css'; // Import custom Header CSS
 
 const Header = ({ openSignUpModal }) => {
   const { user, signOut } = useContext(AuthContext);
+  const { cart, itemCount } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -113,6 +116,21 @@ const Header = ({ openSignUpModal }) => {
 
         {/* Right group: Auth buttons and profile */}
         <div className="flex items-center justify-end space-x-2 md:space-x-3 flex-shrink-0 auth-buttons">
+          {/* Cart Icon and Checkout Button */}
+          <div className="flex items-center mr-2">
+            <Link to="/checkout" className="cart-icon-container">
+              <FaShoppingCart className="text-xl" />
+              {itemCount > 0 && (
+                <span className="cart-badge">{itemCount}</span>
+              )}
+            </Link>
+            {itemCount > 0 && (
+              <Link to="/checkout" className="checkout-button ml-2">
+                Checkout
+              </Link>
+            )}
+          </div>
+          
           {!user && (
             <div className="hidden md:flex items-center space-x-2 md:space-x-3">
               <Link to="/sign-in" className="px-3 py-2 hover:bg-blue-600 rounded auth-link">

@@ -285,4 +285,62 @@ body .mobile-menu-button {
   body.admin-page .mobile-menu-button {
     display: flex !important;
   }
+}
+
+/* Cart Icon and Checkout Button Styles */
+.cart-icon-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.25rem;
+  padding: 0.5rem;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.cart-icon-container:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.cart-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background-color: #f44336;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: bold;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checkout-button {
+  background-color: #4caf50;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.375rem 0.75rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+}
+
+.checkout-button:hover {
+  background-color: #388e3c;
+}
+
+@media (max-width: 640px) {
+  .checkout-button {
+    display: none;
+  }
+  
+  .cart-icon-container {
+    margin-right: 0;
+  }
 } 

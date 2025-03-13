@@ -5,6 +5,7 @@ import './styles/globals.css';
 import AppContent from './components/AppContent';
 import { AuthProvider } from './contexts/AuthContext';
 import { PostsProvider } from './contexts/PostsContext';
+import { CartProvider } from './contexts/CartContext.jsx';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -43,10 +44,12 @@ const App = () => {
     <Router>
       <AuthProvider>
         <PostsProvider>
-          <ErrorBoundary>
-            <AuthCallback />
-            <AppContent />
-          </ErrorBoundary>
+          <CartProvider>
+            <ErrorBoundary>
+              <AuthCallback />
+              <AppContent />
+            </ErrorBoundary>
+          </CartProvider>
         </PostsProvider>
       </AuthProvider>
       <ToastContainer

@@ -160,7 +160,7 @@ const ManageUsers = () => {
       await deleteUser(selectedUser.id);
       
       // Update local state to remove the deleted user
-      setUsers(users.filter(user => user.id !== selectedUser.id));
+    setUsers(users.filter(user => user.id !== selectedUser.id));
       
       // Update pagination if necessary
       if (users.length === 1 && pagination.currentPage > 1) {
@@ -173,8 +173,8 @@ const ManageUsers = () => {
         loadUsers();
       }
       
-      setIsDeleteModalOpen(false);
-      setSelectedUser(null);
+    setIsDeleteModalOpen(false);
+    setSelectedUser(null);
     } catch (err) {
       console.error('Error deleting user:', err);
       setError(err.message || 'Failed to delete user. Please try again.');
@@ -233,8 +233,8 @@ const ManageUsers = () => {
         user.id === selectedUser.id ? updatedUser : user
       ));
       
-      setIsEditModalOpen(false);
-      setSelectedUser(null);
+    setIsEditModalOpen(false);
+    setSelectedUser(null);
     } catch (err) {
       console.error('Error updating user:', err);
       setError(err.message || 'Failed to update user. Please try again.');
@@ -282,12 +282,12 @@ const ManageUsers = () => {
         )}
         
         <div className="filters-container">
-          <div className="search-bar">
+        <div className="search-bar">
             <FaSearch className="search-icon" />
-            <input
-              type="text"
-              placeholder="Search users by name, email, or role..."
-              value={searchQuery}
+          <input
+            type="text"
+            placeholder="Search users by name, email, or role..."
+            value={searchQuery}
               onChange={handleSearchChange}
             />
           </div>
@@ -323,9 +323,9 @@ const ManageUsers = () => {
               </div>
             ) : (
               <>
-                <table className="users-table">
-                  <thead>
-                    <tr>
+              <table className="users-table">
+                <thead>
+                  <tr>
                       <th 
                         className={sortConfig.sortBy === 'username' ? `sorted-${sortConfig.sortDirection}` : ''}
                         onClick={() => handleSort('username')}
@@ -356,59 +356,59 @@ const ManageUsers = () => {
                       >
                         Created
                       </th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
                     {users.map(user => (
-                      <tr key={user.id}>
-                        <td>
-                          <div className="user-info">
-                            <div className="user-avatar">
+                    <tr key={user.id}>
+                      <td>
+                        <div className="user-info">
+                          <div className="user-avatar">
                               {user.photoURL ? (
                                 <img src={user.photoURL} alt={user.username} />
                               ) : (
-                                <FaUser />
+                            <FaUser />
                               )}
                             </div>
                             <span>{user.username || user.displayName}</span>
-                          </div>
-                        </td>
-                        <td>{user.email}</td>
-                        <td>
-                          <span className={`role-badge ${user.role}`}>
-                            {user.role}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`status-badge ${user.status}`}>
-                            {user.status}
-                          </span>
-                        </td>
-                        <td>{formatDate(user.createdAt)}</td>
-                        <td>
-                          <div className="action-buttons">
-                            <button 
-                              className="btn-edit" 
-                              onClick={() => handleEditClick(user)}
-                              title="Edit user"
-                            >
-                              <FaEdit />
-                            </button>
-                            <button 
-                              className="btn-delete" 
-                              onClick={() => handleDeleteClick(user)}
-                              title="Delete user"
+                        </div>
+                      </td>
+                      <td>{user.email}</td>
+                      <td>
+                        <span className={`role-badge ${user.role}`}>
+                          {user.role}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`status-badge ${user.status}`}>
+                          {user.status}
+                        </span>
+                      </td>
+                      <td>{formatDate(user.createdAt)}</td>
+                      <td>
+                        <div className="action-buttons">
+                          <button 
+                            className="btn-edit" 
+                            onClick={() => handleEditClick(user)}
+                            title="Edit user"
+                          >
+                            <FaEdit />
+                          </button>
+                          <button 
+                            className="btn-delete" 
+                            onClick={() => handleDeleteClick(user)}
+                            title="Delete user"
                               disabled={user.role === 'admin' && users.filter(u => u.role === 'admin').length <= 1}
-                            >
-                              <FaTrash />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
                 
                 {/* Pagination controls */}
                 <div className="pagination-controls">
@@ -565,14 +565,14 @@ const ManageUsers = () => {
                     <option value="inactive">Inactive</option>
                   </select>
                 </div>
-                <div className="modal-actions">
+              <div className="modal-actions">
                   <button type="button" className="btn-secondary" onClick={() => setIsCreateModalOpen(false)}>
-                    Cancel
-                  </button>
+                  Cancel
+                </button>
                   <button type="submit" className="btn-primary" disabled={loading}>
                     {loading ? <FaSpinner className="spinner" /> : 'Create User'}
-                  </button>
-                </div>
+                </button>
+              </div>
               </form>
             </div>
           </div>

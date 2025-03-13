@@ -110,7 +110,7 @@ const ManageAgents = () => {
   const [userLoading, setUserLoading] = useState(false);
   const [userError, setUserError] = useState(null);
   const [userSearchQuery, setUserSearchQuery] = useState("");
-  
+
   // Add a cache for individual agent data with timestamps
   const [agentCache, setAgentCache] = useState({});
 

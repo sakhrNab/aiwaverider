@@ -2,10 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { FaStar, FaRegStar, FaCheck, FaDownload, FaHeart, FaRegHeart, FaLink, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
 import { fetchAgentById, toggleWishlist, getDownloadCount, incrementDownloadCount } from '../../utils/api';
+import { useCart } from '../../contexts/CartContext.jsx';
+import { toast } from 'react-toastify';
 import './AgentDetail.css';
 
 const AgentDetail = () => {
   const { agentId } = useParams();
+  const { addToCart } = useCart();
   const [agent, setAgent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -230,20 +233,30 @@ const AgentDetail = () => {
     return [agent.imageUrl || null];
   };
 
-  // Handle download click
-  const handleDownloadClick = async () => {
+  // Handle add to cart click
+  const handleAddToCart = () => {
+    if (!isPriceValid()) return;
+    
     try {
-      // Increment the download count in the backend
-      await incrementDownloadCount(agentId);
+      // Create a product object from the agent data
+      const product = {
+        id: agent.id,
+        title: agent.title,
+        price: parseFloat(customPrice),
+        imageUrl: agent.imageUrl || getImageUrls()[0],
+        quantity: 1
+      };
       
-      // Update the local state
-      setDownloadCount(prev => prev + 1);
+      // Add to cart using the context function
+      addToCart(product);
       
-      // Simulate download start
-      // In a real app, this would trigger the actual file download
-      alert('Download started!');
+      // Update download count in the background
+      incrementDownloadCount(agentId).then(() => {
+        setDownloadCount(prev => prev + 1);
+      });
     } catch (err) {
-      console.error('Error incrementing download count:', err);
+      console.error('Error adding to cart:', err);
+      toast.error('Could not add item to cart. Please try again.');
     }
   };
 
@@ -372,7 +385,7 @@ const AgentDetail = () => {
             <button 
               className={`add-to-cart-btn ${!isPriceValid() ? 'disabled' : ''}`}
               disabled={!isPriceValid()}
-              onClick={handleDownloadClick}
+              onClick={handleAddToCart}
             >
               Add to cart
             </button>
