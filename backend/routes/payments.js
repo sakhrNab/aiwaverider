@@ -15,6 +15,43 @@ router.get('/test', (req, res) => {
   });
 });
 
+// Stripe status endpoint
+router.get('/stripe-status', async (req, res) => {
+  try {
+    // Check if Stripe is configured
+    const stripeIsConfigured = !!process.env.STRIPE_SECRET_KEY;
+    
+    // Try to access Stripe API (lightweight check)
+    let stripeApiAccessible = false;
+    if (stripeIsConfigured) {
+      try {
+        const paymentMethods = await stripe.paymentMethods.list({
+          limit: 1,
+        });
+        stripeApiAccessible = true;
+      } catch (stripeError) {
+        logger.error('Stripe API access error:', stripeError);
+        stripeApiAccessible = false;
+      }
+    }
+    
+    logger.info('Stripe status check performed');
+    return res.status(200).json({
+      status: 'success',
+      stripe: {
+        configured: stripeIsConfigured,
+        apiAccessible: stripeApiAccessible,
+        publishableKeyLength: process.env.STRIPE_PUBLISHABLE_KEY ? process.env.STRIPE_PUBLISHABLE_KEY.length : 0,
+        secretKeyLength: process.env.STRIPE_SECRET_KEY ? process.env.STRIPE_SECRET_KEY.length : 0,
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Error checking Stripe status:', error);
+    return res.status(500).json({ error: 'Failed to check Stripe status' });
+  }
+});
+
 // Log helper
 const logPayment = (type, action, data, error = null) => {
   const timestamp = new Date().toISOString();

@@ -83,11 +83,29 @@ iframe.StripeElement {
 // Use environment variable now that we've fixed the .env.local file
 const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_51R2112HlDxuwLTKvZuzoJTkH5l9gKERbMTvhYVVROWdmkzcN6WzLCMvZa8j71BSeOVDtrWAYGbCfDmb8AGjKr0YS00m8aH9BD8';
 console.log('Stripe key available:', !!stripeKey, 'Key length:', stripeKey ? stripeKey.length : 0);
+// Added extra logging to debug
+console.log('Environment variables:', {
+  VITE_STRIPE_PUBLISHABLE_KEY: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY,
+  VITE_API_URL: import.meta.env.VITE_API_URL,
+  NODE_ENV: import.meta.env.NODE_ENV
+});
 
-// Only attempt to load Stripe if we have a key
-const stripePromise = loadStripe(stripeKey).catch(err => {
-  console.error('Stripe initialization error:', err);
-  return null;
+// Explicitly create a new Promise for Stripe loading
+const stripePromise = new Promise((resolve) => {
+  console.log('Loading Stripe with key:', stripeKey);
+  
+  // Add a slight delay to ensure DOM is ready
+  setTimeout(() => {
+    loadStripe(stripeKey)
+      .then(stripeInstance => {
+        console.log('Stripe loaded successfully:', !!stripeInstance);
+        resolve(stripeInstance);
+      })
+      .catch(err => {
+        console.error('Stripe initialization error:', err);
+        resolve(null);
+      });
+  }, 100);
 });
 
 // Warn if no Stripe key is available
@@ -138,6 +156,7 @@ const CheckoutForm = ({ finalTotal, currency, email, handlePaymentSuccess, isSub
   const [error, setError] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [cardComplete, setCardComplete] = useState(false);
+  const [cardElementReady, setCardElementReady] = useState(false);
   
   // Debug logs for Stripe initialization
   useEffect(() => {
@@ -145,6 +164,28 @@ const CheckoutForm = ({ finalTotal, currency, email, handlePaymentSuccess, isSub
       stripeAvailable: !!stripe,
       elementsAvailable: !!elements
     });
+    
+    // Check every 1 second if Stripe is loaded for up to 10 seconds
+    const checkInterval = setInterval(() => {
+      if (stripe && elements) {
+        console.log("Stripe and elements are now available");
+        clearInterval(checkInterval);
+        setCardElementReady(true);
+      }
+    }, 1000);
+    
+    // Clear interval after 10 seconds
+    const timeout = setTimeout(() => {
+      clearInterval(checkInterval);
+      if (!stripe || !elements) {
+        console.error("Stripe or elements couldn't be loaded after timeout");
+      }
+    }, 10000);
+    
+    return () => {
+      clearInterval(checkInterval);
+      clearTimeout(timeout);
+    };
   }, [stripe, elements]);
   
   const handleSubmit = async (event) => {
@@ -201,36 +242,42 @@ const CheckoutForm = ({ finalTotal, currency, email, handlePaymentSuccess, isSub
     <form onSubmit={handleSubmit} className="stripe-form">
       <div className="form-group">
         <label htmlFor="card-element">Credit or debit card</label>
-        <div className="card-element-container">
-          <CardElement
-            id="card-element"
-            onChange={(e) => {
-              setCardComplete(e.complete);
-              if (e.error) {
-                setError(e.error.message);
-              } else {
-                setError(null);
-              }
-              console.log('Card element change:', e);
-            }}
-            options={{
-              style: {
-                base: {
-                  fontSize: '16px',
-                  color: '#424770',
-                  fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
-                  fontSmoothing: 'antialiased',
-                  '::placeholder': {
-                    color: '#aab7c4',
+        <div className="card-element-container" style={{ minHeight: '42px' }}>
+          {cardElementReady ? (
+            <CardElement
+              id="card-element"
+              onChange={(e) => {
+                setCardComplete(e.complete);
+                if (e.error) {
+                  setError(e.error.message);
+                } else {
+                  setError(null);
+                }
+                console.log('Card element change:', e);
+              }}
+              options={{
+                style: {
+                  base: {
+                    fontSize: '16px',
+                    color: '#424770',
+                    fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
+                    fontSmoothing: 'antialiased',
+                    '::placeholder': {
+                      color: '#aab7c4',
+                    },
+                  },
+                  invalid: {
+                    color: '#9e2146',
                   },
                 },
-                invalid: {
-                  color: '#9e2146',
-                },
-              },
-              hidePostalCode: true,
-            }}
-          />
+                hidePostalCode: true,
+              }}
+            />
+          ) : (
+            <div className="card-element-loading-indicator">
+              Loading card input field...
+            </div>
+          )}
         </div>
       </div>
       
@@ -1015,15 +1062,18 @@ const Checkout = () => {
                       colorPrimary: '#007bff',
                     },
                   },
+                  loader: 'auto', // Show a loading indicator while Stripe loads
                 }}>
-                  <CheckoutForm
-                    finalTotal={finalTotal}
-                    currency={currency}
-                    email={email}
-                    handlePaymentSuccess={handlePaymentSuccess}
-                    isSubmitting={isSubmitting}
-                    setIsSubmitting={setIsSubmitting}
-                  />
+                  <div className="stripe-card-container">
+                    <CheckoutForm
+                      finalTotal={finalTotal}
+                      currency={currency}
+                      email={email}
+                      handlePaymentSuccess={handlePaymentSuccess}
+                      isSubmitting={isSubmitting}
+                      setIsSubmitting={setIsSubmitting}
+                    />
+                  </div>
                 </Elements>
               )}
             </div>
