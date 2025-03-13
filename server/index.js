@@ -8,7 +8,16 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+
+// Important: This ensures we handle JSON for regular routes
+// but keeps raw body for Stripe webhooks
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/payments/stripe-webhook') {
+    next();
+  } else {
+    express.json()(req, res, next);
+  }
+});
 
 // API Routes
 app.use('/api/payments', paymentRoutes);

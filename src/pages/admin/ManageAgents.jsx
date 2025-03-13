@@ -355,7 +355,7 @@ const ManageAgents = () => {
   // Add mock auth token for development - REMOVE IN PRODUCTION!
   useEffect(() => {
     // Validate and refresh token if needed
-    if (!validateAndRefreshToken() && import.meta.env.VITE_NODE_ENV === "development") {
+    if (!validateAndRefreshToken() && process.env.NODE_ENV === "development") {
       // Token is invalid or missing, import and use the auth utility
       import("../../utils/auth").then(({ generateMockFirebaseToken }) => {
         const mockToken = generateMockFirebaseToken();
@@ -518,7 +518,7 @@ const ManageAgents = () => {
       }
 
       // Generate a mock response for development purposes
-      if (import.meta.env.VITE_NODE_ENV === "development" && url.includes("/price")) {
+      if (process.env.NODE_ENV === "development" && url.includes("/price")) {
         console.log(` Generating mock response for ${method} ${url}`);
         return generateMockPriceData();
       }

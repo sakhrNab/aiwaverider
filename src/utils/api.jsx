@@ -127,7 +127,7 @@ api.interceptors.response.use(
     }
     
     // For development: log error details
-    if (import.meta.env.VITE_NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'development') {
       console.error('API Response Error:', {
         url: originalRequest.url,
         status: error.response?.status,

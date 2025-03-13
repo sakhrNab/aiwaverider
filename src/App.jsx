@@ -14,9 +14,10 @@ import AuthCallback from './components/AuthCallback';
 
 // PayPal initial options
 const paypalOptions = {
-  "client-id": "sb", // Using PayPal sandbox client ID for development
+  "client-id": import.meta.env.VITE_PAYPAL_CLIENT_ID || "ARKmoVvHgdgebkNzZaxX1xmTtMGewjV0aX2RvWBxubTenIlDc_s9FHD3SPm0FpMen-_rn9qNOrzk7rho", // Use the actual PayPal client ID
   currency: "USD",
-  intent: "capture"
+  intent: "capture",
+  "disable-funding": "paylater,venmo,credit", // Optional: disable specific payment methods
 };
 
 const App = () => {

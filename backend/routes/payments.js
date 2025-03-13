@@ -2,28 +2,36 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_your_test_key');
-const crypto = require('crypto');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const logger = require('../utils/logger');
 
-// === PayPal Integration (Existing) ===
-// Your PayPal credentials - STORE THESE IN .ENV FILE in production
-const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || 'YOUR_PAYPAL_CLIENT_ID';
-const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET || 'YOUR_PAYPAL_CLIENT_SECRET';
-const PAYPAL_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://api-m.paypal.com'
-  : 'https://api-m.sandbox.paypal.com';
+// Diagnostic endpoint
+router.get('/test', (req, res) => {
+  logger.info('Payment routes test endpoint reached successfully');
+  return res.status(200).json({ 
+    status: 'success', 
+    message: 'Payment routes are working correctly',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Log helper
 const logPayment = (type, action, data, error = null) => {
   const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${type} PAYMENT ${action}: ${error ? 'ERROR' : 'SUCCESS'}`);
+  logger.info(`[${timestamp}] ${type} PAYMENT ${action}: ${error ? 'ERROR' : 'SUCCESS'}`);
   
   if (error) {
-    console.error(`Error details:`, error);
+    logger.error(`Payment error details: ${error.message}`);
   }
-  
-  // In production, you would log to a file or database
 };
+
+// === PayPal Integration ===
+// PayPal credentials from .env
+const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
+const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
+const PAYPAL_BASE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://api-m.paypal.com'
+  : 'https://api-m.sandbox.paypal.com';
 
 // Generate an access token for PayPal API calls
 async function generateAccessToken() {
@@ -41,7 +49,7 @@ async function generateAccessToken() {
     
     return response.data.access_token;
   } catch (error) {
-    console.error('Failed to generate PayPal access token:', error);
+    logger.error('Failed to generate PayPal access token:', error);
     throw new Error('Failed to generate PayPal access token');
   }
 }
@@ -59,14 +67,19 @@ router.post('/create-paypal-order', async (req, res) => {
     
     // Format line items for PayPal
     const lineItems = items.map(item => ({
-      name: item.title,
+      name: item.title || 'Product',
       unit_amount: {
         currency_code: 'USD',
-        value: item.price.toFixed(2)
+        value: (item.price || 0).toFixed(2)
       },
-      quantity: item.quantity.toString(),
+      quantity: (item.quantity || 1).toString(),
       category: 'DIGITAL_GOODS'
     }));
+
+    // Calculate total amount to ensure it matches
+    const calculatedTotal = lineItems.reduce((sum, item) => {
+      return sum + (parseFloat(item.unit_amount.value) * parseInt(item.quantity));
+    }, 0);
     
     // Create order payload
     const payload = {
@@ -76,11 +89,11 @@ router.post('/create-paypal-order', async (req, res) => {
           reference_id: uuidv4(),
           amount: {
             currency_code: 'USD',
-            value: cartTotal.toFixed(2),
+            value: calculatedTotal.toFixed(2),
             breakdown: {
               item_total: {
                 currency_code: 'USD',
-                value: cartTotal.toFixed(2)
+                value: calculatedTotal.toFixed(2)
               }
             }
           },
@@ -96,19 +109,30 @@ router.post('/create-paypal-order', async (req, res) => {
       }
     };
     
-    // Make API request to create order
-    const response = await axios({
-      method: 'post',
-      url: `${PAYPAL_BASE_URL}/v2/checkout/orders`,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`
-      },
-      data: payload
-    });
-    
-    logPayment('PAYPAL', 'ORDER_CREATED', { id: response.data.id });
-    return res.json({ id: response.data.id });
+    try {
+      // Make API request to create order
+      const response = await axios({
+        method: 'post',
+        url: `${PAYPAL_BASE_URL}/v2/checkout/orders`,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        data: payload
+      });
+      
+      logPayment('PAYPAL', 'ORDER_CREATED', { id: response.data.id });
+      return res.json({ id: response.data.id });
+    } catch (apiError) {
+      // Log detailed API error
+      console.error('PayPal API Error:', apiError.response ? {
+        status: apiError.response.status,
+        data: apiError.response.data
+      } : apiError.message);
+      
+      logPayment('PAYPAL', 'ORDER_CREATION_FAILED', null, apiError);
+      return res.status(500).json({ error: 'Failed to create PayPal order: ' + (apiError.response?.data?.message || apiError.message) });
+    }
   } catch (error) {
     logPayment('PAYPAL', 'ORDER_CREATION_FAILED', null, error);
     return res.status(500).json({ error: 'Failed to create PayPal order' });
@@ -147,7 +171,7 @@ router.post('/capture-paypal-payment', async (req, res) => {
   }
 });
 
-// === Stripe Integration (New) ===
+// === Stripe Integration ===
 
 // Helper to format amount for Stripe (converts dollars to cents)
 const formatAmountForStripe = (amount, currency = 'usd') => {
@@ -194,6 +218,7 @@ router.post('/create-stripe-checkout', async (req, res) => {
       currency = 'usd', 
       countryCode = 'US',
       email,
+      paymentMethodTypes = [],
       metadata = {}
     } = req.body;
     
@@ -218,7 +243,10 @@ router.post('/create-stripe-checkout', async (req, res) => {
     }));
     
     // Get appropriate payment methods for the country
-    const payment_method_types = getPaymentMethodsForCountry(countryCode);
+    // Use provided payment method types or fall back to country-based ones
+    const payment_method_types = paymentMethodTypes.length > 0 
+      ? paymentMethodTypes 
+      : getPaymentMethodsForCountry(countryCode);
     
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
@@ -249,194 +277,55 @@ router.post('/create-stripe-checkout', async (req, res) => {
             display_name: 'Digital Delivery',
             delivery_estimate: {
               minimum: {
-                unit: 'hour',
+                unit: 'minute',
                 value: 1,
               },
               maximum: {
-                unit: 'hour',
-                value: 24,
+                unit: 'minute',
+                value: 5,
               },
-            },
-          },
-        },
-      ],
-      locale: 'auto', // Automatically adjust language based on user's browser
+            }
+          }
+        }
+      ]
     });
     
-    logPayment('STRIPE', 'CHECKOUT_SESSION_CREATED', { id: session.id });
-    return res.json({ id: session.id, url: session.url });
+    logPayment('STRIPE', 'SESSION_CREATED', { id: session.id });
+    return res.json({ url: session.url, id: session.id });
   } catch (error) {
-    logPayment('STRIPE', 'CHECKOUT_SESSION_FAILED', null, error);
+    logPayment('STRIPE', 'SESSION_CREATION_FAILED', null, error);
     return res.status(500).json({ error: 'Failed to create Stripe checkout session' });
   }
 });
 
-// Create Stripe payment intent (for custom payment flows with Elements)
+// Create a payment intent for Stripe Elements
 router.post('/create-payment-intent', async (req, res) => {
   try {
-    const { 
-      amount, 
-      currency = 'usd', 
-      paymentMethodTypes = ['card'],
-      metadata = {},
-      customerId = null
-    } = req.body;
+    const { amount, currency = 'usd', paymentMethodTypes = ['card'] } = req.body;
     
     if (!amount) {
       return res.status(400).json({ error: 'Amount is required' });
     }
     
-    // Create payment intent with Stripe
+    // Create a PaymentIntent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: formatAmountForStripe(amount, currency),
       currency: currency.toLowerCase(),
       payment_method_types: paymentMethodTypes,
       metadata: {
-        ...metadata,
         order_id: uuidv4()
-      },
-      customer: customerId || undefined,
-      setup_future_usage: customerId ? 'off_session' : undefined,
+      }
     });
     
     logPayment('STRIPE', 'PAYMENT_INTENT_CREATED', { id: paymentIntent.id });
     return res.json({
       clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id
+      id: paymentIntent.id
     });
   } catch (error) {
-    logPayment('STRIPE', 'PAYMENT_INTENT_FAILED', null, error);
+    logPayment('STRIPE', 'PAYMENT_INTENT_CREATION_FAILED', null, error);
     return res.status(500).json({ error: 'Failed to create payment intent' });
   }
-});
-
-// Confirm payment status
-router.get('/payment-status/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { type = 'payment_intent' } = req.query;
-    
-    if (!id) {
-      return res.status(400).json({ error: 'Payment ID is required' });
-    }
-    
-    let status, result;
-    
-    if (type === 'payment_intent') {
-      const paymentIntent = await stripe.paymentIntents.retrieve(id);
-      status = paymentIntent.status;
-      result = paymentIntent;
-    } else if (type === 'checkout_session') {
-      const session = await stripe.checkout.sessions.retrieve(id);
-      status = session.payment_status;
-      result = session;
-    } else {
-      return res.status(400).json({ error: 'Invalid payment type' });
-    }
-    
-    return res.json({ status, result });
-  } catch (error) {
-    logPayment('STRIPE', 'PAYMENT_STATUS_CHECK_FAILED', { id: req.params.id }, error);
-    return res.status(500).json({ error: 'Failed to check payment status' });
-  }
-});
-
-// Stripe webhook handler
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-router.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-  
-  try {
-    // Verify webhook signature
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
-  } catch (err) {
-    logPayment('STRIPE', 'WEBHOOK_SIGNATURE_FAILED', null, err);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-  
-  // Handle the event
-  switch (event.type) {
-    case 'payment_intent.succeeded':
-      const paymentIntent = event.data.object;
-      // Update your database with payment success
-      logPayment('STRIPE', 'PAYMENT_SUCCEEDED', { id: paymentIntent.id });
-      // Fulfill the order here
-      break;
-    case 'payment_intent.payment_failed':
-      const failedPayment = event.data.object;
-      // Handle failed payment
-      logPayment('STRIPE', 'PAYMENT_FAILED', { id: failedPayment.id });
-      break;
-    case 'checkout.session.completed':
-      const session = event.data.object;
-      // Fulfill the purchase
-      logPayment('STRIPE', 'CHECKOUT_COMPLETED', { id: session.id });
-      break;
-    default:
-      // Unexpected event type
-      logPayment('STRIPE', `UNHANDLED_EVENT_${event.type}`, { id: event.id });
-  }
-  
-  // Return a 200 response to acknowledge receipt of the event
-  res.status(200).send({ received: true });
-});
-
-// === Crypto Payment Integration via BitPay ===
-// This is a simplified implementation - you would need to set up a BitPay account and get API keys
-
-router.post('/create-crypto-payment', async (req, res) => {
-  try {
-    const { cartTotal, items, currency = 'USD' } = req.body;
-    
-    if (!cartTotal || !items || !items.length) {
-      return res.status(400).json({ error: 'Invalid request body' });
-    }
-    
-    // In production, you would use the BitPay SDK here with your API credentials
-    // This is a mock implementation to show the general flow
-    
-    // Generate a unique payment ID
-    const paymentId = uuidv4();
-    
-    // Mock BitPay API call (replace with actual BitPay SDK usage)
-    const mockBitPayResponse = {
-      id: `BP_${paymentId}`,
-      url: `https://bitpay.com/invoice?id=${paymentId}`,
-      status: 'new',
-      price: cartTotal,
-      currency: currency,
-      expirationTime: new Date(Date.now() + 15 * 60000).toISOString(), // 15 minutes
-      paymentCurrencies: ['BTC', 'ETH', 'USDC'],
-      redirectURL: `${req.protocol}://${req.get('host')}/thankyou?crypto_payment_id=${paymentId}`
-    };
-    
-    logPayment('CRYPTO', 'PAYMENT_CREATED', { id: mockBitPayResponse.id });
-    return res.json(mockBitPayResponse);
-  } catch (error) {
-    logPayment('CRYPTO', 'PAYMENT_CREATION_FAILED', null, error);
-    return res.status(500).json({ error: 'Failed to create crypto payment' });
-  }
-});
-
-// Check BitPay payment status
-router.get('/crypto-payment-status/:id', (req, res) => {
-  // In production, you would use the BitPay SDK to check payment status
-  // This is a mock implementation
-  
-  const { id } = req.params;
-  
-  // Mock payment statuses: 'new', 'paid', 'confirmed', 'complete', 'expired', 'invalid'
-  // In a real implementation, you'd fetch this from BitPay's API
-  const statuses = ['new', 'paid', 'confirmed', 'complete', 'expired', 'invalid'];
-  const randomStatus = statuses[Math.floor(Math.random() * 3)]; // For demo, use more positive statuses
-  
-  return res.json({
-    id,
-    status: randomStatus,
-    // Additional data as needed
-  });
 });
 
 module.exports = router; 

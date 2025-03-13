@@ -11,6 +11,7 @@ const agentRoutes = require('./agent');
 const wishlistsRoutes = require('./wishlists');
 const pricesRoutes = require('./prices');
 const testRoutes = require('./test');
+const paymentsRoutes = require('./payments');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -22,6 +23,7 @@ router.use('/agent', agentRoutes);
 router.use('/wishlists', wishlistsRoutes);
 router.use('/agent-prices', pricesRoutes);
 router.use('/test', testRoutes);
+router.use('/payments', paymentsRoutes);
 
 // Health check endpoint
 router.get('/health', (req, res) => {
