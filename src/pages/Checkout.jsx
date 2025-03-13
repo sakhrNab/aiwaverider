@@ -7,12 +7,12 @@ import { useCart } from '../contexts/CartContext.jsx';
 import { getRelatedProducts } from '../utils/productData';
 import { PayPalButtons, usePayPalScriptReducer } from '@paypal/react-paypal-js';
 import { 
+  createStripeCheckout, 
   createPayPalOrder, 
   capturePayPalPayment, 
-  createStripeCheckout, 
   createPaymentIntent, 
   createCryptoPayment, 
-  detectUserCountry 
+  detectUserCountry
 } from '../services/paymentApi';
 import { loadStripe } from '@stripe/stripe-js';
 import {
@@ -553,32 +553,76 @@ const Checkout = () => {
       console.log('SEPA payment initiated with details:', {
         name: cardName,
         email: email,
-        currency: currency
+        currency: currency,
+        countryCode: countryCode
       });
+      
+      // Check API connectivity before proceeding
+      try {
+        const { checkApiConnectivity } = await import('../services/paymentApi');
+        const connectivityCheck = await checkApiConnectivity();
+        
+        if (!connectivityCheck.ok) {
+          console.error('API connectivity check failed:', connectivityCheck.error);
+          
+          if (connectivityCheck.fallbackOk) {
+            toast.error(`Payment system issue: ${connectivityCheck.error}. Please try again in a few minutes.`);
+          } else {
+            toast.error(`Could not connect to payment server: ${connectivityCheck.error}`);
+          }
+          
+          setIsSubmitting(false);
+          return;
+        }
+      } catch (connectivityError) {
+        console.error('Error checking API connectivity:', connectivityError);
+        toast.error('Could not verify payment system availability. Trying to proceed anyway...');
+        // Continue despite connectivity check error - the actual payment might still work
+      }
       
       // Create a checkout session for SEPA
-      const { url } = await createStripeCheckout({
-        cartTotal: finalTotal,
-        items: cart.map(item => ({
-          id: item.id,
-          title: item.title,
-          price: item.price,
-          quantity: item.quantity
-        })),
-        currency: 'eur', // Force EUR for SEPA
-        countryCode, 
-        email,
-        paymentMethodTypes: ['sepa_debit'],
-        billingDetails: {
-          name: cardName,
-          email: email,
+      try {
+        const { url } = await createStripeCheckout({
+          cartTotal: finalTotal,
+          items: cart.map(item => ({
+            id: item.id,
+            title: item.title,
+            price: item.price,
+            quantity: item.quantity
+          })),
+          currency: 'eur', // Force EUR for SEPA
+          countryCode, 
+          email,
+          paymentMethodTypes: ['sepa_debit'],
+          billingDetails: {
+            name: cardName,
+            email: email,
+          }
+        });
+        
+        console.log('SEPA checkout URL:', url);
+        
+        if (!url) {
+          throw new Error('No checkout URL returned from the server');
         }
-      });
-      
-      console.log('SEPA checkout URL:', url);
-      
-      // Redirect to checkout
-      window.location.href = url;
+        
+        // Redirect to checkout
+        window.location.href = url;
+      } catch (checkoutError) {
+        console.error('SEPA checkout creation error:', checkoutError);
+        
+        // Handle specific error cases
+        if (checkoutError.message.includes('timed out')) {
+          toast.error('Payment system is taking too long to respond. Please try again in a few minutes.');
+        } else if (checkoutError.message.includes('Failed to fetch') || 
+                   checkoutError.message.includes('NetworkError')) {
+          toast.error('Cannot connect to payment system. Please check your internet connection and try again.');
+        } else {
+          toast.error(checkoutError.message || 'Failed to initialize SEPA payment. Please try another payment method.');
+        }
+        
+        setIsSubmitting(false);
+      }
     } catch (error) {
       console.error('SEPA payment error:', error);
       toast.error(error.message || 'SEPA payment failed. Please try another payment method.');
@@ -603,29 +647,79 @@ const Checkout = () => {
         toast.warning('iDEAL works best for customers in the Netherlands or Belgium.');
       }
       
-      // Create a checkout session for iDEAL
-      const { url } = await createStripeCheckout({
-        cartTotal: finalTotal,
-        items: cart.map(item => ({
-          id: item.id,
-          title: item.title,
-          price: item.price,
-          quantity: item.quantity
-        })),
-        currency: 'eur', // Force EUR for iDEAL
-        countryCode,
-        email,
-        paymentMethodTypes: ['ideal'],
-        billingDetails: {
-          name: cardName,
-          email: email,
-        }
+      console.log('iDEAL payment initiated with details:', {
+        name: cardName,
+        email: email,
+        currency: currency,
+        countryCode: countryCode
       });
       
-      console.log('iDEAL checkout URL:', url);
+      // Check API connectivity before proceeding
+      try {
+        const { checkApiConnectivity } = await import('../services/paymentApi');
+        const connectivityCheck = await checkApiConnectivity();
+        
+        if (!connectivityCheck.ok) {
+          console.error('API connectivity check failed:', connectivityCheck.error);
+          
+          if (connectivityCheck.fallbackOk) {
+            toast.error(`Payment system issue: ${connectivityCheck.error}. Please try again in a few minutes.`);
+          } else {
+            toast.error(`Could not connect to payment server: ${connectivityCheck.error}`);
+          }
+          
+          setIsSubmitting(false);
+          return;
+        }
+      } catch (connectivityError) {
+        console.error('Error checking API connectivity:', connectivityError);
+        toast.error('Could not verify payment system availability. Trying to proceed anyway...');
+        // Continue despite connectivity check error - the actual payment might still work
+      }
       
-      // Redirect to checkout
-      window.location.href = url;
+      // Create a checkout session for iDEAL
+      try {
+        const { url } = await createStripeCheckout({
+          cartTotal: finalTotal,
+          items: cart.map(item => ({
+            id: item.id,
+            title: item.title,
+            price: item.price,
+            quantity: item.quantity
+          })),
+          currency: 'eur', // Force EUR for iDEAL
+          countryCode,
+          email,
+          paymentMethodTypes: ['ideal'],
+          billingDetails: {
+            name: cardName,
+            email: email,
+          }
+        });
+        
+        console.log('iDEAL checkout URL:', url);
+        
+        if (!url) {
+          throw new Error('No checkout URL returned from the server');
+        }
+        
+        // Redirect to checkout
+        window.location.href = url;
+      } catch (checkoutError) {
+        console.error('iDEAL checkout creation error:', checkoutError);
+        
+        // Handle specific error cases
+        if (checkoutError.message.includes('timed out')) {
+          toast.error('Payment system is taking too long to respond. Please try again in a few minutes.');
+        } else if (checkoutError.message.includes('Failed to fetch') || 
+                   checkoutError.message.includes('NetworkError')) {
+          toast.error('Cannot connect to payment system. Please check your internet connection and try again.');
+        } else {
+          toast.error(checkoutError.message || 'Failed to initialize iDEAL payment. Please try another payment method.');
+        }
+        
+        setIsSubmitting(false);
+      }
     } catch (error) {
       console.error('iDEAL payment error:', error);
       toast.error(error.message || 'iDEAL payment failed. Please try another payment method.');

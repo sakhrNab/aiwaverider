@@ -21,7 +21,7 @@ const PORT = process.env.PORT || (isProduction ? 8080 : 4000);
 // ------------------ CORS Configuration ------------------
 const allowedOrigins = isProduction
   ? (process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim())
-  : ['http://localhost:5173']; // Frontend origin
+  : ['http://localhost:5173', 'http://localhost:3000']; // Frontend origins
 
 // Create a CORS middleware function with proper configuration
 const corsOptions = {
@@ -30,6 +30,7 @@ const corsOptions = {
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      logger.warn(`CORS blocked request from origin: ${origin}`);
       callback(new Error(`CORS policy: Origin ${origin} not allowed`));
     }
   },
@@ -38,6 +39,10 @@ const corsOptions = {
   credentials: true,
   maxAge: 86400 // 24 hours
 };
+
+// Log active CORS configuration
+logger.info(`CORS configured with allowed origins: ${JSON.stringify(allowedOrigins)}`);
+logger.info(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
 
 // Apply middleware
 app.use(cors(corsOptions));

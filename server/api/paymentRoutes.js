@@ -225,8 +225,8 @@ router.post('/create-stripe-checkout', async (req, res) => {
       payment_method_types,
       line_items: lineItems,
       mode: 'payment',
-      success_url: `${req.protocol}://${req.get('host')}/thankyou?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.protocol}://${req.get('host')}/checkout`,
+      success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/thankyou?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout`,
       customer_email: email || undefined,
       payment_intent_data: {
         metadata: {
@@ -246,17 +246,7 @@ router.post('/create-stripe-checkout', async (req, res) => {
               amount: 0, // For digital goods
               currency: currency.toLowerCase(),
             },
-            display_name: 'Digital Delivery',
-            delivery_estimate: {
-              minimum: {
-                unit: 'hour',
-                value: 1,
-              },
-              maximum: {
-                unit: 'hour',
-                value: 24,
-              },
-            },
+            display_name: 'Digital Delivery'
           },
         },
       ],
@@ -437,6 +427,22 @@ router.get('/crypto-payment-status/:id', (req, res) => {
     status: randomStatus,
     // Additional data as needed
   });
+});
+
+// Redirect handler for thank you page after payment
+router.get('/thankyou', (req, res) => {
+  const { session_id } = req.query;
+  // Get the frontend URL (default to localhost:5173 for development)
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  
+  // Redirect to the frontend thank you page with the session_id
+  const redirectUrl = `${frontendUrl}/thankyou?session_id=${session_id}`;
+  console.log(`Redirecting payment success to: ${redirectUrl}`);
+  
+  // Log the redirect
+  logPayment('STRIPE', 'REDIRECT_TO_THANKYOU', { session_id, redirectUrl });
+  
+  return res.redirect(redirectUrl);
 });
 
 module.exports = router; 

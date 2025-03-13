@@ -33,7 +33,9 @@ package-lock*
 *.njsproj
 *.sln
 *.sw?
-
+*.bat
+*.ps1
+*.xlsx
 # unneccessary generated files
 *.$*
 

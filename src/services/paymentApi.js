@@ -1,6 +1,113 @@
 // API URL - adjust based on your environment
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+// Helper function to check API connectivity
+export const checkApiConnectivity = async () => {
+  try {
+    console.log(`Checking API connectivity with ${API_URL}`);
+    
+    // First try the test endpoint which should always work if routes are registered
+    try {
+      const testResponse = await fetch(`${API_URL}/api/payments/test`);
+      if (testResponse.ok) {
+        console.log('Basic test endpoint is responsive');
+      } else {
+        console.error(`Basic test endpoint failed: ${testResponse.status}`);
+      }
+    } catch (testError) {
+      console.error('Cannot connect to basic test endpoint:', testError);
+    }
+    
+    // Then try the full connectivity test
+    const response = await fetch(`${API_URL}/api/payments/test-connectivity`);
+    
+    if (!response.ok) {
+      console.error(`API connectivity test failed: ${response.status}`);
+      
+      // If we get a 404, the route might not be registered properly
+      if (response.status === 404) {
+        // Try a fallback to see if the backend is running at all
+        try {
+          const fallbackResponse = await fetch(`${API_URL}/api`);
+          if (fallbackResponse.ok) {
+            return { 
+              ok: false, 
+              error: `API endpoint not found (404) but server is running. Backend routes may not be properly registered.`,
+              fallbackOk: true
+            };
+          }
+        } catch (fallbackError) {
+          // Fallback also failed
+        }
+      }
+      
+      return { 
+        ok: false, 
+        error: `API returned status ${response.status}` 
+      };
+    }
+    
+    const data = await response.json();
+    console.log('API connectivity test results:', data);
+    
+    return { 
+      ok: true, 
+      data 
+    };
+  } catch (error) {
+    console.error('API connectivity check failed:', error);
+    
+    // If we get a network error, the backend might not be running at all
+    if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+      return { 
+        ok: false, 
+        error: `Cannot connect to backend server at ${API_URL}. Is the server running?` 
+      };
+    }
+    
+    return { 
+      ok: false, 
+      error: error.message 
+    };
+  }
+};
+
+// Helper to determine the correct payment endpoint based on method
+export const getPaymentMethodEndpoint = async (method = 'card', countryCode = 'US') => {
+  try {
+    const response = await fetch(`${API_URL}/api/payments/payment-methods?countryCode=${countryCode}`);
+    
+    if (!response.ok) {
+      console.error(`Failed to get payment methods: ${response.status}`);
+      // Default fallbacks if the endpoint fails
+      return method === 'paypal' 
+        ? `${API_URL}/api/payments/create-paypal-order` 
+        : `${API_URL}/api/payments/create-stripe-checkout`;
+    }
+    
+    const data = await response.json();
+    console.log('Available payment methods:', data);
+    
+    // Find the method in the response
+    const methodName = method === 'sepa' ? 'sepa_debit' : method;
+    
+    if (data.methodDetails && data.methodDetails[methodName]) {
+      return `${API_URL}${data.methodDetails[methodName].endpoint}`;
+    }
+    
+    // Fallback to Stripe for most methods
+    return method === 'paypal' 
+      ? `${API_URL}/api/payments/create-paypal-order` 
+      : `${API_URL}/api/payments/create-stripe-checkout`;
+  } catch (error) {
+    console.error('Error getting payment method endpoint:', error);
+    // Default fallbacks if the endpoint fails
+    return method === 'paypal' 
+      ? `${API_URL}/api/payments/create-paypal-order` 
+      : `${API_URL}/api/payments/create-stripe-checkout`;
+  }
+};
+
 /**
  * Create a PayPal order
  * @param {Object} data - Cart data including cartTotal and items
@@ -8,10 +115,11 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
  */
 export const createPayPalOrder = async (data) => {
   try {
-    console.log(`Attempting to create PayPal order at: ${API_URL}/api/payments/create-paypal-order`);
+    const endpoint = await getPaymentMethodEndpoint('paypal');
+    console.log(`Attempting to create PayPal order at: ${endpoint}`);
     console.log('Request data:', JSON.stringify(data, null, 2));
     
-    const response = await fetch(`${API_URL}/api/payments/create-paypal-order`, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -78,20 +186,68 @@ export const capturePayPalPayment = async (orderID) => {
  */
 export const createStripeCheckout = async (data) => {
   try {
-    const response = await fetch(`${API_URL}/api/payments/create-stripe-checkout`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    });
+    // Determine if we're dealing with SEPA or iDEAL
+    const paymentMethod = data.paymentMethodTypes && data.paymentMethodTypes.length > 0 
+      ? data.paymentMethodTypes[0] 
+      : 'card';
     
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to create Stripe checkout session');
+    const endpoint = await getPaymentMethodEndpoint(paymentMethod, data.countryCode);
+    
+    console.log(`Attempting to create Stripe checkout session at: ${endpoint}`);
+    console.log('Stripe request data:', JSON.stringify(data, null, 2));
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      console.log('Stripe checkout response status:', response.status);
+      
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+          console.error('Stripe checkout error response:', errorData);
+          
+          // Better handling of detailed error information
+          if (errorData.details) {
+            console.error('Stripe error details:', errorData.details);
+          }
+          
+          // Enhanced error message with details if available
+          const errorMessage = errorData.error || `Failed to create Stripe checkout session: ${response.status}`;
+          throw new Error(errorMessage);
+        } catch (parseError) {
+          console.error('Failed to parse Stripe error response:', parseError);
+          const textError = await response.text();
+          console.error('Stripe response text:', textError);
+          throw new Error(`Server returned ${response.status}: ${textError || 'No response body'}`);
+        }
+      }
+      
+      const responseData = await response.json();
+      console.log('Stripe checkout session created successfully:', responseData);
+      return responseData;
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        console.error('Request timed out after 15 seconds');
+        throw new Error('Request timed out. The server took too long to respond. Please try again.');
+      }
+      
+      throw fetchError;
     }
-    
-    return await response.json();
   } catch (error) {
     console.error('Error creating Stripe checkout session:', error);
     throw error;
