@@ -22,6 +22,8 @@ import {
   useElements,
   PaymentElement,
 } from '@stripe/react-stripe-js';
+import GooglePayButton from '../components/GooglePayButton';
+import ApplePayButton from '../components/ApplePayButton';
 import '../styles/Checkout.css';
 
 // Add some style fixes for the Stripe Elements and form fields
@@ -77,6 +79,30 @@ iframe.StripeElement {
   font-size: 14px;
   margin-top: 8px;
 }
+
+/* Style for focused payment methods (Apple Pay, Google Pay) */
+.payment-method-focus {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 10px;
+  background-color: #f9f9f9;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.payment-method-focus h3 {
+  margin-top: 0;
+  color: #333;
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.payment-method-focus .payment-info-note {
+  margin-top: 15px;
+  font-size: 14px;
+  color: #666;
+}
 `;
 
 // Initialize Stripe with your publishable key
@@ -89,6 +115,103 @@ console.log('Environment variables:', {
   VITE_API_URL: import.meta.env.VITE_API_URL,
   NODE_ENV: import.meta.env.NODE_ENV
 });
+
+/**
+ * PAYMENT METHODS MIGRATION TO PRODUCTION
+ * 
+ * ===== STRIPE CARD PAYMENTS =====
+ * Migration steps:
+ * 1. Get production API keys from Stripe dashboard (https://dashboard.stripe.com/apikeys)
+ * 2. Replace test publishable key with production key in environment variables:
+ *    - Update VITE_STRIPE_PUBLISHABLE_KEY in .env.production with "pk_live_..." key
+ *    - Update the server-side secret key to "sk_live_..." in your backend environment
+ * 3. Test the complete payment flow in a staging environment
+ * 4. Ensure your Stripe account has completed all verification requirements
+ * 5. Update webhook endpoints to production URLs and update webhook signing secrets
+ * 6. Set up appropriate monitoring and alerts for production transactions
+ * 
+ * ===== PAYPAL =====
+ * Migration steps:
+ * 1. Create/login to PayPal Developer account and navigate to the app dashboard
+ * 2. Switch from Sandbox to Live accounts in PayPal Developer Dashboard
+ * 3. Create a live app and obtain production client ID and secret
+ * 4. Update environment variables in your deployment:
+ *    - VITE_PAYPAL_CLIENT_ID = "live client ID" (front-end)
+ *    - PAYPAL_SECRET = "live secret" (back-end)
+ * 5. Modify PayPalScriptProvider in your app entry point:
+ *    - Ensure "options" has "intent: 'capture'" for production
+ *    - Set the correct currency and client-id
+ * 6. Set up IPN (Instant Payment Notification) for production URLs
+ * 7. Enable appropriate transaction logging and monitoring
+ * 
+ * ===== GOOGLE PAY =====
+ * Migration steps:
+ * 1. Update Google Pay API configuration in GooglePayButton component:
+ *    - Change environment from 'TEST' to 'PRODUCTION'
+ *    - Update merchantId with your production merchant ID from Google Pay console
+ * 2. Ensure your domain is verified and approved in the Google Pay console
+ * 3. Update gateway merchant ID if using a payment processor
+ * 4. Test thoroughly with real cards in a staging environment
+ * 5. Update your privacy policy to include Google Pay information
+ * 6. Enable proper logging and monitoring for Google Pay transactions
+ * 
+ * ===== APPLE PAY =====
+ * Migration steps:
+ * 1. Complete Apple Pay merchant validation with your production domain:
+ *    - Register your domain in the Apple Pay Developer Dashboard
+ *    - Generate a merchant identity certificate for production use
+ * 2. Update ApplePayButton component configuration:
+ *    - Replace test merchantIdentifier with production identifier
+ *    - Update to production gateway if using a payment processor
+ * 3. Ensure your server properly validates the Apple Pay session
+ * 4. Verify Apple Pay button is only displayed on compatible devices
+ * 5. Update your payment processing backend to handle production Apple Pay tokens
+ * 
+ * ===== SEPA DIRECT DEBIT =====
+ * Migration steps:
+ * 1. Ensure your Stripe account is fully verified for SEPA payments in production
+ * 2. Update your Stripe keys to production keys as described in Stripe section
+ * 3. Obtain necessary legal compliance for SEPA processing:
+ *    - Update your terms of service and privacy policy
+ *    - Implement appropriate mandate text and consent flows
+ * 4. Update the payment_method_types to include 'sepa_debit' in production calls
+ * 5. Implement proper SEPA-specific error handling and retry mechanisms
+ * 6. Consider longer processing time for SEPA in production (typically 1-2 business days)
+ * 7. Set up SEPA mandate management and notifications for users
+ * 
+ * ===== iDEAL =====
+ * Migration steps:
+ * 1. Verify your Stripe account has iDEAL payments enabled for production
+ * 2. Update Stripe API keys to production as described in Stripe section
+ * 3. Ensure your business details are correct in Stripe dashboard
+ * 4. Add required legal text for iDEAL payments in checkout flow
+ * 5. Implement proper bank selection interface in production
+ * 6. Set appropriate redirect URLs for successful/failed payments
+ * 7. Implement proper handling for iDEAL's synchronous notification system
+ * 8. Update webhook handlers to process iDEAL payment confirmations
+ * 
+ * ===== UPI =====
+ * Migration steps:
+ * 1. Complete Stripe verification for UPI payments in India
+ * 2. Update Stripe API keys to production as described in Stripe section
+ * 3. Register with NPCI (National Payments Corporation of India) if direct integration
+ * 4. Update payment_method_types to include 'upi' in production environment
+ * 5. Implement proper VPA (Virtual Payment Address) validation
+ * 6. Set up appropriate success/failure redirect URLs
+ * 7. Implement webhook handlers for asynchronous payment completion
+ * 8. Add proper UPI transaction reference IDs in production
+ * 
+ * ===== CRYPTO PAYMENTS =====
+ * Migration steps:
+ * 1. Select a production cryptocurrency payment processor (BitPay, Coinbase Commerce, etc.)
+ * 2. Create an account and complete verification with the provider
+ * 3. Obtain production API keys and replace test keys
+ * 4. Update webhook endpoints to production URLs
+ * 5. Implement proper crypto payment verification mechanisms
+ * 6. Consider exchange rate volatility handling in production
+ * 7. Implement appropriate refund policies for crypto payments
+ * 8. Update your terms of service to cover cryptocurrency payment details
+ */
 
 // Explicitly create a new Promise for Stripe loading
 const stripePromise = new Promise((resolve) => {
@@ -1069,79 +1192,92 @@ const Checkout = () => {
           </div>
           
           {/* Common customer information */}
-          <div className="form-group">
-            <label htmlFor="email">Email Address</label>
-            <input
-              type="email"
-              id="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="Your email address"
-            />
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="cardName">Name on Card</label>
-            <input
-              type="text"
-              id="cardName"
-              value={cardName}
-              onChange={(e) => setCardName(e.target.value)}
-              required
-              placeholder="Full name as it appears on card"
-            />
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="country">Country</label>
-            <select
-              id="country"
-              value={country}
-              onChange={(e) => {
-                setCountry(e.target.value);
-                // Update payment methods based on country
-                let code = 'US';
-                if (e.target.value === 'United States') code = 'US';
-                else if (e.target.value === 'United Kingdom') code = 'GB';
-                else if (e.target.value === 'India') code = 'IN';
-                else if (e.target.value === 'Germany') code = 'DE';
-                else if (e.target.value === 'France') code = 'FR';
-                else if (e.target.value === 'Netherlands') code = 'NL';
-                setCountryCode(code);
-                setAvailablePaymentMethods(getPaymentMethodsForCountry(code));
-              }}
-              required
-            >
-              <option value="United States">United States</option>
-              <option value="United Kingdom">United Kingdom</option>
-              <option value="Canada">Canada</option>
-              <option value="Australia">Australia</option>
-              <option value="Germany">Germany</option>
-              <option value="France">France</option>
-              <option value="Netherlands">Netherlands</option>
-              <option value="Belgium">Belgium</option>
-              <option value="India">India</option>
-              <option value="Japan">Japan</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="zipCode">Zip/Postal Code</label>
-            <input
-              type="text"
-              id="zipCode"
-              value={zipCode}
-              onChange={(e) => setZipCode(e.target.value)}
-              required
-              placeholder="Your postal code"
-            />
-          </div>
+          {paymentMethod !== PAYMENT_METHODS.GOOGLE_PAY && 
+           paymentMethod !== PAYMENT_METHODS.APPLE_PAY && 
+           paymentMethod !== PAYMENT_METHODS.PAYPAL && (
+            <>
+              <div className="form-group">
+                <label htmlFor="email">Email Address</label>
+                <input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="Your email address"
+                />
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="cardName">Name on Card</label>
+                <input
+                  type="text"
+                  id="cardName"
+                  value={cardName}
+                  onChange={(e) => setCardName(e.target.value)}
+                  required
+                  placeholder="Full name as it appears on card"
+                />
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="country">Country</label>
+                <select
+                  id="country"
+                  value={country}
+                  onChange={(e) => {
+                    setCountry(e.target.value);
+                    // Update payment methods based on country
+                    let code = 'US';
+                    if (e.target.value === 'United States') code = 'US';
+                    else if (e.target.value === 'United Kingdom') code = 'GB';
+                    else if (e.target.value === 'India') code = 'IN';
+                    else if (e.target.value === 'Germany') code = 'DE';
+                    else if (e.target.value === 'France') code = 'FR';
+                    else if (e.target.value === 'Netherlands') code = 'NL';
+                    setCountryCode(code);
+                    setAvailablePaymentMethods(getPaymentMethodsForCountry(code));
+                  }}
+                  required
+                >
+                  <option value="United States">United States</option>
+                  <option value="United Kingdom">United Kingdom</option>
+                  <option value="Canada">Canada</option>
+                  <option value="Australia">Australia</option>
+                  <option value="Germany">Germany</option>
+                  <option value="France">France</option>
+                  <option value="Netherlands">Netherlands</option>
+                  <option value="Belgium">Belgium</option>
+                  <option value="India">India</option>
+                  <option value="Japan">Japan</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="zipCode">Zip/Postal Code</label>
+                <input
+                  type="text"
+                  id="zipCode"
+                  value={zipCode}
+                  onChange={(e) => setZipCode(e.target.value)}
+                  required
+                  placeholder="Your postal code"
+                />
+              </div>
+            </>
+          )}
           
           {/* Payment method specific forms */}
           {paymentMethod === PAYMENT_METHODS.CARD && (
             <div>
+              {/* 
+                PRODUCTION MIGRATION:
+                - Replace stripePromise with production key (pk_live_...)
+                - Ensure proper error handling and logging for production
+                - Update backend to use sk_live_... secret key
+                - Complete Strong Customer Authentication (SCA) compliance for production
+              */}
               {stripeLoading ? (
                 <div className="card-element-loading">
                   <p>Loading payment form...</p>
@@ -1174,12 +1310,19 @@ const Checkout = () => {
           )}
           
           {paymentMethod === PAYMENT_METHODS.PAYPAL && (
-            <div className="paypal-container">
+            <div className="paypal-container payment-method-focus">
+              <h3>PayPal Checkout</h3>
+              <p>Complete your payment quickly and securely with PayPal:</p>
+              {/* 
+                PRODUCTION MIGRATION:
+                - Update PayPalScriptProvider with production client ID
+                - Verify webhook and IPN endpoints for production
+                - Enable production-appropriate logging and error handling
+              */}
               {isPending ? (
                 <div className="paypal-loading">Loading PayPal buttons...</div>
               ) : (
                 <>
-                  <p>Pay with PayPal or credit/debit card via PayPal:</p>
                   <PayPalButtons
                     style={{
                       layout: 'vertical',
@@ -1208,12 +1351,22 @@ const Checkout = () => {
                   </div>
                 </>
               )}
+              <p className="payment-info-note">
+                You can pay with your PayPal account or credit/debit card via PayPal without creating an account.
+              </p>
             </div>
           )}
           
           {paymentMethod === PAYMENT_METHODS.SEPA && (
             <div className="sepa-container">
               <p>Pay with SEPA Direct Debit (European bank accounts only)</p>
+              {/* 
+                PRODUCTION MIGRATION:
+                - Implement SEPA mandate management
+                - Add required legal disclosures for SEPA in production
+                - Consider 1-2 day settlement time in production UX
+                - Ensure Stripe account is fully verified for SEPA in production
+              */}
               {currency.toLowerCase() !== 'eur' ? (
                 <div className="payment-warning">
                   <p>SEPA payments require EUR as the currency. Please switch to EUR to use SEPA.</p>
@@ -1244,6 +1397,13 @@ const Checkout = () => {
           {paymentMethod === PAYMENT_METHODS.IDEAL && (
             <div className="ideal-container">
               <p>Pay with iDEAL (Netherlands)</p>
+              {/* 
+                PRODUCTION MIGRATION:
+                - Ensure proper bank selection interface is implemented
+                - Add required iDEAL legal disclosures for production
+                - Update webhook handlers to properly process iDEAL notifications
+                - Verify Stripe account is approved for iDEAL in production
+              */}
               {currency.toLowerCase() !== 'eur' ? (
                 <div className="payment-warning">
                   <p>iDEAL payments require EUR as the currency. Please switch to EUR to use iDEAL.</p>
@@ -1274,6 +1434,13 @@ const Checkout = () => {
           {paymentMethod === PAYMENT_METHODS.UPI && (
             <div className="upi-container">
               <p>Pay with UPI (India):</p>
+              {/* 
+                PRODUCTION MIGRATION:
+                - Complete NPCI compliance if using direct integration
+                - Implement proper VPA validation
+                - Update to production UPI endpoints
+                - Add appropriate transaction reference IDs for production
+              */}
               <button 
                 onClick={handleUpiPayment}
                 className="pay-button"
@@ -1288,33 +1455,73 @@ const Checkout = () => {
           )}
           
           {paymentMethod === PAYMENT_METHODS.APPLE_PAY && (
-            <div className="apple-pay-container">
-              <p>Pay with Apple Pay for faster checkout:</p>
-              <button 
-                onClick={handleStripeCheckout}
-                className="pay-button apple-pay-button"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Processing...' : `Pay with Apple Pay`}
-              </button>
+            <div className="apple-pay-container payment-method-focus">
+              <h3>Apple Pay Checkout</h3>
+              <p>Complete your payment quickly and securely with Apple Pay:</p>
+              {/* 
+                PRODUCTION MIGRATION:
+                - Register production domain with Apple Pay
+                - Generate production merchant identity certificate
+                - Update merchantIdentifier to production value
+                - Ensure proper session validation on server side
+              */}
+              <ApplePayButton
+                cartTotal={finalTotal}
+                items={cart.map(item => ({
+                  id: item.id,
+                  title: item.title || item.name,
+                  price: item.price,
+                  quantity: item.quantity,
+                  imageUrl: item.image || item.imageUrl
+                }))}
+                currency={currency}
+                countryCode={countryCode}
+                email={email}
+                onSuccess={handlePaymentSuccess}
+                onError={(error) => {
+                  setIsSubmitting(false);
+                  toast.error(`Apple Pay error: ${error.message || 'Unknown error'}`);
+                }}
+                className="w-full"
+              />
               <p className="payment-info-note">
-                You'll be redirected to a secure checkout where Apple Pay is available.
+                Your order details will be securely transferred to Apple Pay.
               </p>
             </div>
           )}
           
           {paymentMethod === PAYMENT_METHODS.GOOGLE_PAY && (
-            <div className="google-pay-container">
-              <p>Pay with Google Pay for faster checkout:</p>
-              <button 
-                onClick={handleStripeCheckout}
-                className="pay-button google-pay-button"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Processing...' : `Pay with Google Pay`}
-              </button>
+            <div className="google-pay-container payment-method-focus">
+              <h3>Google Pay Checkout</h3>
+              <p>Complete your payment quickly and securely with Google Pay:</p>
+              {/* 
+                PRODUCTION MIGRATION:
+                - Change environment from 'TEST' to 'PRODUCTION'
+                - Update merchantId with production merchant ID
+                - Verify domain in Google Pay console
+                - Update gateway parameters for production
+              */}
+              <GooglePayButton
+                cartTotal={finalTotal}
+                items={cart.map(item => ({
+                  id: item.id,
+                  title: item.title || item.name,
+                  price: item.price,
+                  quantity: item.quantity,
+                  imageUrl: item.image || item.imageUrl
+                }))}
+                currency={currency}
+                countryCode={countryCode}
+                email={email}
+                onSuccess={handlePaymentSuccess}
+                onError={(error) => {
+                  setIsSubmitting(false);
+                  toast.error(`Google Pay error: ${error.message || 'Unknown error'}`);
+                }}
+                className="w-full"
+              />
               <p className="payment-info-note">
-                You'll be redirected to a secure checkout where Google Pay is available.
+                Your order details will be securely transferred to Google Pay.
               </p>
             </div>
           )}
@@ -1322,6 +1529,13 @@ const Checkout = () => {
           {paymentMethod === PAYMENT_METHODS.CRYPTO && (
             <div className="crypto-container">
               <p>Pay with cryptocurrency:</p>
+              {/* 
+                PRODUCTION MIGRATION:
+                - Update to production API keys for crypto processor
+                - Implement proper exchange rate handling for production
+                - Create clear refund policy for crypto payments
+                - Set up production webhook endpoints
+              */}
               <div className="crypto-options">
                 <span>BTC</span>
                 <span>ETH</span>
@@ -1344,6 +1558,13 @@ const Checkout = () => {
           {paymentMethod === PAYMENT_METHODS.AFTERPAY && (
             <div className="afterpay-container">
               <p>Pay in 4 interest-free installments:</p>
+              {/* 
+                PRODUCTION MIGRATION:
+                - Complete Stripe verification for Afterpay/Clearpay
+                - Update to production Stripe keys
+                - Add required legal disclosures for installment payments
+                - Implement proper handling for regional differences (Afterpay vs Clearpay)
+              */}
               <button 
                 onClick={handleAfterpayPayment}
                 className="pay-button afterpay-button"

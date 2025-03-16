@@ -256,8 +256,8 @@ const getPaymentMethodsForCountry = (countryCode = 'US') => {
       break;
   }
   
-  // Add globally available digital wallets
-  methods.push('apple_pay', 'google_pay');
+  // Note: google_pay and apple_pay are not direct payment methods in Stripe
+  // They are handled through the card payment method with specific configuration
   
   return methods;
 };
@@ -317,9 +317,31 @@ router.post('/create-stripe-checkout', async (req, res) => {
     
     // Get appropriate payment methods for the country
     // Use provided payment method types or fall back to country-based ones
-    const payment_method_types = paymentMethodTypes.length > 0 
+    let payment_method_types = paymentMethodTypes.length > 0 
       ? paymentMethodTypes 
       : getPaymentMethodsForCountry(countryCode);
+      
+    // Filter out unsupported payment methods like 'google_pay' and 'apple_pay'
+    // These are handled through the 'card' payment method
+    const validPaymentMethods = [
+      'card', 'acss_debit', 'affirm', 'afterpay_clearpay', 'alipay', 
+      'au_becs_debit', 'bacs_debit', 'bancontact', 'blik', 'boleto', 
+      'cashapp', 'customer_balance', 'eps', 'fpx', 'giropay', 'grabpay', 
+      'ideal', 'klarna', 'konbini', 'link', 'multibanco', 'oxxo', 'p24', 
+      'pay_by_bank', 'paynow', 'paypal', 'pix', 'promptpay', 'sepa_debit', 
+      'sofort', 'swish', 'us_bank_account', 'wechat_pay', 'revolut_pay', 
+      'mobilepay', 'zip', 'amazon_pay', 'alma', 'twint', 'kr_card', 
+      'naver_pay', 'kakao_pay', 'payco', 'samsung_pay'
+    ];
+    
+    payment_method_types = payment_method_types.filter(method => 
+      validPaymentMethods.includes(method)
+    );
+    
+    // Make sure 'card' is included for Google Pay support
+    if (!payment_method_types.includes('card')) {
+      payment_method_types.push('card');
+    }
     
     console.log(`Using payment method types: ${payment_method_types.join(', ')}`);
     if (logger) logger.info(`Using payment method types: ${payment_method_types.join(', ')}`);
@@ -349,13 +371,12 @@ router.post('/create-stripe-checkout', async (req, res) => {
       success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/thankyou?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout`,
       customer_email: email || undefined,
-      payment_intent_data: {
-        metadata: {
-          ...metadata,
-          order_id: uuidv4()
-        },
-        setup_future_usage: 'off_session', // Allows future reuse of payment method
-      },
+      payment_intent_data: payment_method_types.includes('ideal') || payment_method_types.includes('sepa_debit')
+        ? { metadata: { ...metadata, order_id: uuidv4() } } // For methods that don't support setup_future_usage
+        : {
+            metadata: { ...metadata, order_id: uuidv4() },
+            setup_future_usage: 'off_session', // Only for card payments and supported methods
+          },
       shipping_address_collection: {
         allowed_countries: ['US', 'CA', 'GB', 'AU', 'DE', 'FR', 'IN', 'NL', 'BE'],
       },
@@ -598,6 +619,223 @@ router.get('/thankyou', (req, res) => {
   if (logger) logger.info(`Redirecting payment success to: ${redirectUrl}`);
   
   return res.redirect(redirectUrl);
+});
+
+// Process Google Pay payment
+router.post('/process-google-pay', async (req, res) => {
+  try {
+    const { paymentToken, amount, currency, items, email } = req.body;
+    
+    if (!paymentToken) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing payment token' 
+      });
+    }
+    
+    // Parse the payment token (it's a JSON string)
+    let paymentData;
+    try {
+      paymentData = JSON.parse(paymentToken);
+    } catch (error) {
+      console.error('Error parsing Google Pay token:', error);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid payment token format' 
+      });
+    }
+    
+    // Log the payment attempt
+    console.log('Processing Google Pay payment:', {
+      amount,
+      currency,
+      email: email || 'not provided',
+      items: items ? items.length : 0
+    });
+    
+    if (logger) {
+      logger.info(`Processing Google Pay payment: ${JSON.stringify({
+        amount,
+        currency,
+        email: email ? 'provided' : 'not provided'
+      })}`);
+    }
+    
+    // Create a payment method using the token
+    const paymentMethod = await stripe.paymentMethods.create({
+      type: 'card',
+      card: {
+        token: paymentData.id
+      }
+    });
+    
+    // Create a payment intent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: formatAmountForStripe(amount, currency),
+      currency: currency.toLowerCase(),
+      payment_method: paymentMethod.id,
+      confirmation_method: 'manual',
+      confirm: true,
+      return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/thankyou`,
+      metadata: {
+        order_id: uuidv4(),
+        email: email || 'anonymous'
+      }
+    });
+    
+    // Check payment intent status
+    if (
+      paymentIntent.status === 'succeeded' ||
+      paymentIntent.status === 'processing' ||
+      paymentIntent.next_action
+    ) {
+      // Generate order ID
+      const orderId = paymentIntent.metadata.order_id;
+      
+      return res.json({
+        success: true,
+        orderId,
+        status: paymentIntent.status,
+        clientSecret: paymentIntent.client_secret
+      });
+    } else {
+      throw new Error(`Payment failed with status: ${paymentIntent.status}`);
+    }
+  } catch (error) {
+    console.error('Google Pay payment processing error:', error);
+    if (logger) logger.error(`Google Pay payment error: ${error.message}`);
+    
+    // Return detailed error information
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Payment processing failed',
+      details: error.type ? {
+        type: error.type,
+        code: error.code,
+        param: error.param
+      } : undefined
+    });
+  }
+});
+
+// Validate Apple Pay merchant
+router.post('/validate-apple-pay-merchant', async (req, res) => {
+  try {
+    const { validationURL } = req.body;
+    
+    if (!validationURL) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing validation URL' 
+      });
+    }
+    
+    console.log('Validating Apple Pay merchant with URL:', validationURL);
+    if (logger) logger.info(`Validating Apple Pay merchant with URL: ${validationURL}`);
+    
+    // Get the merchant session from Stripe
+    const merchantSession = await stripe.applePayDomains.create({
+      domain_name: req.get('host')
+    });
+    
+    return res.json({
+      success: true,
+      merchantSession
+    });
+  } catch (error) {
+    console.error('Apple Pay merchant validation error:', error);
+    if (logger) logger.error(`Apple Pay merchant validation error: ${error.message}`);
+    
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Merchant validation failed'
+    });
+  }
+});
+
+// Process Apple Pay payment
+router.post('/process-apple-pay', async (req, res) => {
+  try {
+    const { payment, amount, currency, items, email } = req.body;
+    
+    if (!payment || !payment.token) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing payment token' 
+      });
+    }
+    
+    // Log the payment attempt
+    console.log('Processing Apple Pay payment:', {
+      amount,
+      currency,
+      email: email || 'not provided',
+      items: items ? items.length : 0
+    });
+    
+    if (logger) {
+      logger.info(`Processing Apple Pay payment: ${JSON.stringify({
+        amount,
+        currency,
+        email: email ? 'provided' : 'not provided'
+      })}`);
+    }
+    
+    // Create a payment method using the token
+    const paymentMethod = await stripe.paymentMethods.create({
+      type: 'card',
+      card: {
+        token: payment.token.id
+      }
+    });
+    
+    // Create a payment intent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: formatAmountForStripe(amount, currency),
+      currency: currency.toLowerCase(),
+      payment_method: paymentMethod.id,
+      confirmation_method: 'manual',
+      confirm: true,
+      return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/thankyou`,
+      metadata: {
+        order_id: uuidv4(),
+        email: email || 'anonymous'
+      }
+    });
+    
+    // Check payment intent status
+    if (
+      paymentIntent.status === 'succeeded' ||
+      paymentIntent.status === 'processing' ||
+      paymentIntent.next_action
+    ) {
+      // Generate order ID
+      const orderId = paymentIntent.metadata.order_id;
+      
+      return res.json({
+        success: true,
+        orderId,
+        status: paymentIntent.status,
+        clientSecret: paymentIntent.client_secret
+      });
+    } else {
+      throw new Error(`Payment failed with status: ${paymentIntent.status}`);
+    }
+  } catch (error) {
+    console.error('Apple Pay payment processing error:', error);
+    if (logger) logger.error(`Apple Pay payment error: ${error.message}`);
+    
+    // Return detailed error information
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Payment processing failed',
+      details: error.type ? {
+        type: error.type,
+        code: error.code,
+        param: error.param
+      } : undefined
+    });
+  }
 });
 
 module.exports = router; 

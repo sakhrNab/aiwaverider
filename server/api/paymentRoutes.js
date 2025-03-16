@@ -179,8 +179,8 @@ const getPaymentMethodsForCountry = (countryCode = 'US') => {
       break;
   }
   
-  // Add globally available digital wallets
-  methods.push('apple_pay', 'google_pay');
+  // Note: google_pay and apple_pay are not direct payment methods in Stripe
+  // They are handled through the card payment method with specific configuration
   
   return methods;
 };
@@ -194,6 +194,7 @@ router.post('/create-stripe-checkout', async (req, res) => {
       currency = 'usd', 
       countryCode = 'US',
       email,
+      paymentMethodTypes = [],
       metadata = {}
     } = req.body;
     
@@ -218,7 +219,31 @@ router.post('/create-stripe-checkout', async (req, res) => {
     }));
     
     // Get appropriate payment methods for the country
-    const payment_method_types = getPaymentMethodsForCountry(countryCode);
+    let payment_method_types = paymentMethodTypes.length > 0 
+      ? paymentMethodTypes 
+      : getPaymentMethodsForCountry(countryCode);
+      
+    // Filter out unsupported payment methods like 'google_pay' and 'apple_pay'
+    // These are handled through the 'card' payment method
+    const validPaymentMethods = [
+      'card', 'acss_debit', 'affirm', 'afterpay_clearpay', 'alipay', 
+      'au_becs_debit', 'bacs_debit', 'bancontact', 'blik', 'boleto', 
+      'cashapp', 'customer_balance', 'eps', 'fpx', 'giropay', 'grabpay', 
+      'ideal', 'klarna', 'konbini', 'link', 'multibanco', 'oxxo', 'p24', 
+      'pay_by_bank', 'paynow', 'paypal', 'pix', 'promptpay', 'sepa_debit', 
+      'sofort', 'swish', 'us_bank_account', 'wechat_pay', 'revolut_pay', 
+      'mobilepay', 'zip', 'amazon_pay', 'alma', 'twint', 'kr_card', 
+      'naver_pay', 'kakao_pay', 'payco', 'samsung_pay'
+    ];
+    
+    payment_method_types = payment_method_types.filter(method => 
+      validPaymentMethods.includes(method)
+    );
+    
+    // Make sure 'card' is included for Google Pay support
+    if (!payment_method_types.includes('card')) {
+      payment_method_types.push('card');
+    }
     
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
@@ -228,13 +253,12 @@ router.post('/create-stripe-checkout', async (req, res) => {
       success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/thankyou?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout`,
       customer_email: email || undefined,
-      payment_intent_data: {
-        metadata: {
-          ...metadata,
-          order_id: uuidv4()
-        },
-        setup_future_usage: 'off_session', // Allows future reuse of payment method
-      },
+      payment_intent_data: payment_method_types.includes('ideal') || payment_method_types.includes('sepa_debit')
+        ? { metadata: { ...metadata, order_id: uuidv4() } } // For methods that don't support setup_future_usage
+        : {
+            metadata: { ...metadata, order_id: uuidv4() },
+            setup_future_usage: 'off_session', // Only for card payments and supported methods
+          },
       shipping_address_collection: {
         allowed_countries: ['US', 'CA', 'GB', 'AU', 'DE', 'FR', 'IN', 'NL', 'BE'],
       },

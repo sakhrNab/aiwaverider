@@ -135,7 +135,21 @@ app.use('/api/wishlists*', (req, res, next) => {
   });
 });
 
-// Add catch-all handler for API routes to help debug 404 errors
+// Add root-level redirect for payment callbacks (placed before the catchall 404 handler)
+app.get('/thankyou', (req, res) => {
+  const { session_id } = req.query;
+  // Get the frontend URL (default to localhost:5173 for development)
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  
+  // Redirect to the frontend thank you page with the session_id
+  const redirectUrl = `${frontendUrl}/thankyou?session_id=${session_id}`;
+  console.log(`Root redirect: Payment success to: ${redirectUrl}`);
+  logger.info(`Root redirect: Payment success to: ${redirectUrl}`);
+  
+  return res.redirect(redirectUrl);
+});
+
+// 404 handler for API routes
 app.use('/api/*', (req, res) => {
   console.error(`API 404: ${req.method} ${req.originalUrl}`);
   
