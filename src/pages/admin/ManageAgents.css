@@ -148,7 +148,7 @@
 
 .category-filter select {
   width: 100%;
-  padding: 10px 10px 10px 36px;
+  padding: 10px 30px 10px 36px;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 0.9rem;
@@ -222,6 +222,7 @@
 .sort-icon {
   margin-left: 8px;
   font-size: 0.8rem;
+  top: 35% !important;
 }
 
 .sort-icon.asc {
@@ -567,7 +568,7 @@
 
 .search-input {
   width: 100%;
-  padding: 8px 8px 8px 36px;
+  padding: 8px 8px 8px 36px !important;
   border: 1px solid #ddd;
   border-radius: 4px;
   outline: none;
@@ -603,7 +604,7 @@
 
 .select-container select {
   width: 100%;
-  padding: 8px 8px 8px 36px;
+  padding: 8px 39px 8px 36px;
   border: 1px solid #ddd;
   border-radius: 4px;
   appearance: none;

@@ -482,4 +482,39 @@
 .warning-icon {
   margin-right: 0.5rem;
   color: #856404;
+}
+
+.active-search-query {
+  display: flex;
+  align-items: center;
+  background-color: #f0f5ff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: #333;
+  border: 1px solid #d6e4ff;
+}
+
+.active-search-query strong {
+  color: #4a90e2;
+  margin: 0 6px;
+}
+
+.clear-search-btn {
+  margin-left: auto;
+  background-color: #fff;
+  border: 1px solid #d6e4ff;
+  color: #4a90e2;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clear-search-btn:hover {
+  background-color: #4a90e2;
+  color: #fff;
+  border-color: #4a90e2;
 } 

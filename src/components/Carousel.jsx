@@ -12,7 +12,7 @@ import 'slick-carousel/slick/slick-theme.css';
 import '../styles/carousel.css';
 import { Link } from 'react-router-dom';
 
-const Carousel = ({ userPreferences }) => {
+const Carousel = ({ userPreferences, searchQuery }) => {
   const { carouselData, loadingPosts } = useContext(PostsContext);
   const [sections, setSections] = useState([]);
   const [error, setError] = useState(null);
@@ -38,14 +38,48 @@ const Carousel = ({ userPreferences }) => {
         console.log('No categories with posts found');
         return [];
       }
+      
+      // First, filter posts by search query if present
+      let filteredCarouselData = { ...carouselData };
+      
+      if (searchQuery && searchQuery.trim() !== '') {
+        const lowerCaseQuery = searchQuery.trim().toLowerCase();
+        
+        // Create a new object with filtered posts for each category
+        filteredCarouselData = Object.keys(carouselData).reduce((filtered, category) => {
+          // Filter posts in this category that match the search query
+          const matchingPosts = carouselData[category].filter(post => {
+            const titleMatch = post.title?.toLowerCase().includes(lowerCaseQuery);
+            const descriptionMatch = post.description?.toLowerCase().includes(lowerCaseQuery);
+            const categoryMatch = category.toLowerCase().includes(lowerCaseQuery);
+            const tagsMatch = post.tags?.some(tag => tag.toLowerCase().includes(lowerCaseQuery));
+            
+            return titleMatch || descriptionMatch || categoryMatch || tagsMatch;
+          });
+          
+          // Only add categories that have matching posts
+          if (matchingPosts.length > 0) {
+            filtered[category] = matchingPosts;
+          }
+          
+          return filtered;
+        }, {});
+        
+        // If no matches found in any category
+        if (Object.keys(filteredCarouselData).length === 0) {
+          console.log('No matching posts found for query:', searchQuery);
+        }
+      }
 
       // Create array of all categories with their priority
-      const categoriesWithPriority = availableCategories.map(category => ({
-        category,
-        priority: userInterests.includes(category) ? 2 :
-                 likedCategoriesArray.includes(category) ? 1 : 0,
-        posts: carouselData[category] || []
-      }));
+      const categoriesWithPriority = Object.keys(filteredCarouselData)
+        .filter(category => filteredCarouselData[category]?.length > 0)
+        .map(category => ({
+          category,
+          priority: userInterests.includes(category) ? 2 :
+                   likedCategoriesArray.includes(category) ? 1 : 0,
+          posts: filteredCarouselData[category] || []
+        }));
 
       // Sort by priority (highest first) but keep all categories
       categoriesWithPriority.sort((a, b) => {
@@ -69,15 +103,18 @@ const Carousel = ({ userPreferences }) => {
       setError('Failed to process carousel data');
       return [];
     }
-  }, [carouselData, userPreferences]);
+  }, [carouselData, userPreferences, searchQuery]);
 
   // Update sections when data changes
   useEffect(() => {
     const processedData = processCarouselData();
     if (processedData.length > 0) {
       setSections(processedData);
+    } else if (searchQuery) {
+      // Clear sections if there are no matches for the search query
+      setSections([]);
     }
-  }, [processCarouselData]);
+  }, [processCarouselData, searchQuery]);
 
   // Slider settings
   const mainSettings = {
@@ -87,7 +124,7 @@ const Carousel = ({ userPreferences }) => {
     slidesToShow: 1,
     slidesToScroll: 1,
     arrows: true,
-    autoplay: true,
+    autoplay: !searchQuery, // Disable autoplay when searching
     autoplaySpeed: 5000,
     fade: true,
     className: 'main-slider',
@@ -149,6 +186,19 @@ const Carousel = ({ userPreferences }) => {
     );
   }
 
+  // Show no results message when searching with no matches
+  if (searchQuery && sections.length === 0) {
+    return (
+      <div className="p-8 bg-gray-50 rounded-lg text-center">
+        <h3 className="text-xl font-semibold text-gray-700 mb-2">No results found</h3>
+        <p className="text-gray-600">
+          We couldn't find any content matching "{searchQuery}". 
+          Try different keywords or browse our categories.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="carousel-container">
       {sections.length > 0 ? (
@@ -197,6 +247,11 @@ Carousel.propTypes = {
     favorites: PropTypes.arrayOf(PropTypes.string),
     likedCategories: PropTypes.instanceOf(Set),
   }).isRequired,
+  searchQuery: PropTypes.string,
+};
+
+Carousel.defaultProps = {
+  searchQuery: '',
 };
 
 export default Carousel;

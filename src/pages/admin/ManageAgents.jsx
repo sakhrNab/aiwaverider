@@ -2470,7 +2470,7 @@ const ManageAgents = () => {
 
                 <div className="sort-filter">
                   <label htmlFor="sort">Sort By:</label>
-                  <div className="select-container">
+                  <div className="select-container" style={{ paddingBottom: "22px" }}>
                     <FaSort className="sort-icon" />
                     <select
                       id="sort"

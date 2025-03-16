@@ -1,11 +1,12 @@
 // src/components/Header.jsx
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import logo from '../assets/v6.webp';
 import { AuthContext } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext.jsx';
 import { toast } from 'react-toastify';
 import { FaShoppingCart } from 'react-icons/fa';
+import SearchBar from '../components/agents/SearchBar';
 import './Header.css'; // Import custom Header CSS
 
 const Header = ({ openSignUpModal }) => {
@@ -13,6 +14,8 @@ const Header = ({ openSignUpModal }) => {
   const { cart, itemCount } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
+  const mobileMenuRef = useRef(null);
+  const toggleButtonRef = useRef(null);
 
   // For toggling mobile navigation
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -26,25 +29,101 @@ const Header = ({ openSignUpModal }) => {
   // Check if current page is an admin page
   const isAdminPage = location.pathname.startsWith('/admin');
   
+  // Determine if we should show search bar (only on homepage and agents page)
+  const shouldShowSearchBar = location.pathname === '/' || location.pathname === '/agents';
+  
+  // Toggle body class when menu opens/closes
+  useEffect(() => {
+    const body = document.querySelector('body');
+    if (isMenuOpen) {
+      body.classList.add('menu-open');
+    } else {
+      body.classList.remove('menu-open');
+    }
+    
+    return () => {
+      body.classList.remove('menu-open');
+    };
+  }, [isMenuOpen]);
+  
   // Add/remove admin-page class to body
   useEffect(() => {
+    const body = document.querySelector('body');
     if (isAdminPage) {
-      document.body.classList.add('admin-page');
+      body.classList.add('admin-page');
     } else {
-      document.body.classList.remove('admin-page');
+      body.classList.remove('admin-page');
     }
     
     // Cleanup function
     return () => {
-      document.body.classList.remove('admin-page');
+      body.classList.remove('admin-page');
     };
   }, [isAdminPage]);
 
-  // Handle search
-  const handleSearch = () => {
-    if (searchTerm.trim() !== '') {
-      navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        isMenuOpen && 
+        mobileMenuRef.current && 
+        !mobileMenuRef.current.contains(event.target) &&
+        toggleButtonRef.current && 
+        !toggleButtonRef.current.contains(event.target)
+      ) {
+        setIsMenuOpen(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen]);
+
+  // Close mobile menu on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 768 && isMenuOpen) {
+        setIsMenuOpen(false);
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isMenuOpen]);
+
+  // Initialize searchTerm from URL when it exists
+  useEffect(() => {
+    const queryParams = new URLSearchParams(location.search);
+    const queryFromUrl = queryParams.get('q');
+    
+    if (queryFromUrl) {
+      setSearchTerm(queryFromUrl);
+    } else if (searchTerm && !location.search.includes('q=')) {
+      // Clear search term when changing pages without a query
       setSearchTerm('');
+    }
+  }, [location.pathname, location.search]);
+
+  // Handle search - Updated to search within Body.jsx content
+  const handleSearch = (query) => {
+    if (query && query.trim() !== '') {
+      const trimmedQuery = query.trim();
+      console.log(`Searching for: ${trimmedQuery}`);
+      
+      // If we're already on the homepage, just update the search param
+      if (location.pathname === '/') {
+        navigate(`/?q=${encodeURIComponent(trimmedQuery)}`);
+      } 
+      // If we're on the agents page, use the agents search
+      else if (location.pathname === '/agents') {
+        navigate(`/agents?q=${encodeURIComponent(trimmedQuery)}`);
+      } 
+      // For any other page, redirect to the homepage with search query
+      else {
+        navigate(`/?q=${encodeURIComponent(trimmedQuery)}`);
+      }
     }
   };
 
@@ -68,174 +147,147 @@ const Header = ({ openSignUpModal }) => {
     }
   };
 
+  // Toggle mobile menu
+  const toggleMobileMenu = () => {
+    setIsMenuOpen(!isMenuOpen);
+  };
+
   return (
-    <header className="bg-gray-800 text-white px-4 py-3 shadow-lg main-header">
-      <div className="container mx-auto flex items-center justify-between">
-        {/* Left group: Logo and main nav */}
-        <div className="flex items-center flex-1 space-x-2 md:space-x-4">
-          <div className="flex-shrink-0 cursor-pointer" onClick={() => navigate('/')}>
-            <img
-              src={logo}
-              alt="Logo"
-              className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover transition-transform hover:scale-110"
-            />
-          </div>
-
-          {/* Main Nav (hidden on mobile, shown on md and up) */}
-          <nav className="hidden md:flex items-center space-x-1 lg:space-x-3 xl:space-x-4 nav-links">
-            <Link to="/agents" className="px-2 lg:px-3 py-2 hover:bg-blue-600 rounded text-sm lg:text-base font-medium nav-link">
-              Agents
-            </Link>
-            <Link to="/ai-tools" className="px-2 lg:px-3 py-2 hover:bg-blue-600 rounded text-sm lg:text-base nav-link">
-              AI Tools
-            </Link>
-            <Link to="/trends" className="px-2 lg:px-3 py-2 hover:bg-blue-600 rounded text-sm lg:text-base nav-link">
-              Trends
-            </Link>
-            <Link to="/latest-tech" className="px-2 lg:px-3 py-2 hover:bg-blue-600 rounded text-sm lg:text-base nav-link">
-              Latest Tech
-            </Link>
-          </nav>
-        </div>
-
-        {/* Center group: Search (hidden on mobile) */}
-        <div className="hidden md:flex items-center justify-center flex-1 max-w-md px-2 lg:px-4">
-          <div className="w-full flex items-center space-x-2">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search..."
-              className="w-full px-3 py-2 rounded-l border border-gray-300 text-gray-800 search-input"
-            />
-            <button onClick={handleSearch} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-r whitespace-nowrap search-button">
-              Search
-            </button>
-          </div>
-        </div>
-
-        {/* Right group: Auth buttons and profile */}
-        <div className="flex items-center justify-end space-x-2 md:space-x-3 flex-shrink-0 auth-buttons">
-          {/* Cart Icon and Checkout Button */}
-          <div className="flex items-center mr-2">
-            <Link to="/checkout" className="cart-icon-container">
-              <FaShoppingCart className="text-xl" />
-              {itemCount > 0 && (
-                <span className="cart-badge">{itemCount}</span>
-              )}
-            </Link>
-            {itemCount > 0 && (
-              <Link to="/checkout" className="checkout-button ml-2">
-                Checkout
-              </Link>
-            )}
-          </div>
-          
-          {!user && (
-            <div className="hidden md:flex items-center space-x-2 md:space-x-3">
-              <Link to="/sign-in" className="px-3 py-2 hover:bg-blue-600 rounded auth-link">
-                Sign In
-              </Link>
-              <button
-                onClick={handleSignUp}
-                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded font-medium auth-button"
-              >
-                Sign Up
-              </button>
+    <>
+      <header className="main-header">
+        <div className="container mx-auto flex items-center justify-between">
+          {/* Left group: Logo and main nav */}
+          <div className="flex items-center space-x-4">
+            <div className="flex-shrink-0 cursor-pointer logo-container" onClick={() => navigate('/')}>
+              <img
+                src={logo}
+                alt="Logo"
+                className="h-10 w-10 rounded-full object-cover transition-transform hover:scale-110"
+              />
             </div>
-          )}
 
-          {user && (
-            <div className="hidden md:flex items-center space-x-2 md:space-x-3">
-              {user.role === 'admin' && (
-                <Link to="/admin/agents" className="px-3 py-2 hover:bg-blue-600 rounded auth-link">
-                  Admin
-                </Link>
-              )}
-              <button
-                onClick={handleSignOut}
-                className="px-3 py-2 bg-red-600 hover:bg-red-700 rounded font-medium auth-button"
-              >
-                Sign Out
-              </button>
-              <Link
-                to="/profile"
-                className="block w-10 h-10 rounded-full overflow-hidden border-2 border-white"
-              >
-                <img
-                  src={user?.photoURL || '/default-avatar.png'}
-                  alt={`${user?.displayName || 'User'}'s Profile`}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // Only set default if not already default
-                    if (e.target.src.indexOf('default-avatar.png') === -1) {
-                      console.log('Header: Avatar image failed to load, using default');
-                      e.target.src = '/default-avatar.png';
-                    }
-                    // Prevent infinite error handling
-                    e.target.onerror = null;
-                  }}
-                />
+            {/* Main Nav (hidden on mobile, shown on md and up) */}
+            <nav className="hidden md:flex items-center space-x-6 nav-links">
+              <Link to="/agents" className="nav-link">
+                Agents
+              </Link>
+              <Link to="/ai-tools" className="nav-link">
+                AI Tools
+              </Link>
+              <Link to="/trends" className="nav-link">
+                Trends
+              </Link>
+              <Link to="/latest-tech" className="nav-link">
+                Latest Tech
+              </Link>
+            </nav>
+          </div>
+
+          {/* Right group: Auth buttons and profile */}
+          <div className="flex items-center space-x-3 auth-buttons">
+            {/* Cart Icon (Removed Checkout Button) */}
+            <div className="cart-container hidden md:flex items-center">
+              <Link to="/checkout" className="cart-icon-container">
+                <FaShoppingCart className="text-xl" />
+                {itemCount > 0 && (
+                  <span className="cart-badge">{itemCount}</span>
+                )}
               </Link>
             </div>
-          )}
-
-          {/* Hamburger menu icon */}
-          <button 
-            className="md:hidden p-2 hover:bg-gray-700 rounded mobile-menu-toggle"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              {isMenuOpen ? (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              ) : (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              )}
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile menu */}
-      {isMenuOpen && (
-        <div className="md:hidden mt-4 border-t border-gray-700 pt-4">
-          <nav className="flex flex-col space-y-2">
-            <Link to="/agents" className="px-3 py-2 hover:bg-blue-600 rounded">
-              Agents
-            </Link>
-            <Link to="/ai-tools" className="px-3 py-2 hover:bg-blue-600 rounded">
-              AI Tools
-            </Link>
-            <Link to="/trends" className="px-3 py-2 hover:bg-blue-600 rounded">
-              Trends
-            </Link>
-            <Link to="/latest-tech" className="px-3 py-2 hover:bg-blue-600 rounded">
-              Latest Tech
-            </Link>
+            
             {!user && (
-              <>
-                <Link to="/sign-in" className="px-3 py-2 hover:bg-blue-600 rounded">
+              <div className="hidden md:flex items-center space-x-3">
+                <Link to="/sign-in" className="auth-link">
                   Sign In
                 </Link>
                 <button
                   onClick={handleSignUp}
-                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded font-medium text-left"
+                  className="auth-button"
+                >
+                  Sign Up
+                </button>
+              </div>
+            )}
+
+            {user && (
+              <div className="hidden md:flex items-center space-x-3">
+                {user.role === 'admin' && (
+                  <Link to="/admin/agents" className="auth-link">
+                    Admin
+                  </Link>
+                )}
+                <button
+                  onClick={handleSignOut}
+                  className="auth-button signout-button"
+                >
+                  Sign Out
+                </button>
+                <Link
+                  to="/profile"
+                  className="profile-avatar"
+                >
+                  <img
+                    src={user?.photoURL || '/default-avatar.png'}
+                    alt={`${user?.displayName || 'User'}'s Profile`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Only set default if not already default
+                      if (e.target.src.indexOf('default-avatar.png') === -1) {
+                        console.log('Header: Avatar image failed to load, using default');
+                        e.target.src = '/default-avatar.png';
+                      }
+                      // Prevent infinite error handling
+                      e.target.onerror = null;
+                    }}
+                  />
+                </Link>
+              </div>
+            )}
+
+            {/* Hamburger menu icon - Only shown on mobile */}
+            <button 
+              ref={toggleButtonRef}
+              className="mobile-menu-toggle md:hidden"
+              onClick={toggleMobileMenu}
+              aria-label="Toggle menu"
+            >
+              <span className={`hamburger-line ${isMenuOpen ? 'active' : ''}`}></span>
+              <span className={`hamburger-line ${isMenuOpen ? 'active' : ''}`}></span>
+              <span className={`hamburger-line ${isMenuOpen ? 'active' : ''}`}></span>
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile menu */}
+        <div ref={mobileMenuRef} className={`mobile-menu ${isMenuOpen ? 'open' : ''}`}>
+          <nav className="mobile-nav">
+            <Link to="/agents" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
+              Agents
+            </Link>
+            <Link to="/ai-tools" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
+              AI Tools
+            </Link>
+            <Link to="/trends" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
+              Trends
+            </Link>
+            <Link to="/latest-tech" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
+              Latest Tech
+            </Link>
+            {/* Cart in mobile menu */}
+            <Link to="/checkout" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
+              Cart {itemCount > 0 ? `(${itemCount})` : ''}
+            </Link>
+            {!user && (
+              <>
+                <Link to="/sign-in" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
+                  Sign In
+                </Link>
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    handleSignUp();
+                  }}
+                  className="mobile-nav-button"
                 >
                   Sign Up
                 </button>
@@ -243,42 +295,41 @@ const Header = ({ openSignUpModal }) => {
             )}
             {user && (
               <>
-                <Link to="/profile" className="px-3 py-2 hover:bg-blue-600 rounded">
+                <Link to="/profile" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
                   Profile
                 </Link>
                 {user.role === 'admin' && (
-                  <Link to="/admin/agents" className="px-3 py-2 hover:bg-blue-600 rounded">
+                  <Link to="/admin/agents" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
                     Admin Dashboard
                   </Link>
                 )}
                 <button
-                  onClick={handleSignOut}
-                  className="px-3 py-2 bg-red-600 hover:bg-red-700 rounded font-medium text-left"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    handleSignOut();
+                  }}
+                  className="mobile-nav-button signout"
                 >
                   Sign Out
                 </button>
               </>
             )}
           </nav>
+        </div>
+      </header>
 
-          {/* Mobile search */}
-          <div className="mt-4">
-            <div className="flex items-center space-x-2">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search..."
-                className="flex-1 px-3 py-2 rounded-l border border-gray-300 text-gray-800"
-              />
-              <button onClick={handleSearch} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-r">
-                Search
-              </button>
-            </div>
+      {/* Search section - Only shown on homepage and agents page */}
+      {shouldShowSearchBar && (
+        <div className="search-section">
+          <div className="container mx-auto">
+            <SearchBar 
+              initialQuery={searchTerm} 
+              onSearch={handleSearch} 
+            />
           </div>
         </div>
       )}
-    </header>
+    </>
   );
 };
 

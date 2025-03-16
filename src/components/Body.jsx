@@ -1,6 +1,7 @@
 // src/components/Body.jsx
 
 import React, { useContext, useEffect, useState, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import Welcome from './Welcome';
 import Carousel from './Carousel';
 import { PostsContext } from '../contexts/PostsContext';
@@ -13,8 +14,10 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
 const Body = () => {
   const { fetchCarouselData } = useContext(PostsContext);
   const { user } = useContext(AuthContext);
+  const location = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [userPreferences, setUserPreferences] = useState(() => {
     // Initialize from cache if available
     const cached = localStorage.getItem(`userPreferences_${user?.uid}`);
@@ -33,6 +36,13 @@ const Body = () => {
       likedCategories: new Set()
     };
   });
+
+  // Extract search query from URL
+  useEffect(() => {
+    const queryParams = new URLSearchParams(location.search);
+    const queryFromUrl = queryParams.get('q');
+    setSearchQuery(queryFromUrl || '');
+  }, [location.search]);
 
   // Memoize the loadData function
   const loadData = useCallback(async (force = false) => {
@@ -218,17 +228,35 @@ const Body = () => {
       {/* Welcome Section */}
       <Welcome />
 
-      {/* Introductory Text */}
-      <div className="text-center my-8">
-        <h2 className="text-3xl font-semibold">Welcome to AI Wave Rider!</h2>
-        <p className="mt-4 text-lg text-gray-700 max-w-2xl mx-auto">
-          Explore the latest in AI trends, tools, and technologies. Engage with our community and stay updated with the newest advancements.
-        </p>
-      </div>
+      {/* Search Results Indicator */}
+      {searchQuery && (
+        <div className="bg-blue-50 border border-blue-100 rounded-md p-4 my-4 flex items-center justify-between">
+          <div>
+            <span className="font-medium">Showing results for: </span>
+            <span className="text-blue-700 font-semibold">{searchQuery}</span>
+          </div>
+          <a 
+            href="/" 
+            className="bg-white text-blue-600 hover:bg-blue-600 hover:text-white px-3 py-1 rounded border border-blue-200 text-sm transition-colors"
+          >
+            Clear
+          </a>
+        </div>
+      )}
 
-      {/* Carousel with user preferences */}
+      {/* Introductory Text - Hide when searching */}
+      {!searchQuery && (
+        <div className="text-center my-8">
+          <h2 className="text-3xl font-semibold">Welcome to AI Wave Rider!</h2>
+          <p className="mt-4 text-lg text-gray-700 max-w-2xl mx-auto">
+            Explore the latest in AI trends, tools, and technologies. Engage with our community and stay updated with the newest advancements.
+          </p>
+        </div>
+      )}
+
+      {/* Carousel with user preferences and search filtering */}
       <div className="my-12">
-        <Carousel userPreferences={userPreferences} />
+        <Carousel userPreferences={userPreferences} searchQuery={searchQuery} />
       </div>
 
       {/* Community Posts with user preferences */}

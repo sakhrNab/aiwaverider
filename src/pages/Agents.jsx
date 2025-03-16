@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { fetchAgents, fetchFeaturedAgents, fetchWishlists } from '../utils/api';
 import SearchBar from '../components/agents/SearchBar';
 import CategoryNav from '../components/agents/CategoryNav';
@@ -11,6 +12,7 @@ import { FaExclamationTriangle } from 'react-icons/fa';
 import '../styles/Agents.css';
 
 const Agents = () => {
+  const location = useLocation();
   const [agents, setAgents] = useState([]);
   const [allAgents, setAllAgents] = useState([]); // Store all agents for filtering
   const [featuredAgents, setFeaturedAgents] = useState([]);
@@ -35,8 +37,24 @@ const Agents = () => {
 
   // Filter application - run when filters change
   useEffect(() => {
-    applyFilters();
+    if (allAgents.length > 0) {
+      applyFilters();
+    }
   }, [allAgents, selectedCategory, selectedFilter, selectedPrice, selectedRating, searchQuery, selectedTags, selectedFeatures]);
+
+  // Get search query from URL
+  useEffect(() => {
+    const queryParams = new URLSearchParams(location.search);
+    const queryFromUrl = queryParams.get('q');
+    if (queryFromUrl) {
+      setSearchQuery(queryFromUrl);
+      console.log('Search query from URL:', queryFromUrl);
+    } else if (searchQuery && location.search === '') {
+      // Clear search query if URL has no query parameter
+      setSearchQuery('');
+      console.log('Clearing search query since URL has no q parameter');
+    }
+  }, [location.search]);
 
   // Calculate counts for tag and feature filters based on all available agents
   const calculateFilterCounts = (agents) => {
@@ -155,7 +173,9 @@ const Agents = () => {
       setWishlists(wishlistsData || []);
       
       // Apply filters to set initial visible agents
-      applyFilters(allAgentsData || []);
+      if (allAgentsData && allAgentsData.length > 0) {
+        applyFilters(allAgentsData);
+      }
       
       setIsRecommendationsLoading(false);
       setIsLoading(false);
@@ -174,15 +194,18 @@ const Agents = () => {
   const applyFilters = (agentsToFilter = allAgents) => {
     if (!agentsToFilter || agentsToFilter.length === 0) return;
     
+    console.log(`Applying filters. Search query: "${searchQuery}". Total agents: ${agentsToFilter.length}`);
+    
     let filteredResults = [...agentsToFilter];
     
     // Apply category filter
     if (selectedCategory && selectedCategory !== 'All') {
       filteredResults = filteredResults.filter(agent => agent.category === selectedCategory);
+      console.log(`After category filter (${selectedCategory}): ${filteredResults.length} agents`);
     }
     
     // Apply price filter - ensure this works with different price formats
-    if (selectedPrice && (selectedPrice.min > 0 || selectedPrice.max < 1000)) {
+    if (selectedPrice && selectedPrice !== 'all' && (selectedPrice.min > 0 || selectedPrice.max < 1000)) {
       filteredResults = filteredResults.filter(agent => {
         // First check the new format with priceDetails
         if (agent.priceDetails) {
@@ -212,6 +235,7 @@ const Agents = () => {
           price <= selectedPrice.max
         );
       });
+      console.log(`After price filter: ${filteredResults.length} agents`);
     }
     
     // Apply rating filter
@@ -220,6 +244,7 @@ const Agents = () => {
         const rating = agent.rating?.average ? parseFloat(agent.rating.average) : 0;
         return rating >= selectedRating;
       });
+      console.log(`After rating filter (${selectedRating}+): ${filteredResults.length} agents`);
     }
     
     // Apply tag filters
@@ -237,6 +262,7 @@ const Agents = () => {
         
         return false;
       });
+      console.log(`After tag filters (${selectedTags.join(', ')}): ${filteredResults.length} agents`);
     }
     
     // Apply feature filters 
@@ -245,7 +271,8 @@ const Agents = () => {
         // Check for 'Free' feature
         if (selectedFeatures.includes('Free') && 
             (agent.price === 0 || agent.price === '0' || 
-             agent.price === 'Free' || agent.price === '$0')) {
+             agent.price === 'Free' || agent.price === '$0' ||
+             agent.isFree === true)) {
           return true;
         }
         
@@ -265,6 +292,7 @@ const Agents = () => {
         
         return false;
       });
+      console.log(`After feature filters (${selectedFeatures.join(', ')}): ${filteredResults.length} agents`);
     }
     
     // Apply search query
@@ -274,9 +302,11 @@ const Agents = () => {
         (agent.name && agent.name.toLowerCase().includes(query)) ||
         (agent.title && agent.title.toLowerCase().includes(query)) ||
         (agent.description && agent.description.toLowerCase().includes(query)) ||
+        (agent.category && agent.category.toLowerCase().includes(query)) ||
         (agent.creator && agent.creator.name && 
          agent.creator.name.toLowerCase().includes(query))
       );
+      console.log(`After search query "${query}": ${filteredResults.length} agents`);
     }
     
     setAgents(filteredResults);
@@ -290,6 +320,17 @@ const Agents = () => {
   };
 
   const handleSearch = (query) => {
+    console.log('Search handler called with query:', query);
+    
+    // Update URL with query parameter
+    if (query) {
+      const newUrl = `/agents?q=${encodeURIComponent(query)}`;
+      window.history.pushState({}, '', newUrl);
+    } else {
+      // Remove query parameter if query is empty
+      window.history.pushState({}, '', '/agents');
+    }
+    
     setSearchQuery(query);
   };
 
@@ -415,11 +456,6 @@ const Agents = () => {
 
   return (
     <div className="agents-page">
-      {/* Search Bar */}
-      <div className="search-section">
-        <SearchBar onSearch={handleSearch} />
-      </div>
-
       {/* Category Navigation */}
       <div className="category-nav-section">
         <CategoryNav 
@@ -502,8 +538,24 @@ const Agents = () => {
             />
           </div>
           
-          {/* Right Column - Agent Grid */}
+          {/* Right Column - Agent Grid with SearchBar */}
           <div className="agents-page-grid-column">
+            {/* Display current search query if present */}
+            {searchQuery && (
+              <div className="active-search-query">
+                Search results for: <strong>{searchQuery}</strong>
+                <button 
+                  className="clear-search-btn"
+                  onClick={() => handleSearch('')}
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+            <SearchBar 
+              initialQuery={searchQuery} 
+              onSearch={handleSearch} 
+            />
             <div className="results-count">
               {agents.length} results
             </div>
