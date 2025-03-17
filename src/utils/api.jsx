@@ -3,6 +3,7 @@
 import axios from 'axios';
 import firebase from 'firebase/compat/app';
 import { auth } from '../utils/firebase';
+import { toast as hotToast } from 'react-hot-toast'; // Import react-hot-toast
 
 // Set API base URL from environment variable or default to localhost:4000
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -115,15 +116,67 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
-    // Handle unauthorized errors (401)
-    if (error.response && error.response.status === 401 && !originalRequest._retry) {
+    // Check for token validation errors
+    const isAuthError = error.response && (
+      error.response.status === 401 || 
+      (error.response.status === 400 && 
+        (error.response.data?.message?.includes('token') || 
+         error.response.data?.error?.includes('token') ||
+         error.response.data?.message?.includes('Firebase ID token has no "kid" claim') ||
+         (typeof error.response.data === 'string' && error.response.data.includes('token'))
+        )
+      )
+    );
+    
+    // Handle authentication errors
+    if (isAuthError && !originalRequest._retry) {
       originalRequest._retry = true;
       
-      // Attempt to refresh token or log user out if necessary
-      console.warn('Authentication error - user may need to log in again');
+      console.warn('Authentication error detected:', error.response?.data);
       
-      // Option to redirect to login page
-      // window.location.href = '/login';
+      // Clear token cache
+      clearTokenCache();
+      
+      // Clear stored tokens
+      localStorage.removeItem('authToken');
+      sessionStorage.removeItem('authToken');
+      
+      // Show notification to user
+      try {
+        // Use react-hot-toast for notification
+        hotToast.error('Your session has expired. Please sign in again.', {
+          duration: 6000,
+          id: 'auth-error-toast', // Prevent duplicate toasts
+        });
+      } catch (notificationError) {
+        console.error('Error showing notification:', notificationError);
+        // Fallback to alert
+        try {
+          alert('Your session has expired. Please sign in again.');
+        } catch (e) {
+          // Silent fail if even alert doesn't work
+          console.error('Failed to show authentication error alert:', e);
+        }
+      }
+      
+      // Sign out the user
+      try {
+        await auth.signOut();
+        
+        // Redirect to login page
+        if (typeof window !== 'undefined') {
+          // Small delay to allow notification to be seen
+          setTimeout(() => {
+            window.location.href = '/sign-in';
+          }, 1500);
+        }
+      } catch (signOutError) {
+        console.error('Error signing out:', signOutError);
+        // Force redirect to login anyway
+        if (typeof window !== 'undefined') {
+          window.location.href = '/sign-in';
+        }
+      }
     }
     
     // For development: log error details
