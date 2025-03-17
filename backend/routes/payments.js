@@ -2,6 +2,52 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
+
+/**
+ * PAYMENT SYSTEM MIGRATION TO PRODUCTION
+ * ======================================
+ * 
+ * This file contains server-side payment route handlers. Below are the necessary steps
+ * to migrate from test to production:
+ * 
+ * 1. STRIPE API KEYS
+ *    - Replace the test secret key with a production key from your Stripe dashboard
+ *    - Set STRIPE_SECRET_KEY in your production environment to your "sk_live_..." key
+ *    - Ensure you NEVER commit live API keys to your repository
+ *    - Consider using a secrets manager service for production keys
+ * 
+ * 2. WEBHOOK HANDLING
+ *    - Create a new webhook endpoint in your Stripe dashboard pointing to your production URL:
+ *      https://your-production-domain.com/api/payments/stripe-webhook
+ *    - Set the new webhook signing secret as STRIPE_WEBHOOK_SECRET in your production environment
+ *    - Test your webhook with the Stripe CLI using your live webhook secret:
+ *      stripe listen --forward-to your-production-domain.com/api/payments/stripe-webhook
+ * 
+ * 3. PAYMENT PROCESSING
+ *    - The logic in the test and production environments is the same, but ensure:
+ *      - Error logging is properly set up for production
+ *      - Proper monitoring is established to track payment failures
+ *      - Financial reconciliation processes are in place
+ * 
+ * 4. SUPPORTED PAYMENT METHODS
+ *    - Verify that all payment methods you're using are activated in your Stripe dashboard
+ *    - Some payment methods may require additional application forms or verification:
+ *      - SEPA Direct Debit requires a registered SEPA Creditor ID
+ *      - iDEAL requires activation and potentially additional verification
+ *      - ACH, Alipay, and other methods may have unique requirements
+ * 
+ * 5. SECURITY CONSIDERATIONS
+ *    - Ensure PCI compliance requirements are met for your level of processing
+ *    - Set up fraud detection tools like Stripe Radar or configure risk rules
+ *    - Implement proper logging of sensitive operations (without logging card details)
+ *    - Ensure you're storing no sensitive payment details in your own database
+ * 
+ * 6. TESTING BEFORE GOING LIVE
+ *    - Perform test transactions using Stripe's test clock feature
+ *    - Test the complete user journey in staging with both successful and failed payments
+ *    - Test refund and dispute handling processes
+ */
+
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_51R2ydLCWt3snxVwEJxJQNsGNifhLhfQrJEBJgPPr9W4dRDfbjh11FvYLrxQ');
 const logger = require('../utils/logger');
 

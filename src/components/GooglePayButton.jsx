@@ -1,3 +1,35 @@
+/**
+ * GOOGLE PAY BUTTON - MIGRATION TO PRODUCTION
+ * ===========================================
+ * 
+ * When migrating this Google Pay integration to production, take the following steps:
+ * 
+ * 1. ENVIRONMENT CONFIGURATION
+ *    - Change the Google Pay environment from 'TEST' to 'PRODUCTION'
+ *    - Update the baseCardPaymentMethod.parameters.gateway to your live Stripe gateway
+ *    - Ensure your production Stripe publishable key is being used
+ * 
+ * 2. DOMAIN VERIFICATION
+ *    - Verify your domain with Google Pay in the Google Pay & Wallet Console
+ *    - Complete domain verification by adding the required DNS TXT record
+ *    - For Android app integration, register your app's signature
+ * 
+ * 3. MERCHANT CONFIGURATION
+ *    - Update merchantInfo with your production merchant name
+ *    - Set your actual merchant ID obtained from the Google Pay & Wallet Console
+ *    - For US merchants: Apply for the Google Pay API Card Payment Method standard integration
+ * 
+ * 4. BUSINESS REQUIREMENTS
+ *    - Ensure your privacy policy and terms of service are accessible
+ *    - Your checkout page must display supported payment card networks
+ *    - Follow Google's brand guidelines for Google Pay button presentation
+ * 
+ * 5. TESTING
+ *    - Test the integration with real cards in production environment
+ *    - Verify the payment flow works across different browsers
+ *    - Test on actual Android devices with Google Pay enabled
+ */
+
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import axios from 'axios';

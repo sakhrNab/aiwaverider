@@ -1,5 +1,57 @@
-// API URL - adjust based on your environment
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+/**
+ * PAYMENT API SERVICE - MIGRATION TO PRODUCTION
+ * =============================================
+ * 
+ * This file contains client-side payment API service functions.
+ * To migrate from test to production environment, follow these steps:
+ * 
+ * 1. FRONTEND API KEYS
+ *    - Update the publishable Stripe key in your .env.production file:
+ *      VITE_STRIPE_PUBLISHABLE_KEY=pk_live_your_live_key
+ *    - Update any other payment service public keys (PayPal client ID, etc.)
+ *    - Ensure test keys are NEVER used in production environment
+ * 
+ * 2. PAYMENT ENDPOINTS
+ *    - Verify your API endpoints point to the production backend:
+ *      - Ensure VITE_API_URL in .env.production points to your production API
+ *      - Double-check that your API requests use the correct base URL
+ *    - Update any hard-coded test endpoints that may exist in the code
+ * 
+ * 3. ERROR HANDLING
+ *    - Enhance error handling to provide better user feedback in production
+ *    - Implement graceful fallbacks when payment services are unavailable
+ *    - Consider adding retry logic for intermittent failures
+ *    - Ensure proper error reporting to monitoring tools
+ * 
+ * 4. FRONTEND VALIDATION
+ *    - Implement additional validation to minimize failed payment attempts
+ *    - Ensure address validation is properly implemented for regions you serve
+ *    - Verify that card validation provides helpful feedback to users
+ * 
+ * 5. PAYMENT METHOD SUPPORT
+ *    - Verify that all payment methods shown in the UI are actually enabled in your
+ *      Stripe dashboard and other payment provider accounts
+ *    - Consider region-specific testing for international payment methods
+ *    - Test mobile wallet integrations (Apple Pay, Google Pay) on actual devices
+ * 
+ * 6. ANALYTICS & MONITORING
+ *    - Add conversion tracking for successful payments
+ *    - Implement abandonment tracking for checkout funnels
+ *    - Set up alerting for abnormal payment failure rates
+ */
+
+import axios from 'axios';
+
+// Use environment variable for API URL
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
+// Create API instance
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
 // Helper function to check API connectivity
 export const checkApiConnectivity = async () => {

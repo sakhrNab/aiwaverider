@@ -5,6 +5,55 @@ const { v4: uuidv4 } = require('uuid');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_your_test_key');
 const crypto = require('crypto');
 
+/**
+ * SERVER API PAYMENT ROUTES - MIGRATION TO PRODUCTION
+ * ==================================================
+ * 
+ * This file contains the API payment routes that handle various payment methods.
+ * Follow these steps when migrating from test to production:
+ * 
+ * 1. API KEYS & SECRETS
+ *    - Update the Stripe secret key to use your production "sk_live_..." key
+ *    - Update all other payment provider credentials (PayPal, etc.) to production values
+ *    - Set up proper environment variable management in your production environment
+ *    - Consider using a secrets manager in production (AWS Secrets Manager, HashiCorp Vault, etc.)
+ * 
+ * 2. WEBHOOKS CONFIGURATION
+ *    - Create new webhook endpoints in your Stripe dashboard for production:
+ *      - Point to: https://your-production-domain.com/api/payments/stripe-webhook
+ *      - Set the new STRIPE_WEBHOOK_SECRET in your production environment
+ *    - Test webhooks thoroughly before going live (Stripe provides webhook testing tools)
+ *    - Implement proper error handling and retries for webhook failures
+ *    - Set up logging to capture and alert on webhook processing errors
+ * 
+ * 3. PAYMENT PROCESSING SETTINGS
+ *    - In your Stripe dashboard, configure:
+ *      - Statement descriptor (what appears on customer credit card statements)
+ *      - Billing address collection requirements
+ *      - Email receipt settings
+ *      - Account settings for your business type
+ * 
+ * 4. COMPLIANCE & SECURITY
+ *    - Ensure your server environment is secure for production payments:
+ *      - HTTPS for all connections
+ *      - Proper firewall and network security
+ *      - Regular security audits
+ *    - Set up monitoring for suspicious payment patterns
+ *    - Ensure proper data handling compliant with:
+ *      - PCI DSS standards if handling card data
+ *      - GDPR or CCPA if applicable to your users
+ * 
+ * 5. TESTING IN STAGING
+ *    - Before switching to production:
+ *      - Test all payment flows in a staging environment using live API mode
+ *      - Verify successful payment handling
+ *      - Verify webhook processing for asynchronous payments
+ *      - Test refund functionality
+ *      - Verify error handling and reporting
+ */
+
+const logger = require('../utils/logger');
+
 // === PayPal Integration (Existing) ===
 // Your PayPal credentials - STORE THESE IN .ENV FILE in production
 const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || 'YOUR_PAYPAL_CLIENT_ID';
