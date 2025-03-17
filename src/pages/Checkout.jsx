@@ -251,8 +251,8 @@ const PAYMENT_METHODS = {
 
 // Define payment methods by region
 const REGION_PAYMENT_METHODS = {
-  US: [PAYMENT_METHODS.CARD, PAYMENT_METHODS.PAYPAL, PAYMENT_METHODS.APPLE_PAY, PAYMENT_METHODS.GOOGLE_PAY, PAYMENT_METHODS.AFTERPAY, PAYMENT_METHODS.CRYPTO],
-  EU: [PAYMENT_METHODS.CARD, PAYMENT_METHODS.PAYPAL, PAYMENT_METHODS.SEPA, PAYMENT_METHODS.IDEAL, PAYMENT_METHODS.APPLE_PAY, PAYMENT_METHODS.GOOGLE_PAY, PAYMENT_METHODS.CRYPTO],
+  US: [PAYMENT_METHODS.PAYPAL, PAYMENT_METHODS.APPLE_PAY, PAYMENT_METHODS.GOOGLE_PAY, PAYMENT_METHODS.CARD, PAYMENT_METHODS.AFTERPAY, PAYMENT_METHODS.CRYPTO],
+  EU: [PAYMENT_METHODS.PAYPAL, PAYMENT_METHODS.APPLE_PAY, PAYMENT_METHODS.GOOGLE_PAY, PAYMENT_METHODS.CARD, PAYMENT_METHODS.SEPA, PAYMENT_METHODS.IDEAL, PAYMENT_METHODS.CRYPTO],
   IN: [PAYMENT_METHODS.CARD, PAYMENT_METHODS.UPI, PAYMENT_METHODS.PAYPAL, PAYMENT_METHODS.GOOGLE_PAY, PAYMENT_METHODS.CRYPTO],
   DEFAULT: [PAYMENT_METHODS.CARD, PAYMENT_METHODS.PAYPAL, PAYMENT_METHODS.APPLE_PAY, PAYMENT_METHODS.GOOGLE_PAY, PAYMENT_METHODS.CRYPTO],
 };
@@ -1177,17 +1177,68 @@ const Checkout = () => {
           {/* Payment method toggle */}
           <div className="payment-methods-container">
             <h3>Choose Payment Method</h3>
-            <div className="payment-methods">
-              {availablePaymentMethods.map(method => (
+            <div className="payment-methods grid grid-cols-3 gap-4">
+              {/* First Row: Card, SEPA, iDEAL */}
+              <div 
+                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.CARD ? 'active' : ''}`}
+                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.CARD)}
+              >
+                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.CARD)}</div>
+                <span>Card</span>
+              </div>
+              
+              <div 
+                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.SEPA ? 'active' : ''}`}
+                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.SEPA)}
+              >
+                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.SEPA)}</div>
+                <span>SEPA</span>
+              </div>
+              
+              <div 
+                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.IDEAL ? 'active' : ''}`}
+                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.IDEAL)}
+              >
+                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.IDEAL)}</div>
+                <span>iDEAL</span>
+              </div>
+              
+              {/* Second Row: PayPal, Google Pay, Apple Pay */}
+              <div 
+                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.PAYPAL ? 'active' : ''}`}
+                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.PAYPAL)}
+              >
+                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.PAYPAL)}</div>
+                <span>PayPal</span>
+              </div>
+              
+              <div 
+                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.GOOGLE_PAY ? 'active' : ''}`}
+                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.GOOGLE_PAY)}
+              >
+                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.GOOGLE_PAY)}</div>
+                <span>Google Pay</span>
+              </div>
+
+              <div 
+                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.APPLE_PAY ? 'active' : ''}`}
+                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.APPLE_PAY)}
+              >
+                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.APPLE_PAY)}</div>
+                <span>Apple Pay</span>
+              </div>
+              
+              {/* Third Row: Crypto (centered) */}
+              <div className="col-span-3 flex justify-center">
                 <div 
-                  key={method}
-                  className={`payment-method-toggle ${paymentMethod === method ? 'active' : ''}`}
-                  onClick={() => handlePaymentMethodChange(method)}
+                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.CRYPTO ? 'active' : ''}`}
+                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.CRYPTO)}
+                  style={{ width: '33%' }}
                 >
-                  <div className="method-icon">{renderPaymentMethodIcon(method)}</div>
-                  <span>{getPaymentMethodName(method)}</span>
+                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.CRYPTO)}</div>
+                  <span>Crypto</span>
                 </div>
-              ))}
+              </div>
             </div>
           </div>
           
@@ -1269,46 +1320,7 @@ const Checkout = () => {
           )}
           
           {/* Payment method specific forms */}
-          {paymentMethod === PAYMENT_METHODS.CARD && (
-            <div>
-              {/* 
-                PRODUCTION MIGRATION:
-                - Replace stripePromise with production key (pk_live_...)
-                - Ensure proper error handling and logging for production
-                - Update backend to use sk_live_... secret key
-                - Complete Strong Customer Authentication (SCA) compliance for production
-              */}
-              {stripeLoading ? (
-                <div className="card-element-loading">
-                  <p>Loading payment form...</p>
-                </div>
-              ) : (
-                <Elements stripe={stripePromise} options={{
-                  locale: 'auto',
-                  currency: currency.toLowerCase(),
-                  appearance: {
-                    theme: 'stripe',
-                    variables: {
-                      colorPrimary: '#007bff',
-                    },
-                  },
-                  loader: 'auto', // Show a loading indicator while Stripe loads
-                }}>
-                  <div className="stripe-card-container">
-                    <CheckoutForm
-                      finalTotal={finalTotal}
-                      currency={currency}
-                      email={email}
-                      handlePaymentSuccess={handlePaymentSuccess}
-                      isSubmitting={isSubmitting}
-                      setIsSubmitting={setIsSubmitting}
-                    />
-                  </div>
-                </Elements>
-              )}
-            </div>
-          )}
-          
+
           {paymentMethod === PAYMENT_METHODS.PAYPAL && (
             <div className="paypal-container payment-method-focus">
               <h3>PayPal Checkout</h3>
@@ -1355,6 +1367,118 @@ const Checkout = () => {
                 You can pay with your PayPal account or credit/debit card via PayPal without creating an account.
               </p>
             </div>
+          )}
+          
+          {paymentMethod === PAYMENT_METHODS.APPLE_PAY && (
+            <div className="apple-pay-container payment-method-focus">
+              <h3>Apple Pay Checkout</h3>
+              <p>Complete your payment quickly and securely with Apple Pay:</p>
+              {/* 
+                PRODUCTION MIGRATION:
+                - Register production domain with Apple Pay
+                - Generate production merchant identity certificate
+                - Update merchantIdentifier to production value
+                - Ensure proper session validation on server side
+              */}
+              <ApplePayButton
+                cartTotal={finalTotal}
+                items={cart.map(item => ({
+                  id: item.id,
+                  title: item.title || item.name,
+                  price: item.price,
+                  quantity: item.quantity,
+                  imageUrl: item.image || item.imageUrl
+                }))}
+                currency={currency}
+                countryCode={countryCode}
+                email={email}
+                onSuccess={handlePaymentSuccess}
+                onError={(error) => {
+                  setIsSubmitting(false);
+                  toast.error(`Apple Pay error: ${error.message || 'Unknown error'}`);
+                }}
+                className="w-full"
+              />
+              <p className="payment-info-note">
+                Your order details will be securely transferred to Apple Pay.
+              </p>
+            </div>
+          )}
+          
+          {paymentMethod === PAYMENT_METHODS.GOOGLE_PAY && (
+            <div className="google-pay-container payment-method-focus">
+              <h3>Google Pay Checkout</h3>
+              <p>Complete your payment quickly and securely with Google Pay:</p>
+              {/* 
+                PRODUCTION MIGRATION:
+                - Change environment from 'TEST' to 'PRODUCTION'
+                - Update merchantId with production merchant ID
+                - Verify domain in Google Pay console
+                - Update gateway parameters for production
+              */}
+              <GooglePayButton
+                cartTotal={finalTotal}
+                items={cart.map(item => ({
+                  id: item.id,
+                  title: item.title || item.name,
+                  price: item.price,
+                  quantity: item.quantity,
+                  imageUrl: item.image || item.imageUrl
+                }))}
+                currency={currency}
+                countryCode={countryCode}
+                email={email}
+                onSuccess={handlePaymentSuccess}
+                onError={(error) => {
+                  setIsSubmitting(false);
+                  toast.error(`Google Pay error: ${error.message || 'Unknown error'}`);
+                }}
+                className="w-full"
+              />
+              <p className="payment-info-note">
+                Your order details will be securely transferred to Google Pay.
+              </p>
+            </div>
+          )}
+
+          {paymentMethod === PAYMENT_METHODS.CARD && (
+                      <div>
+                        {/* 
+                          PRODUCTION MIGRATION:
+                          - Replace stripePromise with production key (pk_live_...)
+                          - Ensure proper error handling and logging for production
+                          - Update backend to use sk_live_... secret key
+                          - Complete Strong Customer Authentication (SCA) compliance for production
+                        */}
+                        {stripeLoading ? (
+                          <div className="card-element-loading">
+                            <p>Loading payment form...</p>
+                          </div>
+                        ) : (
+                          <Elements stripe={stripePromise} options={{
+                            locale: 'auto',
+                            currency: currency.toLowerCase(),
+                            appearance: {
+                              theme: 'stripe',
+                              variables: {
+                                colorPrimary: '#007bff',
+                              },
+                            },
+                            loader: 'auto', // Show a loading indicator while Stripe loads
+                          }}>
+                            <div className="stripe-card-container">
+                              <CheckoutForm
+                                finalTotal={finalTotal}
+                                currency={currency}
+                                email={email}
+                                handlePaymentSuccess={handlePaymentSuccess}
+                                isSubmitting={isSubmitting}
+                                setIsSubmitting={setIsSubmitting}
+                              />
+                            </div>
+                          </Elements>
+                        )}
+                      </div>
           )}
           
           {paymentMethod === PAYMENT_METHODS.SEPA && (
@@ -1450,78 +1574,6 @@ const Checkout = () => {
               </button>
               <p className="payment-info-note">
                 You will be asked to enter your UPI ID or scan a QR code.
-              </p>
-            </div>
-          )}
-          
-          {paymentMethod === PAYMENT_METHODS.APPLE_PAY && (
-            <div className="apple-pay-container payment-method-focus">
-              <h3>Apple Pay Checkout</h3>
-              <p>Complete your payment quickly and securely with Apple Pay:</p>
-              {/* 
-                PRODUCTION MIGRATION:
-                - Register production domain with Apple Pay
-                - Generate production merchant identity certificate
-                - Update merchantIdentifier to production value
-                - Ensure proper session validation on server side
-              */}
-              <ApplePayButton
-                cartTotal={finalTotal}
-                items={cart.map(item => ({
-                  id: item.id,
-                  title: item.title || item.name,
-                  price: item.price,
-                  quantity: item.quantity,
-                  imageUrl: item.image || item.imageUrl
-                }))}
-                currency={currency}
-                countryCode={countryCode}
-                email={email}
-                onSuccess={handlePaymentSuccess}
-                onError={(error) => {
-                  setIsSubmitting(false);
-                  toast.error(`Apple Pay error: ${error.message || 'Unknown error'}`);
-                }}
-                className="w-full"
-              />
-              <p className="payment-info-note">
-                Your order details will be securely transferred to Apple Pay.
-              </p>
-            </div>
-          )}
-          
-          {paymentMethod === PAYMENT_METHODS.GOOGLE_PAY && (
-            <div className="google-pay-container payment-method-focus">
-              <h3>Google Pay Checkout</h3>
-              <p>Complete your payment quickly and securely with Google Pay:</p>
-              {/* 
-                PRODUCTION MIGRATION:
-                - Change environment from 'TEST' to 'PRODUCTION'
-                - Update merchantId with production merchant ID
-                - Verify domain in Google Pay console
-                - Update gateway parameters for production
-              */}
-              <GooglePayButton
-                cartTotal={finalTotal}
-                items={cart.map(item => ({
-                  id: item.id,
-                  title: item.title || item.name,
-                  price: item.price,
-                  quantity: item.quantity,
-                  imageUrl: item.image || item.imageUrl
-                }))}
-                currency={currency}
-                countryCode={countryCode}
-                email={email}
-                onSuccess={handlePaymentSuccess}
-                onError={(error) => {
-                  setIsSubmitting(false);
-                  toast.error(`Google Pay error: ${error.message || 'Unknown error'}`);
-                }}
-                className="w-full"
-              />
-              <p className="payment-info-note">
-                Your order details will be securely transferred to Google Pay.
               </p>
             </div>
           )}

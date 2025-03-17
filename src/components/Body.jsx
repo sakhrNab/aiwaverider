@@ -8,6 +8,8 @@ import { PostsContext } from '../contexts/PostsContext';
 import { AuthContext } from '../contexts/AuthContext';
 import { getProfile } from '../utils/api';
 import { CATEGORIES } from '../constants/categories';
+// Import AI-themed spinner components
+import { MoonLoader, PulseLoader } from 'react-spinners';
 
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
 
@@ -212,9 +214,17 @@ const Body = () => {
   }, [loadData, user]);
 
   if (isLoading) {
-    return <div className="flex justify-center items-center h-96">
-      <div className="loader">Loading...</div>
-    </div>;
+    return (
+      <div className="flex flex-col justify-center items-center h-96">
+        <div className="mb-4">
+          <MoonLoader color="#4A90E2" size={60} speedMultiplier={0.7} />
+        </div>
+        <div className="mt-4 text-blue-500 text-lg font-medium">
+          <PulseLoader color="#4A90E2" size={10} speedMultiplier={0.7} />
+        </div>
+        <p className="mt-6 text-gray-500">Loading AI insights...</p>
+      </div>
+    );
   }
 
   if (loadError) {

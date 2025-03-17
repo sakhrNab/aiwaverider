@@ -154,7 +154,7 @@ const Header = ({ openSignUpModal }) => {
 
   return (
     <>
-      <header className="main-header">
+      <header className="main-header w-full bg-[#1a1a2e] text-white py-4 px-6 shadow-md relative z-[100]">
         <div className="container mx-auto flex items-center justify-between">
           {/* Left group: Logo and main nav */}
           <div className="flex items-center space-x-4">
@@ -168,16 +168,16 @@ const Header = ({ openSignUpModal }) => {
 
             {/* Main Nav (hidden on mobile, shown on md and up) */}
             <nav className="hidden md:flex items-center space-x-6 nav-links">
-              <Link to="/agents" className="nav-link">
+              <Link to="/agents" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
                 Agents
               </Link>
-              <Link to="/ai-tools" className="nav-link">
+              <Link to="/ai-tools" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
                 AI Tools
               </Link>
-              <Link to="/trends" className="nav-link">
+              <Link to="/trends" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
                 Trends
               </Link>
-              <Link to="/latest-tech" className="nav-link">
+              <Link to="/latest-tech" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
                 Latest Tech
               </Link>
             </nav>
@@ -187,22 +187,24 @@ const Header = ({ openSignUpModal }) => {
           <div className="flex items-center space-x-3 auth-buttons">
             {/* Cart Icon (Removed Checkout Button) */}
             <div className="cart-container hidden md:flex items-center">
-              <Link to="/checkout" className="cart-icon-container">
+              <Link to="/checkout" className="cart-icon-container relative inline-block text-white hover:text-[#00bcd4] transition-colors duration-300">
                 <FaShoppingCart className="text-xl" />
                 {itemCount > 0 && (
-                  <span className="cart-badge">{itemCount}</span>
+                  <span className="cart-badge absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                    {itemCount}
+                  </span>
                 )}
               </Link>
             </div>
             
             {!user && (
               <div className="hidden md:flex items-center space-x-3">
-                <Link to="/sign-in" className="auth-link">
+                <Link to="/sign-in" className="auth-link text-white font-medium hover:text-[#00bcd4] transition-colors duration-300">
                   Sign In
                 </Link>
                 <button
                   onClick={handleSignUp}
-                  className="auth-button"
+                  className="auth-button bg-[#00bcd4] hover:bg-[#0097a7] text-white font-medium py-2 px-4 rounded-md transition-colors duration-300"
                 >
                   Sign Up
                 </button>
@@ -212,19 +214,19 @@ const Header = ({ openSignUpModal }) => {
             {user && (
               <div className="hidden md:flex items-center space-x-3">
                 {user.role === 'admin' && (
-                  <Link to="/admin/agents" className="auth-link">
+                  <Link to="/admin/agents" className="auth-link text-white font-medium hover:text-[#00bcd4] transition-colors duration-300">
                     Admin
                   </Link>
                 )}
                 <button
                   onClick={handleSignOut}
-                  className="auth-button signout-button"
+                  className="auth-button signout-button bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md transition-colors duration-300"
                 >
                   Sign Out
                 </button>
                 <Link
                   to="/profile"
-                  className="profile-avatar"
+                  className="profile-avatar w-10 h-10 overflow-hidden rounded-full border-2 border-[#00bcd4]"
                 >
                   <img
                     src={user?.photoURL || '/default-avatar.png'}
@@ -247,39 +249,39 @@ const Header = ({ openSignUpModal }) => {
             {/* Hamburger menu icon - Only shown on mobile */}
             <button 
               ref={toggleButtonRef}
-              className="mobile-menu-toggle md:hidden"
+              className="mobile-menu-toggle md:hidden flex flex-col justify-center items-center w-10 h-10 p-2"
               onClick={toggleMobileMenu}
               aria-label="Toggle menu"
             >
-              <span className={`hamburger-line ${isMenuOpen ? 'active' : ''}`}></span>
-              <span className={`hamburger-line ${isMenuOpen ? 'active' : ''}`}></span>
-              <span className={`hamburger-line ${isMenuOpen ? 'active' : ''}`}></span>
+              <span className={`hamburger-line w-6 h-0.5 bg-white my-0.5 transition-all duration-300 ${isMenuOpen ? 'transform rotate-45 translate-y-1.5' : ''}`}></span>
+              <span className={`hamburger-line w-6 h-0.5 bg-white my-0.5 transition-all duration-300 ${isMenuOpen ? 'opacity-0' : ''}`}></span>
+              <span className={`hamburger-line w-6 h-0.5 bg-white my-0.5 transition-all duration-300 ${isMenuOpen ? 'transform -rotate-45 -translate-y-1.5' : ''}`}></span>
             </button>
           </div>
         </div>
 
         {/* Mobile menu */}
-        <div ref={mobileMenuRef} className={`mobile-menu ${isMenuOpen ? 'open' : ''}`}>
-          <nav className="mobile-nav">
-            <Link to="/agents" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
+        <div ref={mobileMenuRef} className={`mobile-menu fixed top-[72px] left-0 w-full h-screen bg-[#1a1a2e] z-50 transform transition-transform duration-300 ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <nav className="mobile-nav flex flex-col p-4">
+            <Link to="/agents" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
               Agents
             </Link>
-            <Link to="/ai-tools" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
+            <Link to="/ai-tools" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
               AI Tools
             </Link>
-            <Link to="/trends" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
+            <Link to="/trends" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
               Trends
             </Link>
-            <Link to="/latest-tech" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
+            <Link to="/latest-tech" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
               Latest Tech
             </Link>
             {/* Cart in mobile menu */}
-            <Link to="/checkout" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
+            <Link to="/checkout" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
               Cart {itemCount > 0 ? `(${itemCount})` : ''}
             </Link>
             {!user && (
               <>
-                <Link to="/sign-in" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
+                <Link to="/sign-in" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
                   Sign In
                 </Link>
                 <button
@@ -287,7 +289,7 @@ const Header = ({ openSignUpModal }) => {
                     setIsMenuOpen(false);
                     handleSignUp();
                   }}
-                  className="mobile-nav-button"
+                  className="mobile-nav-button mt-3 bg-[#00bcd4] hover:bg-[#0097a7] text-white font-medium py-2 px-4 rounded-md w-full"
                 >
                   Sign Up
                 </button>
@@ -295,11 +297,11 @@ const Header = ({ openSignUpModal }) => {
             )}
             {user && (
               <>
-                <Link to="/profile" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
+                <Link to="/profile" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
                   Profile
                 </Link>
                 {user.role === 'admin' && (
-                  <Link to="/admin/agents" className="mobile-nav-link" onClick={() => setIsMenuOpen(false)}>
+                  <Link to="/admin/agents" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
                     Admin Dashboard
                   </Link>
                 )}
@@ -308,7 +310,7 @@ const Header = ({ openSignUpModal }) => {
                     setIsMenuOpen(false);
                     handleSignOut();
                   }}
-                  className="mobile-nav-button signout"
+                  className="mobile-nav-button signout mt-3 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md w-full"
                 >
                   Sign Out
                 </button>
@@ -320,8 +322,8 @@ const Header = ({ openSignUpModal }) => {
 
       {/* Search section - Only shown on homepage and agents page */}
       {shouldShowSearchBar && (
-        <div className="search-section">
-          <div className="container mx-auto">
+        <div className="search-section bg-[#292949] py-6">
+          <div className="container mx-auto px-4">
             <SearchBar 
               initialQuery={searchTerm} 
               onSearch={handleSearch} 

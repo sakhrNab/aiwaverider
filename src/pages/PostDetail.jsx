@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getPost, getComments, getLikes } from '../services/firebase';
 import { onSnapshot, doc } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
+import { GridLoader, BeatLoader } from 'react-spinners';
 
 const PostDetail = ({ postId, user, disableRealtime }) => {
   const [post, setPost] = useState(null);
@@ -58,9 +59,7 @@ const PostDetail = ({ postId, user, disableRealtime }) => {
 
   // Add real-time updates for likes
   useEffect(() => {
-if (!postId || disableRealtime) return;
-
-
+    if (!postId || disableRealtime) return;
     
     const unsubscribe = onSnapshot(doc(db, 'posts', postId), (doc) => {
       if (doc.exists()) {
@@ -72,9 +71,46 @@ if (!postId || disableRealtime) return;
     return () => unsubscribe();
   }, [postId, disableRealtime]);
 
+  // Render loading state with AI-themed animation
+  if (isLoading) {
+    return (
+      <div className="flex flex-col justify-center items-center min-h-[300px] py-12">
+        <div className="mb-6">
+          <GridLoader color="#6366F1" size={15} margin={2} speedMultiplier={0.8} />
+        </div>
+        <div className="text-indigo-600 text-lg font-medium mt-2">
+          Neural processing...
+        </div>
+        <p className="mt-2 text-gray-500 text-sm">
+          Analyzing content relationships
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Render your component content here */}
+      
+      {/* Show loading more animation at the bottom when loading more comments */}
+      {isLoadingMore && (
+        <div className="flex justify-center items-center py-4">
+          <BeatLoader color="#6366F1" size={10} margin={4} speedMultiplier={0.7} />
+          <span className="ml-4 text-indigo-500 text-sm">Loading more insights...</span>
+        </div>
+      )}
+      
+      {/* Load more button would go here */}
+      {hasMore && !isLoadingMore && (
+        <div className="text-center mt-4 mb-8">
+          <button 
+            onClick={loadMoreComments}
+            className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 transition-colors"
+          >
+            Load more comments
+          </button>
+        </div>
+      )}
     </div>
   );
 };

@@ -307,49 +307,63 @@
 
 /* Payment Method Toggle */
 .payment-methods {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
 .payment-method-toggle {
+  background-color: #f8f9fa;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 12px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  justify-content: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  flex: 1;
-  min-width: 70px;
-  margin: 0 5px 10px;
-  background-color: #f9f9f9;
+  height: 60px;
 }
 
-.payment-method-toggle:first-child {
-  margin-left: 0;
-}
-
-.payment-method-toggle:last-child {
-  margin-right: 0;
+.payment-method-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border-color: #cbd5e0;
 }
 
 .payment-method-toggle.active {
-  border-color: #007bff;
-  background-color: #f0f7ff;
-  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+  background-color: #e6f7ff;
+  border-color: #3182ce;
+  box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.15);
 }
 
-.method-icon {
-  font-size: 24px;
-  margin-bottom: 8px;
-  color: #444;
+.payment-method-toggle .method-icon {
+  font-size: 18px;
+  margin-bottom: 4px;
+  color: #4a5568;
 }
 
 .payment-method-toggle.active .method-icon {
-  color: #007bff;
+  color: #3182ce;
+}
+
+.payment-method-toggle span {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* For the centered crypto row */
+.payment-methods .col-span-3 {
+  grid-column: span 3;
+  display: flex;
+  justify-content: center;
+}
+
+.payment-methods .col-span-3 .payment-method-toggle {
+  width: 33%;
+  max-width: 100px;
 }
 
 /* Form Group */
