@@ -114,19 +114,17 @@ const ApplePayButton = ({
           });
           
           if (response.data.success) {
-            // Complete the payment successfully
-            session.completePayment(ApplePaySession.STATUS_SUCCESS);
             toast.success('Payment successful!');
+            if (onSuccess) onSuccess(response.data);
             
-            if (onSuccess) {
-              onSuccess(response.data);
+            // Check if backend provided a redirect URL
+            if (response.data.redirectUrl) {
+              window.location.href = response.data.redirectUrl;
+            } else {
+              // Use checkout/success with payment info for redirection
+              window.location.href = `/checkout/success?payment_id=${response.data.orderId || 'unknown'}&status=success&type=payment_intent`;
             }
-            
-            // Redirect to thank you page
-            window.location.href = `/thankyou?order_id=${response.data.orderId}`;
           } else {
-            // Payment processing failed
-            session.completePayment(ApplePaySession.STATUS_FAILURE);
             throw new Error(response.data.error || 'Payment processing failed');
           }
         } catch (error) {

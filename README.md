@@ -65,6 +65,49 @@ cd backend
 node scripts/seedSampleAgents.js
 ```
 
+## Notification System
+
+The application includes a comprehensive notification system that supports both email and in-app notifications.
+
+### Features:
+
+- Email notifications for order confirmations
+- Email notifications for agent purchases with templates attached
+- In-app notifications for various events
+- Welcome emails for new users
+
+### Configuration:
+
+Notifications can be configured using environment variables in your `.env` file:
+
+```
+# Email Configuration
+EMAIL_HOST=smtp.example.com
+EMAIL_PORT=587
+EMAIL_SECURE=false
+EMAIL_USER=your_email_user
+EMAIL_PASSWORD=your_email_password
+EMAIL_FROM=AI Wave Rider <noreply@aiwaverider.com>
+SUPPORT_EMAIL=support@aiwaverider.com
+WEBSITE_URL=https://aiwaverider.com
+
+# Notifications
+ENABLE_NOTIFICATIONS=true
+```
+
+To disable notifications, set `ENABLE_NOTIFICATIONS=false`.
+
+### Testing Notifications:
+
+To test the notification system, run:
+
+```
+cd backend
+node test-email-delivery.js
+```
+
+This will simulate a successful payment and trigger both the email delivery for purchased agent templates and notification system.
+
 ## Manually Testing API Endpoints
 
 To test the recommendations API directly:

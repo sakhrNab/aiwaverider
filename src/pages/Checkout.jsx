@@ -418,7 +418,7 @@ const CheckoutForm = ({ finalTotal, currency, email, handlePaymentSuccess, isSub
         className="pay-button"
         disabled={!stripe || processing || isSubmitting || !cardComplete}
       >
-        {processing ? 'Processing...' : `Pay ${currency.toUpperCase()} ${finalTotal.toFixed(2)}`}
+        {processing ? 'Processing...' : `Pay ${currency.toUpperCase()} ${(finalTotal || 0).toFixed(2)}`}
       </button>
       
       {(!stripe || !elements) && (
@@ -632,9 +632,18 @@ const Checkout = () => {
     setIsSubmitting(false);
   };
   
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = (result) => {
     clearCart();
-    navigate('/thankyou');
+    
+    // If we have a payment result with a redirect URL, use that
+    if (result && result.redirectUrl) {
+      window.location.href = result.redirectUrl;
+      return;
+    }
+    
+    // Otherwise construct a generic success URL
+    const successUrl = `/checkout/success?payment_id=${result?.id || 'unknown'}&status=success&type=payment_intent`;
+    navigate(successUrl);
   };
   
   // Handle Stripe checkout redirect
@@ -1063,7 +1072,7 @@ const Checkout = () => {
               
               <div className="item-details">
                 <h3>{item.title}</h3>
-                <p className="item-price">{currency} {item.price.toFixed(2)}</p>
+                <p className="item-price">{currency} {(item.price || 0).toFixed(2)}</p>
                 
                 <div className="item-actions">
                   <div className="quantity-controls">
@@ -1089,7 +1098,7 @@ const Checkout = () => {
               </div>
               
               <div className="item-total">
-                {currency} {(item.price * item.quantity).toFixed(2)}
+                {currency} {((item.price || 0) * item.quantity).toFixed(2)}
               </div>
             </div>
           ))}
@@ -1147,13 +1156,13 @@ const Checkout = () => {
           
           <div className="summary-row">
             <span>Subtotal</span>
-            <span>{currency} {cartTotal.toFixed(2)}</span>
+            <span>{currency} {(cartTotal || 0).toFixed(2)}</span>
           </div>
           
           {discountApplied && (
             <div className="summary-row discount">
               <span>Discount</span>
-              <span>-{currency} {discountAmount.toFixed(2)}</span>
+              <span>-{currency} {(discountAmount || 0).toFixed(2)}</span>
             </div>
           )}
           
@@ -1166,12 +1175,12 @@ const Checkout = () => {
                 </span>
               )}
             </span>
-            <span>{currency} {vatAmount.toFixed(2)}</span>
+            <span>{currency} {(vatAmount || 0).toFixed(2)}</span>
           </div>
           
           <div className="summary-row total">
             <span>Total</span>
-            <span>{currency} {finalTotal.toFixed(2)}</span>
+            <span>{currency} {(finalTotal || 0).toFixed(2)}</span>
           </div>
           
           {/* Payment method toggle */}
@@ -1570,7 +1579,7 @@ const Checkout = () => {
                 className="pay-button"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Processing...' : `Pay ${currency} ${finalTotal.toFixed(2)} with UPI`}
+                {isSubmitting ? 'Processing...' : `Pay ${currency} ${(finalTotal || 0).toFixed(2)} with UPI`}
               </button>
               <p className="payment-info-note">
                 You will be asked to enter your UPI ID or scan a QR code.
@@ -1625,7 +1634,7 @@ const Checkout = () => {
                 {isSubmitting ? 'Processing...' : `Pay with ${countryCode === 'GB' ? 'Clearpay' : 'Afterpay'}`}
               </button>
               <div className="afterpay-installments">
-                <p>4 payments of {currency} {(finalTotal / 4).toFixed(2)}</p>
+                <p>4 payments of {currency} {((finalTotal || 0) / 4).toFixed(2)}</p>
               </div>
               <p className="payment-info-note">
                 You'll be redirected to complete your {countryCode === 'GB' ? 'Clearpay' : 'Afterpay'} payment.
@@ -1670,7 +1679,7 @@ const Checkout = () => {
                 <h3>{product.title}</h3>
                 <p>
                   {product.price > 0 
-                    ? `${currency} ${product.price.toFixed(2)}` 
+                    ? `${currency} ${(product.price || 0).toFixed(2)}` 
                     : 'Free'}
                 </p>
                 <Link to={`/product/${product.id}`} className="view-button">

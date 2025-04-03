@@ -149,7 +149,8 @@ const Header = ({ openSignUpModal }) => {
 
   // Toggle mobile menu
   const toggleMobileMenu = () => {
-    setIsMenuOpen(!isMenuOpen);
+    console.log('Toggle menu button clicked, current state:', isMenuOpen); // Debug log
+    setIsMenuOpen(prevState => !prevState);
   };
 
   return (
@@ -248,10 +249,12 @@ const Header = ({ openSignUpModal }) => {
 
             {/* Hamburger menu icon - Only shown on mobile */}
             <button 
+              type="button"
               ref={toggleButtonRef}
-              className="mobile-menu-toggle md:hidden flex flex-col justify-center items-center w-10 h-10 p-2"
+              className="mobile-menu-toggle md:hidden flex flex-col justify-center items-center w-10 h-10 p-2 z-50"
               onClick={toggleMobileMenu}
               aria-label="Toggle menu"
+              aria-expanded={isMenuOpen}
             >
               <span className={`hamburger-line w-6 h-0.5 bg-white my-0.5 transition-all duration-300 ${isMenuOpen ? 'transform rotate-45 translate-y-1.5' : ''}`}></span>
               <span className={`hamburger-line w-6 h-0.5 bg-white my-0.5 transition-all duration-300 ${isMenuOpen ? 'opacity-0' : ''}`}></span>
@@ -261,7 +264,11 @@ const Header = ({ openSignUpModal }) => {
         </div>
 
         {/* Mobile menu */}
-        <div ref={mobileMenuRef} className={`mobile-menu fixed top-[72px] left-0 w-full h-screen bg-[#1a1a2e] z-50 transform transition-transform duration-300 ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div 
+          ref={mobileMenuRef} 
+          className={`mobile-menu fixed top-[72px] left-0 w-full h-screen bg-[#1a1a2e] z-50 transform transition-transform duration-300 ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'} ${isMenuOpen ? 'block' : 'block'}`}
+          aria-hidden={!isMenuOpen}
+        >
           <nav className="mobile-nav flex flex-col p-4">
             <Link to="/agents" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
               Agents

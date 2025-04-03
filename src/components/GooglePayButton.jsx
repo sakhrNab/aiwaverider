@@ -151,8 +151,13 @@ const GooglePayButton = ({
         toast.success('Payment successful!');
         if (onSuccess) onSuccess(response.data);
         
-        // Redirect to thank you page
-        window.location.href = `/thankyou?order_id=${response.data.orderId}`;
+        // Check if backend provided a redirect URL
+        if (response.data.redirectUrl) {
+          window.location.href = response.data.redirectUrl;
+        } else {
+          // Use checkout/success with payment info for redirection
+          window.location.href = `/checkout/success?payment_id=${response.data.orderId || 'unknown'}&status=success&type=payment_intent`;
+        }
       } else {
         throw new Error(response.data.error || 'Payment processing failed');
       }

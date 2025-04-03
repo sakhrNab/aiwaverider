@@ -203,8 +203,8 @@ router.post('/create-paypal-order', async (req, res) => {
         brand_name: 'AI Wave Rider',
         landing_page: 'NO_PREFERENCE',
         user_action: 'PAY_NOW',
-        return_url: `${req.protocol}://${req.get('host')}/thankyou`,
-        cancel_url: `${req.protocol}://${req.get('host')}/checkout`
+        return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout/success?payment_id=${uuidv4()}&status=success&type=paypal_order`,
+        cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout?canceled=true`
       }
     };
     
@@ -309,170 +309,47 @@ const getPaymentMethodsForCountry = (countryCode = 'US') => {
 };
 
 // Create Stripe checkout session
-router.post('/create-stripe-checkout', async (req, res) => {
+router.post('/create-checkout-session', async (req, res) => {
   try {
-    const { 
-      cartTotal, 
-      items, 
-      currency = 'usd', 
-      countryCode = 'US',
-      email,
-      paymentMethodTypes = [],
-      metadata = {},
-      billingDetails = {}
-    } = req.body;
+    const { items, successUrl, cancelUrl, customerId, metadata = {} } = req.body;
     
-    console.log(`Creating Stripe checkout session:`, {
-      currency,
-      countryCode,
-      paymentMethodTypes,
-      email: email ? 'provided' : 'not provided',
-      items: items.length
-    });
-    
-    if (logger) {
-      logger.info(`Creating Stripe checkout session: ${JSON.stringify({
-        currency,
-        countryCode,
-        paymentMethodTypes,
-        email: email ? 'provided' : 'not provided'
-      })}`);
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty items array' });
     }
     
-    if (!cartTotal || !items || !items.length) {
-      console.error('Invalid request body for Stripe checkout');
-      if (logger) logger.error('Invalid request body for Stripe checkout');
-      return res.status(400).json({ error: 'Invalid request body' });
-    }
-    
-    // Format line items for Stripe
+    // Create line items for the checkout session
     const lineItems = items.map(item => ({
       price_data: {
-        currency: currency.toLowerCase(),
+        currency: 'usd',
         product_data: {
-          name: item.title,
-          images: item.imageUrl ? [item.imageUrl] : [],
-          metadata: {
-            product_id: item.id
-          }
+          name: item.name,
+          description: item.description || '',
+          images: item.image ? [item.image] : [],
         },
-        unit_amount: formatAmountForStripe(item.price, currency)
+        unit_amount: formatAmountForStripe(item.price, 'usd'),
       },
-      quantity: item.quantity
+      quantity: item.quantity || 1,
     }));
-    
-    // Get appropriate payment methods for the country
-    // Use provided payment method types or fall back to country-based ones
-    let payment_method_types = paymentMethodTypes.length > 0 
-      ? paymentMethodTypes 
-      : getPaymentMethodsForCountry(countryCode);
-      
-    // Filter out unsupported payment methods like 'google_pay' and 'apple_pay'
-    // These are handled through the 'card' payment method
-    const validPaymentMethods = [
-      'card', 'acss_debit', 'affirm', 'afterpay_clearpay', 'alipay', 
-      'au_becs_debit', 'bacs_debit', 'bancontact', 'blik', 'boleto', 
-      'cashapp', 'customer_balance', 'eps', 'fpx', 'giropay', 'grabpay', 
-      'ideal', 'klarna', 'konbini', 'link', 'multibanco', 'oxxo', 'p24', 
-      'pay_by_bank', 'paynow', 'paypal', 'pix', 'promptpay', 'sepa_debit', 
-      'sofort', 'swish', 'us_bank_account', 'wechat_pay', 'revolut_pay', 
-      'mobilepay', 'zip', 'amazon_pay', 'alma', 'twint', 'kr_card', 
-      'naver_pay', 'kakao_pay', 'payco', 'samsung_pay'
-    ];
-    
-    payment_method_types = payment_method_types.filter(method => 
-      validPaymentMethods.includes(method)
-    );
-    
-    // Make sure 'card' is included for Google Pay support
-    if (!payment_method_types.includes('card')) {
-      payment_method_types.push('card');
-    }
-    
-    console.log(`Using payment method types: ${payment_method_types.join(', ')}`);
-    if (logger) logger.info(`Using payment method types: ${payment_method_types.join(', ')}`);
-    
-    // For testing/development, we can mock a successful response if Stripe is not properly configured
-    const stripeConfigured = process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY !== 'sk_test_51R2ydLCWt3snxVwEJxJQNsGNifhLhfQrJEBJgPPr9W4dRDfbjh11FvYLrxQ';
-    
-    if (!stripeConfigured) {
-      console.log('Using mock Stripe session (no real credentials)');
-      // Create a mock checkout URL that will still redirect to the thank you page
-      const mockSessionId = `mock_${uuidv4()}`;
-      const mockUrl = `${req.protocol}://${req.get('host')}/thankyou?session_id=${mockSessionId}`;
-      
-      return res.json({ 
-        id: mockSessionId, 
-        url: mockUrl,
-        mock: true,
-        message: 'Mock Stripe checkout created (using fallback due to missing credentials)'
-      });
-    }
     
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: payment_method_types,
+      payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
-      success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/thankyou?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout`,
-      customer_email: email || undefined,
-      payment_intent_data: payment_method_types.includes('ideal') || payment_method_types.includes('sepa_debit')
-        ? { metadata: { ...metadata, order_id: uuidv4() } } // For methods that don't support setup_future_usage
-        : {
-            metadata: { ...metadata, order_id: uuidv4() },
-            setup_future_usage: 'off_session', // Only for card payments and supported methods
-          },
-      shipping_address_collection: {
-        allowed_countries: ['US', 'CA', 'GB', 'AU', 'DE', 'FR', 'IN', 'NL', 'BE'],
+      customer: customerId || undefined,
+      success_url: successUrl || `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout/success?payment_id={CHECKOUT_SESSION_ID}&status=success&type=checkout_session`,
+      cancel_url: cancelUrl || `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout?canceled=true`,
+      metadata: {
+        ...metadata,
+        order_id: uuidv4()
       },
-      // Simplified shipping option without delivery estimates to avoid validation errors
-      shipping_options: [
-        {
-          shipping_rate_data: {
-            type: 'fixed_amount',
-            fixed_amount: {
-              amount: 0,
-              currency: currency.toLowerCase(),
-            },
-            display_name: 'Digital Delivery',
-          }
-        }
-      ]
     });
     
-    console.log(`Stripe session created successfully: ${session.id}`);
-    if (logger) logger.info(`Stripe session created successfully: ${session.id}`);
-    logPayment('STRIPE', 'SESSION_CREATED', { id: session.id });
-    return res.json({ url: session.url, id: session.id });
+    logPayment('STRIPE', 'CHECKOUT_SESSION_CREATED', { id: session.id });
+    return res.json({ id: session.id, url: session.url });
   } catch (error) {
-    console.error(`Stripe session creation failed: ${error.message}`);
-    if (logger) logger.error(`Stripe session creation failed: ${error.message}`);
-    logPayment('STRIPE', 'SESSION_CREATION_FAILED', null, error);
-    
-    // Enhanced error handling for better frontend debugging
-    let errorMessage = 'Failed to create Stripe checkout session';
-    
-    // Check if it's a Stripe API error
-    if (error.type && error.type.startsWith('Stripe')) {
-      errorMessage += `: ${error.message}`;
-      
-      // Add any additional details if available
-      if (error.param) {
-        errorMessage += ` (invalid parameter: ${error.param})`;
-      }
-    } else {
-      errorMessage += ': ' + error.message;
-    }
-    
-    return res.status(500).json({ 
-      error: errorMessage,
-      details: error.type ? {
-        type: error.type,
-        code: error.code,
-        param: error.param
-      } : null
-    });
+    logPayment('STRIPE', 'CHECKOUT_SESSION_FAILED', null, error);
+    return res.status(500).json({ error: 'Failed to create checkout session' });
   }
 });
 
@@ -659,8 +536,8 @@ router.get('/thankyou', (req, res) => {
   // Get the frontend URL (default to localhost:5173 for development)
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   
-  // Redirect to the frontend thank you page with the session_id
-  const redirectUrl = `${frontendUrl}/thankyou?session_id=${session_id}`;
+  // Redirect to the new checkout success page with the session_id
+  const redirectUrl = `${frontendUrl}/checkout/success?payment_id=${session_id}&status=success&type=checkout_session`;
   console.log(`Redirecting payment success to: ${redirectUrl}`);
   if (logger) logger.info(`Redirecting payment success to: ${redirectUrl}`);
   
@@ -722,10 +599,11 @@ router.post('/process-google-pay', async (req, res) => {
       payment_method: paymentMethod.id,
       confirmation_method: 'manual',
       confirm: true,
-      return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/thankyou`,
+      return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout/success?payment_id={PAYMENT_INTENT_ID}&status=success&type=payment_intent`,
       metadata: {
         order_id: uuidv4(),
-        email: email || 'anonymous'
+        email: email || 'anonymous',
+        items: JSON.stringify(items)
       }
     });
     
@@ -738,11 +616,15 @@ router.post('/process-google-pay', async (req, res) => {
       // Generate order ID
       const orderId = paymentIntent.metadata.order_id;
       
+      // Prepare the redirect URL
+      const successUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout/success?payment_id=${paymentIntent.id}&status=success&type=payment_intent`;
+      
       return res.json({
         success: true,
         orderId,
         status: paymentIntent.status,
-        clientSecret: paymentIntent.client_secret
+        clientSecret: paymentIntent.client_secret,
+        redirectUrl: successUrl
       });
     } else {
       throw new Error(`Payment failed with status: ${paymentIntent.status}`);
@@ -842,10 +724,11 @@ router.post('/process-apple-pay', async (req, res) => {
       payment_method: paymentMethod.id,
       confirmation_method: 'manual',
       confirm: true,
-      return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/thankyou`,
+      return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout/success?payment_id={PAYMENT_INTENT_ID}&status=success&type=payment_intent`,
       metadata: {
         order_id: uuidv4(),
-        email: email || 'anonymous'
+        email: email || 'anonymous',
+        items: JSON.stringify(items)
       }
     });
     
@@ -858,11 +741,15 @@ router.post('/process-apple-pay', async (req, res) => {
       // Generate order ID
       const orderId = paymentIntent.metadata.order_id;
       
+      // Prepare the redirect URL
+      const successUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout/success?payment_id=${paymentIntent.id}&status=success&type=payment_intent`;
+      
       return res.json({
         success: true,
         orderId,
         status: paymentIntent.status,
-        clientSecret: paymentIntent.client_secret
+        clientSecret: paymentIntent.client_secret,
+        redirectUrl: successUrl
       });
     } else {
       throw new Error(`Payment failed with status: ${paymentIntent.status}`);

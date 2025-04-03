@@ -15,6 +15,7 @@ import Agents from '../pages/Agents';
 import AgentDetail from '../pages/agent/AgentDetail';
 import Checkout from '../pages/Checkout';
 import ThankYou from '../pages/ThankYou';
+import CheckoutSuccess from './checkout/CheckoutSuccess';
 // Import admin pages
 import Dashboard from '../pages/admin/Dashboard';
 import ManageAgents from '../pages/admin/ManageAgents';
@@ -46,6 +47,7 @@ const AppContent = () => {
           <Route path="/product/:agentId" element={<AgentDetail />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/thankyou" element={<ThankYou />} />
+          <Route path="/checkout/success" element={<CheckoutSuccess />} />
 
           {/* Protected: Admin only */}
           {/* Create Post route */}

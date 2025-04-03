@@ -141,8 +141,8 @@ app.get('/thankyou', (req, res) => {
   // Get the frontend URL (default to localhost:5173 for development)
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   
-  // Redirect to the frontend thank you page with the session_id
-  const redirectUrl = `${frontendUrl}/thankyou?session_id=${session_id}`;
+  // Redirect to the new checkout success page with the session_id
+  const redirectUrl = `${frontendUrl}/checkout/success?payment_id=${session_id}&status=success&type=checkout_session`;
   console.log(`Root redirect: Payment success to: ${redirectUrl}`);
   logger.info(`Root redirect: Payment success to: ${redirectUrl}`);
   
