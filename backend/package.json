@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node test/controllerCheck.js",
+    "test:all": "npm run test:controllers && npm run test:agentController",
+    "test:controllers": "node test/controllerCheck.js",
+    "test:agentController": "node test/agentController.test.js",
+    "test:jest": "jest",
     "start": "node index.js",
     "dev": "nodemon index.js",
     "seed:agents": "node scripts/seedAgents.js",
@@ -34,5 +38,9 @@
     "sanitize-html": "^2.14.0",
     "stripe": "^17.7.0",
     "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.1"
   }
 }

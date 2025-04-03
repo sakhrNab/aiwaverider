@@ -1153,7 +1153,7 @@ const getDownloadCount = async (req, res) => {
     const agentData = agentDoc.data();
     
     // Return the download count (default to 0 if not set)
-    return res.json({ 
+    return res.status(200).json({ 
       downloads: agentData.downloadCount || 0,
       agentId
     });
@@ -1193,7 +1193,7 @@ const incrementDownloadCount = async (req, res) => {
     const updatedAgentDoc = await agentRef.get();
     const updatedAgentData = updatedAgentDoc.data();
     
-    return res.json({ 
+    return res.status(200).json({ 
       downloads: updatedAgentData.downloadCount || 1,
       agentId,
       message: 'Download count incremented successfully'

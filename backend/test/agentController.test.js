@@ -1,4 +1,10 @@
-const { db, admin } = require('../config/firebase');
+// Manually mock Firebase - we need to do this before requiring the controller
+const mockFirebase = require('./mockFirebase');
+
+// Override the require cache to inject our mock
+require.cache[require.resolve('../config/firebase')] = {
+  exports: mockFirebase
+};
 
 // Import the controller we want to test
 const agentsController = require('../controllers/agentsController');
@@ -41,7 +47,7 @@ async function runTests() {
     await agentsController.getAgents(mockReq(), mockRes());
     const agentsResponse = responses[responses.length - 1];
     console.log(`Status: ${agentsResponse.statusCode}`);
-    console.log(`Total agents: ${agentsResponse.body.total}`);
+    console.log(`Total agents: ${agentsResponse.body.total || 0}`);
     console.log(`Success: ${agentsResponse.statusCode === 200 ? 'Yes' : 'No'}`);
     
     // Test 2: Get agent by ID (using a known or first agent ID)
@@ -59,13 +65,14 @@ async function runTests() {
       console.log(`Agent name: ${agentResponse.body.data?.name || 'N/A'}`);
     }
     
-    // Test 3: Test download count methods
+    // Test 3: Test download count methods - Fixed by using the proper parameter name
     console.log('\n--- Test 3: getDownloadCount ---');
+    // The parameter should be 'agentId', not just 'id'
     await agentsController.getDownloadCount(mockReq({ agentId }), mockRes());
     const downloadResponse = responses[responses.length - 1];
     console.log(`Status: ${downloadResponse.statusCode}`);
     console.log(`Success: ${downloadResponse.statusCode === 200 ? 'Yes' : 'No'}`);
-    console.log(`Download count: ${downloadResponse.body.downloads || 'N/A'}`);
+    console.log(`Download count: ${downloadResponse.body?.downloads || 'N/A'}`);
 
     console.log('\n=== TEST SUMMARY ===');
     console.log(`Total tests: 3`);
