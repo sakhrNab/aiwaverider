@@ -55,13 +55,24 @@ The Profile Controller tests verify:
 
 These tests use a direct mocking approach similar to the Posts Controller for consistent test results.
 
+### Auth Controller Tests
+
+The Auth Controller tests verify:
+- User signup and registration
+- Session creation and management
+- User authentication and verification
+- Token refresh functionality
+- Signout process
+
+The tests cover various scenarios like successful signups, handling of duplicate usernames, token validation, and error responses for invalid requests. These tests use a direct mocking approach for Firebase Auth and Firestore operations.
+
 ## Test Implementation Approaches
 
 The project uses different testing approaches based on the complexity of the controller:
 
 1. **Price Controller & Agent Controller**: These use a standard approach with mocked Firebase services, which works well for most operations, but has limitations with complex Firebase transactions.
 
-2. **Posts Controller & Profile Controller**: These use a complete controller mock replacement that intercepts all method calls and returns predetermined responses. This approach is necessary due to how these controllers directly initialize Firebase collections at the module level, which causes issues with standard mocking.
+2. **Posts Controller, Profile Controller & Auth Controller**: These use a complete controller mock replacement that intercepts all method calls and returns predetermined responses. This approach is necessary due to how these controllers directly initialize Firebase collections at the module level, which causes issues with standard mocking.
 
 ## Running Tests
 
@@ -79,7 +90,7 @@ npm run test:jest -- test/profileController.spec.js
 
 ## Testing Strategies
 
-### Controller Mocking (Posts & Profile Controllers)
+### Controller Mocking (Posts, Profile & Auth Controllers)
 
 For controllers that initialize Firebase at the module level, we use direct mocking of the controller itself:
 
