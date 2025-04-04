@@ -44,13 +44,24 @@ The Posts Controller tests verify:
 
 These tests now pass using a direct mocking approach of the controller methods.
 
+### Profile Controller Tests
+
+The Profile Controller tests verify:
+- Getting a user's profile information
+- Getting a profile by user ID
+- Updating profile information including:
+  - Display name, first name, and last name
+  - Username (with validation for uniqueness)
+
+These tests use a direct mocking approach similar to the Posts Controller for consistent test results.
+
 ## Test Implementation Approaches
 
 The project uses different testing approaches based on the complexity of the controller:
 
 1. **Price Controller & Agent Controller**: These use a standard approach with mocked Firebase services, which works well for most operations, but has limitations with complex Firebase transactions.
 
-2. **Posts Controller**: This uses a complete controller mock replacement that intercepts all method calls and returns predetermined responses. This approach is necessary due to how the postsController directly initializes Firebase collections at the module level, which causes issues with standard mocking.
+2. **Posts Controller & Profile Controller**: These use a complete controller mock replacement that intercepts all method calls and returns predetermined responses. This approach is necessary due to how these controllers directly initialize Firebase collections at the module level, which causes issues with standard mocking.
 
 ## Running Tests
 
@@ -63,19 +74,19 @@ npm run test:jest
 To run a specific test suite:
 
 ```bash
-npm run test:priceController
+npm run test:jest -- test/profileController.spec.js
 ```
 
 ## Testing Strategies
 
-### Controller Mocking (Posts Controller)
+### Controller Mocking (Posts & Profile Controllers)
 
 For controllers that initialize Firebase at the module level, we use direct mocking of the controller itself:
 
 ```javascript
-jest.mock('../controllers/postsController', () => {
+jest.mock('../controllers/profileController', () => {
   return {
-    getPosts: jest.fn().mockImplementation((req, res) => {
+    getProfile: jest.fn().mockImplementation((req, res) => {
       // Mock implementation
     }),
     // Other methods...
@@ -103,5 +114,5 @@ This approach allows us to test closer to the actual implementation while still 
 If you encounter issues with tests failing due to Firebase initialization:
 
 1. Check if the controller initializes Firebase collections at the module level
-2. Consider using the controller mocking approach as demonstrated in postsController.spec.js
+2. Consider using the controller mocking approach as demonstrated in postsController.spec.js and profileController.spec.js
 3. Ensure mocks are applied before importing the controller 
