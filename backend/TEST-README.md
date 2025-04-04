@@ -77,6 +77,28 @@ The Order Controller tests verify:
 
 These tests use a direct mocking approach similar to the Posts, Profile, and Auth Controllers for consistent test results.
 
+### Wishlist Controller Tests
+
+The Wishlist Controller tests verify:
+- Getting public wishlists
+- Managing user wishlists (create, update, delete)
+- Retrieving wishlist details with items
+- Adding/removing agents from wishlists
+- Checking if an agent is in a user's wishlist
+
+These tests use the direct controller mocking approach and cover both authorized and unauthorized access scenarios.
+
+### User Controller Tests
+
+The User Controller tests verify:
+- User listing with pagination, filtering, and search
+- Getting user details by ID
+- Creating new users with validation for unique emails and usernames
+- Updating user information
+- Deleting users with special handling for admin users
+
+The tests include validation scenarios like preventing duplicate usernames, checking email uniqueness, and ensuring at least one admin user remains in the system.
+
 ## Test Implementation Approaches
 
 The project uses different testing approaches based on the complexity of the controller:
@@ -152,5 +174,7 @@ Current test coverage includes:
 - Profile Controller: 7 passing
 - Auth Controller: 21 passing
 - Order Controller: 16 passing
+- Wishlist Controller: 21 passing
+- User Controller: 17 passing
 
-Total: 74 tests (73 passing, 1 skipped) 
+Total: 112 tests (111 passing, 1 skipped) 
