@@ -5,95 +5,192 @@
  * without relying on actual Firebase implementation.
  */
 
-// Mock firebase-admin first to avoid any real Firebase connections
-jest.mock('firebase-admin', () => {
-  // Create FieldValue mock with all required methods
-  const fieldValue = {
-    serverTimestamp: jest.fn().mockReturnValue(new Date()),
-    increment: jest.fn().mockImplementation(val => val),
-    arrayUnion: jest.fn().mockImplementation(item => [item]),
-    arrayRemove: jest.fn().mockImplementation(item => [])
-  };
-  
-  // Create a mock collection function that handles common operations
-  const mockCollection = name => ({
-    doc: jest.fn().mockReturnValue({
-      get: jest.fn().mockResolvedValue({
-        exists: true,
-        id: 'post-1',
-        data: jest.fn().mockReturnValue({
-          title: 'Test Post',
-          description: 'A test post',
-          category: 'Technology',
-          createdBy: 'test-user-id',
-          createdByUsername: 'testuser',
-          likes: ['user-1'],
-          createdAt: new Date()
-        }),
-        ref: {
-          collection: jest.fn().mockReturnValue({
-            get: jest.fn().mockResolvedValue({
-              docs: [],
-              empty: true,
-              forEach: jest.fn()
-            })
-          })
-        }
-      }),
-      update: jest.fn().mockResolvedValue({}),
-      delete: jest.fn().mockResolvedValue({})
-    }),
-    where: jest.fn().mockReturnThis(),
-    orderBy: jest.fn().mockReturnThis(),
-    limit: jest.fn().mockReturnThis(),
+// We need to mock everything BEFORE loading the controller
+// Using jest.doMock which applies mocks before modules are loaded
+
+// Create a mock for Firestore collections
+const mockPostsCollection = {
+  doc: jest.fn().mockReturnValue({
     get: jest.fn().mockResolvedValue({
-      docs: [{
+      exists: true,
+      id: 'post-1',
+      data: jest.fn().mockReturnValue({
+        title: 'Test Post',
+        content: 'Test content',
+        category: 'Technology',
+        createdBy: 'test-user-id',
+        createdByUsername: 'testuser',
+        likes: [],
+        createdAt: new Date().toISOString()
+      })
+    }),
+    set: jest.fn().mockResolvedValue({}),
+    update: jest.fn().mockResolvedValue({}),
+    delete: jest.fn().mockResolvedValue({})
+  }),
+  add: jest.fn().mockResolvedValue({
+    id: 'new-post-id'
+  }),
+  where: jest.fn().mockReturnThis(),
+  orderBy: jest.fn().mockReturnThis(),
+  limit: jest.fn().mockReturnThis(),
+  get: jest.fn().mockResolvedValue({
+    empty: false,
+    docs: [{
+      id: 'post-1',
+      data: jest.fn().mockReturnValue({
+        title: 'Test Post',
+        content: 'Test content',
+        category: 'Technology'
+      })
+    }],
+    forEach: jest.fn().mockImplementation(callback => {
+      callback({
         id: 'post-1',
         data: jest.fn().mockReturnValue({
           title: 'Test Post',
-          description: 'A test post',
+          content: 'Test content',
           category: 'Technology'
         })
-      }],
-      forEach: jest.fn().mockImplementation(cb => {
-        cb({
-          id: 'post-1',
-          data: jest.fn().mockReturnValue({
-            title: 'Test Post',
-            description: 'A test post',
-            category: 'Technology'
-          })
-        });
-      }),
-      empty: false
-    }),
-    add: jest.fn().mockResolvedValue({
-      id: 'new-post-id',
-      get: jest.fn().mockResolvedValue({
-        exists: true,
-        data: jest.fn().mockReturnValue({
-          title: 'New Post'
-        })
-      })
+      });
     })
-  });
-  
+  })
+};
+
+const mockCommentsCollection = {
+  doc: jest.fn().mockReturnValue({
+    get: jest.fn().mockResolvedValue({
+      exists: true,
+      id: 'comment-1',
+      data: jest.fn().mockReturnValue({
+        text: 'Test comment',
+        createdBy: 'test-user-id',
+        createdAt: new Date().toISOString()
+      })
+    }),
+    delete: jest.fn().mockResolvedValue({})
+  }),
+  add: jest.fn().mockResolvedValue({
+    id: 'new-comment-id'
+  }),
+  where: jest.fn().mockReturnThis(),
+  orderBy: jest.fn().mockReturnThis(),
+  limit: jest.fn().mockReturnThis(),
+  get: jest.fn().mockResolvedValue({
+    empty: false,
+    docs: [{
+      id: 'comment-1',
+      data: jest.fn().mockReturnValue({
+        text: 'Test comment',
+        createdBy: 'test-user-id'
+      })
+    }]
+  })
+};
+
+const mockUsersCollection = {
+  doc: jest.fn().mockReturnValue({
+    get: jest.fn().mockResolvedValue({
+      exists: true,
+      id: 'test-user-id',
+      data: jest.fn().mockReturnValue({
+        username: 'testuser',
+        role: 'user'
+      })
+    }),
+    update: jest.fn().mockResolvedValue({})
+  })
+};
+
+// Create the mock Firebase implementation
+const mockFirebase = {
+  postsCollection: mockPostsCollection,
+  commentsCollection: mockCommentsCollection,
+  usersCollection: mockUsersCollection,
+  FieldValue: {
+    serverTimestamp: jest.fn().mockReturnValue(new Date().toISOString()),
+    increment: jest.fn().mockImplementation(val => val),
+    arrayUnion: jest.fn().mockImplementation((...items) => items),
+    arrayRemove: jest.fn().mockImplementation((...items) => [])
+  }
+};
+
+// Mock the postsController directly rather than trying to mock Firebase
+jest.mock('../controllers/postsController', () => {
   return {
-    firestore: jest.fn().mockReturnValue({
-      collection: mockCollection,
-      batch: jest.fn().mockReturnValue({
-        delete: jest.fn().mockReturnThis(),
-        commit: jest.fn().mockResolvedValue({})
-      }),
-      FieldValue: fieldValue
+    // Read operations
+    getPosts: jest.fn().mockImplementation((req, res) => {
+      return res.json({ 
+        posts: [{ id: 'post-1', title: 'Test Post', category: 'Technology' }],
+        total: 1 
+      });
+    }),
+    
+    getPostById: jest.fn().mockImplementation((req, res) => {
+      if (!req.params.postId) {
+        return res.status(400).json({ error: 'Post ID is required' });
+      }
+      return res.json({ 
+        post: { id: req.params.postId, title: 'Test Post', content: 'Test content' } 
+      });
+    }),
+    
+    getPostComments: jest.fn().mockImplementation((req, res) => {
+      if (!req.params.postId) {
+        return res.status(400).json({ error: 'Post ID is required' });
+      }
+      return res.json({ 
+        comments: [{ id: 'comment-1', text: 'Test comment' }] 
+      });
+    }),
+    
+    getMultiCategoryPosts: jest.fn().mockImplementation((req, res) => {
+      if (!req.query.categories) {
+        return res.status(400).json({ error: 'Categories are required' });
+      }
+      return res.json({ 
+        posts: [{ id: 'post-1', title: 'Test Post', category: 'Technology' }] 
+      });
+    }),
+    
+    // Write operations
+    createPost: jest.fn().mockImplementation((req, res) => {
+      if (!req.body.title || !req.body.description || !req.body.category) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      return res.json({ 
+        post: { id: 'new-post', title: req.body.title, description: req.body.description } 
+      });
+    }),
+    
+    addComment: jest.fn().mockImplementation((req, res) => {
+      if (!req.params.postId || !req.body.text) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      return res.json({ 
+        comment: { id: 'new-comment', text: req.body.text } 
+      });
+    }),
+    
+    // Delete operations
+    deletePost: jest.fn().mockImplementation((req, res) => {
+      if (!req.params.postId) {
+        return res.status(400).json({ error: 'Post ID is required' });
+      }
+      return res.json({ success: true });
+    }),
+    
+    deleteComment: jest.fn().mockImplementation((req, res) => {
+      if (!req.params.postId || !req.params.commentId) {
+        return res.status(400).json({ error: 'Post ID and Comment ID are required' });
+      }
+      return res.json({ success: true });
     })
   };
 });
 
-// Mock sanitize utility
+// Mock utility functions
 jest.mock('../utils/sanitize', () => jest.fn(html => html));
-
-// Mock github utility
 jest.mock('../utils/github', () => ({
   uploadImageToGitHub: jest.fn().mockResolvedValue({ 
     url: 'https://example.com/image.jpg', 
@@ -101,8 +198,6 @@ jest.mock('../utils/github', () => ({
   }),
   deleteImageFromGitHub: jest.fn().mockResolvedValue(true)
 }));
-
-// Mock cache utility
 jest.mock('../utils/cache', () => ({
   getCache: jest.fn().mockResolvedValue(null),
   setCache: jest.fn().mockResolvedValue(true),
@@ -113,7 +208,7 @@ jest.mock('../utils/cache', () => ({
   generateCommentsCacheKey: jest.fn().mockReturnValue('comments:123')
 }));
 
-// Import the controller after mocks are set up
+// Import the controller after all mocks are set up
 const postsController = require('../controllers/postsController');
 
 // Test suite

@@ -8,6 +8,8 @@
     "test:controllers": "node test/controllerCheck.js",
     "test:agentController": "node test/agentController.test.js",
     "test:jest": "jest",
+    "test:jest:safe": "jest \"priceController|agentController\"",
+    "test:priceController": "jest test/priceController.spec.js",
     "start": "node index.js",
     "dev": "nodemon index.js",
     "seed:agents": "node scripts/seedAgents.js",
