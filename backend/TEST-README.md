@@ -66,6 +66,17 @@ The Auth Controller tests verify:
 
 The tests cover various scenarios like successful signups, handling of duplicate usernames, token validation, and error responses for invalid requests. These tests use a direct mocking approach for Firebase Auth and Firestore operations.
 
+### Order Controller Tests
+
+The Order Controller tests verify:
+- Getting agent templates for order generation
+- Creating new orders
+- Processing successful payments
+- Retrieving orders by ID
+- Getting all orders for a specific user
+
+These tests use a direct mocking approach similar to the Posts, Profile, and Auth Controllers for consistent test results.
+
 ## Test Implementation Approaches
 
 The project uses different testing approaches based on the complexity of the controller:
@@ -85,7 +96,11 @@ npm run test:jest
 To run a specific test suite:
 
 ```bash
+# Run profile controller tests
 npm run test:jest -- test/profileController.spec.js
+
+# Run order controller tests
+npm run test:jest -- test/orderController.spec.js
 ```
 
 ## Testing Strategies
@@ -127,3 +142,15 @@ If you encounter issues with tests failing due to Firebase initialization:
 1. Check if the controller initializes Firebase collections at the module level
 2. Consider using the controller mocking approach as demonstrated in postsController.spec.js and profileController.spec.js
 3. Ensure mocks are applied before importing the controller 
+
+## Test Results Summary
+
+Current test coverage includes:
+- Price Controller: 14 passing, 1 skipped
+- Agent Controller: 6 passing
+- Posts Controller: 10 passing
+- Profile Controller: 7 passing
+- Auth Controller: 21 passing
+- Order Controller: 16 passing
+
+Total: 74 tests (73 passing, 1 skipped) 
