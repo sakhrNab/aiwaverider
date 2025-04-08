@@ -1,147 +1,226 @@
-const { db } = require('../config/firebase');
-const { sanitizeUser } = require('../utils/sanitize');
-const { getCache, setCache, generateProfileCacheKey } = require('../utils/cache');
+/**
+ * Profile Controller
+ * 
+ * Handles HTTP requests related to user profiles, using the service layer
+ */
 
-// Collection reference
-const usersCollection = db.collection('users');
+const profileService = require('../services/profile/profileService');
+const logger = require('../utils/logger');
+const admin = require('firebase-admin');
+const crypto = require('crypto');
+const multer = require('multer');
+const sharp = require('sharp');
+const { AppError } = require('../middleware/errorHandler');
 
 /**
- * Get a user's profile
+ * Setup multer storage for file uploads
  */
-exports.getProfile = async (req, res) => {
+const multerStorage = multer.memoryStorage();
+
+/**
+ * Filter files to ensure only images are uploaded
+ */
+const multerFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith('image')) {
+    cb(null, true);
+  } else {
+    cb(new AppError('Not an image! Please upload only images.', 400), false);
+  }
+};
+
+/**
+ * Configure multer
+ */
+const upload = multer({
+  storage: multerStorage,
+  fileFilter: multerFilter,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
+
+/**
+ * Middleware to handle avatar upload
+ */
+exports.uploadUserAvatar = upload.single('avatar');
+
+/**
+ * Middleware to resize avatar
+ */
+exports.resizeUserAvatar = async (req, res, next) => {
   try {
-    // Get user ID from the authenticated request
-    const userId = req.user.uid;
-    
-    // Try to get from cache first
-    const cacheKey = generateProfileCacheKey(userId);
-    const cachedProfile = await getCache(cacheKey);
-    if (cachedProfile) {
-      return res.json(cachedProfile);
-    }
+    if (!req.file) return next();
 
-    // If not in cache, get from Firestore
-    const userDoc = await usersCollection.doc(userId).get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
+    // Format filename
+    req.file.filename = `user-${req.user.id}-${Date.now()}.jpeg`;
 
-    const profileData = sanitizeUser({
-      id: userId,
-      ...userDoc.data()
-    });
-    
-    // Cache the profile
-    await setCache(cacheKey, profileData);
+    // Process image
+    await sharp(req.file.buffer)
+      .resize(500, 500)
+      .toFormat('jpeg')
+      .jpeg({ quality: 90 })
+      .toFile(`public/img/users/${req.file.filename}`);
 
-    return res.json(profileData);
+    next();
   } catch (err) {
-    console.error('Error in getProfile:', err);
-    return res.status(500).json({ error: 'Failed to retrieve profile' });
+    logger.error('Error resizing user avatar:', err);
+    return next(new AppError('Error processing image', 500));
+  }
+};
+
+/**
+ * Get user's own profile
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.getProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    logger.debug(`Getting profile for user: ${userId}`);
+
+    const profile = await profileService.getProfileById(userId);
+
+    res.status(200).json({
+      status: 'success',
+      data: { profile }
+    });
+  } catch (err) {
+    logger.error('Error getting user profile:', err);
+    return next(err);
   }
 };
 
 /**
  * Get a user profile by ID
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
  */
 exports.getProfileById = async (req, res) => {
   try {
     const { userId } = req.params;
     
-    // Try to get from cache first
-    const cacheKey = generateProfileCacheKey(userId);
-    const cachedProfile = await getCache(cacheKey);
-    if (cachedProfile) {
-      return res.json(cachedProfile);
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
     }
-
-    // If not in cache, get from Firestore
-    const userDoc = await usersCollection.doc(userId).get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
-
-    const profileData = sanitizeUser({
-      id: userId,
-      ...userDoc.data()
-    });
     
-    // Cache the profile
-    await setCache(cacheKey, profileData);
-
-    return res.json(profileData);
-  } catch (err) {
-    console.error('Error in getProfileById:', err);
-    return res.status(500).json({ error: 'Failed to retrieve profile' });
+    const profile = await profileService.getProfileById(userId);
+    
+    return res.json(profile);
+  } catch (error) {
+    logger.error(`Controller error getting profile by ID: ${error.message}`);
+    
+    return res.status(error.statusCode || 500).json({
+      error: error.message
+    });
   }
 };
 
 /**
  * Update the current user's profile
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
  */
-exports.updateProfile = async (req, res) => {
+exports.updateProfile = async (req, res, next) => {
   try {
-    // Get user ID from the authenticated request
-    const userId = req.user.uid;
-    
-    // Get update data from request body
-    const { username, firstName, lastName, displayName } = req.body;
-    
-    // Check if the user exists
-    const userDoc = await usersCollection.doc(userId).get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: 'User not found.' });
+    const userId = req.user.id;
+    logger.debug(`Updating profile for user: ${userId}`);
+
+    // Prevent password updates via this route
+    if (req.body.password || req.body.passwordConfirm) {
+      return next(new AppError('This route is not for password updates. Please use /updatePassword.', 400));
     }
-    
-    // Prepare update data
-    const updateData = {
-      updatedAt: new Date()
-    };
-    
-    // Only include fields that are provided
-    if (username) {
-      // Check if username already exists
-      const usernameQuery = await usersCollection
-        .where('username', '==', username)
-        .where('uid', '!=', userId)
-        .get();
-      
-      if (!usernameQuery.empty) {
-        return res.status(400).json({ error: 'Username is already taken.' });
-      }
-      
-      updateData.username = username;
-    }
-    
-    if (firstName !== undefined) updateData.firstName = firstName;
-    if (lastName !== undefined) updateData.lastName = lastName;
-    if (displayName !== undefined) updateData.displayName = displayName;
-    
-    // Update searchable field if relevant fields changed
-    if (username || firstName || lastName || displayName) {
-      const userData = userDoc.data();
-      updateData.searchField = `${username || userData.username || ''} ${firstName || userData.firstName || ''} ${lastName || userData.lastName || ''} ${displayName || userData.displayName || ''}`.toLowerCase();
-    }
-    
-    // Update the user
-    await usersCollection.doc(userId).update(updateData);
-    
-    // Get the updated user data
-    const updatedUserDoc = await usersCollection.doc(userId).get();
-    
-    // Return the updated profile
-    const profileData = sanitizeUser({
-      id: userId,
-      ...updatedUserDoc.data()
+
+    const updatedProfile = await profileService.updateProfile(userId, req.body);
+
+    res.status(200).json({
+      status: 'success',
+      data: { user: updatedProfile }
     });
-    
-    // Update cache
-    const cacheKey = generateProfileCacheKey(userId);
-    await setCache(cacheKey, profileData);
-    
-    return res.json(profileData);
   } catch (err) {
-    console.error('Error in updateProfile:', err);
-    return res.status(500).json({ error: 'Failed to update profile' });
+    logger.error('Error updating user profile:', err);
+    return next(err);
+  }
+};
+
+/**
+ * Upload and update user's avatar
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.updateAvatar = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return next(new AppError('Please upload an image file', 400));
+    }
+
+    const userId = req.user.id;
+    logger.debug(`Updating avatar for user: ${userId}`);
+
+    // Generate photo URL
+    const photoURL = `/img/users/${req.file.filename}`;
+    
+    const updatedProfile = await profileService.updateAvatar(userId, photoURL);
+
+    res.status(200).json({
+      status: 'success',
+      data: { user: updatedProfile }
+    });
+  } catch (err) {
+    logger.error('Error updating user avatar:', err);
+    return next(err);
+  }
+};
+
+/**
+ * Update user's interests
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.updateInterests = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { interests } = req.body;
+    
+    if (!interests || !Array.isArray(interests)) {
+      return next(new AppError('Please provide an array of interests', 400));
+    }
+
+    logger.debug(`Updating interests for user: ${userId}`);
+
+    const updatedProfile = await profileService.updateInterests(userId, interests);
+
+    res.status(200).json({
+      status: 'success',
+      data: { user: updatedProfile }
+    });
+  } catch (err) {
+    logger.error('Error updating user interests:', err);
+    return next(err);
+  }
+};
+
+/**
+ * Update user's notification settings
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.updateNotificationSettings = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const settings = req.body;
+    
+    if (!settings || typeof settings !== 'object') {
+      return next(new AppError('Please provide notification settings as an object', 400));
+    }
+
+    logger.debug(`Updating notification settings for user: ${userId}`);
+
+    const updatedProfile = await profileService.updateNotificationSettings(userId, settings);
+
+    res.status(200).json({
+      status: 'success',
+      data: { user: updatedProfile }
+    });
+  } catch (err) {
+    logger.error('Error updating notification settings:', err);
+    return next(err);
   }
 }; 

@@ -1,339 +1,237 @@
-const { db } = require('../config/firebase');
-const bcrypt = require('bcrypt');
-const { sanitizeUser } = require('../utils/sanitize');
+/**
+ * User Controller
+ * 
+ * Handles HTTP requests related to users, using the service layer
+ */
 
-// Collection reference
-const usersCollection = db.collection('users');
+const userService = require('../services/user/userService');
+const logger = require('../utils/logger');
 
 /**
- * Get all users with pagination, filtering and sorting
+ * Get all users with pagination and filtering
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
  */
 exports.getUsers = async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      search = '', 
-      sortBy = 'createdAt', 
-      sortDirection = 'desc' 
-    } = req.query;
-
-    // Convert to numbers
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
+    const { page = 1, limit = 50, role, isActive, search } = req.query;
     
-    // Calculate offset
-    const offset = (pageNum - 1) * limitNum;
+    const options = {
+      limit: parseInt(limit, 10),
+      offset: (parseInt(page, 10) - 1) * parseInt(limit, 10),
+      filters: {}
+    };
     
-    // Start with base query
-    let query = usersCollection;
+    if (role) options.filters.role = role;
+    if (isActive !== undefined) options.filters.isActive = isActive === 'true';
+    if (search) options.filters.search = search;
     
-    // Add search if provided
-    if (search) {
-      // Firebase doesn't support full text search, so we have to do multiple queries
-      // This is a simple implementation - for production, consider using Algolia or ElasticSearch
-      const searchLower = search.toLowerCase();
-      
-      // Get users where username, email, firstName, or lastName contains the search term
-      query = query.where('searchField', '>=', searchLower)
-                   .where('searchField', '<=', searchLower + '\uf8ff');
-    }
+    const result = await userService.getAllUsers(options);
     
-    // Get total count for pagination
-    const countSnapshot = await query.count().get();
-    const totalUsers = countSnapshot.data().count;
-    
-    // Add sorting
-    if (sortBy && sortDirection) {
-      query = query.orderBy(sortBy, sortDirection);
-    }
-    
-    // Add pagination
-    query = query.limit(limitNum).offset(offset);
-    
-    // Execute query
-    const usersSnapshot = await query.get();
-    
-    // Format data
-    const users = [];
-    usersSnapshot.forEach((doc) => {
-      const userData = doc.data();
-      
-      // Helper function to safely format timestamps
-      const formatTimestamp = (timestamp) => {
-        if (!timestamp) return null;
-        // Check if it's a Firestore timestamp with toDate function
-        if (timestamp && typeof timestamp.toDate === 'function') {
-          return timestamp.toDate().toISOString();
-        }
-        // If it's already a Date object
-        if (timestamp instanceof Date) {
-          return timestamp.toISOString();
-        }
-        // If it's a string that might be ISO format already
-        if (typeof timestamp === 'string') {
-          return timestamp;
-        }
-        // Fallback
-        return null;
-      };
-      
-      users.push({
-        id: doc.id,
-        username: userData.username || userData.displayName,
-        email: userData.email,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        photoURL: userData.photoURL,
-        role: userData.role,
-        status: userData.status || 'active',
-        createdAt: formatTimestamp(userData.createdAt),
-        updatedAt: formatTimestamp(userData.updatedAt)
-      });
-    });
-    
-    // Calculate total pages
-    const totalPages = Math.ceil(totalUsers / limitNum);
-    
-    return res.json({
-      users,
-      currentPage: pageNum,
-      totalPages,
-      total: totalUsers,
-      limit: limitNum
+    return res.json({ 
+      success: true,
+      ...result
     });
   } catch (error) {
-    console.error('Error in getUsers:', error);
-    return res.status(500).json({ error: 'Failed to retrieve users' });
+    logger.error(`Controller error getting users: ${error.message}`);
+    
+    return res.status(500).json({
+      error: error.message
+    });
   }
 };
 
 /**
- * Get a single user by ID
+ * Get user by ID
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
  */
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
     
-    const userDoc = await usersCollection.doc(userId).get();
-    
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: 'User not found' });
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
     }
     
-    const userData = userDoc.data();
+    const user = await userService.getUserById(userId);
     
-    // Return user data without sensitive information
-    return res.json({
-      id: userDoc.id,
-      username: userData.username || userData.displayName,
-      email: userData.email,
-      firstName: userData.firstName,
-      lastName: userData.lastName,
-      photoURL: userData.photoURL,
-      role: userData.role,
-      status: userData.status || 'active',
-      createdAt: userData.createdAt ? userData.createdAt.toDate().toISOString() : null,
-      updatedAt: userData.updatedAt ? userData.updatedAt.toDate().toISOString() : null
+    return res.json({ 
+      success: true,
+      user
     });
   } catch (error) {
-    console.error('Error in getUserById:', error);
-    return res.status(500).json({ error: 'Failed to retrieve user' });
+    logger.error(`Controller error getting user by ID: ${error.message}`);
+    
+    return res.status(error.message.includes('not found') ? 404 : 500).json({
+      error: error.message
+    });
   }
 };
 
 /**
  * Create a new user
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
  */
 exports.createUser = async (req, res) => {
   try {
-    const { username, email, password, firstName, lastName, role, status } = req.body;
+    const userData = req.body;
     
-    // Validate required fields
-    if (!username || !email || !password) {
-      return res.status(400).json({ error: 'Username, email, and password are required' });
+    if (!userData) {
+      return res.status(400).json({ error: 'User data is required' });
     }
     
-    // Check if email already exists
-    const emailQuery = await usersCollection.where('email', '==', email.toLowerCase()).get();
-    if (!emailQuery.empty) {
-      return res.status(400).json({ error: 'Email is already registered' });
+    if (!userData.email) {
+      return res.status(400).json({ error: 'Email is required' });
     }
     
-    // Check if username already exists
-    const usernameQuery = await usersCollection.where('username', '==', username).get();
-    if (!usernameQuery.empty) {
-      return res.status(400).json({ error: 'Username is already taken' });
+    if (!userData.password && !userData.provider) {
+      return res.status(400).json({ error: 'Password is required for local accounts' });
     }
     
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await userService.createUser(userData);
     
-    // Create searchable fields
-    const searchField = `${username.toLowerCase()} ${email.toLowerCase()} ${firstName ? firstName.toLowerCase() : ''} ${lastName ? lastName.toLowerCase() : ''}`;
-    
-    // Prepare user data
-    const userData = {
-      username,
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      firstName: firstName || '',
-      lastName: lastName || '',
-      role: role || 'user',
-      status: status || 'active',
-      searchField,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    
-    // Create user in Firestore
-    const userRef = await usersCollection.add(userData);
-    
-    // Return success with user data (excluding password)
-    return res.status(201).json({
-      id: userRef.id,
-      username,
-      email: email.toLowerCase(),
-      firstName: firstName || '',
-      lastName: lastName || '',
-      role: role || 'user',
-      status: status || 'active',
-      createdAt: userData.createdAt.toISOString(),
-      updatedAt: userData.updatedAt.toISOString()
+    return res.status(201).json({ 
+      success: true,
+      user
     });
   } catch (error) {
-    console.error('Error in createUser:', error);
-    return res.status(500).json({ error: 'Failed to create user' });
+    logger.error(`Controller error creating user: ${error.message}`);
+    
+    // Handle common error cases with appropriate status codes
+    if (error.message.includes('already in use')) {
+      return res.status(409).json({ error: error.message });
+    }
+    
+    return res.status(500).json({
+      error: error.message
+    });
   }
 };
 
 /**
  * Update an existing user
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
  */
 exports.updateUser = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { username, email, password, firstName, lastName, role, status } = req.body;
+    const updateData = req.body;
     
-    // Validate user exists
-    const userDoc = await usersCollection.doc(userId).get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: 'User not found' });
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
     }
     
-    const userData = userDoc.data();
-    
-    // Check if email is being changed and already exists
-    if (email && email.toLowerCase() !== userData.email) {
-      const emailQuery = await usersCollection.where('email', '==', email.toLowerCase()).get();
-      if (!emailQuery.empty) {
-        return res.status(400).json({ error: 'Email is already registered' });
-      }
+    if (!updateData || Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: 'Update data is required' });
     }
     
-    // Check if username is being changed and already exists
-    if (username && username !== userData.username) {
-      const usernameQuery = await usersCollection.where('username', '==', username).get();
-      if (!usernameQuery.empty) {
-        return res.status(400).json({ error: 'Username is already taken' });
-      }
+    // Prevent role escalation by non-admin users
+    if (updateData.role && updateData.role === 'admin' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Not authorized to assign admin role' });
     }
     
-    // Prepare update data
-    const updateData = {
-      updatedAt: new Date()
-    };
+    const user = await userService.updateUser(userId, updateData);
     
-    // Only add fields that are provided
-    if (username) updateData.username = username;
-    if (email) updateData.email = email.toLowerCase();
-    if (firstName !== undefined) updateData.firstName = firstName;
-    if (lastName !== undefined) updateData.lastName = lastName;
-    if (role) updateData.role = role;
-    if (status) updateData.status = status;
-    
-    // Update searchable field if any of these fields change
-    if (username || email || firstName || lastName) {
-      updateData.searchField = `${username || userData.username}.toLowerCase() ${email ? email.toLowerCase() : userData.email} ${firstName !== undefined ? firstName.toLowerCase() : userData.firstName ? userData.firstName.toLowerCase() : ''} ${lastName !== undefined ? lastName.toLowerCase() : userData.lastName ? userData.lastName.toLowerCase() : ''}`;
-    }
-    
-    // Hash password if provided
-    if (password) {
-      updateData.password = await bcrypt.hash(password, 10);
-    }
-    
-    // Update user in Firestore
-    await usersCollection.doc(userId).update(updateData);
-    
-    // Get updated user data
-    const updatedUserDoc = await usersCollection.doc(userId).get();
-    const updatedUserData = updatedUserDoc.data();
-    
-    // Helper function to safely format timestamps
-    const formatTimestamp = (timestamp) => {
-      if (!timestamp) return null;
-      // Check if it's a Firestore timestamp with toDate function
-      if (timestamp && typeof timestamp.toDate === 'function') {
-        return timestamp.toDate().toISOString();
-      }
-      // If it's already a Date object
-      if (timestamp instanceof Date) {
-        return timestamp.toISOString();
-      }
-      // If it's a string that might be ISO format already
-      if (typeof timestamp === 'string') {
-        return timestamp;
-      }
-      // Fallback
-      return null;
-    };
-    
-    // Return updated user data
-    return res.json({
-      id: userId,
-      username: updatedUserData.username || updatedUserData.displayName,
-      email: updatedUserData.email,
-      firstName: updatedUserData.firstName || '',
-      lastName: updatedUserData.lastName || '',
-      role: updatedUserData.role,
-      status: updatedUserData.status || 'active',
-      createdAt: formatTimestamp(updatedUserData.createdAt),
-      updatedAt: formatTimestamp(updatedUserData.updatedAt)
+    return res.json({ 
+      success: true,
+      user
     });
   } catch (error) {
-    console.error('Error in updateUser:', error);
-    return res.status(500).json({ error: 'Failed to update user' });
+    logger.error(`Controller error updating user: ${error.message}`);
+    
+    // Handle common error cases
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ error: error.message });
+    }
+    
+    if (error.message.includes('already in use')) {
+      return res.status(409).json({ error: error.message });
+    }
+    
+    return res.status(500).json({
+      error: error.message
+    });
   }
 };
 
 /**
  * Delete a user
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
  */
 exports.deleteUser = async (req, res) => {
   try {
     const { userId } = req.params;
     
-    // Validate user exists
-    const userDoc = await usersCollection.doc(userId).get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: 'User not found' });
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
     }
     
-    // Check if this is the last admin user
-    const userData = userDoc.data();
-    if (userData.role === 'admin') {
-      const adminQuery = await usersCollection.where('role', '==', 'admin').get();
-      if (adminQuery.size <= 1) {
-        return res.status(400).json({ error: 'Cannot delete the last admin user' });
-      }
-    }
+    await userService.deleteUser(userId);
     
-    // Delete user from Firestore
-    await usersCollection.doc(userId).delete();
-    
-    return res.json({ message: 'User deleted successfully' });
+    return res.json({ 
+      success: true,
+      message: 'User deleted successfully'
+    });
   } catch (error) {
-    console.error('Error in deleteUser:', error);
-    return res.status(500).json({ error: 'Failed to delete user' });
+    logger.error(`Controller error deleting user: ${error.message}`);
+    
+    // Handle specific error cases
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ error: error.message });
+    }
+    
+    if (error.message.includes('last admin user')) {
+      return res.status(403).json({ error: error.message });
+    }
+    
+    return res.status(500).json({
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Change user password
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.changePassword = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+    
+    await userService.changePassword(userId, currentPassword, newPassword);
+    
+    return res.json({ 
+      success: true,
+      message: 'Password changed successfully'
+    });
+  } catch (error) {
+    logger.error(`Controller error changing password: ${error.message}`);
+    
+    // Handle specific error cases
+    if (error.message.includes('not found')) {
+      return res.status(404).json({ error: error.message });
+    }
+    
+    if (error.message.includes('incorrect')) {
+      return res.status(401).json({ error: error.message });
+    }
+    
+    return res.status(500).json({
+      error: error.message
+    });
   }
 }; 

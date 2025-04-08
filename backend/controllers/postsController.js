@@ -1,890 +1,284 @@
-// backend/controllers/postsController.js
+/**
+ * Posts Controller
+ * Handles HTTP requests for post-related operations
+ */
+const postService = require('../services/post/postService');
+const { sanitizeHtml } = require('../utils/sanitizer');
+const { uploadImage, deleteImage } = require('../utils/imageUpload');
+const AppError = require('../utils/appError');
+const asyncHandler = require('../middleware/asyncHandler');
 
-const sanitizeHtml = require('../utils/sanitize');
-const {
-  uploadImageToGitHub,
-  deleteImageFromGitHub,
-} = require('../utils/github');
-const admin = require('firebase-admin');
-const {
-  getCache,
-  setCache,
-  deleteCache,
-  deleteCacheByPattern,
-  generatePostsCacheKey,
-  generatePostCacheKey,
-  generateCommentsCacheKey,
-} = require('../utils/cache');
+/**
+ * Get all posts with optional category filtering
+ */
+const getPosts = asyncHandler(async (req, res) => {
+  const { category = 'All', limit = 10, startAfter = null } = req.query;
+  const result = await postService.getPosts(category, limit, startAfter);
+  res.status(200).json(result);
+});
 
-const postsCollection = admin.firestore().collection('posts');
-const commentsCollection = admin.firestore().collection('comments');
-const usersCollection = admin.firestore().collection('users');
-
-const createPost = async (req, res) => {
-  try {
-    const { title, description, category, additionalHTML, graphHTML } = req.body;
-    const user = req.user;
-
-    // Add validation for authenticated users
-    if (!user?.uid) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-    // Validate required fields
-    if (!title || !description || !category) {
-      return res.status(400).json({ error: 'Title, description, and category are required.' });
-    }
-
-    // Handle image upload if provided
-    let imageUrl = null;
-    let imageSha = null;
-    if (req.file) {
-      const filename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
-      const uploadResult = await uploadImageToGitHub(filename, req.file.buffer);
-      if (!uploadResult || !uploadResult.url || !uploadResult.sha) {
-        throw new Error('Image upload failed: Missing URL or SHA.');
-      }
-      imageUrl = uploadResult.url;
-      imageSha = uploadResult.sha;
-    }
-
-    // Get username from users collection
-    const userDoc = await usersCollection.doc(user.uid).get();
-    const username = userDoc.exists ? userDoc.data().username : 'Unknown User';
-
-    // Sanitize inputs
-    const sanitizedAdditionalHTML = sanitizeHtml(additionalHTML || '');
-    const sanitizedGraphHTML = sanitizeHtml(graphHTML || '');
-
-    // Add post to Firestore
-    const newPostRef = await postsCollection.add({
-      title,
-      description,
-      category,
-      imageUrl,
-      imageSha,
-      additionalHTML: sanitizedAdditionalHTML,
-      graphHTML: sanitizedGraphHTML,
-      createdBy: user.uid || null,
-      createdByUsername: username,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    const newPostDoc = await newPostRef.get();
-    const newPost = { id: newPostRef.id, ...newPostDoc.data() };
-
-    // Invalidate relevant caches
-    await deleteCacheByPattern('posts:*');
-    await setCache(generatePostCacheKey(newPostRef.id), newPost);
-
-    return res.json({
-      message: 'Post created successfully.',
-      post: newPost,
-    });
-  } catch (err) {
-    console.error('Error in createPost:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+/**
+ * Get a post by ID
+ */
+const getPostById = asyncHandler(async (req, res) => {
+  const { postId } = req.params;
+  const post = await postService.getPostById(postId);
+  
+  if (!post) {
+    throw new AppError('Post not found', 404);
   }
-};
+  
+  res.status(200).json(post);
+});
 
-const getPosts = async (req, res) => {
-  try {
-    const { category = 'All', limit = 10, startAfter = null } = req.query;
-    
-    // Generate cache key
-    const cacheKey = generatePostsCacheKey({ category, limit, startAfter });
-    
-    // Try to get from cache first
-    const cachedData = await getCache(cacheKey);
-    if (cachedData) {
-      return res.json(cachedData);
-    }
-
-    // If not in cache, query Firestore
-    let query = postsCollection.orderBy('createdAt', 'desc');
-    
-    if (category !== 'All') {
-      query = query.where('category', '==', category);
-    }
-    
-    if (startAfter) {
-      const startAfterDoc = await postsCollection.doc(startAfter).get();
-      if (startAfterDoc.exists) {
-        query = query.startAfter(startAfterDoc);
-      }
-    }
-    
-    query = query.limit(parseInt(limit));
-    
-    const snapshot = await query.get();
-    const posts = [];
-    let lastDoc = null;
-
-    snapshot.forEach((doc) => {
-      posts.push({ id: doc.id, ...doc.data() });
-      lastDoc = doc;
-    });
-
-    const response = {
-      posts,
-      lastPostId: lastDoc ? lastDoc.id : null,
-      hasMore: posts.length === parseInt(limit)
-    };
-
-    // Cache the response
-    await setCache(cacheKey, response);
-
-    return res.json(response);
-  } catch (err) {
-    console.error('Error in getPosts:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+/**
+ * Create a new post
+ */
+const createPost = asyncHandler(async (req, res) => {
+  const { title, content, category } = req.body;
+  const userId = req.user.id;
+  
+  // Handle image upload if present
+  let imageUrl = null;
+  if (req.file) {
+    imageUrl = await uploadImage(req.file, 'posts');
   }
-};
+  
+  // Sanitize HTML content
+  const sanitizedContent = sanitizeHtml(content);
+  
+  const post = await postService.createPost({
+    title,
+    content: sanitizedContent,
+    category,
+    userId,
+    imageUrl
+  });
+  
+  res.status(201).json(post);
+});
 
-const getPostById = async (req, res) => {
-  try {
-    const { postId } = req.params;
-    
-    // Try to get from cache first
-    const cacheKey = generatePostCacheKey(postId);
-    const cachedPost = await getCache(cacheKey);
-    if (cachedPost) {
-      return res.json(cachedPost);
-    }
-
-    // If not in cache, get from Firestore
-    const postDoc = await postsCollection.doc(postId).get();
-    
-    if (!postDoc.exists) {
-      return res.status(404).json({ error: 'Post not found.' });
-    }
-
-    const post = { id: postDoc.id, ...postDoc.data() };
-    
-    // Cache the post
-    await setCache(cacheKey, post);
-
-    return res.json(post);
-  } catch (err) {
-    console.error('Error in getPostById:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+/**
+ * Update a post
+ */
+const updatePost = asyncHandler(async (req, res) => {
+  const { postId } = req.params;
+  const { title, content, category } = req.body;
+  const userId = req.user.id;
+  
+  // Get existing post to check ownership
+  const existingPost = await postService.getPostById(postId);
+  
+  if (!existingPost) {
+    throw new AppError('Post not found', 404);
   }
-};
-
-const updatePost = async (req, res) => {
-  try {
-    const { postId } = req.params;
-    const updates = req.body;
-    const user = req.user;
-
-    // Validate user and post ownership
-    const postDoc = await postsCollection.doc(postId).get();
-    if (!postDoc.exists) {
-      return res.status(404).json({ error: 'Post not found.' });
+  
+  // Handle image upload if present
+  let imageUrl = existingPost.imageUrl;
+  if (req.file) {
+    // Delete old image if it exists
+    if (existingPost.imageUrl) {
+      await deleteImage(existingPost.imageUrl);
     }
-
-    const postData = postDoc.data();
-    if (postData.createdBy !== user.uid && user.role !== 'admin') {
-      return res.status(403).json({ error: 'Unauthorized to update this post.' });
-    }
-
-    // Handle image updates if needed
-    if (req.file) {
-      // Delete old image if it exists
-      if (postData.imageSha) {
-        await deleteImageFromGitHub(postData.imageSha);
-      }
-
-      const filename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
-      const uploadResult = await uploadImageToGitHub(filename, req.file.buffer);
-      
-      if (!uploadResult || !uploadResult.url || !uploadResult.sha) {
-        throw new Error('Image upload failed');
-      }
-
-      updates.imageUrl = uploadResult.url;
-      updates.imageSha = uploadResult.sha;
-    }
-
-    // Sanitize HTML content if present
-    if (updates.additionalHTML) {
-      updates.additionalHTML = sanitizeHtml(updates.additionalHTML);
-    }
-    if (updates.graphHTML) {
-      updates.graphHTML = sanitizeHtml(updates.graphHTML);
-    }
-
-    // Update the post
-    updates.updatedAt = admin.firestore.FieldValue.serverTimestamp();
-    await postsCollection.doc(postId).update(updates);
-
-    // Get updated post and return it
-    const updatedDoc = await postsCollection.doc(postId).get();
-    const updatedPost = { id: updatedDoc.id, ...updatedDoc.data() };
-
-    // Clear cache for this post
-    await deleteCache(generatePostCacheKey(postId));
-    await deleteCacheByPattern('posts:*'); // Clear all post lists
-
-    return res.json({ 
-      message: 'Post updated successfully',
-      post: updatedPost 
-    });
-  } catch (error) {
-    console.error('Error updating post:', error);
-    return res.status(500).json({ error: 'Failed to update post' });
+    imageUrl = await uploadImage(req.file, 'posts');
+  } else if (req.body.deleteImage === 'true' && existingPost.imageUrl) {
+    await deleteImage(existingPost.imageUrl);
+    imageUrl = null;
   }
-};
-
-const deletePost = async (req, res, user) => {
-  try {
-    const { postId } = req.params;
-
-    // Validate user and post ownership
-    const postDoc = await postsCollection.doc(postId).get();
-    if (!postDoc.exists) {
-      return res.status(404).json({ error: 'Post not found.' });
+  
+  // Sanitize HTML content
+  const sanitizedContent = content ? sanitizeHtml(content) : existingPost.content;
+  
+  const updatedPost = await postService.updatePost(
+    postId,
+    userId,
+    {
+      title: title || existingPost.title,
+      content: sanitizedContent,
+      category: category || existingPost.category,
+      imageUrl
     }
+  );
+  
+  res.status(200).json(updatedPost);
+});
 
-    const postData = postDoc.data();
-    if (postData.createdBy !== user.uid && user.role !== 'admin') {
-      return res.status(403).json({ error: 'Unauthorized to delete this post.' });
-    }
-
-    // Delete image from GitHub if it exists
-    if (postData.imageSha) {
-      await deleteImageFromGitHub(postData.imageSha);
-    }
-
-    // Delete the post
-    await postsCollection.doc(postId).delete();
-
-    // Delete all comments for this post
-    const commentsSnapshot = await commentsCollection
-      .where('postId', '==', postId)
-      .get();
-    
-    const batch = admin.firestore().batch();
-    commentsSnapshot.docs.forEach((doc) => {
-      batch.delete(doc.ref);
-    });
-    await batch.commit();
-
-    // Invalidate caches
-    await deleteCacheByPattern('posts:*');
-    await deleteCache(generatePostCacheKey(postId));
-    await deleteCache(generateCommentsCacheKey(postId));
-
-    return res.json({ success: true, message: 'Post deleted successfully.' });
-  } catch (err) {
-    console.error('Error in deletePost:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+/**
+ * Delete a post
+ */
+const deletePost = asyncHandler(async (req, res) => {
+  const { postId } = req.params;
+  const userId = req.user.id;
+  
+  // Get existing post to check ownership and image
+  const existingPost = await postService.getPostById(postId);
+  
+  if (!existingPost) {
+    throw new AppError('Post not found', 404);
   }
-};
-
-const toggleLike = async (req, res) => {
-  try {
-    const { postId } = req.params;
-    const userId = req.user.uid;
-    console.log(`User ${userId} toggling like on post ${postId}`);
-
-    if (!userId) {
-      console.log('Authentication required for like action');
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
-    const postRef = postsCollection.doc(postId);
-    const postDoc = await postRef.get();
-
-    if (!postDoc.exists) {
-      console.log(`Post ${postId} not found`);
-      return res.status(404).json({ error: 'Post not found' });
-    }
-
-    const post = postDoc.data();
-    const likes = post.likes || [];
-    const isLiked = likes.includes(userId);
-    console.log(`Current like status for user ${userId} on post ${postId}: ${isLiked ? 'liked' : 'not liked'}`);
-
-    // Toggle like
-    try {
-      if (isLiked) {
-        console.log(`Removing like from user ${userId} on post ${postId}`);
-        await postRef.update({
-          likes: admin.firestore.FieldValue.arrayRemove(userId)
-        });
-      } else {
-        console.log(`Adding like from user ${userId} on post ${postId}`);
-        await postRef.update({
-          likes: admin.firestore.FieldValue.arrayUnion(userId)
-        });
-      }
-    } catch (updateError) {
-      console.error(`Error updating like status: ${updateError.message}`);
-      return res.status(500).json({ 
-        error: 'Failed to update like status',
-        details: updateError.message
-      });
-    }
-
-    // Get updated post
-    const updatedDoc = await postRef.get();
-    const updatedPost = { 
-      id: updatedDoc.id, 
-      ...updatedDoc.data(),
-      // Ensure createdAt is serialized properly
-      createdAt: updatedDoc.data().createdAt ? updatedDoc.data().createdAt.toDate().toISOString() : null,
-      updatedAt: updatedDoc.data().updatedAt ? updatedDoc.data().updatedAt.toDate().toISOString() : null
-    };
-
-    // Double-check the like status was actually changed
-    const updatedLikes = updatedPost.likes || [];
-    const newIsLiked = updatedLikes.includes(userId);
-    
-    if (newIsLiked === isLiked) {
-      console.warn(`Like status didn't change for user ${userId} on post ${postId}!`);
-    } else {
-      console.log(`Like status successfully changed to ${newIsLiked ? 'liked' : 'unliked'}`);
-    }
-
-    // Invalidate cache
-    try {
-      await deleteCache(generatePostCacheKey(postId));
-      await deleteCacheByPattern('posts:*');
-    } catch (cacheError) {
-      console.error('Error invalidating cache:', cacheError);
-      // Continue despite cache error
-    }
-
-    console.log(`Successfully ${isLiked ? 'unliked' : 'liked'} post ${postId}`);
-    return res.json({
-      success: true,
-      message: isLiked ? 'Post unliked' : 'Post liked',
-      updatedPost: updatedPost
-    });
-  } catch (err) {
-    console.error('Error in toggleLike:', err);
-    return res.status(500).json({ error: 'Internal server error', details: err.message });
+  
+  // Delete image if it exists
+  if (existingPost.imageUrl) {
+    await deleteImage(existingPost.imageUrl);
   }
-};
+  
+  await postService.deletePost(postId, userId);
+  
+  res.status(200).json({ message: 'Post deleted successfully' });
+});
 
-// Add missing functions from index.js
-const getMultiCategoryPosts = async (req, res) => {
-  try {
-    const { categories, limit } = req.query;
-    if (!categories) {
-      return res.status(400).json({ error: 'No categories provided.' });
-    }
-
-    const categoryArray = categories.split(',').map((c) => c.trim());
-    const limitNumber = parseInt(limit, 10) || 5;
-    const results = {};
-
-    for (const cat of categoryArray) {
-      let query = postsCollection.orderBy('createdAt', 'desc').limit(limitNumber);
-      if (cat !== 'All') {
-        query = query.where('category', '==', cat);
-      }
-
-      const snapshot = await query.get();
-      const postIds = snapshot.docs.map((doc) => doc.id);
-      const postsForThisCategory = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : null,
-          comments: [],
-        };
-      });
-
-      let allCommentsForThisCategory = [];
-      if (postIds.length > 0) {
-        const chunkSize = 10;
-        const chunks = [];
-        for (let i = 0; i < postIds.length; i += chunkSize) {
-          chunks.push(postIds.slice(i, i + chunkSize));
-        }
-        const commentsPromises = chunks.map((chunk) =>
-          commentsCollection
-            .where('postId', 'in', chunk)
-            .orderBy('createdAt', 'desc')
-            .get()
-        );
-        const commentsSnapshots = await Promise.all(commentsPromises);
-
-        allCommentsForThisCategory = commentsSnapshots.flatMap((snap) =>
-          snap.docs.map((commentDoc) => {
-            const cdata = commentDoc.data();
-            return {
-              id: commentDoc.id,
-              ...cdata,
-              createdAt: cdata.createdAt ? cdata.createdAt.toDate().toISOString() : null,
-            };
-          })
-        );
-      }
-
-      const commentsByPostId = {};
-      allCommentsForThisCategory.forEach((comment) => {
-        if (!commentsByPostId[comment.postId]) {
-          commentsByPostId[comment.postId] = [];
-        }
-        commentsByPostId[comment.postId].push(comment);
-      });
-
-      postsForThisCategory.forEach((post) => {
-        post.comments = commentsByPostId[post.id] || [];
-      });
-
-      results[cat] = postsForThisCategory;
-    }
-
-    return res.json({
-      data: results,
-    });
-  } catch (err) {
-    console.error('Error in getMultiCategoryPosts:', err);
-    return res.status(500).json({ error: 'Internal server error.', details: err.message });
+/**
+ * Toggle like status on a post
+ */
+const toggleLike = asyncHandler(async (req, res) => {
+  const { postId } = req.params;
+  const userId = req.user.id;
+  
+  const updatedPost = await postService.toggleLike(postId, userId);
+  
+  if (!updatedPost) {
+    throw new AppError('Post not found', 404);
   }
-};
+  
+  res.status(200).json(updatedPost);
+});
 
-const getBatchComments = async (req, res) => {
-  try {
-    // Support both GET (query params) and POST (request body) methods
-    let postIds = [];
-    
-    if (req.method === 'POST' && req.body.postIds) {
-      // Get postIds from request body (for the optimized client)
-      postIds = Array.isArray(req.body.postIds) 
-        ? req.body.postIds 
-        : req.body.postIds.split(',');
-    } else if (req.query.postIds) {
-      // Support both comma-separated format and multiple parameter instances
-      if (Array.isArray(req.query.postIds)) {
-        // Handle case where Express parses repeated params as an array
-        postIds = req.query.postIds;
-      } else {
-        // Handle comma-separated format
-        postIds = req.query.postIds.split(',');
-      }
-    } else {
-      return res.status(400).json({ 
-        error: 'No postIds provided',
-        message: 'Please provide postIds as a comma-separated list or as multiple parameters' 
-      });
-    }
-
-    // Filter out empty values and deduplicate
-    postIds = [...new Set(postIds.filter(id => id && id.trim()))];
-
-    if (!postIds.length) {
-      return res.status(400).json({ 
-        error: 'No valid postIds provided',
-        message: 'Please provide at least one valid postId'
-      });
-    }
-    
-    console.log(`Processing batch comments request for ${postIds.length} posts:`, postIds);
-    
-    // Limit the number of posts we'll process at once
-    if (postIds.length > 50) {
-      console.warn(`Limiting batch request from ${postIds.length} to 50 posts`);
-      postIds = postIds.slice(0, 50);
-    }
-    
-    // Check cache first
-    const cachingEnabled = req.query.skipCache !== 'true';
-    const results = {};
-    
-    if (cachingEnabled) {
-      // Check if all requested posts are in cache
-      const cachedResults = {};
-      let allCached = true;
-      
-      for (const postId of postIds) {
-        const cacheKey = `comments:${postId}`;
-        const cachedComments = await getCache(cacheKey);
-        
-        if (cachedComments) {
-          try {
-            cachedResults[postId] = JSON.parse(cachedComments);
-          } catch (e) {
-            console.error(`Error parsing cached comments for post ${postId}:`, e);
-            allCached = false;
-            break;
-          }
-        } else {
-          allCached = false;
-          break;
-        }
-      }
-      
-      // If all posts have cached comments, return them
-      if (allCached) {
-        console.log('Returning all batch comments from cache');
-        return res.json(cachedResults);
-      }
-    }
-    
-    // Fetch comments for all posts in batches to avoid Firestore limits
-    const batchSize = 10; // Firestore "in" query supports up to 10 items
-    const batches = [];
-    
-    for (let i = 0; i < postIds.length; i += batchSize) {
-      batches.push(postIds.slice(i, i + batchSize));
-    }
-    
-    console.log(`Processing ${batches.length} batches of comments`);
-    
-    const promises = batches.map(async (batchIds) => {
-      try {
-        const snapshot = await commentsCollection
-          .where('postId', 'in', batchIds)
-          .orderBy('createdAt', 'desc')
-          .get();
-          
-        return snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt ? doc.data().createdAt.toDate().toISOString() : new Date().toISOString()
-        }));
-      } catch (error) {
-        console.error(`Error fetching comments batch:`, error);
-        // Return empty array for this batch to avoid failing the entire request
-        return [];
-      }
-    });
-    
-    const allComments = (await Promise.all(promises)).flat();
-    console.log(`Retrieved ${allComments.length} total comments`);
-    
-    // Group comments by postId
-    for (const comment of allComments) {
-      if (!results[comment.postId]) {
-        results[comment.postId] = [];
-      }
-      results[comment.postId].push(comment);
-    }
-    
-    // Add empty arrays for posts with no comments
-    for (const postId of postIds) {
-      if (!results[postId]) {
-        results[postId] = [];
-      }
-    }
-    
-    // Cache individual post comments
-    if (cachingEnabled) {
-      for (const [postId, comments] of Object.entries(results)) {
-        const cacheKey = `comments:${postId}`;
-        await setCache(cacheKey, JSON.stringify(comments), 60 * 5); // Cache for 5 minutes
-      }
-    }
-    
-    return res.json(results);
-  } catch (err) {
-    console.error('Error in getBatchComments:', err);
-    return res.status(500).json({ error: 'Server error', message: err.message });
+/**
+ * Get posts from multiple categories
+ */
+const getMultiCategoryPosts = asyncHandler(async (req, res) => {
+  const { categories, limit = 5 } = req.query;
+  
+  if (!categories) {
+    throw new AppError('Categories are required', 400);
   }
-};
+  
+  const categoriesArray = Array.isArray(categories) ? categories : categories.split(',');
+  const result = await postService.getMultiCategoryPosts(categoriesArray, limit);
+  
+  res.status(200).json(result);
+});
 
-const getPostComments = async (req, res) => {
-  try {
-    const { postId } = req.params;
-    const snapshot = await commentsCollection
-      .where('postId', '==', postId)
-      .orderBy('createdAt', 'desc')
-      .get();
+/**
+ * Get comments for a specific post
+ */
+const getPostComments = asyncHandler(async (req, res) => {
+  const { postId } = req.params;
+  const { limit = 50, startAfter = null } = req.query;
+  
+  const comments = await postService.getPostComments(postId, limit, startAfter);
+  
+  res.status(200).json(comments);
+});
 
-    const allComments = [];
-    const commentMap = new Map();
-
-    for (const doc of snapshot.docs) {
-      const data = doc.data();
-      const likes = data.likes || [];
-      let likedBy = [];
-      
-      if (likes.length > 0) {
-        const userPromises = likes.map(userId =>
-          usersCollection.doc(userId).get()
-        );
-        const userDocs = await Promise.all(userPromises);
-        likedBy = userDocs
-          .filter(doc => doc.exists)
-          .map(doc => ({ id: doc.id, username: doc.data().username }));
-      }
-
-      const comment = {
-        id: doc.id,
-        postId: data.postId,
-        userId: data.userId,
-        text: data.text,
-        username: data.username || 'Anonymous',
-        userRole: data.userRole || 'user',
-        likes: likes,
-        likedBy: likedBy,
-        parentCommentId: data.parentCommentId || null,
-        replies: [],
-        createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
-      };
-
-      commentMap.set(doc.id, comment);
-    }
-
-    for (const comment of commentMap.values()) {
-      if (comment.parentCommentId) {
-        const parentComment = commentMap.get(comment.parentCommentId);
-        if (parentComment) {
-          parentComment.replies.push(comment);
-        } else {
-          allComments.push(comment);
-        }
-      } else {
-        allComments.push(comment);
-      }
-    }
-
-    for (const comment of allComments) {
-      if (comment.replies.length > 0) {
-        comment.replies.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-      }
-    }
-
-    return res.json(allComments);
-  } catch (err) {
-    console.error('Error in getPostComments:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+/**
+ * Add a comment to a post
+ */
+const addComment = asyncHandler(async (req, res) => {
+  const { postId } = req.params;
+  const { content } = req.body;
+  const userId = req.user.id;
+  
+  if (!content) {
+    throw new AppError('Comment content is required', 400);
   }
-};
+  
+  const comment = await postService.addComment({
+    postId,
+    userId,
+    content,
+    username: req.user.username,
+    avatarUrl: req.user.avatarUrl
+  });
+  
+  res.status(201).json(comment);
+});
 
-const addComment = async (req, res) => {
-  try {
-    const { postId } = req.params;
-    const { commentText, parentCommentId } = req.body;
-    
-    const newCommentRef = await commentsCollection.add({
-      postId,
-      text: commentText,
-      parentCommentId: parentCommentId || null,
-      userId: req.user.uid,
-      username: req.user.username,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      likes: []
-    });
-
-    const newCommentDoc = await newCommentRef.get();
-    const newComment = { id: newCommentRef.id, ...newCommentDoc.data() };
-
-    await deleteCache(generateCommentsCacheKey(postId));
-    await deleteCacheByPattern('batchComments_*');
-
-    return res.json({ comment: newComment });
-  } catch (err) {
-    console.error('Error in addComment:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+/**
+ * Update a comment
+ */
+const updateComment = asyncHandler(async (req, res) => {
+  const { commentId } = req.params;
+  const { content } = req.body;
+  const userId = req.user.id;
+  
+  if (!content) {
+    throw new AppError('Comment content is required', 400);
   }
-};
+  
+  const updatedComment = await postService.updateComment(commentId, userId, content);
+  
+  res.status(200).json(updatedComment);
+});
 
-const likeComment = async (req, res) => {
-  try {
-    const { postId, commentId } = req.params;
-    const uid = req.user.uid;
-    console.log(`User ${uid} attempting to like comment ${commentId} for post ${postId}`);
-    
-    const commentRef = commentsCollection.doc(commentId);
-    const commentDoc = await commentRef.get();
-    
-    if (!commentDoc.exists) {
-      console.log(`Comment ${commentId} not found`);
-      return res.status(404).json({ error: 'Comment not found.' });
-    }
-    
-    let commentData = commentDoc.data();
-    let likes = commentData.likes || [];
-    
-    if (!likes.includes(uid)) {
-      console.log(`Adding user ${uid} to likes for comment ${commentId}`);
-      likes.push(uid);
-      await commentRef.update({ likes });
-      const updatedDoc = await commentRef.get();
-      const updatedData = updatedDoc.data();
+/**
+ * Delete a comment
+ */
+const deleteComment = asyncHandler(async (req, res) => {
+  const { commentId } = req.params;
+  const userId = req.user.id;
+  
+  await postService.deleteComment(commentId, userId);
+  
+  res.status(200).json({ message: 'Comment deleted successfully' });
+});
 
-      const userPromises = likes.map(userId =>
-        usersCollection.doc(userId).get()
-      );
-      const userDocs = await Promise.all(userPromises);
-      const likedBy = userDocs
-        .filter(doc => doc.exists)
-        .map(doc => ({ id: doc.id, username: doc.data().username }));
-
-      const updatedComment = {
-        id: updatedDoc.id,
-        ...updatedData,
-        likes,
-        likedBy,
-        createdAt: updatedData.createdAt ? updatedData.createdAt.toDate().toISOString() : null
-      };
-
-      console.log(`Successfully liked comment ${commentId}, returning updated comment`);
-      return res.json({ updatedComment });
-    } else {
-      console.log(`User ${uid} already liked comment ${commentId}, no changes made`);
-      const userPromises = likes.map(userId =>
-        usersCollection.doc(userId).get()
-      );
-      const userDocs = await Promise.all(userPromises);
-      const likedBy = userDocs
-        .filter(doc => doc.exists)
-        .map(doc => ({ id: doc.id, username: doc.data().username }));
-
-      const updatedComment = {
-        id: commentDoc.id,
-        ...commentData,
-        likes,
-        likedBy,
-        createdAt: commentData.createdAt ? commentData.createdAt.toDate().toISOString() : null
-      };
-
-      return res.json({ updatedComment });
-    }
-  } catch (err) {
-    console.error('Error in likeComment:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+/**
+ * Like a comment
+ */
+const likeComment = asyncHandler(async (req, res) => {
+  const { commentId } = req.params;
+  const userId = req.user.id;
+  
+  const updatedComment = await postService.toggleCommentLike(commentId, userId);
+  
+  if (!updatedComment) {
+    throw new AppError('Comment not found', 404);
   }
-};
+  
+  res.status(200).json(updatedComment);
+});
 
-const unlikeComment = async (req, res) => {
-  try {
-    const { postId, commentId } = req.params;
-    const uid = req.user.uid;
-    console.log(`User ${uid} attempting to unlike comment ${commentId} for post ${postId}`);
-    
-    const commentRef = commentsCollection.doc(commentId);
-    const commentDoc = await commentRef.get();
-    
-    if (!commentDoc.exists) {
-      console.log(`Comment ${commentId} not found`);
-      return res.status(404).json({ error: 'Comment not found.' });
-    }
-    
-    let commentData = commentDoc.data();
-    let likes = commentData.likes || [];
-    
-    if (likes.includes(uid)) {
-      console.log(`Removing user ${uid} from likes for comment ${commentId}`);
-      likes = likes.filter(id => id !== uid);
-      await commentRef.update({ likes });
-      
-      const updatedDoc = await commentRef.get();
-      const updatedData = updatedDoc.data();
-      
-      const userPromises = likes.map(userId =>
-        usersCollection.doc(userId).get()
-      );
-      const userDocs = await Promise.all(userPromises);
-      const likedBy = userDocs
-        .filter(doc => doc.exists)
-        .map(doc => ({ id: doc.id, username: doc.data().username }));
-      
-      const updatedComment = {
-        id: updatedDoc.id,
-        ...updatedData,
-        likes,
-        likedBy,
-        createdAt: updatedData.createdAt ? updatedData.createdAt.toDate().toISOString() : null
-      };
-      
-      console.log(`Successfully unliked comment ${commentId}, returning updated comment`);
-      return res.json({ updatedComment });
-    } else {
-      console.log(`User ${uid} hasn't liked comment ${commentId}, no changes made`);
-      const userPromises = likes.map(userId =>
-        usersCollection.doc(userId).get()
-      );
-      const userDocs = await Promise.all(userPromises);
-      const likedBy = userDocs
-        .filter(doc => doc.exists)
-        .map(doc => ({ id: doc.id, username: doc.data().username }));
-      
-      const updatedComment = {
-        id: commentDoc.id,
-        ...commentData,
-        likes,
-        likedBy,
-        createdAt: commentData.createdAt ? commentData.createdAt.toDate().toISOString() : null
-      };
-      
-      return res.json({ updatedComment });
-    }
-  } catch (err) {
-    console.error('Error in unlikeComment:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+/**
+ * Unlike a comment (for backward compatibility)
+ */
+const unlikeComment = asyncHandler(async (req, res) => {
+  const { commentId } = req.params;
+  const userId = req.user.id;
+  
+  const updatedComment = await postService.toggleCommentLike(commentId, userId);
+  
+  if (!updatedComment) {
+    throw new AppError('Comment not found', 404);
   }
-};
+  
+  res.status(200).json(updatedComment);
+});
 
-const deleteComment = async (req, res) => {
-  try {
-    const { postId, commentId } = req.params;
-    const uid = req.user.uid;
-    const commentRef = commentsCollection.doc(commentId);
-    const commentDoc = await commentRef.get();
-    
-    if (!commentDoc.exists) {
-      return res.status(404).json({ error: 'Comment not found.' });
+/**
+ * Get comments for multiple posts
+ */
+const getBatchComments = asyncHandler(async (req, res) => {
+  let postIds;
+  
+  // Support both GET and POST methods
+  if (req.method === 'GET') {
+    postIds = req.query.postIds;
+    if (typeof postIds === 'string') {
+      postIds = postIds.split(',');
     }
-    
-    const commentData = commentDoc.data();
-    if (commentData.userId !== uid && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Forbidden.' });
-    }
-    
-    await commentRef.delete();
-    await deleteCache(generateCommentsCacheKey(postId));
-    await deleteCacheByPattern('batchComments_*');
-
-    return res.json({ message: 'Comment deleted successfully.' });
-  } catch (err) {
-    console.error('Error in deleteComment:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+  } else {
+    postIds = req.body.postIds;
   }
-};
-
-const updateComment = async (req, res) => {
-  try {
-    const { postId, commentId } = req.params;
-    const { commentText } = req.body;
-    const uid = req.user.uid;
-    const commentRef = commentsCollection.doc(commentId);
-    const commentDoc = await commentRef.get();
-    
-    if (!commentDoc.exists) {
-      return res.status(404).json({ error: 'Comment not found' });
-    }
-    
-    const commentData = commentDoc.data();
-    if (commentData.userId !== uid && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-    
-    await commentRef.update({
-      text: commentText,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-    
-    const updatedDoc = await commentRef.get();
-    const updatedComment = { id: updatedDoc.id, ...updatedDoc.data() };
-
-    await deleteCache(generateCommentsCacheKey(postId));
-    await deleteCacheByPattern('batchComments_*');
-
-    return res.json({ updatedComment });
-  } catch (err) {
-    console.error('Error in updateComment:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+  
+  if (!postIds || !Array.isArray(postIds)) {
+    throw new AppError('Post IDs are required', 400);
   }
-};
+  
+  const comments = await postService.getBatchComments(postIds);
+  
+  res.status(200).json(comments);
+});
 
 module.exports = {
   createPost,

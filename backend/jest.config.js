@@ -42,5 +42,8 @@ module.exports = {
   maxWorkers: '50%',
   
   // Configure test timeouts (5 seconds per test)
-  testTimeout: 5000
+  testTimeout: 5000,
+  
+  // Use the @jest/globals package
+  injectGlobals: true
 }; 

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 // Import all API routes
-const authRoutes = require('./api/auth');
+const authRoutes = require('./auth');
 const usersRoutes = require('./api/users');
 const postsRoutes = require('./posts');
 const profileRoutes = require('./profile');

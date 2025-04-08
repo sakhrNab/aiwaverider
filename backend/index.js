@@ -9,6 +9,7 @@ const rateLimit = require('express-rate-limit');
 const logger = require('./utils/logger');
 const { initializePassport } = require('./config/passport');
 const { db } = require('./config/firebase');
+const { setupSwagger } = require('./config/swagger');
 
 // Initialize express
 const app = express();
@@ -52,6 +53,12 @@ app.use(cookieParser());
 
 // Add security headers
 app.use(helmet());
+
+// Configure Swagger documentation
+if (!isProduction) {
+  setupSwagger(app);
+  logger.info('API Documentation available at /api/docs');
+}
 
 // Session configuration - required for Passport
 app.use(session({
@@ -114,23 +121,6 @@ app.get('/api-test/recommendations', (req, res) => {
     recommendations: [
       { id: 'test-1', title: 'Test Product 1', price: 9.99 },
       { id: 'test-2', title: 'Test Product 2', price: 0, isFree: true }
-    ]
-  });
-});
-
-// Add a specific route handler for wishlist API to help debug 404 errors
-app.use('/api/wishlists*', (req, res, next) => {
-  logger.warn(`Wishlist API 404: ${req.method} ${req.originalUrl}`);
-  res.status(404).json({ 
-    error: 'Wishlist route not found. Please check the URL and method.',
-    requestedPath: req.originalUrl,
-    availableRoutes: [
-      'GET /api/wishlists',
-      'GET /api/wishlists/:id',
-      'POST /api/wishlists',
-      'PUT /api/wishlists/:id',
-      'DELETE /api/wishlists/:id',
-      'POST /api/wishlists/toggle'
     ]
   });
 });
