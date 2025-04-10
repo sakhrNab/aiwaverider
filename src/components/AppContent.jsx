@@ -16,6 +16,7 @@ import AgentDetail from '../pages/agent/AgentDetail';
 import Checkout from '../pages/Checkout';
 import ThankYou from '../pages/ThankYou';
 import CheckoutSuccess from './checkout/CheckoutSuccess';
+import AITools from '../pages/AITools';
 // Import admin pages
 import Dashboard from '../pages/admin/Dashboard';
 import ManageAgents from '../pages/admin/ManageAgents';
@@ -23,6 +24,7 @@ import ManageUsers from '../pages/admin/ManageUsers';
 import Analytics from '../pages/admin/Analytics';
 import Settings from '../pages/admin/Settings';
 import Pricing from '../pages/admin/Pricing';
+import AIToolsManager from './admin/AIToolsManager';
 
 const AppContent = () => {
   const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
@@ -43,6 +45,7 @@ const AppContent = () => {
           <Route path="/sign-up" element={<SignUp />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/agents" element={<Agents />} />
+          <Route path="/ai-tools" element={<AITools />} />
           <Route path="/agents/:agentId" element={<AgentDetail />} />
           <Route path="/product/:agentId" element={<AgentDetail />} />
           <Route path="/checkout" element={<Checkout />} />
@@ -86,6 +89,16 @@ const AppContent = () => {
             element={
               <ProtectedRoute roles={['admin']}>
                 <ManageAgents />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* AI Tools Manager */}
+          <Route
+            path="/admin/ai-tools"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <AIToolsManager />
               </ProtectedRoute>
             }
           />

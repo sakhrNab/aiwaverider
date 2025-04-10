@@ -249,7 +249,7 @@ if (!isProduction) {
     }
   };
   
-  // Run the check
+  // Run the checks
   checkAgentsCollection();
 }
 

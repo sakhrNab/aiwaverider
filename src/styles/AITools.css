@@ -1,0 +1,481 @@
+/* AITools.css */
+.ai-tools-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* Theme transition */
+.tool-card,
+.filter-tag,
+input,
+h1,
+p,
+span,
+button {
+  transition: all 0.3s ease;
+}
+
+/* Enhanced gradient background - Light Mode */
+.min-h-screen.bg-gradient-to-br {
+  animation: gradientAnimation 15s ease infinite alternate;
+  background-size: 200% 200%;
+}
+
+@keyframes gradientAnimation {
+  0% {
+    background-position: 0% 0%;
+  }
+  100% {
+    background-position: 100% 100%;
+  }
+}
+
+/* Particles container - Light Mode */
+.particles-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.particles-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='5' cy='5' r='1' fill='white' fill-opacity='0.3'/%3E%3C/svg%3E");
+  opacity: 0.5;
+  animation: particles-float 120s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes particles-float {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  100% {
+    transform: translate(100px, 100px) rotate(360deg);
+  }
+}
+
+/* Stars pattern - Dark Mode */
+.stars-pattern {
+  position: relative;
+  overflow: hidden;
+}
+
+.stars-pattern::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(1px 1px at 25% 15%, rgba(255, 255, 255, 0.6) 1%, transparent 0%),
+    radial-gradient(1px 1px at 50% 50%, rgba(255, 255, 255, 0.4) 1%, transparent 0%),
+    radial-gradient(1px 1px at 75% 25%, rgba(255, 255, 255, 0.5) 1%, transparent 0%),
+    radial-gradient(2px 2px at 10% 80%, rgba(255, 255, 255, 0.3) 1%, transparent 0%),
+    radial-gradient(2px 2px at 20% 40%, rgba(255, 255, 255, 0.4) 1%, transparent 0%),
+    radial-gradient(2px 2px at 30% 70%, rgba(255, 255, 255, 0.5) 1%, transparent 0%),
+    radial-gradient(2px 2px at 60% 20%, rgba(255, 255, 255, 0.5) 1%, transparent 0%),
+    radial-gradient(2px 2px at 80% 90%, rgba(255, 255, 255, 0.4) 1%, transparent 0%),
+    radial-gradient(2px 2px at 90% 60%, rgba(255, 255, 255, 0.3) 1%, transparent 0%);
+  animation: twinkle 10s ease infinite alternate;
+  z-index: -1;
+}
+
+@keyframes twinkle {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Glass effect */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 8px 32px 0 rgba(31, 38, 135, 0.3),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Background pattern */
+.bg-pattern {
+  background: 
+    radial-gradient(circle at 0% 0%, rgba(65, 88, 208, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 100% 0%, rgba(200, 80, 192, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(255, 204, 112, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 0% 100%, rgba(65, 88, 208, 0.4) 0%, transparent 50%);
+  mix-blend-mode: soft-light;
+}
+
+/* Glow effect for text in dark mode */
+.glow-text-blue {
+  text-shadow: 0 0 10px rgba(99, 102, 241, 0.5), 0 0 20px rgba(99, 102, 241, 0.3);
+}
+
+/* Shadow with glow for dark mode */
+.shadow-glow-sm {
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06),
+    0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+/* Subtle pulse animation for avatar in dark mode */
+.pulse-subtle {
+  animation: pulse-subtle 3s ease-in-out infinite;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(79, 70, 229, 0);
+  }
+}
+
+/* Tool card enhancements */
+.tool-card,
+a[class*='group p-6 rounded-2xl'] {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: all 0.3s ease !important;
+  animation: fadeInUp 0.5s ease forwards;
+  animation-fill-mode: both;
+  opacity: 0;
+  transform: translateY(20px);
+  position: relative;
+  overflow: hidden;
+}
+
+.tool-card::before,
+a[class*='group p-6 rounded-2xl']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.15) 0%,
+    transparent 100%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.tool-card:hover,
+a[class*='group p-6 rounded-2xl']:hover {
+  transform: translateY(-5px) !important;
+}
+
+.tool-card:hover::before,
+a[class*='group p-6 rounded-2xl']:hover::before {
+  opacity: 1;
+}
+
+/* Filter tag enhancements */
+.filter-tag,
+button[class*='px-5 py-2 rounded-full'] {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: all 0.3s ease;
+  transform: translateZ(0); /* Force GPU acceleration */
+}
+
+/* Animation keyframes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Main heading enhancement */
+h1.text-4xl,
+h1.text-5xl {
+  letter-spacing: -0.02em;
+}
+
+/* Tool Grid Row Separator - adds subtle dividers between rows */
+.grid-cols-1 > a:not(:last-child) {
+  position: relative;
+}
+
+.grid-cols-1 > a:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+}
+
+@media (min-width: 768px) {
+  .grid-cols-1.md\:grid-cols-2 > a:not(:last-child)::after {
+    display: none;
+  }
+}
+
+/* Card hover animations */
+a[class*='group p-6 rounded-2xl']:hover img {
+  animation: wobble 1s ease;
+}
+
+@keyframes wobble {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-5px) rotate(-5deg);
+  }
+  30% {
+    transform: translateX(4px) rotate(3deg);
+  }
+  45% {
+    transform: translateX(-3px) rotate(-2deg);
+  }
+  60% {
+    transform: translateX(2px) rotate(1deg);
+  }
+  75% {
+    transform: translateX(-1px) rotate(-1deg);
+  }
+}
+
+/* Improved search input focus state */
+input[type="text"]:focus {
+  outline: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: pulse-input 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-input {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Special scrollbar for dark mode */
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: rgba(30, 27, 75, 0.5);
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: rgba(79, 70, 229, 0.5);
+    border-radius: 5px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.8);
+  }
+}
+
+/* Shimmer effect on hover for buttons in light mode */
+button:not([class*='bg-gray-800']):hover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Custom focus styles for interactive elements */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: none;
+  ring: 2px;
+  ring-offset: 2px;
+  ring-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .filter-tags-container {
+    gap: 0.25rem;
+  }
+  
+  h1.text-4xl {
+    font-size: 2.5rem;
+  }
+}
+
+/* Training header */
+div[class*='bg-[#2D1846]'] {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Emphasize keyword tags */
+span[class*='inline-flex items-center px-3 py-1 rounded-full'] {
+  background: rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* Theme toggle button */
+.theme-toggle {
+  transition: all 0.3s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.theme-toggle:hover {
+  transform: scale(1.1);
+}
+
+/* Training header animation */
+@keyframes gradientFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.training-header {
+  background-size: 200% 200%;
+  animation: gradientFlow 15s ease infinite;
+}
+
+/* Light theme specific styles */
+:root[data-theme="light"] .tool-card {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark theme specific styles */
+:root[data-theme="dark"] .tool-card {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Filter tags container */
+.filter-tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 1.5rem 0;
+}
+
+/* Smooth transitions for interactive elements */
+button, a, input {
+  transition: all 0.3s ease;
+}
+
+/* Card hover effects */
+.tool-card:hover .tool-icon {
+  transform: scale(1.05);
+}
+
+.tool-card .tool-icon {
+  transition: transform 0.3s ease;
+}
+
+/* Container enhancements */
+.tools-container {
+  border-radius: 2rem;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 8px 32px rgba(31, 38, 135, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.tools-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    transparent 100%
+  );
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Search input enhancement */
+input[type="text"] {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+input[type="text"]:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Card icon container */
+.tool-icon-container {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: all 0.3s ease;
+}
+
+.tool-card:hover .tool-icon-container {
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+/* Animation for fading in elements */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+  opacity: 0;
+} 

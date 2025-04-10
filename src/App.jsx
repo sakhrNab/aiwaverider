@@ -21,12 +21,23 @@ const paypalOptions = {
 };
 
 const App = () => {
-  // State to track if Firebase has initialized
+  // State to track if app has initialized
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    // You can add any app initialization logic here
-    setIsInitialized(true);
+    // Simple initialization - no static data population
+    const initializeApp = async () => {
+      try {
+        // Any global app initialization can go here
+        console.log('App initialized without static data')
+      } catch (error) {
+        console.error('Error during app initialization:', error);
+      } finally {
+        setIsInitialized(true);
+      }
+    };
+
+    initializeApp();
   }, []);
 
   return (

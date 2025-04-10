@@ -1892,4 +1892,85 @@ export const incrementDownloadCount = async (agentId) => {
   }
 };
 
+// AI Tools API Functions
+export const fetchAITools = async () => {
+  try {
+    const response = await api.get('/api/ai-tools');
+    return response.data.data;
+  } catch (error) {
+    console.error('Error fetching AI tools:', error);
+    throw error;
+  }
+};
+
+export const fetchAIToolById = async (id) => {
+  try {
+    const response = await api.get(`/api/ai-tools/${id}`);
+    return response.data.data;
+  } catch (error) {
+    console.error(`Error fetching AI tool ${id}:`, error);
+    throw error;
+  }
+};
+
+export const createAITool = async (toolData, imageFile) => {
+  try {
+    let formData = new FormData();
+    
+    // Add tool data as JSON
+    formData.append('data', JSON.stringify(toolData));
+    
+    // Add image file if present
+    if (imageFile) {
+      formData.append('image', imageFile);
+    }
+    
+    const response = await api.post('/api/ai-tools', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    return response.data.data;
+  } catch (error) {
+    console.error('Error creating AI tool:', error);
+    throw error;
+  }
+};
+
+export const updateAITool = async (id, toolData, imageFile) => {
+  try {
+    let formData = new FormData();
+    
+    // Add tool data as JSON
+    formData.append('data', JSON.stringify(toolData));
+    
+    // Add image file if present
+    if (imageFile) {
+      formData.append('image', imageFile);
+    }
+    
+    const response = await api.put(`/api/ai-tools/${id}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
+    return response.data.data;
+  } catch (error) {
+    console.error(`Error updating AI tool ${id}:`, error);
+    throw error;
+  }
+};
+
+export const deleteAITool = async (id) => {
+  try {
+    await api.delete(`/api/ai-tools/${id}`);
+    return true;
+  } catch (error) {
+    console.error(`Error deleting AI tool ${id}:`, error);
+    throw error;
+  }
+};
+
 export default api;

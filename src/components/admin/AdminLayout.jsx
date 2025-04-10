@@ -10,6 +10,7 @@ import {
   FaDollarSign,
   FaBars,
   FaTimes,
+  FaTools
   // FaSearch
 } from 'react-icons/fa';
 import './AdminLayout.css';
@@ -35,6 +36,7 @@ const AdminLayout = ({ children }) => {
   const navItems = [
     { path: '/admin/dashboard', icon: <FaHome />, label: 'Dashboard' },
     { path: '/admin/agents', icon: <FaRobot />, label: 'Manage Agents' },
+    { path: '/admin/ai-tools', icon: <FaTools />, label: 'AI Tools' },
     { path: '/admin/users', icon: <FaUsers />, label: 'Manage Users' },
     { path: '/admin/analytics', icon: <FaChartBar />, label: 'Analytics' },
     { path: '/admin/pricing', icon: <FaDollarSign />, label: 'Pricing' },
