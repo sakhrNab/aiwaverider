@@ -23,6 +23,99 @@
     --white: #ffffff;
     --gray-2: #e5e7eb;
     --gray-3: #d1d5db;
+    
+    /* Theme variables */
+    --background: #ffffff;
+    --text: #000000;
+    --card-bg: #f9fafb;
+    --card-border: #e5e7eb;
+    --header-bg: rgba(255, 255, 255, 0.8);
+    --button-bg: rgba(255, 255, 255, 0.2);
+    --button-active-bg: rgba(99, 102, 241, 0.7);
+    --button-text: #000000;
+    --gradient-from: #4158D0;
+    --gradient-via: #C850C0;
+    --gradient-to: #FFCC70;
+    --card-shadow: rgba(0, 0, 0, 0.1);
+    --glass-bg: rgba(255, 255, 255, 0.08);
+    --glass-border: rgba(255, 255, 255, 0.2);
+  }
+  
+  /* Dark mode variables */
+  [data-theme="dark"] {
+    --background: #1a0b2e;
+    --text: #ffffff;
+    --card-bg: rgba(45, 24, 70, 0.7);
+    --card-border: rgba(255, 255, 255, 0.1);
+    --header-bg: rgba(26, 11, 46, 0.8);
+    --button-bg: rgba(255, 255, 255, 0.1);
+    --button-active-bg: rgba(128, 90, 213, 0.6);
+    --button-text: #ffffff;
+    --gradient-from: #2D1846;
+    --gradient-via: #5C33A0;
+    --gradient-to: #7533A8;
+    --card-shadow: rgba(0, 0, 0, 0.3);
+    --glass-bg: rgba(45, 24, 70, 0.3);
+    --glass-border: rgba(128, 90, 213, 0.2);
+  }
+  
+  /* Apply theme variables to all pages */
+  body {
+    background-color: var(--background);
+    color: var(--text);
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  
+  /* Dark mode class for Tailwind */
+  .dark {
+    @apply text-white bg-[#1a0b2e];
+  }
+
+  /* Apply proper gradient backgrounds based on theme */
+  body[data-theme="dark"], 
+  html[data-theme="dark"] body {
+    background-image: linear-gradient(to bottom right, var(--gradient-from), var(--gradient-via), var(--gradient-to));
+    background-attachment: fixed;
+    background-size: 200% 200%;
+    animation: gradientAnimation 15s ease infinite;
+    color: white;
+    min-height: 100vh;
+  }
+
+  /* Apply proper dark background to the html element too for full coverage */
+  html[data-theme="dark"] {
+    background-color: #1a0b2e;
+  }
+
+  /* Make sure all pages receive the dark theme properly */
+  #root, 
+  .App, 
+  div[class^="min-h-screen"] {
+    background-color: transparent !important;
+    color: inherit;
+  }
+
+  /* Ensure main-header gets proper dark mode styling */
+  [data-theme="dark"] .main-header {
+    background-color: rgba(26, 11, 46, 0.9) !important;
+    border-bottom: 1px solid rgba(128, 90, 213, 0.2);
+  }
+
+  @keyframes gradientAnimation {
+    0% {
+      background-position: 0% 0%;
+    }
+    50% {
+      background-position: 100% 100%;
+    }
+    100% {
+      background-position: 0% 0%;
+    }
+  }
+  
+  /* For elements that need the gradient background */
+  .bg-gradient-to-br {
+    background-image: linear-gradient(to bottom right, var(--gradient-from), var(--gradient-via), var(--gradient-to));
   }
 
 /* Standard Heading Styles */
@@ -95,6 +188,9 @@ h6 {
   /* Card Styles */
   .card {
     padding: 2em;
+    background-color: var(--card-bg);
+    border: 1px solid var(--card-border);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
   }
 
   /* Read the Docs */
@@ -104,24 +200,109 @@ h6 {
 
   /* Button Hover Effects */
   button:hover {
-    background-color: #ffcc00;
+    background-color: var(--button-active-bg);
     transition: background-color 0.3s ease;
   }
 
   /* Scoped hover effect for buttons with class 'custom-button' */
   .custom-button:hover {
-    background-color: #ffcc00;
+    background-color: var(--button-active-bg);
     transition: background-color 0.3s ease;
   }
 
   /* Scoped hover effect for cards with class 'custom-card' */
   .custom-card:hover {
     transform: scale(1.05);
-    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0px 4px 8px var(--card-shadow);
   }
   .card:hover {
     transform: scale(1.05);
-    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0px 4px 8px var(--card-shadow);
+  }
+  
+  /* Glass effect common component */
+  .glass-effect {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    box-shadow: 
+      0 8px 32px 0 rgba(31, 38, 135, 0.3),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Enhanced glass effect for dark mode */
+  [data-theme="dark"] .glass-effect {
+    background: rgba(45, 24, 70, 0.3);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(128, 90, 213, 0.2);
+    box-shadow: 
+      0 8px 32px 0 rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+  }
+  
+  /* Glass effect hover state */
+  .glass-effect:hover {
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 
+      0 12px 36px 0 rgba(31, 38, 135, 0.4),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+  }
+  
+  /* Filter button styles */
+  .filter-button {
+    background-color: var(--button-bg);
+    color: var(--text);
+    transition: all 0.2s ease;
+  }
+  
+  .filter-button.active {
+    background-color: var(--button-active-bg);
+  }
+  
+  /* Stars pattern for dark mode */
+  .stars-pattern {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stars-pattern::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(1px 1px at 25% 15%, rgba(255, 255, 255, 0.7) 1%, transparent 0%),
+                     radial-gradient(1px 1px at 50% 50%, rgba(255, 255, 255, 0.5) 1%, transparent 0%),
+                     radial-gradient(1px 1px at 75% 25%, rgba(255, 255, 255, 0.6) 1%, transparent 0%),
+                     radial-gradient(2px 2px at 10% 80%, rgba(255, 255, 255, 0.4) 1%, transparent 0%),
+                     radial-gradient(2px 2px at 20% 40%, rgba(255, 255, 255, 0.5) 1%, transparent 0%),
+                     radial-gradient(2px 2px at 30% 70%, rgba(255, 255, 255, 0.6) 1%, transparent 0%),
+                     radial-gradient(2px 2px at 60% 20%, rgba(255, 255, 255, 0.6) 1%, transparent 0%),
+                     radial-gradient(2px 2px at 80% 90%, rgba(255, 255, 255, 0.5) 1%, transparent 0%),
+                     radial-gradient(2px 2px at 90% 60%, rgba(255, 255, 255, 0.4) 1%, transparent 0%);
+    opacity: 0.3;
+    z-index: -1;
+    animation: twinkle 10s ease infinite alternate;
+  }
+
+  @keyframes twinkle {
+    0%, 100% {
+      opacity: 0.3;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  /* Background pattern for cards and containers */
+  .bg-pattern {
+    background: 
+      radial-gradient(circle at 0% 0%, rgba(65, 88, 208, 0.4) 0%, transparent 50%),
+      radial-gradient(circle at 100% 0%, rgba(200, 80, 192, 0.4) 0%, transparent 50%),
+      radial-gradient(circle at 100% 100%, rgba(255, 204, 112, 0.4) 0%, transparent 50%),
+      radial-gradient(circle at 0% 100%, rgba(65, 88, 208, 0.4) 0%, transparent 50%);
+    mix-blend-mode: soft-light;
   }
 }
 
@@ -154,6 +335,63 @@ h6 {
 /* Additional Styles from App.css */
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+/* Animation for load more spinner */
+@keyframes pulse-subtle {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(79, 70, 229, 0);
+  }
+}
+
+.pulse-subtle {
+  animation: pulse-subtle 3s ease-in-out infinite;
+}
+
+/* Animation for fade in */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
+
+/* Enhanced shimmer effect for buttons and interactive elements */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer-effect:hover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(90deg, 
+    rgba(255,255,255,0) 0%, 
+    rgba(255,255,255,0.2) 50%, 
+    rgba(255,255,255,0) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  z-index: 1;
+  pointer-events: none;
 }
 
 /* You can add more global styles here as needed */

@@ -6,6 +6,7 @@ import AppContent from './components/AppContent';
 import { AuthProvider } from './contexts/AuthContext';
 import { PostsProvider } from './contexts/PostsContext';
 import { CartProvider } from './contexts/CartContext.jsx';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { PayPalScriptProvider } from '@paypal/react-paypal-js';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ToastContainer } from 'react-toastify';
@@ -54,17 +55,19 @@ const App = () => {
           draggable
           pauseOnHover
         />
-        <AuthProvider>
-          <PostsProvider>
-            <CartProvider>
-              <PayPalScriptProvider options={paypalOptions}>
-                <AuthCallback>
-                  {isInitialized ? <AppContent /> : <div>Loading application...</div>}
-                </AuthCallback>
-              </PayPalScriptProvider>
-            </CartProvider>
-          </PostsProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <PostsProvider>
+              <CartProvider>
+                <PayPalScriptProvider options={paypalOptions}>
+                  <AuthCallback>
+                    {isInitialized ? <AppContent /> : <div>Loading application...</div>}
+                  </AuthCallback>
+                </PayPalScriptProvider>
+              </CartProvider>
+            </PostsProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </ErrorBoundary>
     </Router>
   );

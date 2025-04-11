@@ -4,18 +4,22 @@ import React, { useContext, useEffect, useState, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import Welcome from './Welcome';
 import Carousel from './Carousel';
+import BookingHeader from './BookingHeader';
 import { PostsContext } from '../contexts/PostsContext';
 import { AuthContext } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { getProfile } from '../utils/api';
 import { CATEGORIES } from '../constants/categories';
 // Import AI-themed spinner components
 import { MoonLoader, PulseLoader } from 'react-spinners';
+import { FaExclamationTriangle } from 'react-icons/fa';
 
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
 
 const Body = () => {
   const { fetchCarouselData } = useContext(PostsContext);
   const { user } = useContext(AuthContext);
+  const { darkMode } = useTheme();
   const location = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -234,45 +238,36 @@ const Body = () => {
   }
 
   return (
-    <div className="p-8 bg-gray-50">
-      {/* Welcome Section */}
-      <Welcome />
-
-      {/* Search Results Indicator */}
-      {searchQuery && (
-        <div className="bg-blue-50 border border-blue-100 rounded-md p-4 my-4 flex items-center justify-between">
-          <div>
-            <span className="font-medium">Showing results for: </span>
-            <span className="text-blue-700 font-semibold">{searchQuery}</span>
+    <div className={`min-h-screen ${darkMode ? "dark bg-[#2D1846]" : "bg-gray-50"} bg-gradient-to-br from-[#4158D0] via-[#C850C0] to-[#FFCC70] stars-pattern`}>
+      {/* Add BookingHeader at the top */}
+      <BookingHeader />
+      
+      <div className="container mx-auto px-4 py-8">
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <MoonLoader color="#4F46E5" loading={isLoading} size={60} />
           </div>
-          <a 
-            href="/" 
-            className="bg-white text-blue-600 hover:bg-blue-600 hover:text-white px-3 py-1 rounded border border-blue-200 text-sm transition-colors"
-          >
-            Clear
-          </a>
-        </div>
-      )}
-
-      {/* Introductory Text - Hide when searching */}
-      {!searchQuery && (
-        <div className="text-center my-8">
-          <h2 className="text-3xl font-semibold">Welcome to AI Wave Rider!</h2>
-          <p className="mt-4 text-lg text-gray-700 max-w-2xl mx-auto">
-            Explore the latest in AI trends, tools, and technologies. Engage with our community and stay updated with the newest advancements.
-          </p>
-        </div>
-      )}
-
-      {/* Carousel with user preferences and search filtering */}
-      <div className="my-12">
-        <Carousel userPreferences={userPreferences} searchQuery={searchQuery} />
+        ) : loadError ? (
+          <div className="text-center p-12 bg-white bg-opacity-10 backdrop-blur-lg rounded-xl shadow-lg">
+            <div className="text-red-500 text-xl mb-4">
+              <FaExclamationTriangle className="inline-block mr-2" />
+              Error loading content
+            </div>
+            <p className="text-white mb-4">{loadError}</p>
+            <button 
+              onClick={() => loadData(true)} 
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+        ) : (
+          <>
+            <Welcome searchQuery={searchQuery} userPreferences={userPreferences} />
+            <Carousel />
+          </>
+        )}
       </div>
-
-      {/* Community Posts with user preferences */}
-      {/* <div className="my-12">
-        <PostList userPreferences={userPreferences} />
-      </div> */}
     </div>
   );
 };

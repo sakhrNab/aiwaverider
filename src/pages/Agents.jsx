@@ -8,11 +8,17 @@ import WishlistSection from '../components/agents/WishlistSection';
 import FilterSidebar from '../components/agents/FilterSidebar';
 import AgentCard from '../components/agents/AgentCard';
 import AgentCarousel from '../components/agents/AgentCarousel';
+import BookingHeader from '../components/BookingHeader';
+import { useTheme } from '../contexts/ThemeContext';
 import { FaExclamationTriangle } from 'react-icons/fa';
 import '../styles/Agents.css';
 
+// Import theme classes - similar to AITools.jsx
+const themeClasses = "bg-gradient-to-br from-[#4158D0] via-[#C850C0] to-[#FFCC70] stars-pattern";
+
 const Agents = () => {
   const location = useLocation();
+  const { darkMode } = useTheme();
   const [agents, setAgents] = useState([]);
   const [allAgents, setAllAgents] = useState([]); // Store all agents for filtering
   const [featuredAgents, setFeaturedAgents] = useState([]);
@@ -396,8 +402,8 @@ const Agents = () => {
     return (
       <>
         {isMockData && (
-          <div className="mock-data-warning">
-            <FaExclamationTriangle className="warning-icon" />
+          <div className="mock-data-warning glass-effect text-white mb-4 p-2 rounded-lg text-sm flex items-center">
+            <FaExclamationTriangle className="warning-icon mr-2 text-yellow-300" />
             <span>Showing mock data - not fetched from database</span>
           </div>
         )}
@@ -455,111 +461,152 @@ const Agents = () => {
   }, [allAgents]);
 
   return (
-    <div className="agents-page">
-      {/* Category Navigation */}
-      <div className="category-nav-section">
-        <CategoryNav 
-          selectedCategory={selectedCategory} 
-          onCategoryChange={handleCategoryChange} 
-        />
-      </div>
-
-      {/* Featured Agents Carousel */}
-      <div className="featured-section">
-        <h2 className="featured-title">Featured This Week</h2>
-        <FeaturedAgents agents={featuredAgents} isLoading={isLoading} />
-      </div>
-
-      {/* Recommended Agents Carousel */}
-      <div className="recommendations-section">
-        {isRecommendationsLoading ? (
-          <div className="loading-container">
-            <div>Loading recommendations...</div>
-          </div>
-        ) : recommendedAgents.length > 0 ? (
-          <AgentCarousel 
-            title="Recommended For You" 
-            agents={recommendedAgents} 
-          />
-        ) : (
-          <div className="no-results">
-            <h3>Personalized recommendations coming soon</h3>
-            <p>Explore our featured agents in the meantime</p>
-          </div>
-        )}
-      </div>
-
-      {/* Wishlists Section */}
-      <div className="wishlists-section">
-        <h2 className="wishlists-title">Popular Wishlists</h2>
-        <WishlistSection wishlists={wishlists} isLoading={isLoading} />
-      </div>
-
-      {/* Curated Marketplace - Two Column Layout */}
-      <div className="curated-marketplace">
-        <div className="curated-header">
-          <h2 className="curated-title">Curated Marketplace</h2>
-          <div className="curated-tabs">
-            <button 
-              className={`curated-tab ${selectedFilter === 'Hot & New' ? 'active' : ''}`}
-              onClick={() => handleFilterChange('Hot & New')}
-            >
-              Hot & New
-            </button>
-            <button 
-              className={`curated-tab ${selectedFilter === 'Top Rated' ? 'active' : ''}`}
-              onClick={() => handleFilterChange('Top Rated')}
-            >
-              Top Rated
-            </button>
-            <button 
-              className={`curated-tab ${selectedFilter === 'Trending' ? 'active' : ''}`}
-              onClick={() => handleFilterChange('Trending')}
-            >
-              Trending
-            </button>
-          </div>
-        </div>
-
-        <div className="curated-content">
-          {/* Left Column - Filters */}
-          <div className="sidebar-column">
-            <FilterSidebar 
-              onTagSelect={handleTagChange}
-              onFeatureSelect={handleFeatureChange}
-              onRatingSelect={handleRatingChange}
-              selectedTags={selectedTags}
-              selectedFeatures={selectedFeatures}
-              selectedRating={selectedRating}
-              priceRange={selectedPrice}
-              onPriceChange={handlePriceChange}
-              tagCounts={tagCounts}
-              featureCounts={featureCounts}
-            />
-          </div>
-          
-          {/* Right Column - Agent Grid with SearchBar */}
-          <div className="agents-page-grid-column">
-            {/* Display current search query if present */}
-            {searchQuery && (
-              <div className="active-search-query">
-                Search results for: <strong>{searchQuery}</strong>
-                <button 
-                  className="clear-search-btn"
-                  onClick={() => handleSearch('')}
-                >
-                  Clear
-                </button>
-              </div>
-            )}
-            <SearchBar 
-              initialQuery={searchQuery} 
-              onSearch={handleSearch} 
-            />
-            <div className="results-count">
-              {agents.length} results
+    <div className={`min-h-screen pb-16 ${darkMode ? "dark bg-[#2D1846]" : "bg-gray-50"} ${themeClasses}`}>
+      {/* BookingHeader */}
+      <BookingHeader />
+      
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-6xl mx-auto">
+          {/* Enhanced 3D Header with animation - similar to AITools.jsx */}
+          <div className="bg-gradient-to-br from-purple-900/70 via-[#2D1846]/80 to-indigo-900/70 backdrop-blur-lg rounded-3xl p-8 mb-8 shadow-2xl border border-white/20 transition-all duration-700 hover:border-white/30 transform hover:translate-y-[-5px] relative overflow-hidden">
+            <div className="absolute inset-0 bg-pattern opacity-30"></div>
+            <div className="relative z-10">
+              <h1 className="text-4xl sm:text-5xl font-bold mb-4 tracking-tight">
+                <span className="bg-gradient-to-r from-purple-300 via-pink-300 to-yellow-200 text-transparent bg-clip-text">
+                  Master AI Agents
+                </span>
+              </h1>
+              <p className="text-white/80 text-lg mb-2">
+                Discover and automate your repetitive tasks
+              </p>
+              <div className="w-20 h-1 bg-gradient-to-r from-purple-500 to-pink-500 mt-4 rounded-full"></div>
             </div>
-            {renderAgentGrid()}
+          </div>
+
+          <div className="flex flex-col xl:flex-row gap-6">
+            {/* Sidebar with filters - enhanced with glass effect */}
+            <aside className="xl:w-1/4 mb-6 xl:mb-0">
+              <div className="glass-effect rounded-2xl p-6 backdrop-blur-md border border-white/20">
+                <FilterSidebar
+                  selectedPrice={selectedPrice}
+                  onPriceChange={handlePriceChange}
+                  selectedRating={selectedRating}
+                  onRatingChange={handleRatingChange}
+                  selectedTags={selectedTags}
+                  onTagChange={handleTagChange}
+                  tagCounts={tagCounts}
+                  selectedFeatures={selectedFeatures}
+                  onFeatureChange={handleFeatureChange}
+                  featureCounts={featureCounts}
+                />
+              </div>
+            </aside>
+
+            {/* Main content area */}
+            <main className="xl:w-3/4">
+              {/* Category navigation - enhanced with glass effect */}
+              <div className="mb-6 curated-marketplace glass-effect rounded-xl p-6">
+                <CategoryNav
+                  selectedCategory={selectedCategory}
+                  onCategoryChange={handleCategoryChange}
+                />
+              </div>
+
+              {/* Filter and search area - enhanced with glass effect */}
+              <div className="glass-effect rounded-xl p-6 mb-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex flex-wrap gap-2">
+                    {['Hot & New', 'Top Rated', 'Most Popular', 'Price: Low to High', 'Price: High to Low'].map((filter) => (
+                      <button
+                        key={filter}
+                        onClick={() => handleFilterChange(filter)}
+                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                          selectedFilter === filter ? 
+                          'bg-gradient-to-r from-purple-500/60 to-indigo-500/60 text-white shadow-md border border-white/30' : 
+                          'bg-white/10 backdrop-blur-sm border border-white/10 text-white/70 hover:bg-white/15'
+                        }`}
+                      >
+                        {filter}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="w-full md:w-auto">
+                    <SearchBar
+                      initialQuery={searchQuery}
+                      onSearch={handleSearch}
+                      placeholder="Search agents..."
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Featured agents carousel */}
+              {featuredAgents.length > 0 && (
+                <section className="mb-12 glass-effect p-6 rounded-xl">
+                  <h2 className="text-2xl font-semibold mb-4 text-white">Featured Agents</h2>
+                  <FeaturedAgents agents={featuredAgents} />
+                </section>
+              )}
+
+              {/* Agent grid - Conditional rendering based on loading state */}
+              {isLoading ? (
+                <div className="flex justify-center items-center h-64 glass-effect rounded-xl p-6">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-300"></div>
+                </div>
+              ) : agents.length === 0 ? (
+                <div className="text-center p-12 glass-effect rounded-xl">
+                  <FaExclamationTriangle className="text-3xl text-yellow-300 mb-4 mx-auto" />
+                  <h3 className="text-xl font-semibold mb-2 text-white">No agents found</h3>
+                  <p className="text-white/70 mb-6">
+                    We couldn't find any agents matching your current filters. Try adjusting your search criteria.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSelectedCategory('All');
+                      setSelectedFilter('Hot & New');
+                      setSelectedPrice('all');
+                      setSelectedRating(0);
+                      setSelectedTags([]);
+                      setSelectedFeatures([]);
+                      setSearchQuery('');
+                      applyFilters(allAgents);
+                    }}
+                    className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-full hover:from-purple-700 hover:to-purple-800 transition-all shadow-md"
+                  >
+                    Reset Filters
+                  </button>
+                </div>
+              ) : (
+                <div className="glass-effect p-6 rounded-xl">
+                  {renderAgentGrid()}
+                </div>
+              )}
+
+              {/* Recommended agents */}
+              {recommendedAgents.length > 0 && (
+                <section className="mt-16 glass-effect p-6 rounded-xl">
+                  <h2 className="text-2xl font-semibold mb-4 text-white">Recommended For You</h2>
+                  <div className="relative">
+                    {isRecommendationsLoading ? (
+                      <div className="flex justify-center items-center h-64">
+                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-300"></div>
+                      </div>
+                    ) : (
+                      <AgentCarousel agents={recommendedAgents} />
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {/* Wishlists */}
+              {wishlists.length > 0 && (
+                <section className="mt-16 glass-effect p-6 rounded-xl">
+                  <h2 className="text-2xl font-semibold mb-4 text-white">Your Saved Collections</h2>
+                  <WishlistSection wishlists={wishlists} />
+                </section>
+              )}
+            </main>
           </div>
         </div>
       </div>

@@ -6,7 +6,6 @@ import { AuthContext } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext.jsx';
 import { toast } from 'react-toastify';
 import { FaShoppingCart } from 'react-icons/fa';
-import SearchBar from '../components/agents/SearchBar';
 import './Header.css'; // Import custom Header CSS
 
 const Header = ({ openSignUpModal }) => {
@@ -20,17 +19,8 @@ const Header = ({ openSignUpModal }) => {
   // For toggling mobile navigation
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  // For the search input
-  const [searchTerm, setSearchTerm] = useState('');
-
-  // Helper to highlight active route (optional)
-  const isActive = (path) => location.pathname === path;
-  
   // Check if current page is an admin page
   const isAdminPage = location.pathname.startsWith('/admin');
-  
-  // Determine if we should show search bar (only on homepage and agents page)
-  const shouldShowSearchBar = location.pathname === '/' || location.pathname === '/agents';
   
   // Toggle body class when menu opens/closes
   useEffect(() => {
@@ -93,40 +83,6 @@ const Header = ({ openSignUpModal }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, [isMenuOpen]);
 
-  // Initialize searchTerm from URL when it exists
-  useEffect(() => {
-    const queryParams = new URLSearchParams(location.search);
-    const queryFromUrl = queryParams.get('q');
-    
-    if (queryFromUrl) {
-      setSearchTerm(queryFromUrl);
-    } else if (searchTerm && !location.search.includes('q=')) {
-      // Clear search term when changing pages without a query
-      setSearchTerm('');
-    }
-  }, [location.pathname, location.search]);
-
-  // Handle search - Updated to search within Body.jsx content
-  const handleSearch = (query) => {
-    if (query && query.trim() !== '') {
-      const trimmedQuery = query.trim();
-      console.log(`Searching for: ${trimmedQuery}`);
-      
-      // If we're already on the homepage, just update the search param
-      if (location.pathname === '/') {
-        navigate(`/?q=${encodeURIComponent(trimmedQuery)}`);
-      } 
-      // If we're on the agents page, use the agents search
-      else if (location.pathname === '/agents') {
-        navigate(`/agents?q=${encodeURIComponent(trimmedQuery)}`);
-      } 
-      // For any other page, redirect to the homepage with search query
-      else {
-        navigate(`/?q=${encodeURIComponent(trimmedQuery)}`);
-      }
-    }
-  };
-
   // If we're already on /sign-in, going to sign up should push /sign-up
   const handleSignUp = () => {
     if (location.pathname === '/sign-in') {
@@ -154,191 +110,177 @@ const Header = ({ openSignUpModal }) => {
   };
 
   return (
-    <>
-      <header className="main-header w-full bg-[#1a1a2e] text-white py-4 px-6 shadow-md relative z-[100]">
-        <div className="container mx-auto flex items-center justify-between">
-          {/* Left group: Logo and main nav */}
-          <div className="flex items-center space-x-4">
-            <div className="flex-shrink-0 cursor-pointer logo-container" onClick={() => navigate('/')}>
-              <img
-                src={logo}
-                alt="Logo"
-                className="h-10 w-10 rounded-full object-cover transition-transform hover:scale-110"
-              />
-            </div>
-
-            {/* Main Nav (hidden on mobile, shown on md and up) */}
-            <nav className="hidden md:flex items-center space-x-6 nav-links">
-              <Link to="/agents" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
-                Agents
-              </Link>
-              <Link to="/ai-tools" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
-                AI Tools
-              </Link>
-              <Link to="/trends" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
-                Trends
-              </Link>
-              <Link to="/latest-tech" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
-                Latest Tech
-              </Link>
-            </nav>
-          </div>
-
-          {/* Right group: Auth buttons and profile */}
-          <div className="flex items-center space-x-3 auth-buttons">
-            {/* Cart Icon (Removed Checkout Button) */}
-            <div className="cart-container hidden md:flex items-center">
-              <Link to="/checkout" className="cart-icon-container relative inline-block text-white hover:text-[#00bcd4] transition-colors duration-300">
-                <FaShoppingCart className="text-xl" />
-                {itemCount > 0 && (
-                  <span className="cart-badge absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {itemCount}
-                  </span>
-                )}
-              </Link>
-            </div>
-            
-            {!user && (
-              <div className="hidden md:flex items-center space-x-3">
-                <Link to="/sign-in" className="auth-link text-white font-medium hover:text-[#00bcd4] transition-colors duration-300">
-                  Sign In
-                </Link>
-                <button
-                  onClick={handleSignUp}
-                  className="auth-button bg-[#00bcd4] hover:bg-[#0097a7] text-white font-medium py-2 px-4 rounded-md transition-colors duration-300"
-                >
-                  Sign Up
-                </button>
-              </div>
-            )}
-
-            {user && (
-              <div className="hidden md:flex items-center space-x-3">
-                {user.role === 'admin' && (
-                  <Link to="/admin/agents" className="auth-link text-white font-medium hover:text-[#00bcd4] transition-colors duration-300">
-                    Admin
-                  </Link>
-                )}
-                <button
-                  onClick={handleSignOut}
-                  className="auth-button signout-button bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md transition-colors duration-300"
-                >
-                  Sign Out
-                </button>
-                <Link
-                  to="/profile"
-                  className="profile-avatar w-10 h-10 overflow-hidden rounded-full border-2 border-[#00bcd4]"
-                >
-                  <img
-                    src={user?.photoURL || '/default-avatar.png'}
-                    alt={`${user?.displayName || 'User'}'s Profile`}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      // Only set default if not already default
-                      if (e.target.src.indexOf('default-avatar.png') === -1) {
-                        console.log('Header: Avatar image failed to load, using default');
-                        e.target.src = '/default-avatar.png';
-                      }
-                      // Prevent infinite error handling
-                      e.target.onerror = null;
-                    }}
-                  />
-                </Link>
-              </div>
-            )}
-
-            {/* Hamburger menu icon - Only shown on mobile */}
-            <button 
-              type="button"
-              ref={toggleButtonRef}
-              className="mobile-menu-toggle md:hidden flex flex-col justify-center items-center w-10 h-10 p-2 z-50"
-              onClick={toggleMobileMenu}
-              aria-label="Toggle menu"
-              aria-expanded={isMenuOpen}
-            >
-              <span className={`hamburger-line w-6 h-0.5 bg-white my-0.5 transition-all duration-300 ${isMenuOpen ? 'transform rotate-45 translate-y-1.5' : ''}`}></span>
-              <span className={`hamburger-line w-6 h-0.5 bg-white my-0.5 transition-all duration-300 ${isMenuOpen ? 'opacity-0' : ''}`}></span>
-              <span className={`hamburger-line w-6 h-0.5 bg-white my-0.5 transition-all duration-300 ${isMenuOpen ? 'transform -rotate-45 -translate-y-1.5' : ''}`}></span>
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile menu */}
-        <div 
-          ref={mobileMenuRef} 
-          className={`mobile-menu fixed top-[72px] left-0 w-full h-screen bg-[#1a1a2e] z-50 transform transition-transform duration-300 ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'} ${isMenuOpen ? 'block' : 'block'}`}
-          aria-hidden={!isMenuOpen}
-        >
-          <nav className="mobile-nav flex flex-col p-4">
-            <Link to="/agents" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
-              Agents
-            </Link>
-            <Link to="/ai-tools" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
-              AI Tools
-            </Link>
-            <Link to="/trends" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
-              Trends
-            </Link>
-            <Link to="/latest-tech" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
-              Latest Tech
-            </Link>
-            {/* Cart in mobile menu */}
-            <Link to="/checkout" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
-              Cart {itemCount > 0 ? `(${itemCount})` : ''}
-            </Link>
-            {!user && (
-              <>
-                <Link to="/sign-in" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
-                  Sign In
-                </Link>
-                <button
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    handleSignUp();
-                  }}
-                  className="mobile-nav-button mt-3 bg-[#00bcd4] hover:bg-[#0097a7] text-white font-medium py-2 px-4 rounded-md w-full"
-                >
-                  Sign Up
-                </button>
-              </>
-            )}
-            {user && (
-              <>
-                <Link to="/profile" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
-                  Profile
-                </Link>
-                {user.role === 'admin' && (
-                  <Link to="/admin/agents" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
-                    Admin Dashboard
-                  </Link>
-                )}
-                <button
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    handleSignOut();
-                  }}
-                  className="mobile-nav-button signout mt-3 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md w-full"
-                >
-                  Sign Out
-                </button>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
-
-      {/* Search section - Only shown on homepage and agents page */}
-      {shouldShowSearchBar && (
-        <div className="search-section bg-[#292949] py-6">
-          <div className="container mx-auto px-4">
-            <SearchBar 
-              initialQuery={searchTerm} 
-              onSearch={handleSearch} 
+    <header className="main-header w-full bg-[#1a1a2e] text-white py-4 px-6 shadow-md relative z-[100]">
+      <div className="container mx-auto flex items-center justify-between">
+        {/* Left group: Logo and main nav */}
+        <div className="flex items-center space-x-4">
+          <div className="flex-shrink-0 cursor-pointer logo-container" onClick={() => navigate('/')}>
+            <img
+              src={logo}
+              alt="Logo"
+              className="h-10 w-10 rounded-full object-cover transition-transform hover:scale-110"
             />
           </div>
+
+          {/* Main Nav (hidden on mobile, shown on md and up) */}
+          <nav className="hidden md:flex items-center space-x-6 nav-links">
+            <Link to="/agents" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
+              Agents
+            </Link>
+            <Link to="/ai-tools" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
+              AI Tools
+            </Link>
+            <Link to="/trends" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
+              Trends
+            </Link>
+            <Link to="/latest-tech" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
+              Latest Tech
+            </Link>
+          </nav>
         </div>
-      )}
-    </>
+
+        {/* Right group: Auth buttons and profile */}
+        <div className="flex items-center space-x-3 auth-buttons">
+          {/* Cart Icon (Removed Checkout Button) */}
+          <div className="cart-container hidden md:flex items-center">
+            <Link to="/checkout" className="cart-icon-container relative inline-block text-white hover:text-[#00bcd4] transition-colors duration-300">
+              <FaShoppingCart className="text-xl" />
+              {itemCount > 0 && (
+                <span className="cart-badge absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {itemCount}
+                </span>
+              )}
+            </Link>
+          </div>
+          
+          {!user && (
+            <div className="hidden md:flex items-center space-x-3">
+              <Link to="/sign-in" className="auth-link text-white font-medium hover:text-[#00bcd4] transition-colors duration-300">
+                Sign In
+              </Link>
+              <button
+                onClick={handleSignUp}
+                className="auth-button bg-[#00bcd4] hover:bg-[#0097a7] text-white font-medium py-2 px-4 rounded-md transition-colors duration-300"
+              >
+                Sign Up
+              </button>
+            </div>
+          )}
+
+          {user && (
+            <div className="hidden md:flex items-center space-x-3">
+              {user.role === 'admin' && (
+                <Link to="/admin/agents" className="auth-link text-white font-medium hover:text-[#00bcd4] transition-colors duration-300">
+                  Admin
+                </Link>
+              )}
+              <button
+                onClick={handleSignOut}
+                className="auth-button signout-button bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md transition-colors duration-300"
+              >
+                Sign Out
+              </button>
+              <Link
+                to="/profile"
+                className="profile-avatar w-10 h-10 overflow-hidden rounded-full border-2 border-[#00bcd4]"
+              >
+                <img
+                  src={user?.photoURL || '/default-avatar.png'}
+                  alt={`${user?.displayName || 'User'}'s Profile`}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Only set default if not already default
+                    if (e.target.src.indexOf('default-avatar.png') === -1) {
+                      console.log('Header: Avatar image failed to load, using default');
+                      e.target.src = '/default-avatar.png';
+                    }
+                    // Prevent infinite error handling
+                    e.target.onerror = null;
+                  }}
+                />
+              </Link>
+            </div>
+          )}
+
+          {/* Hamburger menu icon - Only shown on mobile */}
+          <button 
+            type="button"
+            ref={toggleButtonRef}
+            className="mobile-menu-toggle md:hidden flex flex-col justify-center items-center w-10 h-10 p-2 z-50"
+            onClick={toggleMobileMenu}
+            aria-label="Toggle menu"
+            aria-expanded={isMenuOpen}
+          >
+            <span className={`hamburger-line w-6 h-0.5 bg-white my-0.5 transition-all duration-300 ${isMenuOpen ? 'transform rotate-45 translate-y-1.5' : ''}`}></span>
+            <span className={`hamburger-line w-6 h-0.5 bg-white my-0.5 transition-all duration-300 ${isMenuOpen ? 'opacity-0' : ''}`}></span>
+            <span className={`hamburger-line w-6 h-0.5 bg-white my-0.5 transition-all duration-300 ${isMenuOpen ? 'transform -rotate-45 -translate-y-1.5' : ''}`}></span>
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile menu */}
+      <div 
+        ref={mobileMenuRef} 
+        className={`mobile-menu fixed top-[72px] left-0 w-full h-screen bg-[#1a1a2e] z-50 transform transition-transform duration-300 ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'} ${isMenuOpen ? 'block' : 'block'}`}
+        aria-hidden={!isMenuOpen}
+      >
+        <nav className="mobile-nav flex flex-col p-4">
+          <Link to="/agents" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
+            Agents
+          </Link>
+          <Link to="/ai-tools" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
+            AI Tools
+          </Link>
+          <Link to="/trends" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
+            Trends
+          </Link>
+          <Link to="/latest-tech" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
+            Latest Tech
+          </Link>
+          {/* Cart in mobile menu */}
+          <Link to="/checkout" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
+            Cart {itemCount > 0 ? `(${itemCount})` : ''}
+          </Link>
+          {!user && (
+            <>
+              <Link to="/sign-in" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
+                Sign In
+              </Link>
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  handleSignUp();
+                }}
+                className="mobile-nav-button mt-3 bg-[#00bcd4] hover:bg-[#0097a7] text-white font-medium py-2 px-4 rounded-md w-full"
+              >
+                Sign Up
+              </button>
+            </>
+          )}
+          {user && (
+            <>
+              <Link to="/profile" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
+                Profile
+              </Link>
+              {user.role === 'admin' && (
+                <Link to="/admin/agents" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
+                  Admin Dashboard
+                </Link>
+              )}
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  handleSignOut();
+                }}
+                className="mobile-nav-button signout mt-3 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-md w-full"
+              >
+                Sign Out
+              </button>
+            </>
+          )}
+        </nav>
+      </div>
+    </header>
   );
 };
 

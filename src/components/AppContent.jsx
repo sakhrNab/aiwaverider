@@ -17,6 +17,7 @@ import Checkout from '../pages/Checkout';
 import ThankYou from '../pages/ThankYou';
 import CheckoutSuccess from './checkout/CheckoutSuccess';
 import AITools from '../pages/AITools';
+import LatestTech from '../pages/LatestTech';
 // Import admin pages
 import Dashboard from '../pages/admin/Dashboard';
 import ManageAgents from '../pages/admin/ManageAgents';
@@ -46,6 +47,7 @@ const AppContent = () => {
           <Route path="/profile" element={<Profile />} />
           <Route path="/agents" element={<Agents />} />
           <Route path="/ai-tools" element={<AITools />} />
+          <Route path="/latest-tech" element={<LatestTech />} />
           <Route path="/agents/:agentId" element={<AgentDetail />} />
           <Route path="/product/:agentId" element={<AgentDetail />} />
           <Route path="/checkout" element={<Checkout />} />
