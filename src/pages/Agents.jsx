@@ -385,7 +385,7 @@ const Agents = () => {
     if (isLoading) {
       return (
         <div className="loading-container">
-          <div className="loading-spinner"></div>
+          <div className="loader"></div>
         </div>
       );
     }
@@ -467,8 +467,8 @@ const Agents = () => {
       
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
-          {/* Enhanced 3D Header with animation - similar to AITools.jsx */}
-          <div className="bg-gradient-to-br from-purple-900/70 via-[#2D1846]/80 to-indigo-900/70 backdrop-blur-lg rounded-3xl p-8 mb-8 shadow-2xl border border-white/20 transition-all duration-700 hover:border-white/30 transform hover:translate-y-[-5px] relative overflow-hidden">
+          {/* Enhanced 3D Header */}
+          <div className="page-header-3d">
             <div className="absolute inset-0 bg-pattern opacity-30"></div>
             <div className="relative z-10">
               <h1 className="text-4xl sm:text-5xl font-bold mb-4 tracking-tight">
@@ -484,9 +484,9 @@ const Agents = () => {
           </div>
 
           <div className="flex flex-col xl:flex-row gap-6">
-            {/* Sidebar with filters - enhanced with glass effect */}
+            {/* Sidebar with filters */}
             <aside className="xl:w-1/4 mb-6 xl:mb-0">
-              <div className="glass-effect rounded-2xl p-6 backdrop-blur-md border border-white/20">
+              <div className="filter-sidebar glass-effect">
                 <FilterSidebar
                   selectedPrice={selectedPrice}
                   onPriceChange={handlePriceChange}
@@ -504,64 +504,58 @@ const Agents = () => {
 
             {/* Main content area */}
             <main className="xl:w-3/4">
-              {/* Category navigation - enhanced with glass effect */}
-              <div className="mb-6 curated-marketplace glass-effect rounded-xl p-6">
-                <CategoryNav
-                  selectedCategory={selectedCategory}
-                  onCategoryChange={handleCategoryChange}
-                />
-              </div>
+              {/* Category navigation */}
+              <div className="mb-6 curated-marketplace glass-effect">
+        <CategoryNav 
+          selectedCategory={selectedCategory} 
+          onCategoryChange={handleCategoryChange} 
+        />
+      </div>
 
-              {/* Filter and search area - enhanced with glass effect */}
-              <div className="glass-effect rounded-xl p-6 mb-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex flex-wrap gap-2">
-                    {['Hot & New', 'Top Rated', 'Most Popular', 'Price: Low to High', 'Price: High to Low'].map((filter) => (
-                      <button
-                        key={filter}
-                        onClick={() => handleFilterChange(filter)}
-                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-                          selectedFilter === filter ? 
-                          'bg-gradient-to-r from-purple-500/60 to-indigo-500/60 text-white shadow-md border border-white/30' : 
-                          'bg-white/10 backdrop-blur-sm border border-white/10 text-white/70 hover:bg-white/15'
-                        }`}
-                      >
-                        {filter}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="w-full md:w-auto">
-                    <SearchBar
-                      initialQuery={searchQuery}
-                      onSearch={handleSearch}
-                      placeholder="Search agents..."
-                      className="w-full"
-                    />
-                  </div>
+              {/* Filter and search area */}
+              <div className="filter-search-container glass-effect">
+                <div className="filter-options">
+                  {['Hot & New', 'Top Rated', 'Most Popular', 'Price: Low to High', 'Price: High to Low'].map((filter) => (
+            <button 
+                      key={filter}
+                      onClick={() => handleFilterChange(filter)}
+                      className={`filter-button ${selectedFilter === filter ? 'active' : ''}`}
+            >
+                      {filter}
+            </button>
+                  ))}
                 </div>
-              </div>
+                <div className="search-wrapper">
+                  <SearchBar
+                    initialQuery={searchQuery}
+                    onSearch={handleSearch}
+                    placeholder="Search agents..."
+                    className="w-full"
+                  />
+          </div>
+        </div>
 
               {/* Featured agents carousel */}
               {featuredAgents.length > 0 && (
-                <section className="mb-12 glass-effect p-6 rounded-xl">
-                  <h2 className="text-2xl font-semibold mb-4 text-white">Featured Agents</h2>
+                <section className="mb-12 glass-effect section-container">
+                  <h2 className="section-title">Featured Agents</h2>
                   <FeaturedAgents agents={featuredAgents} />
                 </section>
               )}
 
               {/* Agent grid - Conditional rendering based on loading state */}
               {isLoading ? (
-                <div className="flex justify-center items-center h-64 glass-effect rounded-xl p-6">
-                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-300"></div>
-                </div>
+                <div className="loading-wrapper glass-effect">
+                  <div className="loader"></div>
+          </div>
               ) : agents.length === 0 ? (
-                <div className="text-center p-12 glass-effect rounded-xl">
-                  <FaExclamationTriangle className="text-3xl text-yellow-300 mb-4 mx-auto" />
-                  <h3 className="text-xl font-semibold mb-2 text-white">No agents found</h3>
-                  <p className="text-white/70 mb-6">
+                <div className="empty-results glass-effect">
+                  <FaExclamationTriangle className="empty-icon" />
+                  <h3 className="empty-title">No agents found</h3>
+                  <p className="empty-message">
                     We couldn't find any agents matching your current filters. Try adjusting your search criteria.
                   </p>
-                  <button
+                <button 
                     onClick={() => {
                       setSelectedCategory('All');
                       setSelectedFilter('Hot & New');
@@ -572,37 +566,37 @@ const Agents = () => {
                       setSearchQuery('');
                       applyFilters(allAgents);
                     }}
-                    className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-full hover:from-purple-700 hover:to-purple-800 transition-all shadow-md"
+                    className="reset-button"
                   >
                     Reset Filters
-                  </button>
-                </div>
+                </button>
+              </div>
               ) : (
-                <div className="glass-effect p-6 rounded-xl">
+                <div className="agents-container glass-effect">
                   {renderAgentGrid()}
                 </div>
               )}
 
               {/* Recommended agents */}
               {recommendedAgents.length > 0 && (
-                <section className="mt-16 glass-effect p-6 rounded-xl">
-                  <h2 className="text-2xl font-semibold mb-4 text-white">Recommended For You</h2>
-                  <div className="relative">
+                <section className="mt-16 glass-effect section-container">
+                  <h2 className="section-title">Recommended For You</h2>
+                  <div className="carousel-container">
                     {isRecommendationsLoading ? (
-                      <div className="flex justify-center items-center h-64">
-                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-300"></div>
+                      <div className="loading-recommendations">
+                        <div className="loader"></div>
                       </div>
                     ) : (
                       <AgentCarousel agents={recommendedAgents} />
                     )}
-                  </div>
+            </div>
                 </section>
               )}
 
               {/* Wishlists */}
               {wishlists.length > 0 && (
-                <section className="mt-16 glass-effect p-6 rounded-xl">
-                  <h2 className="text-2xl font-semibold mb-4 text-white">Your Saved Collections</h2>
+                <section className="mt-16 glass-effect section-container">
+                  <h2 className="section-title">Your Saved Collections</h2>
                   <WishlistSection wishlists={wishlists} />
                 </section>
               )}

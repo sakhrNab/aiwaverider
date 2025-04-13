@@ -136,8 +136,8 @@ const AITools = () => {
 
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
-          {/* Enhanced 3D Header with animation */}
-          <div className="bg-gradient-to-br from-purple-900/70 via-[#2D1846]/80 to-indigo-900/70 backdrop-blur-lg rounded-3xl p-8 mb-8 shadow-2xl border border-white/20 transition-all duration-700 hover:border-white/30 transform hover:translate-y-[-5px] relative overflow-hidden">
+          {/* Page header using global class */}
+          <div className="page-header-3d">
             <div className="absolute inset-0 bg-pattern opacity-30"></div>
             <div className="relative z-10">
               <h1 className="text-4xl sm:text-5xl font-bold text-center mb-4 tracking-tight">
@@ -155,11 +155,11 @@ const AITools = () => {
           {/* Loading and Error states */}
           {loading ? (
             <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white mb-4"></div>
-              <p className="text-white text-lg">Loading AI tools...</p>
+              <div className="loader"></div>
+              <p className="text-white text-lg mt-4">Loading AI tools...</p>
             </div>
           ) : error ? (
-            <div className="text-center py-12 bg-white/10 backdrop-blur-md rounded-2xl p-6">
+            <div className="text-center py-12 glass-effect rounded-2xl p-6">
               <p className="text-red-400 text-lg mb-4">{error}</p>
               <button 
                 onClick={handleRetry}
@@ -170,59 +170,47 @@ const AITools = () => {
             </div>
           ) : (
             <>
-              {/* Fixed Search input with better positioning and spacing */}
+              {/* Search input with better positioning - using class-based approach */}
               <div className="mb-8">
-                <div className="relative mx-auto max-w-3xl transition-all duration-300 transform hover:scale-[1.01]">
-                  <div className="relative flex items-center">
-                    <div className="absolute left-4 top-1/2 transform -translate-y-1/2 z-10">
-                      <FaSearch className="text-white/50" size={20} />
-                    </div>
-                    <input 
-                      type="text" 
-                      placeholder="Search AI tools..." 
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full p-4 pl-14 bg-gradient-to-r from-white/15 to-white/10 backdrop-blur-lg border border-white/20 rounded-full text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-purple-500/50 shadow-lg transition-all duration-300 focus:shadow-xl"
-                    />
+                <div className="relative mx-auto max-w-3xl search-container">
+                  <div className="search-icon-wrapper">
+                    <FaSearch className="search-icon" />
                   </div>
+                  <input 
+                    type="text" 
+                    placeholder="Search AI tools..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="search-input"
+                  />
                 </div>
               </div>
 
-              {/* Tags filter - Enhanced with better active state */}
+              {/* Tags filter - using global filter-tags-container */}
               {tools.length > 0 && (
-                <div className="mb-8 filter-tags-container">
-                  <div className="flex flex-wrap justify-center gap-3">
+                <div className="filter-tags-container">
+                  <button
+                    onClick={() => setSelectedTag('')}
+                    className={`filter-button ${selectedTag === '' ? 'active' : ''}`}
+                  >
+                    All
+                  </button>
+                  {tags.filter(tag => tag !== 'All').map((tag) => (
                     <button
-                      onClick={() => setSelectedTag('')}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-                        selectedTag === '' ? 
-                        'bg-gradient-to-r from-purple-500/60 to-indigo-500/60 text-white shadow-md border border-white/30' : 
-                        'bg-white/10 backdrop-blur-sm border border-white/10 text-white/70 hover:bg-white/15'
-                      }`}
+                      key={tag}
+                      onClick={() => setSelectedTag(tag)}
+                      className={`filter-button ${selectedTag === tag ? 'active' : ''}`}
                     >
-                      All
+                      {tag}
                     </button>
-                    {tags.filter(tag => tag !== 'All').map((tag) => (
-                      <button
-                        key={tag}
-                        onClick={() => setSelectedTag(tag)}
-                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-                          selectedTag === tag ? 
-                          'bg-gradient-to-r from-purple-500/60 to-indigo-500/60 text-white shadow-md border border-white/30' : 
-                          'bg-white/10 backdrop-blur-sm border border-white/10 text-white/70 hover:bg-white/15'
-                        }`}
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                  </div>
+                  ))}
                 </div>
               )}
 
-              {/* Tools Container - Enhanced with improved shadows and glass morphism */}
+              {/* Tools Container - Enhanced with glass effect */}
               {tools.length > 0 ? (
-                <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-6 shadow-xl transform transition-transform duration-700 hover:scale-[1.01]">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="glass-effect rounded-3xl p-6 shadow-xl transform transition-transform duration-700 hover:scale-[1.01]">
+                  <div className="content-grid">
                     {filteredTools.length === 0 ? (
                       <div className="col-span-2 text-center py-12">
                         <p className="text-white/70">No tools match your search criteria. Try adjusting your filters.</p>
@@ -234,10 +222,10 @@ const AITools = () => {
                           href={formatLink(tool.link)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="glass-effect rounded-2xl p-6 hover:bg-white/15 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg flex items-start gap-4 group animate-fade-in"
+                          className="ai-tool-card glass-effect animate-fade-in shimmer-effect"
                           style={{ animationDelay: `${index * 100}ms` }}
                         >
-                          <div className="tool-icon-container w-14 h-14 bg-gradient-to-br from-purple-500/40 to-pink-500/40 rounded-xl p-2.5 flex items-center justify-center border border-white/20 shadow-inner group-hover:scale-110 transition-transform duration-300 overflow-hidden">
+                          <div className="tool-icon-container">
                             <img 
                               src={tool.image || iconMap[tool.keyword] || defaultAiIcon} 
                               alt={tool.title} 
@@ -250,20 +238,20 @@ const AITools = () => {
                               }}
                             />
                           </div>
-                          <div className="flex-1">
+                          <div className="ai-tool-content">
                             <div className="flex justify-between items-center">
-                              <h3 className="font-semibold text-lg group-hover:text-white transition-colors duration-300">{tool.title}</h3>
-                              <FaExternalLinkAlt className="opacity-50 group-hover:opacity-100 transition-opacity duration-300" />
+                              <h3 className="ai-tool-title">{tool.title}</h3>
+                              <FaExternalLinkAlt className="external-link-icon" />
                             </div>
-                            <p className="text-sm text-white/70 mt-1 line-clamp-2 group-hover:text-white/80 transition-colors duration-300">{tool.description}</p>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              <span className="inline-block px-3 py-1 bg-white/10 border border-white/15 rounded-full text-xs font-medium">
+                            <p className="ai-tool-description">{tool.description}</p>
+                            <div className="ai-tool-tags">
+                              <span className="ai-tool-primary-tag">
                                 {tool.keyword}
                               </span>
                               {tool.tags?.slice(0, 2).map((tag, tagIndex) => (
                                 <span 
                                   key={tagIndex} 
-                                  className="inline-block px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs text-white/60"
+                                  className="ai-tool-secondary-tag"
                                 >
                                   {tag}
                                 </span>

@@ -643,4 +643,181 @@ input[type="text"]:focus {
     rgba(0, 0, 0, 0) 70%
   );
   pointer-events: none;
+}
+
+/* Search input styling */
+.search-container {
+  transition: all 0.3s ease;
+  transform: translateZ(0);
+}
+
+.search-container:hover {
+  transform: scale(1.01);
+}
+
+.search-icon-wrapper {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+}
+
+.search-icon {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 1.25rem;
+}
+
+.search-input {
+  width: 100%;
+  padding: 1rem;
+  padding-left: 3.5rem;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.1));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+  color: white;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.search-input:focus {
+  outline: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* AI Tool card styling */
+.ai-tool-card {
+  display: flex;
+  align-items: start;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.ai-tool-card:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-4px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.tool-icon-container {
+  width: 3.5rem;
+  height: 3.5rem;
+  background: linear-gradient(to bottom right, rgba(139, 92, 246, 0.4), rgba(219, 39, 119, 0.4));
+  border-radius: 0.75rem;
+  padding: 0.625rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}
+
+.ai-tool-card:hover .tool-icon-container {
+  transform: scale(1.1);
+}
+
+.ai-tool-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-tool-title {
+  font-weight: 600;
+  font-size: 1.125rem;
+  color: rgba(255, 255, 255, 0.9);
+  transition: color 0.3s ease;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-tool-card:hover .ai-tool-title {
+  color: white;
+}
+
+.external-link-icon {
+  opacity: 0.5;
+  font-size: 0.875rem;
+  transition: opacity 0.3s ease;
+}
+
+.ai-tool-card:hover .external-link-icon {
+  opacity: 1;
+}
+
+.ai-tool-description {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0.25rem 0 0.75rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 0.3s ease;
+}
+
+.ai-tool-card:hover .ai-tool-description {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ai-tool-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.ai-tool-primary-tag {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: white;
+}
+
+.ai-tool-secondary-tag {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Image aspect ratio handling */
+img[data-aspect="portrait"] {
+  object-fit: cover;
+  height: 100%;
+  width: auto;
+}
+
+img[data-aspect="landscape"] {
+  object-fit: cover;
+  width: 100%;
+  height: auto;
+}
+
+img[data-aspect="square"] {
+  object-fit: contain;
+  width: 100%;
+  height: 100%;
 } 
