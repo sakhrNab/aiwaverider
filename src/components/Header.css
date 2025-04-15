@@ -104,6 +104,48 @@
   border: none;
   cursor: pointer;
   transition: all 0.3s ease;
+  position: relative;
+}
+
+/* Enhanced tooltip for theme toggle button */
+.tooltip-container {
+  position: relative;
+}
+
+.tooltip-container:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: -35px;
+  right: 50%;
+  transform: translateX(50%);
+  background-color: #333;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 100;
+  opacity: 0;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.tooltip-container:hover::before {
+  content: '';
+  position: absolute;
+  bottom: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: transparent transparent #333 transparent;
+  opacity: 0;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
 }
 
 .theme-toggle-button:hover {

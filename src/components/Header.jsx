@@ -6,7 +6,7 @@ import { AuthContext } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext.jsx';
 import { useTheme } from '../contexts/ThemeContext';
 import { toast } from 'react-toastify';
-import { FaShoppingCart, FaSun, FaMoon } from 'react-icons/fa';
+import { FaShoppingCart, FaSun, FaMoon, FaHome } from 'react-icons/fa';
 import './Header.css'; // Import custom Header CSS
 
 const Header = ({ openSignUpModal }) => {
@@ -126,6 +126,9 @@ const Header = ({ openSignUpModal }) => {
 
             {/* Main Nav (hidden on mobile, shown on md and up) */}
             <nav className="hidden md:flex items-center space-x-6 nav-links">
+              <Link to="/" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
+                <FaHome className="inline-block mr-1" /> Home
+              </Link>
               <Link to="/agents" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
                 Agents
               </Link>
@@ -143,14 +146,6 @@ const Header = ({ openSignUpModal }) => {
 
           {/* Right group: Auth buttons and profile */}
           <div className="flex items-center space-x-3 auth-buttons">
-            {/* Theme toggle button */}
-            <button 
-              onClick={toggleDarkMode} 
-              className="theme-toggle-button hidden md:flex items-center justify-center w-10 h-10 rounded-full bg-opacity-10 bg-white hover:bg-opacity-20 transition-all duration-300"
-              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>
-              {darkMode ? <FaSun className="text-yellow-400" /> : <FaMoon className="text-blue-400" />}
-            </button>
-            
             {/* Cart Icon (Removed Checkout Button) */}
             <div className="cart-container hidden md:flex items-center">
               <Link to="/checkout" className="cart-icon-container relative inline-block text-white hover:text-[#00bcd4] transition-colors duration-300">
@@ -212,6 +207,15 @@ const Header = ({ openSignUpModal }) => {
               </div>
             )}
 
+            {/* Theme toggle button - moved to the rightmost position */}
+            <button 
+              onClick={toggleDarkMode} 
+              className="theme-toggle-button hidden md:flex items-center justify-center w-10 h-10 rounded-full bg-opacity-10 bg-white hover:bg-opacity-20 transition-all duration-300 tooltip-container"
+              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={darkMode ? 'Enable Light Mode' : 'Enable Dark Mode'}>
+              {darkMode ? <FaSun className="text-yellow-400" /> : <FaMoon className="text-blue-400" />}
+            </button>
+
             {/* Hamburger menu icon - Only shown on mobile */}
             <button 
               type="button"
@@ -239,11 +243,15 @@ const Header = ({ openSignUpModal }) => {
             <button 
               onClick={toggleDarkMode}
               className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949] flex justify-between items-center"
+              title={darkMode ? 'Enable Light Mode' : 'Enable Dark Mode'}
             >
               <span>{darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}</span>
               {darkMode ? <FaSun className="text-yellow-400" /> : <FaMoon className="text-blue-400" />}
             </button>
             
+            <Link to="/" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
+              <FaHome className="inline-block mr-2" /> Home
+            </Link>
             <Link to="/agents" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
               Agents
             </Link>
