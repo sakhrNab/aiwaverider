@@ -8,9 +8,9 @@ import WishlistSection from '../components/agents/WishlistSection';
 import FilterSidebar from '../components/agents/FilterSidebar';
 import AgentCard from '../components/agents/AgentCard';
 import AgentCarousel from '../components/agents/AgentCarousel';
-import BookingHeader from '../components/BookingHeader';
 import { useTheme } from '../contexts/ThemeContext';
-import { FaExclamationTriangle } from 'react-icons/fa';
+import { FaExclamationTriangle, FaCalendarAlt, FaArrowRight } from 'react-icons/fa';
+import { HashLoader } from 'react-spinners';
 import '../styles/Agents.css';
 
 // Import theme classes - similar to AITools.jsx
@@ -460,10 +460,46 @@ const Agents = () => {
     }
   }, [allAgents]);
 
+  // Use the new loader
+  if (isLoading) {
+    return (
+      <div className="flex flex-col justify-center items-center h-screen bg-gradient-to-b from-gray-900 to-blue-900">
+        <div className="mb-8">
+          <HashLoader color="#4FD1C5" size={70} speedMultiplier={0.8} />
+        </div>
+        <div className="text-white text-xl font-semibold mt-4">
+          Loading AI Agents
+        </div>
+        <div className="text-blue-300 text-sm mt-2">
+          Fetching the latest agents for you...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen pb-16 ${darkMode ? "dark bg-[#2D1846]" : "bg-gray-50"} ${themeClasses}`}>
-      {/* BookingHeader */}
-      <BookingHeader />
+      {/* Custom booking header that matches the homepage */}
+      <div className="bg-indigo-900 py-6 px-6">
+        <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-bold text-white">Wave Rider</h2>
+            <p className="text-yellow-500 font-medium">Your Gateway to AI Mastery</p>
+          </div>
+          <div className="mt-4 md:mt-0">
+            <a 
+              href="https://calendly.com/your-booking-link" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="px-6 py-3 bg-gradient-to-r from-yellow-500 to-red-500 text-white rounded-full font-semibold flex items-center heartbeat-pulse"
+            >
+              <FaCalendarAlt className="mr-2" />
+              Book a Training Session
+              <FaArrowRight className="ml-2" />
+            </a>
+          </div>
+        </div>
+      </div>
       
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
@@ -506,23 +542,23 @@ const Agents = () => {
             <main className="xl:w-3/4">
               {/* Category navigation */}
               <div className="mb-6 curated-marketplace glass-effect">
-        <CategoryNav 
-          selectedCategory={selectedCategory} 
-          onCategoryChange={handleCategoryChange} 
-        />
-      </div>
+                <CategoryNav 
+                  selectedCategory={selectedCategory} 
+                  onCategoryChange={handleCategoryChange} 
+                />
+              </div>
 
               {/* Filter and search area */}
               <div className="filter-search-container glass-effect">
                 <div className="filter-options">
                   {['Hot & New', 'Top Rated', 'Most Popular', 'Price: Low to High', 'Price: High to Low'].map((filter) => (
-            <button 
+                    <button 
                       key={filter}
                       onClick={() => handleFilterChange(filter)}
                       className={`filter-button ${selectedFilter === filter ? 'active' : ''}`}
-            >
+                    >
                       {filter}
-            </button>
+                    </button>
                   ))}
                 </div>
                 <div className="search-wrapper">
@@ -532,8 +568,8 @@ const Agents = () => {
                     placeholder="Search agents..."
                     className="w-full"
                   />
-          </div>
-        </div>
+                </div>
+              </div>
 
               {/* Featured agents carousel */}
               {featuredAgents.length > 0 && (
@@ -547,7 +583,7 @@ const Agents = () => {
               {isLoading ? (
                 <div className="loading-wrapper glass-effect">
                   <div className="loader"></div>
-          </div>
+                </div>
               ) : agents.length === 0 ? (
                 <div className="empty-results glass-effect">
                   <FaExclamationTriangle className="empty-icon" />
@@ -555,7 +591,7 @@ const Agents = () => {
                   <p className="empty-message">
                     We couldn't find any agents matching your current filters. Try adjusting your search criteria.
                   </p>
-                <button 
+                  <button 
                     onClick={() => {
                       setSelectedCategory('All');
                       setSelectedFilter('Hot & New');
@@ -569,8 +605,8 @@ const Agents = () => {
                     className="reset-button"
                   >
                     Reset Filters
-                </button>
-              </div>
+                  </button>
+                </div>
               ) : (
                 <div className="agents-container glass-effect">
                   {renderAgentGrid()}
@@ -589,7 +625,7 @@ const Agents = () => {
                     ) : (
                       <AgentCarousel agents={recommendedAgents} />
                     )}
-            </div>
+                  </div>
                 </section>
               )}
 

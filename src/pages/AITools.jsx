@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { FaExternalLinkAlt, FaSearch } from 'react-icons/fa';
+import { FaExternalLinkAlt, FaSearch, FaCalendarAlt, FaArrowRight } from 'react-icons/fa';
 import '../styles/AITools.css';
 import * as aiToolsService from '../services/aiToolsService';
 import { useTheme } from '../contexts/ThemeContext';
-import BookingHeader from '../components/BookingHeader';
+import { HashLoader } from 'react-spinners';
 
 // Import icons
 import promptIcon from '../assets/ai-tools/prompt-icon.svg';
@@ -129,10 +129,46 @@ const AITools = () => {
     return titleMatch && tagMatch;
   });
 
+  // Use the new loader component
+  if (loading) {
+    return (
+      <div className="flex flex-col justify-center items-center h-screen bg-gradient-to-b from-gray-900 to-blue-900">
+        <div className="mb-8">
+          <HashLoader color="#4FD1C5" size={70} speedMultiplier={0.8} />
+        </div>
+        <div className="text-white text-xl font-semibold mt-4">
+          Loading AI Tools
+        </div>
+        <div className="text-blue-300 text-sm mt-2">
+          Discovering the best tools for you...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen pb-16 ${darkMode ? "dark bg-[#2D1846]" : "bg-gray-50"} ${themeClasses}`}>
-      {/* Use the BookingHeader component */}
-      <BookingHeader />
+      {/* Custom booking header that matches the homepage */}
+      <div className="bg-indigo-900 py-6 px-6">
+        <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-bold text-white">Wave Rider</h2>
+            <p className="text-yellow-500 font-medium">Your Gateway to AI Mastery</p>
+          </div>
+          <div className="mt-4 md:mt-0">
+            <a 
+              href="https://calendly.com/your-booking-link" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="px-6 py-3 bg-gradient-to-r from-yellow-500 to-red-500 text-white rounded-full font-semibold flex items-center heartbeat-pulse"
+            >
+              <FaCalendarAlt className="mr-2" />
+              Book a Training Session
+              <FaArrowRight className="ml-2" />
+            </a>
+          </div>
+        </div>
+      </div>
 
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
@@ -152,13 +188,8 @@ const AITools = () => {
             </div>
           </div>
 
-          {/* Loading and Error states */}
-          {loading ? (
-            <div className="text-center py-12">
-              <div className="loader"></div>
-              <p className="text-white text-lg mt-4">Loading AI tools...</p>
-            </div>
-          ) : error ? (
+          {/* Error state - Loading handled above */}
+          {error ? (
             <div className="text-center py-12 glass-effect rounded-2xl p-6">
               <p className="text-red-400 text-lg mb-4">{error}</p>
               <button 

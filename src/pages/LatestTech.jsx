@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { FaCalendarAlt, FaEye, FaHeart, FaComment } from 'react-icons/fa';
+import { FaCalendarAlt, FaEye, FaHeart, FaComment, FaArrowRight } from 'react-icons/fa';
 import { PostsContext } from '../contexts/PostsContext';
 import { useTheme } from '../contexts/ThemeContext';
-import BookingHeader from '../components/BookingHeader';
+import { HashLoader } from 'react-spinners';
 import DOMPurify from 'dompurify';
 
 const LatestTech = () => {
@@ -89,10 +89,46 @@ const LatestTech = () => {
 
   const themeClasses = "bg-gradient-to-br from-[#4158D0] via-[#C850C0] to-[#FFCC70] stars-pattern";
   
+  // New loading state with HashLoader
+  if (loadingPosts && !loadingMore) {
+    return (
+      <div className="flex flex-col justify-center items-center h-screen bg-gradient-to-b from-gray-900 to-blue-900">
+        <div className="mb-8">
+          <HashLoader color="#4FD1C5" size={70} speedMultiplier={0.8} />
+        </div>
+        <div className="text-white text-xl font-semibold mt-4">
+          Loading Latest Tech News
+        </div>
+        <div className="text-blue-300 text-sm mt-2">
+          Fetching the latest articles for you...
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className={`min-h-screen pb-16 ${darkMode ? "dark bg-[#2D1846]" : "bg-gray-50"} ${themeClasses}`}>
-      {/* Use the BookingHeader component */}
-      <BookingHeader />
+      {/* Custom booking header that matches the homepage */}
+      <div className="bg-indigo-900 py-6 px-6">
+        <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-bold text-white">Wave Rider</h2>
+            <p className="text-yellow-500 font-medium">Your Gateway to AI Mastery</p>
+          </div>
+          <div className="mt-4 md:mt-0">
+            <a 
+              href="https://calendly.com/your-booking-link" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="px-6 py-3 bg-gradient-to-r from-yellow-500 to-red-500 text-white rounded-full font-semibold flex items-center heartbeat-pulse"
+            >
+              <FaCalendarAlt className="mr-2" />
+              Book a Training Session
+              <FaArrowRight className="ml-2" />
+            </a>
+          </div>
+        </div>
+      </div>
       
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
@@ -157,13 +193,8 @@ const LatestTech = () => {
             </div>
           </div>
           
-          {/* Loading State */}
-          {loadingPosts && !loadingMore ? (
-            <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white mb-4"></div>
-              <p className="text-white text-lg">Loading posts...</p>
-            </div>
-          ) : errorPosts ? (
+          {/* Loading State - Already handled by the new HashLoader at the top */}
+          {errorPosts ? (
             <div className="text-center py-12 bg-white/10 backdrop-blur-md rounded-2xl p-6">
               <p className="text-red-400 text-lg mb-4">{errorPosts}</p>
               <button 
@@ -191,6 +222,9 @@ const LatestTech = () => {
                           src={post.imageUrl || 'https://via.placeholder.com/600x400?text=AI+Tech'} 
                           alt={post.title}
                           className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                          onError={(e) => { 
+                            e.target.src = 'https://placehold.co/600x400/indigo/white?text=AI+Tech'; 
+                          }}
                         />
                         <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
                           {post.category}
