@@ -4,7 +4,7 @@ import { FaRobot, FaTools, FaLightbulb, FaCalendarAlt, FaArrowRight, FaUserGradu
 import { Link } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 
-const Home = () => {
+const HomePage = () => {
   const [loading, setLoading] = useState(true);
   const { darkMode } = useTheme();
   
@@ -57,6 +57,28 @@ const Home = () => {
   
   return (
     <div className={`${darkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
+      {/* Custom booking header that matches the screenshot */}
+      <div className="bg-indigo-900 py-6 px-6">
+        <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-bold text-white">Wave Rider</h2>
+            <p className="text-yellow-500 font-medium">Your Gateway to AI Mastery</p>
+          </div>
+          <div className="mt-4 md:mt-0">
+            <a 
+              href="https://calendly.com/your-booking-link" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="px-6 py-3 bg-gradient-to-r from-yellow-500 to-red-500 text-white rounded-full font-semibold flex items-center heartbeat-pulse"
+            >
+              <FaCalendarAlt className="mr-2" />
+              Book a Training Session
+              <FaArrowRight className="ml-2" />
+            </a>
+          </div>
+        </div>
+      </div>
+
       {/* Hero Section */}
       <section className="relative py-20 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-purple-600 via-blue-500 to-indigo-700 opacity-90"></div>
@@ -84,7 +106,7 @@ const Home = () => {
               <div className="relative">
                 <div className="absolute -top-5 -left-5 w-24 h-24 bg-blue-500 rounded-full opacity-20 animate-pulse"></div>
                 <div className="absolute -bottom-8 -right-8 w-40 h-40 bg-purple-500 rounded-full opacity-20 animate-pulse delay-300"></div>
-                <img src="/hero-image.webp" alt="AI Technology" className="relative z-10 rounded-xl shadow-2xl max-w-full h-auto" onError={(e) => { e.target.src = 'https://via.placeholder.com/600x400?text=AI+Wave+Rider'; }} />
+                <img src="/hero-image.webp" alt="AI Technology" className="relative z-10 rounded-xl shadow-2xl max-w-full h-auto" onError={(e) => { e.target.src = 'https://placehold.co/600x400/indigo/white?text=AI+Wave+Rider'; }} />
               </div>
             </div>
           </div>
@@ -323,7 +345,7 @@ const Home = () => {
                   href="https://calendly.com/your-booking-link" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="w-full px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all flex items-center justify-center heartbeat-pulse"
+                  className="w-full px-8 py-3 bg-gradient-to-r from-yellow-500 to-red-500 text-white rounded-lg font-medium transition-all flex items-center justify-center heartbeat-pulse"
                 >
                   <FaCalendarAlt className="mr-2" />
                   Book Your Session Now
@@ -350,7 +372,7 @@ const Home = () => {
             <Link to="/ai-tools" className="px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-all">
               Browse AI Tools
             </Link>
-            <a href="#book-session" className="px-8 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium transition-all">
+            <a href="#book-session" className="px-8 py-3 bg-gradient-to-r from-yellow-500 to-red-500 text-white rounded-lg font-medium transition-all">
               Book a Consultation
             </a>
           </div>
@@ -360,4 +382,4 @@ const Home = () => {
   );
 };
 
-export default Home;
+export default HomePage; 

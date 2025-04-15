@@ -18,6 +18,7 @@ import ThankYou from '../pages/ThankYou';
 import CheckoutSuccess from './checkout/CheckoutSuccess';
 import AITools from '../pages/AITools';
 import LatestTech from '../pages/LatestTech';
+import HomePage from '../pages/HomePage';
 // Import admin pages
 import Dashboard from '../pages/admin/Dashboard';
 import ManageAgents from '../pages/admin/ManageAgents';
@@ -41,7 +42,7 @@ const AppContent = () => {
       <div className="flex-grow">
         <Routes>
           {/* Public Routes */}
-          <Route path="/" element={<Body />} />
+          <Route path="/" element={<HomePage />} />
           <Route path="/sign-in" element={<SignIn />} />
           <Route path="/sign-up" element={<SignUp />} />
           <Route path="/profile" element={<Profile />} />
@@ -149,7 +150,7 @@ const AppContent = () => {
           <Route path="/posts/:postId" element={<PostDetail />} />
 
           {/* Fallback */}
-          <Route path="*" element={<Body />} />
+          <Route path="*" element={<HomePage />} />
         </Routes>
       </div>
 
