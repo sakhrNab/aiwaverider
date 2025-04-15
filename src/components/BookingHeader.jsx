@@ -1,12 +1,12 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import { FaCalendarAlt, FaArrowRight, FaBolt, FaClock, FaSun, FaMoon } from 'react-icons/fa';
+import { FaCalendarAlt, FaArrowRight, FaBolt, FaClock } from 'react-icons/fa';
 import { useTheme } from '../contexts/ThemeContext';
 import '../styles/BookingHeader.css';
 
 const BookingHeader = () => {
   const location = useLocation();
-  const { darkMode, toggleDarkMode } = useTheme();
+  const { darkMode } = useTheme();
   
   // IMPORTANT: Replace with your actual Calendly link
   const calendlyLink = "https://calendly.com/your-booking-link";
@@ -62,14 +62,6 @@ const BookingHeader = () => {
             <span>Book a Training Session</span>
             <FaArrowRight className="arrow-icon" />
           </a>
-          
-          {/* Theme toggle button */}
-          <button 
-            onClick={toggleDarkMode} 
-            className="theme-toggle-button"
-            aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>
-            {darkMode ? <FaSun /> : <FaMoon />}
-          </button>
         </div>
       </div>
       

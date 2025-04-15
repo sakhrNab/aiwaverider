@@ -92,6 +92,29 @@
   background-color: #c44;
 }
 
+/* Theme toggle button */
+.theme-toggle-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.theme-toggle-button:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+.theme-toggle-button svg {
+  font-size: 1.25rem;
+}
+
 .cart-icon-container {
   position: relative;
   display: flex;

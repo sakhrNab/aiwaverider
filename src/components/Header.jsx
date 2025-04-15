@@ -4,13 +4,15 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import logo from '../assets/v6.webp';
 import { AuthContext } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext.jsx';
+import { useTheme } from '../contexts/ThemeContext';
 import { toast } from 'react-toastify';
-import { FaShoppingCart } from 'react-icons/fa';
+import { FaShoppingCart, FaSun, FaMoon } from 'react-icons/fa';
 import './Header.css'; // Import custom Header CSS
 
 const Header = ({ openSignUpModal }) => {
   const { user, signOut } = useContext(AuthContext);
   const { cart, itemCount } = useCart();
+  const { darkMode, toggleDarkMode } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const mobileMenuRef = useRef(null);
@@ -141,6 +143,14 @@ const Header = ({ openSignUpModal }) => {
 
           {/* Right group: Auth buttons and profile */}
           <div className="flex items-center space-x-3 auth-buttons">
+            {/* Theme toggle button */}
+            <button 
+              onClick={toggleDarkMode} 
+              className="theme-toggle-button hidden md:flex items-center justify-center w-10 h-10 rounded-full bg-opacity-10 bg-white hover:bg-opacity-20 transition-all duration-300"
+              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>
+              {darkMode ? <FaSun className="text-yellow-400" /> : <FaMoon className="text-blue-400" />}
+            </button>
+            
             {/* Cart Icon (Removed Checkout Button) */}
             <div className="cart-container hidden md:flex items-center">
               <Link to="/checkout" className="cart-icon-container relative inline-block text-white hover:text-[#00bcd4] transition-colors duration-300">
@@ -225,6 +235,15 @@ const Header = ({ openSignUpModal }) => {
           aria-hidden={!isMenuOpen}
         >
           <nav className="mobile-nav flex flex-col p-4">
+            {/* Theme toggle in mobile menu */}
+            <button 
+              onClick={toggleDarkMode}
+              className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949] flex justify-between items-center"
+            >
+              <span>{darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}</span>
+              {darkMode ? <FaSun className="text-yellow-400" /> : <FaMoon className="text-blue-400" />}
+            </button>
+            
             <Link to="/agents" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
               Agents
             </Link>
