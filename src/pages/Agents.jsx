@@ -9,7 +9,7 @@ import FilterSidebar from '../components/agents/FilterSidebar';
 import AgentCard from '../components/agents/AgentCard';
 import AgentCarousel from '../components/agents/AgentCarousel';
 import { useTheme } from '../contexts/ThemeContext';
-import { FaExclamationTriangle, FaCalendarAlt, FaArrowRight } from 'react-icons/fa';
+import { FaExclamationTriangle, FaCalendarAlt, FaArrowRight, FaBars, FaTimes, FaFilter } from 'react-icons/fa';
 import { HashLoader } from 'react-spinners';
 import '../styles/Agents.css';
 
@@ -35,6 +35,8 @@ const Agents = () => {
   const [selectedFeatures, setSelectedFeatures] = useState([]);
   const [tagCounts, setTagCounts] = useState({}); // Dynamic tag counts
   const [featureCounts, setFeatureCounts] = useState({}); // Dynamic feature counts
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [mobileOptionsOpen, setMobileOptionsOpen] = useState(false);
 
   // Add a ref for the agents container
   const agentsContainerRef = useRef(null);
@@ -436,6 +438,16 @@ const Agents = () => {
     });
   };
 
+  // Toggle mobile filters sidebar
+  const toggleMobileFilters = () => {
+    setMobileFiltersOpen(!mobileFiltersOpen);
+  };
+  
+  // Toggle mobile filter options
+  const toggleMobileOptions = () => {
+    setMobileOptionsOpen(!mobileOptionsOpen);
+  };
+
   // Render the agent grid with appropriate filtering
   const renderAgentGrid = () => {
     const isMockData = agents.some(agent => 
@@ -574,18 +586,18 @@ const Agents = () => {
   return (
     <div className={`min-h-screen pb-16 ${darkMode ? "dark bg-[#2D1846]" : "bg-gray-50"} ${themeClasses}`}>
       {/* Custom booking header that matches the homepage */}
-      <div className="bg-indigo-900 py-6 px-6">
-        <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
+      <div className="bg-indigo-900 py-4 sm:py-6 px-4 sm:px-6">
+        <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center">
           <div>
-            <h2 className="text-3xl font-bold text-white">Wave Rider</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-white">Wave Rider</h2>
             <p className="text-yellow-500 font-medium">Your Gateway to AI Mastery</p>
           </div>
-          <div className="mt-4 md:mt-0">
+          <div className="mt-4 sm:mt-0">
             <a 
               href="https://calendly.com/your-booking-link" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="px-6 py-3 bg-gradient-to-r from-yellow-500 to-red-500 text-white rounded-full font-semibold flex items-center heartbeat-pulse"
+              className="px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-yellow-500 to-red-500 text-white rounded-full font-semibold flex items-center heartbeat-pulse text-sm sm:text-base"
             >
               <FaCalendarAlt className="mr-2" />
               Book a Training Session
@@ -595,28 +607,48 @@ const Agents = () => {
         </div>
       </div>
       
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8">
         <div className="max-w-6xl mx-auto">
           {/* Enhanced 3D Header */}
-          <div className="page-header-3d">
+          <div className="page-header-3d mb-6 sm:mb-8">
             <div className="absolute inset-0 bg-pattern opacity-30"></div>
-            <div className="relative z-10">
-              <h1 className="text-4xl sm:text-5xl font-bold mb-4 tracking-tight">
+            <div className="relative z-10 p-4 sm:p-6">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-3 sm:mb-4 tracking-tight">
                 <span className="bg-gradient-to-r from-purple-300 via-pink-300 to-yellow-200 text-transparent bg-clip-text">
                   Master AI Agents
                 </span>
               </h1>
-              <p className="text-white/80 text-lg mb-2">
+              <p className="text-white/80 text-base sm:text-lg mb-2">
                 Discover and automate your repetitive tasks
               </p>
-              <div className="w-20 h-1 bg-gradient-to-r from-purple-500 to-pink-500 mt-4 rounded-full"></div>
+              <div className="w-16 sm:w-20 h-1 bg-gradient-to-r from-purple-500 to-pink-500 mt-3 sm:mt-4 rounded-full"></div>
             </div>
           </div>
 
-          <div className="flex flex-col xl:flex-row gap-6">
-            {/* Sidebar with filters */}
-            <aside className="xl:w-1/4 mb-6 xl:mb-0">
+          {/* Mobile Filter Controls */}
+          <div className="flex lg:hidden gap-2 mb-4">
+            <button 
+              onClick={toggleMobileFilters}
+              className="flex-1 flex items-center justify-center gap-2 py-2 px-4 bg-purple-600 text-white rounded-md"
+            >
+              {mobileFiltersOpen ? <FaTimes /> : <FaFilter />}
+              {mobileFiltersOpen ? 'Close Filters' : 'Show Filters'}
+            </button>
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
+            {/* Sidebar with filters - conditionally shown on mobile */}
+            <aside className={`${mobileFiltersOpen ? 'block' : 'hidden'} lg:block w-full lg:w-1/4 mb-4 lg:mb-0`}>
               <div className="filter-sidebar glass-effect">
+                <div className="flex justify-between items-center lg:hidden mb-4">
+                  <h3 className="text-lg font-semibold text-white">Filters</h3>
+                  <button 
+                    onClick={toggleMobileFilters}
+                    className="text-white p-1 rounded-full bg-purple-700 hover:bg-purple-800"
+                  >
+                    <FaTimes />
+                  </button>
+                </div>
                 <FilterSidebar
                   selectedPrice={selectedPrice}
                   onPriceChange={handlePriceChange}
@@ -633,9 +665,17 @@ const Agents = () => {
             </aside>
 
             {/* Main content area */}
-            <main className="xl:w-3/4">
+            <main className="w-full lg:w-3/4">
               {/* Category navigation */}
-              <div className="mb-6 curated-marketplace glass-effect">
+              <div className="mb-4 sm:mb-6 curated-marketplace glass-effect">
+                <div className="flex items-center px-3 py-2 sm:hidden">
+                  <span className="text-white mr-2">Categories:</span>
+                  <div className="flex-1 overflow-x-auto">
+                    <div className="flex">
+                      <div className="h-1 w-4 bg-purple-300 rounded-full absolute left-4 bottom-2 animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
                 <CategoryNav 
                   selectedCategory={selectedCategory} 
                   onCategoryChange={handleCategoryChange} 
@@ -643,19 +683,37 @@ const Agents = () => {
               </div>
 
               {/* Filter and search area */}
-              <div className="filter-search-container glass-effect">
-                <div className="filter-options">
+              <div className="filter-search-container glass-effect mb-4 sm:mb-6">
+                <div className="flex sm:hidden justify-between items-center mb-3">
+                  <button 
+                    onClick={toggleMobileOptions}
+                    className="flex items-center gap-2 py-2 px-4 bg-purple-700 rounded-md text-white text-sm"
+                  >
+                    <FaFilter size={14} />
+                    Sort Options
+                    {mobileOptionsOpen ? <FaTimes size={14} /> : <FaBars size={14} />}
+                  </button>
+                  
+                  <div className="text-white text-sm">
+                    {agents.length} results
+                  </div>
+                </div>
+                
+                <div className={`filter-options ${mobileOptionsOpen ? 'flex' : 'hidden'} sm:flex`}>
                   {['Hot & New', 'Top Rated', 'Most Popular', 'Price: Low to High', 'Price: High to Low'].map((filter) => (
                     <button 
                       key={filter}
-                      onClick={() => handleFilterChange(filter)}
-                      className={`filter-button ${selectedFilter === filter ? 'active' : ''}`}
+                      onClick={() => {
+                        handleFilterChange(filter);
+                        setMobileOptionsOpen(false);
+                      }}
+                      className={`filter-button whitespace-nowrap ${selectedFilter === filter ? 'active' : ''}`}
                     >
                       {filter}
                     </button>
                   ))}
                 </div>
-                <div className="search-wrapper">
+                <div className="search-wrapper mt-3 sm:mt-0">
                   <SearchBar
                     initialQuery={searchQuery}
                     onSearch={handleSearch}
@@ -734,6 +792,14 @@ const Agents = () => {
           </div>
         </div>
       </div>
+
+      {/* Floating filter button for mobile */}
+      <button 
+        onClick={toggleMobileFilters}
+        className="fixed bottom-6 right-6 lg:hidden z-50 w-14 h-14 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-lg"
+      >
+        <FaFilter size={20} />
+      </button>
     </div>
   );
 };
