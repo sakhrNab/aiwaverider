@@ -341,8 +341,11 @@
   padding: 1rem 0.5rem; /* Reduced horizontal padding to avoid cutting off buttons */
   overflow: visible;
   width: 100%;
-  position: relative;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 100 !important;
   background: rgba(139, 92, 246, 1); /* Solid purple background to match the gradient indicators */
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
 }
 
 .curated-header {
@@ -1548,6 +1551,10 @@
   border-radius: 0.75rem;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
+  position: sticky !important;
+  top: 65px !important; /* Position below the curated-marketplace */
+  z-index: 99 !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
 }
 
 .filter-options {

@@ -36,6 +36,9 @@ const Agents = () => {
   const [tagCounts, setTagCounts] = useState({}); // Dynamic tag counts
   const [featureCounts, setFeatureCounts] = useState({}); // Dynamic feature counts
 
+  // Add a ref for the agents container
+  const agentsContainerRef = useRef(null);
+
   // Initial data load - only run once
   useEffect(() => {
     loadInitialData();
@@ -400,6 +403,8 @@ const Agents = () => {
 
   const handleFilterChange = (filter) => {
     setSelectedFilter(filter);
+    // Scroll to the agents list when a filter is selected
+    agentsContainerRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const handlePriceChange = (newPriceRange) => {
@@ -697,7 +702,7 @@ const Agents = () => {
                   </button>
                 </div>
               ) : (
-                <div className="agents-container glass-effect">
+                <div className="agents-container glass-effect" ref={agentsContainerRef}>
                   {renderAgentGrid()}
                 </div>
               )}
