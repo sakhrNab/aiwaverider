@@ -28,10 +28,10 @@ const Welcome = () => {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
       {/* Text Section */}
       <div className="flex flex-col justify-center">
-        <h1 className={`text-4xl md:text-5xl font-bold mb-4 ${darkMode ? 'text-white' : ''}`}>
+        <h1 className={`text-4xl md:text-5xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
           Revolutionizing AI Integration
         </h1>
-        <p className={`text-xl md:text-2xl ${darkMode ? 'text-gray-200' : 'text-gray-600'}`}>
+        <p className={`text-xl md:text-2xl ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
           AI Wave Rider helps you navigate the complex world of artificial intelligence,
           making it accessible and practical for your business needs.
         </p>

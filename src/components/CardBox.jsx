@@ -28,10 +28,10 @@ const CardBox = ({ image, title, description, isFavorite }) => {
         />
       </div>
       <div className="p-4">
-        <h3 className={`text-lg font-semibold mb-2 line-clamp-2 ${darkMode ? 'text-white' : ''}`}>
+        <h3 className={`text-lg font-semibold mb-2 line-clamp-2 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
           {title}
         </h3>
-        <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} text-sm line-clamp-3`}>
+        <p className={`${darkMode ? 'text-gray-300' : 'text-gray-700'} text-sm line-clamp-3`}>
           {description}
         </p>
       </div>

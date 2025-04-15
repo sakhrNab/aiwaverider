@@ -192,8 +192,8 @@ const Carousel = ({ userPreferences, searchQuery }) => {
   if (searchQuery && sections.length === 0) {
     return (
       <div className={`p-8 ${darkMode ? 'bg-gray-800' : 'bg-gray-50'} rounded-lg text-center`}>
-        <h3 className={`text-xl font-semibold ${darkMode ? 'text-white' : 'text-gray-700'} mb-2`}>No results found</h3>
-        <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+        <h3 className={`text-xl font-semibold ${darkMode ? 'text-white' : 'text-gray-800'} mb-2`}>No results found</h3>
+        <p className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
           We couldn't find any content matching "{searchQuery}". 
           Try different keywords or browse our categories.
         </p>
@@ -207,7 +207,7 @@ const Carousel = ({ userPreferences, searchQuery }) => {
         <Slider {...mainSettings}>
           {sections.map((section, sectionIndex) => (
             <div key={`section-${sectionIndex}`} className="carousel-slide">
-              <h2 className={`text-2xl font-bold mb-6 text-center ${darkMode ? 'text-white' : ''}`}>
+              <h2 className={`text-2xl font-bold mb-6 text-center ${darkMode ? 'text-white' : 'text-gray-800'}`}>
                 {section.category}
                 {userPreferences.interests.includes(section.category) && (
                   <span className="ml-2 text-sm text-blue-500">(Interested)</span>
@@ -227,7 +227,7 @@ const Carousel = ({ userPreferences, searchQuery }) => {
                   ))}
                 </Slider>
               ) : (
-                <p className={`text-center ${darkMode ? 'text-gray-300' : 'text-gray-500'}`}>
+                <p className={`text-center ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   No posts available in this category
                 </p>
               )}
@@ -235,7 +235,7 @@ const Carousel = ({ userPreferences, searchQuery }) => {
           ))}
         </Slider>
       ) : (
-        <p className={`text-center ${darkMode ? 'text-gray-300' : 'text-gray-500'}`}>
+        <p className={`text-center ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
           No content available at the moment
         </p>
       )}
