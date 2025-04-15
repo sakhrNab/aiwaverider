@@ -863,102 +863,180 @@
 .featured-carousel {
   overflow: hidden;
   position: relative;
+  margin-bottom: 1.5rem;
 }
 
 .featured-carousel-track {
   display: flex;
   transition: transform 0.5s ease;
+  gap: 1rem;
+  padding: 0.5rem 0;
 }
 
 .featured-item {
   flex: 0 0 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 @media (min-width: 640px) {
   .featured-item {
-    flex: 0 0 50%;
+    flex: 0 0 calc(50% - 0.5rem);
   }
 }
 
 @media (min-width: 768px) {
   .featured-item {
-    flex: 0 0 33.333%;
+    flex: 0 0 calc(33.333% - 0.667rem);
   }
 }
 
 @media (min-width: 1024px) {
   .featured-item {
-    flex: 0 0 25%;
+    flex: 0 0 calc(25% - 0.75rem);
   }
 }
 
-/* Wishlist Styling */
-.wishlist-section {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+/* Improve carousel controls */
+.carousel-controls {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.5rem;
   gap: 1rem;
 }
 
-.wishlist-card {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 0.5rem;
-  overflow: hidden;
-  transition: all 0.3s ease;
+.carousel-control {
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 1.25rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.wishlist-card:hover {
-  transform: translateY(-5px);
-  background: rgba(255, 255, 255, 0.1);
+.carousel-control:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
 }
 
-.wishlist-header {
-  padding: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+.carousel-control:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-.wishlist-title {
+/* Agent card content improvements */
+.agent-card-content {
+  padding: 1.25rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-card-title {
+  font-size: 1.125rem;
   font-weight: 600;
-  font-size: 1rem;
+  margin-bottom: 0.5rem;
   color: white;
 }
 
-.wishlist-count {
+.agent-card-description {
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 1rem;
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.6);
+  flex: 1;
 }
 
-.wishlist-preview {
-  padding: 1rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.wishlist-preview-item {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 0.25rem;
-  background-size: cover;
-  background-position: center;
-}
-
-.wishlist-footer {
-  padding: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+.agent-card-meta {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-top: auto;
+  margin-bottom: 0.5rem;
 }
 
-.wishlist-view-all {
+.agent-card-creator {
   font-size: 0.875rem;
-  color: rgba(139, 92, 246, 1);
-  font-weight: 600;
-  transition: color 0.2s ease;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 0.5rem;
 }
 
-.wishlist-view-all:hover {
-  color: rgba(167, 139, 250, 1);
+.agent-card-price {
+  font-weight: 600;
+  font-size: 1.125rem;
+  color: #fff;
+}
+
+.agent-card-rating {
+  display: flex;
+  align-items: center;
+  color: #FBBF24;
+  font-weight: 500;
+}
+
+.agent-card-rating-count {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.875rem;
+  margin-left: 0.25rem;
+}
+
+.agent-card-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.agent-card-category {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Badge improvements */
+.badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 10;
+}
+
+.badge-trending {
+  background-color: rgba(124, 58, 237, 0.9);
+  color: white;
+}
+
+.badge-new {
+  background-color: rgba(59, 130, 246, 0.9);
+  color: white;
+}
+
+/* Agent card image container */
+.agent-card-image-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+}
+
+.agent-card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* Warning and error messages */
