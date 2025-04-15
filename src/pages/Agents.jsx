@@ -64,71 +64,54 @@ const Agents = () => {
 
   // Calculate counts for tag and feature filters based on all available agents
   const calculateFilterCounts = (agents) => {
+    if (!agents || agents.length === 0) return;
+    
+    console.log("Calculating filter counts from", agents.length, "agents");
     const tagCount = {};
     const featureCount = {};
-    
-    // Predefined tags and features to count
-    const tagsToCount = [
-      'Design', '3D Modeling', 'Art', 'Music', 'Writing', 
-      'Productivity', 'Business', 'Education', 'Entertainment'
-    ];
-    
-    const featuresToCount = [
-      'API Access', 'Customizable', 'Mobile Compatible', 
-      'Desktop App', 'Web Interface', 'Voice Enabled'
-    ];
     
     // Count tags based on category or tags property
     agents.forEach(agent => {
       // For tags, use category or tags array if available
       if (agent.category) {
         const category = agent.category;
-        if (tagsToCount.includes(category)) {
-          tagCount[category] = (tagCount[category] || 0) + 1;
-        }
+        tagCount[category] = (tagCount[category] || 0) + 1;
       }
       
       if (agent.tags && Array.isArray(agent.tags)) {
         agent.tags.forEach(tag => {
-          if (tagsToCount.includes(tag)) {
-            tagCount[tag] = (tagCount[tag] || 0) + 1;
-          }
+          tagCount[tag] = (tagCount[tag] || 0) + 1;
         });
       }
       
       // For features, check for specific properties or use features array if available
       if (agent.features && Array.isArray(agent.features)) {
         agent.features.forEach(feature => {
-          if (featuresToCount.includes(feature)) {
-            featureCount[feature] = (featureCount[feature] || 0) + 1;
-          }
+          featureCount[feature] = (featureCount[feature] || 0) + 1;
         });
       }
       
       // Count free agents
-      if (agent.price === 0 || agent.price === '0' || agent.price === 'Free' || agent.price === '$0') {
+      if (agent.price === 0 || 
+          agent.price === '0' || 
+          agent.price === 'Free' || 
+          agent.price === '$0' || 
+          agent.isFree === true) {
         featureCount['Free'] = (featureCount['Free'] || 0) + 1;
       }
       
       // Count subscription agents
       if (typeof agent.price === 'string' && 
-          (agent.price.includes('/month') || agent.price.includes('a month'))) {
+          (agent.price.includes('/month') || 
+           agent.price.includes('a month') || 
+           agent.price.includes('monthly') ||
+           agent.price.includes('subscription'))) {
         featureCount['Subscription'] = (featureCount['Subscription'] || 0) + 1;
       }
     });
     
-    // Add some default counts for any missing items
-    tagsToCount.forEach(tag => {
-      if (!tagCount[tag]) {
-        tagCount[tag] = Math.floor(Math.random() * 30) + 5; // Default random count
-      }
-    });
-    
-    featuresToCount.concat(['Free', 'Subscription']).forEach(feature => {
-      if (!featureCount[feature]) {
-        featureCount[feature] = Math.floor(Math.random() * 20) + 2; // Default random count
-      }
-    });
+    console.log("Tag counts:", tagCount);
+    console.log("Feature counts:", featureCount);
     
     setTagCounts(tagCount);
     setFeatureCounts(featureCount);
@@ -140,12 +123,25 @@ const Agents = () => {
       setIsLoading(true);
       setIsRecommendationsLoading(true);
       
-      // Load all agents first for client-side filtering
-      const allAgentsData = await fetchAgents('All', 'All', 1, 100);
-      setAllAgents(allAgentsData || []);
+      // Load agents data from API
+      const allAgentsData = await fetchAgents();
       
-      // Calculate filter counts
-      calculateFilterCounts(allAgentsData || []);
+      // Save all agents to state for filtering
+      if (allAgentsData && allAgentsData.length > 0) {
+        // Process the agents data
+        const processedAgents = allAgentsData.map(agent => {
+          // Add any processing logic here
+          return agent;
+        });
+        
+        setAllAgents(processedAgents);
+        
+        // Calculate filter counts based on actual data
+        calculateFilterCounts(processedAgents);
+        
+        // Apply initial filters
+        applyFilters(processedAgents);
+      }
       
       // Load featured agents
       const featuredData = await fetchFeaturedAgents(8);
@@ -177,11 +173,6 @@ const Agents = () => {
       // Fetch wishlists
       const wishlistsData = await fetchWishlists();
       setWishlists(wishlistsData || []);
-      
-      // Apply filters to set initial visible agents
-      if (allAgentsData && allAgentsData.length > 0) {
-        applyFilters(allAgentsData);
-      }
       
       setIsRecommendationsLoading(false);
       setIsLoading(false);
@@ -269,34 +260,41 @@ const Agents = () => {
         return false;
       });
       console.log(`After tag filters (${selectedTags.join(', ')}): ${filteredResults.length} agents`);
+      
+      // Debug logging for tags
+      console.log('Selected tags:', selectedTags);
+      console.log('Sample agent tags:', filteredResults.length > 0 ? 
+        (filteredResults[0].tags || 'No tags') : 'No agents after filtering');
     }
     
     // Apply feature filters 
     if (selectedFeatures && selectedFeatures.length > 0) {
       filteredResults = filteredResults.filter(agent => {
-        // Check for 'Free' feature
-        if (selectedFeatures.includes('Free') && 
-            (agent.price === 0 || agent.price === '0' || 
-             agent.price === 'Free' || agent.price === '$0' ||
-             agent.isFree === true)) {
-          return true;
-        }
-        
-        // Check for 'Subscription' feature
-        if (selectedFeatures.includes('Subscription') && 
-            typeof agent.price === 'string' && 
-            (agent.price.includes('/month') || agent.price.includes('a month'))) {
-          return true;
-        }
-        
-        // Check other features
-        if (agent.features && Array.isArray(agent.features)) {
-          return agent.features.some(feature => 
-            selectedFeatures.includes(feature)
-          );
-        }
-        
-        return false;
+        // Process each selected feature
+        return selectedFeatures.some(feature => {
+          // Check for 'Free' feature
+          if (feature === 'Free') {
+            return agent.price === 0 || 
+                   agent.price === '0' || 
+                   agent.price === 'Free' || 
+                   agent.price === '$0' ||
+                   agent.isFree === true;
+          }
+          
+          // Check for 'Subscription' feature
+          if (feature === 'Subscription') {
+            return typeof agent.price === 'string' && 
+                   (agent.price.includes('/month') || 
+                    agent.price.includes('a month') || 
+                    agent.price.includes('monthly') ||
+                    agent.price.includes('subscription'));
+          }
+          
+          // Check other features in the features array
+          return agent.features && 
+                 Array.isArray(agent.features) && 
+                 agent.features.includes(feature);
+        });
       });
       console.log(`After feature filters (${selectedFeatures.join(', ')}): ${filteredResults.length} agents`);
     }
@@ -313,6 +311,66 @@ const Agents = () => {
          agent.creator.name.toLowerCase().includes(query))
       );
       console.log(`After search query "${query}": ${filteredResults.length} agents`);
+    }
+    
+    // Apply sorting based on selected filter
+    if (selectedFilter) {
+      switch (selectedFilter) {
+        case 'Hot & New':
+          // Sort by newest first, then by rating
+          filteredResults.sort((a, b) => {
+            if (a.isNew && !b.isNew) return -1;
+            if (!a.isNew && b.isNew) return 1;
+            const aRating = a.rating?.average || 0;
+            const bRating = b.rating?.average || 0;
+            return bRating - aRating;
+          });
+          break;
+        case 'Top Rated':
+          // Sort by rating (highest first)
+          filteredResults.sort((a, b) => {
+            const aRating = a.rating?.average || 0;
+            const bRating = b.rating?.average || 0;
+            return bRating - aRating;
+          });
+          break;
+        case 'Most Popular':
+          // Sort by number of users or views if available, otherwise rating count
+          filteredResults.sort((a, b) => {
+            const aPopularity = a.usersCount || a.views || a.rating?.count || 0;
+            const bPopularity = b.usersCount || b.views || b.rating?.count || 0;
+            return bPopularity - aPopularity;
+          });
+          break;
+        case 'Price: Low to High':
+          // Sort by price (lowest first)
+          filteredResults.sort((a, b) => {
+            const aPrice = typeof a.price === 'number' ? a.price : 
+                          a.priceDetails?.basePrice || 
+                          (typeof a.price === 'string' ? parseFloat(a.price.replace(/[^0-9.]/g, '')) : 0);
+            const bPrice = typeof b.price === 'number' ? b.price : 
+                          b.priceDetails?.basePrice || 
+                          (typeof b.price === 'string' ? parseFloat(b.price.replace(/[^0-9.]/g, '')) : 0);
+            return aPrice - bPrice;
+          });
+          break;
+        case 'Price: High to Low':
+          // Sort by price (highest first)
+          filteredResults.sort((a, b) => {
+            const aPrice = typeof a.price === 'number' ? a.price : 
+                          a.priceDetails?.basePrice || 
+                          (typeof a.price === 'string' ? parseFloat(a.price.replace(/[^0-9.]/g, '')) : 0);
+            const bPrice = typeof b.price === 'number' ? b.price : 
+                          b.priceDetails?.basePrice || 
+                          (typeof b.price === 'string' ? parseFloat(b.price.replace(/[^0-9.]/g, '')) : 0);
+            return bPrice - aPrice;
+          });
+          break;
+        default:
+          // No sorting
+          break;
+      }
+      console.log(`After sorting by ${selectedFilter}: ${filteredResults.length} agents`);
     }
     
     setAgents(filteredResults);
@@ -419,29 +477,53 @@ const Agents = () => {
   // Add tags and features to the mockup agents for filtering demonstration
   useEffect(() => {
     if (allAgents.length > 0 && (!allAgents[0].tags || !allAgents[0].features)) {
+      // AI-specific tags for better categorization of agents
       const tagsToAssign = [
-        'Creative Writing', 'Coding Assistant', 'Data Analysis',
-        'Learning', 'Storytelling', 'Productivity', 'Research',
-        'Gaming', 'Entertainment', 'Business'
+        'AI Writing',
+        'Automation',
+        'Business',
+        'Coding Assistant',
+        'Content Creation',
+        'Data Analysis',
+        'Email Management',
+        'Language Learning',
+        'Productivity',
+        'Research',
+        'Summarization',
+        'Task Management',
+        'Website Building'
       ];
       
+      // AI agent-specific features
       const featuresToAssign = [
-        'Custom Instructions', 'API Access', 'Knowledge Base',
-        'Local Files', 'Web Search', 'Plugins'
+        'API Access',
+        'Chat Interface',
+        'Code Generation',
+        'Custom Instructions',
+        'Document Processing',
+        'Free',
+        'Image Generation',
+        'Knowledge Base',
+        'Multiple Language Support',
+        'PDF Processing',
+        'Plugins',
+        'Subscription',
+        'Voice Enabled',
+        'Web Search'
       ];
       
       // Add random tags and features to each agent
       const enhancedAgents = allAgents.map(agent => {
-        // Generate 1-3 random tags for each agent
-        const numTags = Math.floor(Math.random() * 3) + 1;
+        // Generate 2-3 random tags for each agent
+        const numTags = Math.floor(Math.random() * 2) + 2;
         const tags = [];
         for (let i = 0; i < numTags; i++) {
           const randomTag = tagsToAssign[Math.floor(Math.random() * tagsToAssign.length)];
           if (!tags.includes(randomTag)) tags.push(randomTag);
         }
         
-        // Generate 1-2 random features for each agent
-        const numFeatures = Math.floor(Math.random() * 2) + 1;
+        // Generate 2-3 random features for each agent
+        const numFeatures = Math.floor(Math.random() * 2) + 2;
         const features = [];
         for (let i = 0; i < numFeatures; i++) {
           const randomFeature = featuresToAssign[Math.floor(Math.random() * featuresToAssign.length)];
@@ -457,6 +539,13 @@ const Agents = () => {
       
       setAllAgents(enhancedAgents);
       calculateFilterCounts(enhancedAgents);
+    }
+  }, [allAgents]);
+
+  // Make sure to call calculateFilterCounts whenever agent data changes
+  useEffect(() => {
+    if (allAgents.length > 0) {
+      calculateFilterCounts(allAgents);
     }
   }, [allAgents]);
 

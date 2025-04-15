@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import './FilterSidebar.css';
 
 const FilterSidebar = ({ 
-  onTagSelect, 
-  onFeatureSelect, 
-  onRatingSelect, 
-  selectedTags = [],
+  selectedTags = [], 
+  onTagChange, 
   selectedFeatures = [],
-  selectedRating = 0,
-  priceRange = { min: 0, max: 1000 },
+  onFeatureChange, 
+  selectedRating = 0, 
+  onRatingChange,
+  selectedPrice = { min: 0, max: 1000 },
   onPriceChange,
   tagCounts = {},
   featureCounts = {}
@@ -18,74 +18,68 @@ const FilterSidebar = ({
   const [tagOptions, setTagOptions] = useState([]);
   const [featureOptions, setFeatureOptions] = useState([]);
   const [price, setPrice] = useState({
-    min: priceRange.min || 0,
-    max: priceRange.max || 1000
+    min: selectedPrice.min || 0,
+    max: selectedPrice.max || 1000
   });
 
-  // Update tag options based on provided counts or use defaults
+  // Update price state when selectedPrice prop changes
   useEffect(() => {
-    // Default tags with counts if none provided
-    const defaultTags = [
-      { name: 'Design', count: 45 },
-      { name: '3D Modeling', count: 32 },
-      { name: 'Art', count: 28 },
-      { name: 'Music', count: 15 },
-      { name: 'Writing', count: 22 },
-      { name: 'Productivity', count: 18 },
-      { name: 'Business', count: 12 },
-      { name: 'Education', count: 9 },
-      { name: 'Entertainment', count: 7 }
-    ];
-    
-    // Use dynamic counts if available, otherwise defaults
+    if (selectedPrice && typeof selectedPrice === 'object') {
+      setPrice({
+        min: selectedPrice.min || 0,
+        max: selectedPrice.max || 1000
+      });
+    }
+  }, [selectedPrice]);
+
+  // Update tag options based on provided counts
+  useEffect(() => {
+    // Use dynamic counts from props
     if (Object.keys(tagCounts).length > 0) {
       const dynamicTags = Object.entries(tagCounts).map(([name, count]) => ({
         name,
         count
       }));
       
-      // Sort by count descending
-      dynamicTags.sort((a, b) => b.count - a.count);
+      // Sort alphabetically by name
+      dynamicTags.sort((a, b) => a.name.localeCompare(b.name));
       setTagOptions(dynamicTags);
     } else {
-      setTagOptions(defaultTags);
+      setTagOptions([]);
     }
   }, [tagCounts]);
   
-  // Update feature options based on provided counts or use defaults
+  // Update feature options based on provided counts
   useEffect(() => {
-    // Default features with counts if none provided
-    const defaultFeatures = [
-      { name: 'Free', count: 25 },
-      { name: 'Subscription', count: 18 },
-      { name: 'API Access', count: 15 },
-      { name: 'Customizable', count: 12 },
-      { name: 'Mobile Compatible', count: 10 },
-      { name: 'Desktop App', count: 8 },
-      { name: 'Web Interface', count: 20 },
-      { name: 'Voice Enabled', count: 7 }
-    ];
-    
-    // Use dynamic counts if available, otherwise defaults
+    // Use dynamic counts from props
     if (Object.keys(featureCounts).length > 0) {
       const dynamicFeatures = Object.entries(featureCounts).map(([name, count]) => ({
         name,
         count
       }));
       
-      // Sort by count descending
-      dynamicFeatures.sort((a, b) => b.count - a.count);
+      // Sort alphabetically by name
+      dynamicFeatures.sort((a, b) => a.name.localeCompare(b.name));
       setFeatureOptions(dynamicFeatures);
     } else {
-      setFeatureOptions(defaultFeatures);
+      setFeatureOptions([]);
     }
   }, [featureCounts]);
 
   const handlePriceChange = (e) => {
     const { name, value } = e.target;
-    const newPrice = { ...price, [name]: Number(value) };
+    const newValue = Number(value);
+    
+    // Validate input
+    if (isNaN(newValue) || newValue < 0) return;
+    
+    const newPrice = { ...price, [name]: newValue };
     setPrice(newPrice);
-    onPriceChange(newPrice);
+    
+    // Only update parent component after user has stopped typing (debounce)
+    if (onPriceChange) {
+      onPriceChange(newPrice);
+    }
   };
 
   const getVisibleTags = () => {
@@ -106,6 +100,24 @@ const FilterSidebar = ({
       );
     }
     return stars;
+  };
+  
+  const handleTagSelect = (tag) => {
+    if (onTagChange) {
+      onTagChange(tag);
+    }
+  };
+  
+  const handleFeatureSelect = (feature) => {
+    if (onFeatureChange) {
+      onFeatureChange(feature);
+    }
+  };
+  
+  const handleRatingSelect = (rating) => {
+    if (onRatingChange) {
+      onRatingChange(rating);
+    }
   };
 
   return (
@@ -161,7 +173,7 @@ const FilterSidebar = ({
             <div 
               key={rating} 
               className={`filter-option ${selectedRating === rating ? 'selected' : ''}`}
-              onClick={() => onRatingSelect(rating)}
+              onClick={() => handleRatingSelect(rating)}
             >
               <div className={`checkbox ${selectedRating === rating ? 'checked' : ''}`}>
                 {selectedRating === rating && <span className="checkmark">✓</span>}
@@ -182,7 +194,7 @@ const FilterSidebar = ({
             <div 
               key={tag.name} 
               className={`filter-option ${selectedTags.includes(tag.name) ? 'selected' : ''}`}
-              onClick={() => onTagSelect(tag.name)}
+              onClick={() => handleTagSelect(tag.name)}
             >
               <div className={`checkbox ${selectedTags.includes(tag.name) ? 'checked' : ''}`}>
                 {selectedTags.includes(tag.name) && <span className="checkmark">✓</span>}
@@ -208,7 +220,7 @@ const FilterSidebar = ({
             <div 
               key={feature.name} 
               className={`filter-option ${selectedFeatures.includes(feature.name) ? 'selected' : ''}`}
-              onClick={() => onFeatureSelect(feature.name)}
+              onClick={() => handleFeatureSelect(feature.name)}
             >
               <div className={`checkbox ${selectedFeatures.includes(feature.name) ? 'checked' : ''}`}>
                 {selectedFeatures.includes(feature.name) && <span className="checkmark">✓</span>}
