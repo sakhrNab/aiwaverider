@@ -57,7 +57,7 @@ const BookingHeader = () => {
           <a href={calendlyLink} 
              target="_blank" 
              rel="noopener noreferrer"
-             className="booking-button shimmer-effect">
+             className="booking-button shimmer-effect heartbeat-pulse">
             <FaCalendarAlt className="booking-icon" />
             <span>Book a Training Session</span>
             <FaArrowRight className="arrow-icon" />

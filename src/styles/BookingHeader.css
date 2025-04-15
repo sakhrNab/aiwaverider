@@ -137,4 +137,78 @@
 .benefit-icon {
   color: #fbbf24; /* Yellow-400 */
   font-size: 0.75rem;
+}
+
+/* Heartbeat pulse animation for the booking button */
+.heartbeat-pulse {
+  position: relative;
+  box-shadow: 0 0 0 0 rgba(255, 138, 0, 0.7);
+  animation: heartbeat-pulse 1.8s infinite cubic-bezier(0.66, 0, 0, 1);
+  transform-origin: center;
+}
+
+.heartbeat-pulse:hover {
+  animation: none;
+  transform: scale(1.05);
+  box-shadow: 0 0 25px rgba(255, 138, 0, 0.6);
+  background-size: 200% 200%;
+  background-position: right center;
+}
+
+.heartbeat-pulse::after {
+  content: '';
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  bottom: -5px;
+  left: -5px;
+  border-radius: 30px;
+  background: linear-gradient(45deg, rgba(255, 138, 0, 0.3), rgba(255, 0, 128, 0.3));
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.heartbeat-pulse:hover::after {
+  opacity: 1;
+  animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(1.1);
+    opacity: 0;
+  }
+}
+
+@keyframes heartbeat-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 138, 0, 0.7);
+  }
+  
+  25% {
+    transform: scale(1.03);
+  }
+  
+  40% {
+    transform: scale(1);
+  }
+  
+  60% {
+    transform: scale(1.03);
+    box-shadow: 0 0 0 8px rgba(255, 138, 0, 0);
+  }
+  
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 138, 0, 0);
+  }
 } 
