@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useTheme } from '../contexts/ThemeContext';
 
 const Welcome = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const videoId = 'ZJ7B6JRbk3Q';
+  const { darkMode } = useTheme();
 
   const handleVideoLoad = () => {
     setIsLoading(false);
@@ -26,10 +28,10 @@ const Welcome = () => {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
       {/* Text Section */}
       <div className="flex flex-col justify-center">
-        <h1 className="text-4xl md:text-5xl font-bold mb-4">
+        <h1 className={`text-4xl md:text-5xl font-bold mb-4 ${darkMode ? 'text-white' : ''}`}>
           Revolutionizing AI Integration
         </h1>
-        <p className="text-xl md:text-2xl text-gray-600">
+        <p className={`text-xl md:text-2xl ${darkMode ? 'text-gray-200' : 'text-gray-600'}`}>
           AI Wave Rider helps you navigate the complex world of artificial intelligence,
           making it accessible and practical for your business needs.
         </p>

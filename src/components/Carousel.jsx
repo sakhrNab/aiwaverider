@@ -6,6 +6,7 @@ import PropTypes from 'prop-types';
 import Slider from 'react-slick';
 import CardBox from './CardBox';
 import { PostsContext } from '../contexts/PostsContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { CATEGORIES } from '../constants/categories';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
@@ -14,6 +15,7 @@ import { Link } from 'react-router-dom';
 
 const Carousel = ({ userPreferences, searchQuery }) => {
   const { carouselData, loadingPosts } = useContext(PostsContext);
+  const { darkMode } = useTheme();
   const [sections, setSections] = useState([]);
   const [error, setError] = useState(null);
 
@@ -189,9 +191,9 @@ const Carousel = ({ userPreferences, searchQuery }) => {
   // Show no results message when searching with no matches
   if (searchQuery && sections.length === 0) {
     return (
-      <div className="p-8 bg-gray-50 rounded-lg text-center">
-        <h3 className="text-xl font-semibold text-gray-700 mb-2">No results found</h3>
-        <p className="text-gray-600">
+      <div className={`p-8 ${darkMode ? 'bg-gray-800' : 'bg-gray-50'} rounded-lg text-center`}>
+        <h3 className={`text-xl font-semibold ${darkMode ? 'text-white' : 'text-gray-700'} mb-2`}>No results found</h3>
+        <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
           We couldn't find any content matching "{searchQuery}". 
           Try different keywords or browse our categories.
         </p>
@@ -205,7 +207,7 @@ const Carousel = ({ userPreferences, searchQuery }) => {
         <Slider {...mainSettings}>
           {sections.map((section, sectionIndex) => (
             <div key={`section-${sectionIndex}`} className="carousel-slide">
-              <h2 className="text-2xl font-bold mb-6 text-center">
+              <h2 className={`text-2xl font-bold mb-6 text-center ${darkMode ? 'text-white' : ''}`}>
                 {section.category}
                 {userPreferences.interests.includes(section.category) && (
                   <span className="ml-2 text-sm text-blue-500">(Interested)</span>
@@ -225,7 +227,7 @@ const Carousel = ({ userPreferences, searchQuery }) => {
                   ))}
                 </Slider>
               ) : (
-                <p className="text-center text-gray-500">
+                <p className={`text-center ${darkMode ? 'text-gray-300' : 'text-gray-500'}`}>
                   No posts available in this category
                 </p>
               )}
@@ -233,7 +235,7 @@ const Carousel = ({ userPreferences, searchQuery }) => {
           ))}
         </Slider>
       ) : (
-        <p className="text-center text-gray-500">
+        <p className={`text-center ${darkMode ? 'text-gray-300' : 'text-gray-500'}`}>
           No content available at the moment
         </p>
       )}
