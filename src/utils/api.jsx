@@ -1973,4 +1973,24 @@ export const deleteAITool = async (id) => {
   }
 };
 
+/**
+ * Create a new agent
+ * @param {Object} agentData - The agent data to create
+ * @returns {Promise<Object>} - Created agent data
+ */
+export const createAgent = async (agentData) => {
+  try {
+    console.log('Creating new agent:', agentData);
+    const response = await api.post('/api/agents', agentData);
+    console.log('Successfully created agent:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Error creating agent:', error);
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error);
+    }
+    throw error;
+  }
+};
+
 export default api;

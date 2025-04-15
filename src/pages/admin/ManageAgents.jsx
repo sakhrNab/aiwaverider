@@ -25,7 +25,7 @@ import "./ManageAgents.css";
 import { getAuthHeaders, validateAndRefreshToken } from "../../utils/auth";
 import { deleteAgent as deleteAgentHelper } from "../../utils/agent-helper";
 import { toast } from "react-hot-toast";
-import { checkApiStatus, deletePost } from "../../utils/api";
+import { checkApiStatus, deletePost, createAgent } from "../../utils/api";
 // Import contexts and components for posts management
 import { AuthContext } from "../../contexts/AuthContext";
 import { PostsContext } from "../../contexts/PostsContext";
@@ -955,320 +955,37 @@ const ManageAgents = () => {
         currency: agentData.currency || "USD",
       };
 
-      if (selectedAgent) {
-        // Update existing agent
-        // Ensure agent ID is sanitized (no slashes or spaces)
-        const sanitizedAgentId = selectedAgent.id.trim().split("/")[0];
-
-        // Extract the numeric part for API calls if ID starts with "agent-"
-        const apiAgentId = sanitizedAgentId.startsWith("agent-")
-          ? sanitizedAgentId.substring(6) // Remove "agent-" prefix
-          : sanitizedAgentId;
-
-        console.log("Updating agent:", sanitizedAgentId, "API ID:", apiAgentId);
-
-        // Combined payload that includes price data to reduce API calls
-        const combinedUpdateData = {
-          ...agentDataWithoutPrice,
-          priceData: pricePayload,
-          _method: "PATCH", // Some backends support this convention
-        };
-
-        try {
-          // Use a single API call to update both agent and price
-          const response = await apiRequest(
-            `http://localhost:4000/api/agent/${apiAgentId}/combined-update`,
-            "POST",
-            combinedUpdateData,
-          );
-
-          // Check if the combined update succeeded
-          if (response && (response.success || response.status === 204)) {
-            console.log("Combined update successful:", response);
-
-            // Use the data field from the response if available
-            if (response.data) {
-              savedAgent = response.data;
-            } else {
-              // If no data in response (e.g., for 204 responses), fetch the agent again
-              console.log("No data in response, fetching updated agent data");
-              savedAgent = await getAgentWithCache(
-                sanitizedAgentId,
-                true,
-                true,
-              );
-            }
-
-            // Display success message
-            toast.success(response.message || "Agent updated successfully");
-          } else {
-            console.log(
-              "Combined update failed or returned error:",
-              response?.error || response?.message || "No valid response",
-            );
-
-            // Fall back to separate calls
-            console.log("Using separate calls for agent and price update");
-
-            try {
-              // Update agent data
-              savedAgent = await apiRequest(
-                `http://localhost:4000/api/agent/${sanitizedAgentId}`,
-                "POST",
-                { ...agentDataWithoutPrice, _method: "PATCH" },
-              );
-
-              // Only make price API call if price data was actually changed
-              if (
-                basePrice !== undefined ||
-                discountedPrice !== undefined ||
-                isFree !== undefined ||
-                isSubscription !== undefined
-              ) {
-                // Important: Use the same API ID format as in the combined update call
-                // to prevent duplicate calls to different endpoints
-                const priceResponse = await apiRequest(
-                  `http://localhost:4000/api/agent/${apiAgentId}/price`,
-                  "PUT",
-                  pricePayload,
-                );
-
-                // Merge price data with the agent data for UI consistency
-                if (priceResponse) {
-                  savedAgent = {
-                    ...savedAgent,
-                    priceDetails: {
-                      basePrice: priceResponse.basePrice || 0,
-                      discountedPrice:
-                        priceResponse.discountedPrice ||
-                        priceResponse.finalPrice ||
-                        priceResponse.basePrice ||
-                        0,
-                      currency: priceResponse.currency || "USD",
-                    },
-                    isFree: priceResponse.isFree || false,
-                    isSubscription: priceResponse.isSubscription || false,
-                  };
-                }
-              }
-            } catch (updateError2) {
-              console.error("Separate API calls failed:", updateError2);
-
-              // Fallback method for agent updates
-              try {
-                savedAgent = await apiRequest(
-                  `http://localhost:4000/api/agent/${sanitizedAgentId}`,
-                  "PUT",
-                  agentDataWithoutPrice,
-                );
-
-                // Update price with PUT if needed
-                if (
-                  basePrice !== undefined ||
-                  discountedPrice !== undefined ||
-                  isFree !== undefined ||
-                  isSubscription !== undefined
-                ) {
-                  // Use the same API ID format consistently
-                  const priceResponse = await apiRequest(
-                    `http://localhost:4000/api/agent/${apiAgentId}/price`,
-                    "PUT",
-                    pricePayload,
-                  );
-
-                  // Merge price data
-                  if (priceResponse) {
-                    savedAgent = {
-                      ...savedAgent,
-                      priceDetails: {
-                        basePrice: priceResponse.basePrice || 0,
-                        discountedPrice:
-                          priceResponse.discountedPrice ||
-                          priceResponse.finalPrice ||
-                          0,
-                        currency: priceResponse.currency || "USD",
-                      },
-                      isFree: priceResponse.isFree || false,
-                      isSubscription: priceResponse.isSubscription || false,
-                    };
-                  }
-                }
-              } catch (putError) {
-                console.error("PUT method failed, using local data:", putError);
-
-                // Fallback to mock data if both methods fail
-                savedAgent = {
-                  ...selectedAgent,
-                  ...agentDataWithoutPrice,
-                  priceDetails: {
-                    basePrice:
-                      basePrice || selectedAgent.priceDetails?.basePrice || 0,
-                    discountedPrice:
-                      discountedPrice ||
-                      selectedAgent.priceDetails?.discountedPrice ||
-                      0,
-                    currency:
-                      agentData.currency ||
-                      selectedAgent.priceDetails?.currency ||
-                      "USD",
-                  },
-                  isFree: isFree ?? selectedAgent.isFree ?? false,
-                  isSubscription:
-                    isSubscription ?? selectedAgent.isSubscription ?? false,
-                  updatedAt: new Date().toISOString(),
-                };
-              }
-            }
-          }
-        } catch (updateError) {
-          console.error("Update failed completely:", updateError);
-
-          // Fallback to mock data if all API methods fail
-          savedAgent = {
-            ...selectedAgent,
-            ...agentDataWithoutPrice,
-            priceDetails: {
-              basePrice:
-                basePrice || selectedAgent.priceDetails?.basePrice || 0,
-              discountedPrice:
-                discountedPrice ||
-                selectedAgent.priceDetails?.discountedPrice ||
-                0,
-              currency:
-                agentData.currency ||
-                selectedAgent.priceDetails?.currency ||
-                "USD",
-            },
-            isFree: isFree ?? selectedAgent.isFree ?? false,
-            isSubscription:
-              isSubscription ?? selectedAgent.isSubscription ?? false,
-            updatedAt: new Date().toISOString(),
-          };
-        }
-      } else {
-        // Create new agent with price data in one request
-        console.log("Creating new agent with pricing data");
-
-        // Combined payload for creation
-        const combinedCreateData = {
-          ...agentDataWithoutPrice,
-          priceData: pricePayload,
-        };
-
-        try {
-          // Try to use a single endpoint that handles both agent and price creation
-          savedAgent = await apiRequest(
-            "http://localhost:4000/api/agent/with-price",
-            "POST",
-            combinedCreateData,
-          );
-
-          // Fall back to separate calls if needed
-          if (!savedAgent || savedAgent.error === "Endpoint not found") {
-            console.log(
-              "Combined creation endpoint not available, using separate calls",
-            );
-            console.log(
-              "FALLBACK: Using separate API calls for agent creation and price update",
-            );
-
-            savedAgent = await apiRequest(
-              "http://localhost:4000/api/agent",
-              "POST",
-              agentDataWithoutPrice,
-            );
-
-            // Only if we have a valid agent ID from creation, update price
-            if (savedAgent && savedAgent.id) {
-              const priceResponse = await apiRequest(
-                `http://localhost:4000/api/agent/${savedAgent.id}/price`,
-                "PUT",
-                pricePayload,
-              );
-
-              // Merge price data
-              if (priceResponse) {
-                savedAgent = {
-                  ...savedAgent,
-                  priceDetails: {
-                    basePrice: priceResponse.basePrice || 0,
-                    discountedPrice:
-                      priceResponse.discountedPrice ||
-                      priceResponse.finalPrice ||
-                      0,
-                    currency: priceResponse.currency || "USD",
-                  },
-                  isFree: priceResponse.isFree || false,
-                  isSubscription: priceResponse.isSubscription || false,
-                };
-              }
-            }
-          }
-        } catch (createError) {
-          console.error(
-            "Failed to create agent, using mock data:",
-            createError,
-          );
-
-          // Fallback to mock data
-          savedAgent = {
-            ...agentDataWithoutPrice,
-            id: `mock-agent-${Date.now()}`,
-            priceDetails: {
-              basePrice: basePrice || 0,
-              discountedPrice: discountedPrice || 0,
-              currency: agentData.currency || "USD",
-            },
-            isFree: isFree || false,
-            isSubscription: isSubscription || false,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-        }
-      }
-
-      // Invalidate the cache for this agent
       if (agentId) {
-        invalidateAgentCache(agentId);
-      }
-
-      // Update the agents list - ensure we're using the freshest data but maintain order
-      if (selectedAgent) {
-        // Replace the agent in the list while maintaining the same position
-        setAgents((prevAgents) => {
-          const updatedAgents = prevAgents.map((agent) =>
-            agent.id === savedAgent.id ? savedAgent : agent,
-          );
-          return updatedAgents;
-        });
+        // Handle update case
+        savedAgent = await apiRequest(`/api/agents/${agentId}`, 'PUT', agentDataWithoutPrice);
       } else {
-        // Add new agent to the list
-        setAgents((prevAgents) => [...prevAgents, savedAgent]);
+        // Handle create case
+        savedAgent = await createAgent({
+          ...agentDataWithoutPrice,
+          priceDetails: pricePayload
+        });
       }
 
-      // Update the cache with the new data
-      setAgentCache((prev) => ({
-        ...prev,
-        [savedAgent.id]: {
-          data: savedAgent,
-          timestamp: Date.now(),
-        },
-      }));
-
-      setShowAgentForm(false);
-      setSelectedAgent(null);
-
-      // Show a success message
-      toast.success(
-        `Agent ${selectedAgent ? "updated" : "created"} successfully!`,
-      );
+      // Update the UI
+      if (savedAgent) {
+        // Invalidate cache for this agent
+        invalidateAgentCache(savedAgent.id);
+        
+        // Show success message
+        toast.success(agentId ? 'Agent updated successfully' : 'Agent created successfully');
+        
+        // Refresh the agents list
+        fetchAgents();
+        
+        // Close the form
+        setShowAgentForm(false);
+        setSelectedAgent(null);
+      }
 
       return savedAgent;
     } catch (error) {
-      console.error("Error saving agent:", error);
-      toast.error(
-        `Error ${selectedAgent ? "updating" : "creating"} agent: ${error.message}`,
-      );
+      console.error('Error saving agent:', error);
+      toast.error(error.message || 'Failed to save agent');
       throw error;
     }
   };
@@ -1334,8 +1051,8 @@ const ManageAgents = () => {
       // If the primary sort field values are equal, fall back to sorting by ID
       // This ensures a consistent ordering regardless of how many times you edit
       if (comparison === 0) {
-        const aNum = parseInt(a.id.replace(/\D/g, "")) || 0;
-        const bNum = parseInt(b.id.replace(/\D/g, "")) || 0;
+        const aNum = parseInt((a.id || '').replace(/\D/g, "")) || 0;
+        const bNum = parseInt((b.id || '').replace(/\D/g, "")) || 0;
         return aNum - bNum;
       }
 
@@ -2555,10 +2272,10 @@ const ManageAgents = () => {
                                 <span className="manage-info-label">Features:</span>
                                 <ul className="manage-features-list">
                                   {agent.features.slice(0, 3).map((feature, index) => (
-                                    <li key={index}>{feature}</li>
+                                    <li key={`${agent.id}-feature-${index}`}>{feature}</li>
                                   ))}
                                   {agent.features.length > 3 && (
-                                    <li key="more-features">+{agent.features.length - 3} more...</li>
+                                    <li key={`${agent.id}-more-features`}>+{agent.features.length - 3} more...</li>
                                   )}
                                 </ul>
                               </div>

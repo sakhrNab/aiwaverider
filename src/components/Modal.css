@@ -9,32 +9,35 @@
   justify-content: center;
   align-items: center;
   z-index: 1000;
-  padding: 1rem;
+  padding: 0.5rem;
+  overflow-y: auto;
 }
 
 .modal {
   background-color: white;
   border-radius: 8px;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-  max-height: 90vh;
+  max-height: calc(100vh - 2rem);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  margin: auto;
+  width: 95%;
 }
 
 .modal-small {
-  width: 95%;
   max-width: 400px;
 }
 
 .modal-medium {
-  width: 95%;
   max-width: 600px;
 }
 
 .modal-large {
   width: 95%;
-  max-width: 900px;
+  max-width: 1100px;
+  height: auto;
+  max-height: calc(100vh - 2rem);
 }
 
 .modal-header {
@@ -43,6 +46,10 @@
   align-items: center;
   padding: 1rem 1.5rem;
   border-bottom: 1px solid #eaeaea;
+  position: sticky;
+  top: 0;
+  background-color: white;
+  z-index: 10;
 }
 
 .modal-header h2 {
@@ -85,20 +92,73 @@
 }
 
 /* Responsive adjustments */
-@media (max-width: 600px) {
-  .modal-small, 
-  .modal-medium, 
+@media (max-width: 1200px) {
   .modal-large {
+    max-width: 90%;
+    width: 90%;
+  }
+}
+
+@media (max-width: 991px) {
+  .modal-large {
+    max-width: 95%;
     width: 95%;
+  }
+}
+
+@media (max-width: 767px) {
+  .modal-overlay {
+    padding: 0.5rem;
+    align-items: flex-start;
+  }
+
+  .modal {
+    max-height: calc(100vh - 1rem);
+    margin: 0.5rem auto;
+    width: 95%;
+  }
+  
+  .modal-small, 
+  .modal-medium {
+    width: 100%;
+    max-width: none;
+  }
+  
+  .modal-large {
+    width: 100%;
     max-width: none;
   }
   
   .modal-header {
     padding: 0.75rem 1rem;
+    position: sticky;
+    top: 0;
   }
   
   .modal-content {
     padding: 1rem;
+  }
+}
+
+/* For very small screens */
+@media (max-width: 480px) {
+  .modal-overlay {
+    padding: 0;
+  }
+  
+  .modal {
+    width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+    margin: 0;
+  }
+  
+  .modal-content {
+    padding: 0.75rem;
+  }
+  
+  .modal-header h2 {
+    font-size: 1.1rem;
   }
 }
 
@@ -122,11 +182,11 @@
 
 @keyframes slideIn {
   from {
-    transform: translateY(-20px);
     opacity: 0;
+    transform: translateY(-20px);
   }
   to {
-    transform: translateY(0);
     opacity: 1;
+    transform: translateY(0);
   }
 } 

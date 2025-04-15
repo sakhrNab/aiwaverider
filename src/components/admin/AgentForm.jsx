@@ -762,6 +762,37 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
               onChange={handleChange}
               placeholder="URL for agent icon"
             />
+            <span className="field-help">Enter an URL or use the file uploader below</span>
+          </div>
+          
+          <div className="form-group">
+            <label htmlFor="iconUpload">Upload Icon</label>
+            <input
+              type="file"
+              id="iconUpload"
+              accept="image/*"
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  try {
+                    // For preview only - in a real implementation you would upload to a server
+                    const iconUrl = URL.createObjectURL(e.target.files[0]);
+                    setFormData({
+                      ...formData,
+                      iconUrl: iconUrl,
+                      _iconFile: e.target.files[0] // Store the file for later upload
+                    });
+                  } catch (error) {
+                    console.error('Error creating object URL:', error);
+                    // Fallback to placeholder if createObjectURL fails
+                    setFormData({
+                      ...formData,
+                      iconUrl: generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A')
+                    });
+                  }
+                }
+              }}
+            />
+            <span className="field-help">Supported formats: JPG, PNG, GIF. Max size: 5MB</span>
           </div>
           
           <div className="form-group">
