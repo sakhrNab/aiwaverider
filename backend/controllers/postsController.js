@@ -903,53 +903,25 @@ const incrementViews = async (req, res) => {
     const { postId } = req.params;
     console.log(`Incrementing view count for post ${postId}`);
     
-    // Get IP and user agent to create a unique visitor ID
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    const userAgent = req.headers['user-agent'];
-    const visitorId = Buffer.from(`${ip}-${userAgent}`).toString('base64');
+    // Update the post's view count in Firestore
+    const postRef = postsCollection.doc(postId);
+    const postDoc = await postRef.get();
     
-    // Check for session cookie to prevent duplicate views
-    const viewedPosts = req.cookies?.viewedPosts ? JSON.parse(req.cookies.viewedPosts) : {};
-    const now = Date.now();
-    const viewWindow = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
-    
-    // Only count as a new view if this visitor hasn't viewed this post in the last 4 hours
-    if (!viewedPosts[postId] || now - viewedPosts[postId] > viewWindow) {
-      // Update the post's view count in Firestore
-      const postRef = postsCollection.doc(postId);
-      const postDoc = await postRef.get();
-      
-      if (!postDoc.exists) {
-        return res.status(404).json({ error: 'Post not found' });
-      }
-      
-      await postRef.update({
-        views: admin.firestore.FieldValue.increment(1)
-      });
-      
-      // Update cookie with current timestamp
-      viewedPosts[postId] = now;
-      res.cookie('viewedPosts', JSON.stringify(viewedPosts), {
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        httpOnly: true,
-        sameSite: 'lax'
-      });
-      
-      console.log(`View count incremented for post ${postId}`);
-      
-      // Invalidate cache
-      await deleteCache(generatePostCacheKey(postId));
-      await deleteCacheByPattern('posts:*');
-      
-      return res.status(200).json({ success: true });
-    } else {
-      console.log(`Duplicate view not counted for post ${postId}`);
-      return res.status(200).json({ 
-        success: true, 
-        duplicate: true,
-        message: 'View already counted recently' 
-      });
+    if (!postDoc.exists) {
+      return res.status(404).json({ error: 'Post not found' });
     }
+    
+    await postRef.update({
+      views: admin.firestore.FieldValue.increment(1)
+    });
+    
+    console.log(`View count incremented for post ${postId}`);
+    
+    // Invalidate cache
+    await deleteCache(generatePostCacheKey(postId));
+    await deleteCacheByPattern('posts:*');
+    
+    return res.status(200).json({ success: true });
   } catch (err) {
     console.error('Error incrementing view count:', err);
     return res.status(500).json({ error: 'Internal server error' });

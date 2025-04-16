@@ -134,10 +134,14 @@ const PostDetail = () => {
   const viewCountIncremented = useRef(false);
   const initialLoadComplete = useRef(false);
   
+  console.log(`[PostDetail] Component rendering for post ${postId}, viewIncremented=${viewCountIncremented.current}, initialLoad=${initialLoadComplete.current}`);
+  
   // Load post data once
   useEffect(() => {
     // Skip for create route
     if (postId === 'create') return;
+    
+    console.log(`[PostDetail] useEffect for post loading triggered for ${postId}`);
     
     // Clean up previous listener
     const cleanupListener = () => {
@@ -157,8 +161,10 @@ const PostDetail = () => {
       
       try {
         // Initial post load
+        console.log(`[PostDetail] Fetching post data for ${postId}`);
         const postData = await getPostById(postId);
         if (postData) {
+          console.log(`[PostDetail] Successfully loaded post data: ${postId}, views=${postData.views || 0}`);
           setPost(postData);
           setAdditionalHTML(postData.additionalHTML || '');
           initialLoadComplete.current = true;
@@ -199,49 +205,74 @@ const PostDetail = () => {
     return cleanupListener;
   }, [postId]); // Only depend on postId to avoid re-fetching
   
-  // Handle view increment separately after post is loaded
+  // This effect handles view incrementation when the component mounts
   useEffect(() => {
-    // Only run if we have a post, haven't incremented the view yet,
-    // and we've completed the initial post load
-    if (!post || viewCountIncremented.current || postId === 'create' || !initialLoadComplete.current) {
+    // Skip for create route or when no post is loaded yet
+    if (!post || postId === 'create' || !initialLoadComplete.current) {
+      console.log(`[PostDetail] View increment skipped - conditions not met: post=${!!post}, initialLoad=${initialLoadComplete.current}`);
       return;
     }
     
-    const incrementView = async () => {
-      try {
-        console.log('[PostDetail] Incrementing view count for post:', postId);
-        
-        // Mark that we've incremented the view to prevent duplicate calls
-        viewCountIncremented.current = true;
-        
-        // Make the API call to increment the view
-        const response = await incrementPostView(postId);
-        console.log('[PostDetail] View increment response:', response);
-        
-        // Force a refresh of the post data to get the updated view count
-        // Wait a moment for the view count to be updated in the database
-        setTimeout(async () => {
-          try {
-            // Force cache bypass to get fresh view count
-            const freshData = await getPostById(postId, true);
-            if (freshData) {
-              console.log('[PostDetail] Refreshed post data with updated view count:', freshData.views);
-              setPost(prevPost => ({
-                ...prevPost, 
-                views: freshData.views || 0
-              }));
-            }
-          } catch (err) {
-            console.error('[PostDetail] Error refreshing post data:', err);
-          }
-        }, 1000);
-      } catch (err) {
-        console.error('Error incrementing view:', err);
-      }
-    };
+    // We only want to increment view once per component mount
+    if (viewCountIncremented.current) {
+      console.log('[PostDetail] View already incremented for this session');
+      return;
+    }
     
-    incrementView();
-  }, [post, postId, getPostById]); // Add getPostById as dependency for fresh data
+    // Mark that we've already incremented for this mounting - do this BEFORE the async call
+    // to prevent any possibility of multiple increments if the component re-renders quickly
+    viewCountIncremented.current = true;
+    
+    console.log(`[PostDetail] Incrementing view count for post: ${postId}, current views=${post.views || 0}`);
+    
+    // Fire and forget - don't use await to avoid blocking
+    incrementPostView(postId)
+      .then(response => {
+        // If the increment failed, we'll still refresh to get the current count
+        if (response.success === false) {
+          console.warn(`[PostDetail] View increment failed: ${response.error}`);
+        } else {
+          console.log(`[PostDetail] View increment succeeded`);
+        }
+        
+        // Always fetch fresh data to get current view count
+        setTimeout(() => {
+          getPostById(postId, true) // Force cache bypass
+            .then(freshData => {
+              if (freshData) {
+                console.log(`[PostDetail] Fresh post data received: views=${freshData.views}, previous=${post.views || 0}`);
+                
+                // Update local state
+                setPost(prevPost => ({
+                  ...prevPost,
+                  views: freshData.views || 0
+                }));
+                
+                // Update global cache
+                if (updatePostInCache) {
+                  updatePostInCache(freshData);
+                }
+              }
+            })
+            .catch(err => {
+              console.error('[PostDetail] Error refreshing post data:', err);
+            });
+        }, 500); // Small delay to allow the backend to process the view
+      })
+      .catch(error => {
+        console.error('[PostDetail] Error incrementing view count:', error);
+        // Even if view increment fails, we still want to get fresh data
+        getPostById(postId, true).catch(() => {}); // Silently fail if this also fails
+      });
+    
+    // Cleanup function - this ensures we reset the increment flag when component unmounts
+    return () => {
+      console.log(`[PostDetail] Component unmounting, resetting viewCountIncremented flag`);
+      viewCountIncremented.current = false;
+    };
+    // Only run this effect when the post ID changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postId]);
 
   // Called when saving admin edits to additionalHTML
   const handleSave = async (e) => {

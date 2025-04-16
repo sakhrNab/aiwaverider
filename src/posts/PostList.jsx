@@ -2,7 +2,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { PostsContext } from '../contexts/PostsContext';
-import { addComment, deletePost, getAllPosts } from '../utils/api';
+import { addComment, deletePost, getAllPosts, incrementPostView } from '../utils/api';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { auth } from '../utils/firebase';
 import { Link } from 'react-router-dom'; // Add this import
@@ -187,6 +187,28 @@ const PostsList = () => {
     return new Date(isoString).toLocaleString();
   };
 
+  // Add a handler for post clicks that increments the view count
+  const handlePostClick = async (e, postId) => {
+    // Don't prevent default navigation, but increment the view count
+    console.log(`[PostsList] Incrementing view for post ${postId} on click`);
+    
+    // Fire and forget - don't wait for the response or handle errors
+    incrementPostView(postId)
+      .then(response => {
+        if (response.success === false) {
+          console.warn(`[PostsList] View increment failed but continuing navigation:`, response.error);
+        } else {
+          console.log(`[PostsList] View increment response:`, response);
+        }
+      })
+      .catch(error => {
+        // This shouldn't happen now that incrementPostView handles errors internally
+        console.error(`[PostsList] Error incrementing view:`, error);
+      });
+    
+    // Navigation will happen naturally through the Link component
+  };
+
   // Use loadingPosts instead of local loading state
   if (loadingPosts) {
     return (
@@ -244,6 +266,7 @@ const PostsList = () => {
                   <Link 
                     to={`/posts/${post.id}`}
                     className="block hover:text-blue-600 transition-colors cursor-pointer"
+                    onClick={(e) => handlePostClick(e, post.id)}
                   >
                     <div className="mb-4">
                       <h3 className="text-2xl font-semibold mb-2">{post.title}</h3>

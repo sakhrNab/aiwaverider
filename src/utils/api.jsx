@@ -737,14 +737,19 @@ export const getPostById = async (postId, skipCache = false) => {
   }
 };
 
-// Increment Post View
+// Increment Post View - Simplified to avoid CORS issues
 export const incrementPostView = async (postId) => {
   try {
+    console.log(`[API] Sending view increment request for post ${postId}`);
+    // Use the simplest request possible to avoid CORS issues
     const response = await api.post(`/api/posts/${postId}/view`);
+    console.log(`[API] View increment successful:`, response.data);
     return response.data;
   } catch (error) {
-    console.error('Error incrementing post view:', error);
-    throw error;
+    console.error(`[API] Error incrementing view for post ${postId}:`, error.message);
+    // Don't throw the error - we don't want to break the user experience
+    // for a non-critical feature like view counting
+    return { success: false, error: error.message };
   }
 };
 

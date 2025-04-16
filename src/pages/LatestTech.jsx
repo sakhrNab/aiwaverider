@@ -4,6 +4,7 @@ import { FaCalendarAlt, FaEye, FaHeart, FaComment, FaArrowRight } from 'react-ic
 import { PostsContext } from '../contexts/PostsContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { HashLoader } from 'react-spinners';
+import { incrementPostView } from '../utils/api';
 import DOMPurify from 'dompurify';
 
 const LatestTech = () => {
@@ -105,6 +106,29 @@ const LatestTech = () => {
       </div>
     );
   }
+  
+  // Add a handler for post clicks to increment views
+  const handlePostClick = (e, postId) => {
+    // Don't prevent default navigation, but increment the view count
+    console.log(`[LatestTech] Incrementing view for post ${postId} on click`);
+    
+    // Fire and forget - don't wait for the response or handle errors
+    // This ensures navigation continues smoothly regardless of view count success
+    incrementPostView(postId)
+      .then(response => {
+        if (response.success === false) {
+          console.warn(`[LatestTech] View increment failed but continuing navigation:`, response.error);
+        } else {
+          console.log(`[LatestTech] View increment response:`, response);
+        }
+      })
+      .catch(error => {
+        // This shouldn't happen now that incrementPostView handles errors internally
+        console.error(`[LatestTech] Error incrementing view:`, error);
+      });
+    
+    // Navigation will happen naturally through the Link component
+  };
   
   return (
     <div className={`min-h-screen pb-16 ${darkMode ? "dark bg-[#2D1846]" : "bg-gray-50"} ${themeClasses}`}>
@@ -215,6 +239,7 @@ const LatestTech = () => {
                       key={post.id}
                       className="glass-effect rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col animate-fade-in"
                       style={{ animationDelay: `${index * 50}ms` }}
+                      onClick={(e) => handlePostClick(e, post.id)}
                     >
                       {/* Post Image */}
                       <div className="h-48 overflow-hidden relative">
