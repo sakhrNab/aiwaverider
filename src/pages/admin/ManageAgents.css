@@ -621,6 +621,8 @@
   border-radius: 4px;
   outline: none;
   transition: border-color 0.2s;
+  color: #333;
+  background-color: #fff;
 }
 
 .search-input:focus {
@@ -656,9 +658,25 @@
   border: 1px solid #ddd;
   border-radius: 4px;
   appearance: none;
+  background-color: #fff;
+  color: #333;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23777' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: calc(100% - 12px) center;
+}
+
+.select-container select:focus {
+  border-color: #2196f3;
+  outline: none;
+}
+
+.sort-select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #fff;
+  color: #333;
+  font-size: 14px;
 }
 
 /* Loading container styles */
@@ -745,6 +763,8 @@
   border: 1px solid #ddd;
   border-radius: 4px 0 0 4px;
   font-size: 14px;
+  color: #333;
+  background-color: #fff;
 }
 
 .search-button {
@@ -949,19 +969,27 @@
 .pagination-btn {
   padding: 8px 16px;
   border: 1px solid #ddd;
-  background-color: white;
+  background-color: #fff;
+  color: #333;
   border-radius: 4px;
   cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background-color: #f0f0f0;
+  border-color: #ccc;
 }
 
 .pagination-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  color: #888;
 }
 
 .page-info {
   font-size: 14px;
-  color: #666;
+  color: #333;
 }
 
 /* User Form Modal */
@@ -978,15 +1006,26 @@
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
+  color: #333;
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group textarea {
   width: 100%;
   padding: 10px;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 14px;
+  color: #333;
+  background-color: #fff;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: #2196f3;
+  outline: none;
 }
 
 .form-row {
@@ -1059,4 +1098,118 @@
   padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
+}
+
+/* CSS for users search in the users management section */
+.users-search input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px 0 0 4px;
+  font-size: 14px;
+  color: #333;
+  background-color: #fff;
+}
+
+/* Apply text colors to all select dropdowns */
+select {
+  color: #333;
+  background-color: #fff;
+}
+
+.users-search {
+  display: flex;
+  max-width: 300px;
+  width: 100%;
+}
+
+.users-search input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px 0 0 4px;
+  font-size: 14px;
+  color: #333;
+  background-color: #fff;
+}
+
+.users-search .search-button {
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  padding: 0 16px;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Form inputs for modal windows */
+.form-group input, 
+.form-group select,
+.form-group textarea {
+  color: #333;
+  background-color: #fff;
+}
+
+/* Responsive improvements for mobile */
+@media (max-width: 767px) {
+  .manage-agents-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+  
+  .search-filter, 
+  .category-filter,
+  .sort-filter {
+    max-width: 100%;
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .users-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .users-search {
+    max-width: 100%;
+    width: 100%;
+  }
+  
+  .sort-controls {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+  }
+  
+  .create-user-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Improve readability of form elements */
+  .search-input, 
+  select,
+  .users-search input,
+  .form-group input {
+    font-size: 16px; /* Prevent auto-zoom on iOS */
+    padding: 10px 12px;
+  }
+  
+  .search-input {
+    padding-left: 36px !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  .manage-agents-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 } 
