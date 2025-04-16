@@ -1,6 +1,6 @@
 // backend/controllers/postsController.js
 
-const sanitizeHtml = require('../utils/sanitize');
+const sanitizeUtils = require('../utils/sanitize');
 const {
   uploadImageToGitHub,
   deleteImageFromGitHub,
@@ -52,8 +52,8 @@ const createPost = async (req, res) => {
     const username = userDoc.exists ? userDoc.data().username : 'Unknown User';
 
     // Sanitize inputs
-    const sanitizedAdditionalHTML = sanitizeHtml(additionalHTML || '');
-    const sanitizedGraphHTML = sanitizeHtml(graphHTML || '');
+    const sanitizedAdditionalHTML = sanitizeUtils.sanitizeContent(additionalHTML || '');
+    const sanitizedGraphHTML = sanitizeUtils.sanitizeContent(graphHTML || '');
 
     // Add post to Firestore
     const newPostRef = await postsCollection.add({
@@ -208,10 +208,10 @@ const updatePost = async (req, res) => {
 
     // Sanitize HTML content if present
     if (updates.additionalHTML) {
-      updates.additionalHTML = sanitizeHtml(updates.additionalHTML);
+      updates.additionalHTML = sanitizeUtils.sanitizeContent(updates.additionalHTML);
     }
     if (updates.graphHTML) {
-      updates.graphHTML = sanitizeHtml(updates.graphHTML);
+      updates.graphHTML = sanitizeUtils.sanitizeContent(updates.graphHTML);
     }
 
     // Update the post

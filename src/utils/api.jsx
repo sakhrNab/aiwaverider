@@ -697,17 +697,26 @@ export const deletePost = async (postId) => {
 };
 
 // Update Post
-export const updatePost = async (postId, formData) => {
+export const updatePost = async (postId, data) => {
   try {
     const headers = await getAuthHeaders();
-    if (headers['Content-Type']) {
-      delete headers['Content-Type'];
+    
+    // Check if data is FormData (for backward compatibility)
+    if (data instanceof FormData) {
+      // FormData needs special handling
+      if (headers['Content-Type']) {
+        delete headers['Content-Type'];
+      }
+    } else {
+      // For JSON data, ensure Content-Type is set
+      headers['Content-Type'] = 'application/json';
     }
-    const response = await api.put(`/api/posts/${postId}`, formData, { headers });
+    
+    const response = await api.put(`/api/posts/${postId}`, data, { headers });
     return response.data;
   } catch (error) {
     console.error('Error updating post:', error);
-    return { error: 'An unexpected error occurred while updating the post.' };
+    throw error;
   }
 };
 

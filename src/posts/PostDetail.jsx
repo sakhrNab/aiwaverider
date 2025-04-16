@@ -242,7 +242,7 @@ const PostDetail = () => {
     e.preventDefault();
     if (!isAdmin || !post) return;
 
-    // Prepare form data
+    // Prepare sanitized HTML content
     const sanitized = DOMPurify.sanitize(additionalHTML, {
       ADD_ATTR: ['style', 'data-align', 'width', 'height', 'class'],
       ADD_TAGS: ['iframe'],
@@ -256,11 +256,14 @@ const PostDetail = () => {
         'data-align', 'width', 'height',
       ],
     });
-    const formData = new FormData();
-    formData.append('additionalHTML', sanitized);
+    
+    // Send as JSON object instead of FormData
+    const updateData = {
+      additionalHTML: sanitized
+    };
 
     try {
-      const response = await updatePost(postId, formData, token);
+      const response = await updatePost(postId, updateData, token);
       if (response.message) {
         const refreshed = await getPostById(postId, true); // force refresh
         updatePostInCache(refreshed); // Update cache
