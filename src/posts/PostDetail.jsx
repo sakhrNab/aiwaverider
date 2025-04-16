@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
-import { getPostById, updatePost } from '../utils/api';
+import { getPostById, updatePost, incrementPostView } from '../utils/api';
 import CommentsSection from './CommentsSection';
 import DOMPurify from 'dompurify';
 import { PostsContext } from '../contexts/PostsContext';
@@ -128,114 +128,120 @@ const PostDetail = () => {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [additionalHTML, setAdditionalHTML] = useState('');
-  const [skipRealtimeUpdates, setSkipRealtimeUpdates] = useState(false);
   
-  // Use ref to track active listeners
-  const listenerRef = useRef(null);
-  const lastUpdateTime = useRef(Date.now());
-
-  // Update the initial useEffect
+  // Refs to track state without triggering re-renders
+  const firebaseListener = useRef(null);
+  const viewCountIncremented = useRef(false);
+  const initialLoadComplete = useRef(false);
+  
+  // Load post data once
   useEffect(() => {
-    const loadPost = async () => {
+    // Skip for create route
+    if (postId === 'create') return;
+    
+    // Clean up previous listener
+    const cleanupListener = () => {
+      if (firebaseListener.current) {
+        firebaseListener.current();
+        firebaseListener.current = null;
+      }
+    };
+    
+    // Reset our tracking refs when post ID changes
+    viewCountIncremented.current = false;
+    initialLoadComplete.current = false;
+    cleanupListener();
+    
+    const fetchPost = async () => {
+      if (loading === false) setLoading(true);
+      
       try {
-        setLoading(true);
-        console.log(`[PostDetail] Loading post ${postId}, checking cache first`);
-        
-        // First check if post is already in cache and use that immediately
-        const cachedPost = postDetails[postId];
-        if (cachedPost) {
-          console.log(`[PostDetail] Using cached post data for ${postId}`);
-          setPost(cachedPost);
-          setAdditionalHTML(cachedPost.additionalHTML || '');
-          
-          // Skip realtime updates if we have fresh data (< 30 seconds old)
-          const postTimestamp = cachedPost.fetchTimestamp || 0;
-          if (Date.now() - postTimestamp < 30000) {
-            console.log(`[PostDetail] Cached post data is fresh, skipping immediate API fetch`);
-            setSkipRealtimeUpdates(true);
-            setLoading(false);
-            return;
-          }
-        }
-        
-        // Then fetch latest post data
-        console.log(`[PostDetail] Fetching latest data for post ${postId}`);
-        const freshPost = await getPostById(postId);
-        if (freshPost) {
-          console.log(`[PostDetail] Received fresh post data for ${postId}`);
-          // Add timestamp for cache freshness check
-          freshPost.fetchTimestamp = Date.now();
-          setPost(freshPost);
-          setAdditionalHTML(freshPost.additionalHTML || '');
-          lastUpdateTime.current = Date.now();
-        }
-        
-        // Only set up real-time listener in specific cases:
-        // 1. For admin users who need to see changes immediately
-        // 2. If we don't already have complete post data
-        // 3. If we haven't set up a listener recently (within 10 seconds)
-        const shouldCreateListener = 
-          (isAdmin || !freshPost?.likes) && 
-          !skipRealtimeUpdates &&
-          (Date.now() - lastUpdateTime.current > 10000);
-        
-        if (shouldCreateListener) {
-          console.log(`[PostDetail] Setting up Firebase listener for post ${postId}`);
-          
-          // Clean up any existing listener first
-          if (listenerRef.current) {
-            console.log(`[PostDetail] Cleaning up previous listener before creating new one`);
-            listenerRef.current();
-            listenerRef.current = null;
-          }
-          
-          // Set up new real-time listener for likes and views
-          listenerRef.current = onSnapshot(doc(db, 'posts', postId), (doc) => {
-            if (doc.exists()) {
-              const data = doc.data();
-              console.log(`[PostDetail] Received Firebase update for post ${postId}`);
-              lastUpdateTime.current = Date.now();
-              
-              // Only update the specific fields we need to reduce re-renders
-              setPost(prevPost => {
-                if (!prevPost) return { ...data, id: doc.id };
-                
-                return {
-                  ...prevPost,
-                  likes: data.likes || [],
-                  views: data.views || 0,
-                  // Only update if newer than what we have
-                  updatedAt: data.updatedAt > prevPost.updatedAt ? data.updatedAt : prevPost.updatedAt
-                };
-              });
-            }
-          }, (error) => {
-            console.error(`[PostDetail] Error in Firebase listener for post ${postId}:`, error);
-          });
-        } else {
-          console.log(`[PostDetail] Skipping Firebase listener creation for post ${postId}`);
+        // Initial post load
+        const postData = await getPostById(postId);
+        if (postData) {
+          setPost(postData);
+          setAdditionalHTML(postData.additionalHTML || '');
+          initialLoadComplete.current = true;
         }
       } catch (err) {
-        console.error(`[PostDetail] Error loading post ${postId}:`, err);
+        console.error('Error loading post:', err);
         setError(err.message);
       } finally {
         setLoading(false);
       }
     };
 
-    if (postId !== 'create') {
-      loadPost();
+    // Set up Firebase listener for real-time updates
+    const setupListener = () => {
+      firebaseListener.current = onSnapshot(doc(db, 'posts', postId), (docSnapshot) => {
+        if (docSnapshot.exists()) {
+          const docData = docSnapshot.data();
+          
+          // Only update view-related fields to avoid unnecessary re-renders
+          setPost(prevPost => {
+            if (!prevPost) return { id: postId, ...docData };
+            
+            return {
+              ...prevPost,
+              likes: docData.likes || [],
+              views: docData.views || 0,
+            };
+          });
+        }
+      }, (error) => {
+        console.error('Firebase listener error:', error);
+      });
+    };
+    
+    fetchPost();
+    setupListener();
+    
+    return cleanupListener;
+  }, [postId]); // Only depend on postId to avoid re-fetching
+  
+  // Handle view increment separately after post is loaded
+  useEffect(() => {
+    // Only run if we have a post, haven't incremented the view yet,
+    // and we've completed the initial post load
+    if (!post || viewCountIncremented.current || postId === 'create' || !initialLoadComplete.current) {
+      return;
     }
     
-    // Clean up function
-    return () => {
-      if (listenerRef.current) {
-        console.log(`[PostDetail] Cleaning up Firebase listener for post ${postId}`);
-        listenerRef.current();
-        listenerRef.current = null;
+    const incrementView = async () => {
+      try {
+        console.log('[PostDetail] Incrementing view count for post:', postId);
+        
+        // Mark that we've incremented the view to prevent duplicate calls
+        viewCountIncremented.current = true;
+        
+        // Make the API call to increment the view
+        const response = await incrementPostView(postId);
+        console.log('[PostDetail] View increment response:', response);
+        
+        // Force a refresh of the post data to get the updated view count
+        // Wait a moment for the view count to be updated in the database
+        setTimeout(async () => {
+          try {
+            // Force cache bypass to get fresh view count
+            const freshData = await getPostById(postId, true);
+            if (freshData) {
+              console.log('[PostDetail] Refreshed post data with updated view count:', freshData.views);
+              setPost(prevPost => ({
+                ...prevPost, 
+                views: freshData.views || 0
+              }));
+            }
+          } catch (err) {
+            console.error('[PostDetail] Error refreshing post data:', err);
+          }
+        }, 1000);
+      } catch (err) {
+        console.error('Error incrementing view:', err);
       }
     };
-  }, [postId, getPostById, postDetails, isAdmin, skipRealtimeUpdates]);
+    
+    incrementView();
+  }, [post, postId, getPostById]); // Add getPostById as dependency for fresh data
 
   // Called when saving admin edits to additionalHTML
   const handleSave = async (e) => {

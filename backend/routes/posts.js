@@ -16,7 +16,9 @@ const {
   likeComment,
   unlikeComment,
   deleteComment,
-  updateComment
+  updateComment,
+  incrementViews,
+  initializeViewCounts
 } = require('../controllers/postsController');
 const admin = require('firebase-admin');
 // Initialize Firestore
@@ -57,5 +59,11 @@ router.put('/:postId/comments/:commentId', validateFirebaseToken, updateComment)
 router.delete('/:postId/comments/:commentId', validateFirebaseToken, deleteComment);
 router.post('/:postId/comments/:commentId/like', validateFirebaseToken, likeComment);
 router.post('/:postId/comments/:commentId/unlike', validateFirebaseToken, unlikeComment);
+
+// Track post view
+router.post('/:postId/view', incrementViews);
+
+// Admin route to initialize view counts
+router.post('/initialize-views', initializeViewCounts);
 
 module.exports = router; 

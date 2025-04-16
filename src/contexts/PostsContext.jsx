@@ -292,18 +292,30 @@ export const PostsProvider = ({ children }) => {
 
   const getPostById = useCallback(
     async (postId, force = false) => {
+      console.log(`[PostsContext] Getting post ${postId}, force=${force}`);
+      
+      // If not forcing a refresh and we have the post in cache, use it
       if (!force && postDetails[postId]) {
+        console.log(`[PostsContext] Using cached post ${postId}, views: ${postDetails[postId].views || 0}`);
         return postDetails[postId];
       }
+      
       try {
-        const data = await apiGetPostById(postId);
+        // Pass the skipCache parameter to the API when force=true
+        const data = await apiGetPostById(postId, force);
+        
         if (data) {
+          console.log(`[PostsContext] Received post ${postId} from API, views: ${data.views || 0}`);
+          
+          // Update both our cache objects with the fresh data
           setPostDetails(prev => ({ ...prev, [postId]: data }));
+          
+          // Also update the post in the posts array if it exists
           setPosts(prev => prev.map(p => (p.id === postId ? data : p)));
         }
         return data;
       } catch (error) {
-        console.error('Error fetching post by ID:', error);
+        console.error(`[PostsContext] Error fetching post ${postId}:`, error);
         throw error;
       }
     },
@@ -577,10 +589,47 @@ export const PostsProvider = ({ children }) => {
   }, []);
 
   const updatePostInCache = useCallback((updatedPost) => {
-    setPosts(prev =>
-      prev.map(p => (p.id === updatedPost.id ? updatedPost : p))
+    if (!updatedPost || !updatedPost.id) {
+      console.warn('[PostsContext] Invalid post data in updatePostInCache', updatedPost);
+      return;
+    }
+    
+    console.log(`[PostsContext] Updating post ${updatedPost.id} in cache with views: ${updatedPost.views || 0}`);
+    
+    // Update the post in the posts array
+    setPosts(prev => 
+      prev.map(p => {
+        if (p.id === updatedPost.id) {
+          // Preserve any properties that might be missing in updatedPost
+          return { 
+            ...p, 
+            ...updatedPost,
+            // Always ensure views is properly updated
+            views: updatedPost.views !== undefined ? updatedPost.views : p.views
+          };
+        }
+        return p;
+      })
     );
-    setPostDetails(prev => ({ ...prev, [updatedPost.id]: updatedPost }));
+    
+    // Update the post in the postDetails object
+    setPostDetails(prev => {
+      const existingPost = prev[updatedPost.id];
+      if (existingPost) {
+        // Merge with existing post data to preserve any missing properties
+        return { 
+          ...prev, 
+          [updatedPost.id]: {
+            ...existingPost,
+            ...updatedPost,
+            // Always ensure views is properly updated
+            views: updatedPost.views !== undefined ? updatedPost.views : existingPost.views
+          }
+        };
+      }
+      // If post doesn't exist in cache yet, add it
+      return { ...prev, [updatedPost.id]: updatedPost };
+    });
   }, []);
 
   const removePostFromCache = useCallback((postId) => {

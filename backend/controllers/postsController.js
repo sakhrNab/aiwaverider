@@ -144,15 +144,21 @@ const getPosts = async (req, res) => {
 const getPostById = async (req, res) => {
   try {
     const { postId } = req.params;
+    const skipCache = req.query.skipCache === 'true';
     
-    // Try to get from cache first
-    const cacheKey = generatePostCacheKey(postId);
-    const cachedPost = await getCache(cacheKey);
-    if (cachedPost) {
-      return res.json(cachedPost);
+    // Try to get from cache first (unless skipCache is true)
+    if (!skipCache) {
+      const cacheKey = generatePostCacheKey(postId);
+      const cachedPost = await getCache(cacheKey);
+      if (cachedPost) {
+        console.log(`Serving post ${postId} from cache`);
+        return res.json(cachedPost);
+      }
+    } else {
+      console.log(`Skipping cache for post ${postId} as requested by client`);
     }
 
-    // If not in cache, get from Firestore
+    // If skipCache=true or not in cache, get from Firestore
     const postDoc = await postsCollection.doc(postId).get();
     
     if (!postDoc.exists) {
@@ -161,9 +167,14 @@ const getPostById = async (req, res) => {
 
     const post = { id: postDoc.id, ...postDoc.data() };
     
-    // Cache the post
-    await setCache(cacheKey, post);
+    // Cache the post (unless skipCache is true)
+    if (!skipCache) {
+      const cacheKey = generatePostCacheKey(postId);
+      await setCache(cacheKey, post);
+      console.log(`Cached post ${postId}`);
+    }
 
+    console.log(`Serving fresh post ${postId} from Firestore, views: ${post.views || 0}`);
     return res.json(post);
   } catch (err) {
     console.error('Error in getPostById:', err);
@@ -886,6 +897,108 @@ const updateComment = async (req, res) => {
   }
 };
 
+// Add this new function to track views
+const incrementViews = async (req, res) => {
+  try {
+    const { postId } = req.params;
+    console.log(`Incrementing view count for post ${postId}`);
+    
+    // Get IP and user agent to create a unique visitor ID
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    const visitorId = Buffer.from(`${ip}-${userAgent}`).toString('base64');
+    
+    // Check for session cookie to prevent duplicate views
+    const viewedPosts = req.cookies?.viewedPosts ? JSON.parse(req.cookies.viewedPosts) : {};
+    const now = Date.now();
+    const viewWindow = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
+    
+    // Only count as a new view if this visitor hasn't viewed this post in the last 4 hours
+    if (!viewedPosts[postId] || now - viewedPosts[postId] > viewWindow) {
+      // Update the post's view count in Firestore
+      const postRef = postsCollection.doc(postId);
+      const postDoc = await postRef.get();
+      
+      if (!postDoc.exists) {
+        return res.status(404).json({ error: 'Post not found' });
+      }
+      
+      await postRef.update({
+        views: admin.firestore.FieldValue.increment(1)
+      });
+      
+      // Update cookie with current timestamp
+      viewedPosts[postId] = now;
+      res.cookie('viewedPosts', JSON.stringify(viewedPosts), {
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        httpOnly: true,
+        sameSite: 'lax'
+      });
+      
+      console.log(`View count incremented for post ${postId}`);
+      
+      // Invalidate cache
+      await deleteCache(generatePostCacheKey(postId));
+      await deleteCacheByPattern('posts:*');
+      
+      return res.status(200).json({ success: true });
+    } else {
+      console.log(`Duplicate view not counted for post ${postId}`);
+      return res.status(200).json({ 
+        success: true, 
+        duplicate: true,
+        message: 'View already counted recently' 
+      });
+    }
+  } catch (err) {
+    console.error('Error incrementing view count:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Add a script to initialize view counts for posts that don't have them
+const initializeViewCounts = async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can run this operation' });
+    }
+    
+    console.log('Initializing view counts for posts...');
+    const snapshot = await postsCollection.get();
+    const batch = admin.firestore().batch();
+    let updatedCount = 0;
+    
+    for (const doc of snapshot.docs) {
+      const post = doc.data();
+      // Only update posts that don't have a views field
+      if (post.views === undefined) {
+        batch.update(doc.ref, { views: 0 });
+        updatedCount++;
+      }
+    }
+    
+    if (updatedCount > 0) {
+      await batch.commit();
+      console.log(`Initialized view counts for ${updatedCount} posts`);
+    } else {
+      console.log('No posts needed view count initialization');
+    }
+    
+    // Invalidate all post caches
+    await deleteCacheByPattern('posts:*');
+    
+    return res.status(200).json({ 
+      success: true, 
+      updatedCount,
+      message: `Initialized view counts for ${updatedCount} posts` 
+    });
+  } catch (err) {
+    console.error('Error initializing view counts:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 module.exports = {
   createPost,
   getPosts,
@@ -900,5 +1013,7 @@ module.exports = {
   likeComment,
   unlikeComment,
   deleteComment,
-  updateComment
+  updateComment,
+  incrementViews,
+  initializeViewCounts
 };

@@ -721,12 +721,29 @@ export const updatePost = async (postId, data) => {
 };
 
 // Get Post by ID
-export const getPostById = async (postId) => {
+export const getPostById = async (postId, skipCache = false) => {
   try {
-    const response = await api.get(`/api/posts/${postId}`);
+    // Add skipCache parameter to get fresh post data with latest view count
+    const url = skipCache 
+      ? `/api/posts/${postId}?skipCache=true` 
+      : `/api/posts/${postId}`;
+      
+    console.log(`[API] Getting post ${postId}${skipCache ? ' (skipping cache)' : ''}`);
+    const response = await api.get(url);
     return response.data;
   } catch (error) {
     console.error('Error fetching post by ID:', error);
+    throw error;
+  }
+};
+
+// Increment Post View
+export const incrementPostView = async (postId) => {
+  try {
+    const response = await api.post(`/api/posts/${postId}/view`);
+    return response.data;
+  } catch (error) {
+    console.error('Error incrementing post view:', error);
     throw error;
   }
 };
