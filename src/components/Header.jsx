@@ -6,7 +6,16 @@ import { AuthContext } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext.jsx';
 import { useTheme } from '../contexts/ThemeContext';
 import { toast } from 'react-toastify';
-import { FaShoppingCart, FaSun, FaMoon, FaHome } from 'react-icons/fa';
+import { 
+  FaShoppingCart, 
+  FaSun, 
+  FaMoon, 
+  FaHome, 
+  FaRobot, 
+  FaTools, 
+  FaChartLine, 
+  FaMicrochip 
+} from 'react-icons/fa';
 import './Header.css'; // Import custom Header CSS
 
 const Header = ({ openSignUpModal }) => {
@@ -130,16 +139,16 @@ const Header = ({ openSignUpModal }) => {
                 <FaHome className="inline-block mr-1" /> Home
               </Link>
               <Link to="/agents" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
-                Agents
+                <FaRobot className="inline-block mr-1" /> Agents
               </Link>
               <Link to="/ai-tools" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
-                AI Tools
+                <FaTools className="inline-block mr-1" /> AI Tools
               </Link>
               <Link to="/trends" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
-                Trends
+                <FaChartLine className="inline-block mr-1" /> Trends
               </Link>
               <Link to="/latest-tech" className="nav-link text-lg font-medium text-white no-underline px-3 py-2 rounded-md transition-all duration-300 hover:text-[#00bcd4] hover:bg-opacity-10 hover:bg-[#00bcd4]">
-                Latest Tech
+                <FaMicrochip className="inline-block mr-1" /> Latest Tech
               </Link>
             </nav>
           </div>
@@ -253,16 +262,16 @@ const Header = ({ openSignUpModal }) => {
               <FaHome className="inline-block mr-2" /> Home
             </Link>
             <Link to="/agents" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
-              Agents
+              <FaRobot className="inline-block mr-2" /> Agents
             </Link>
             <Link to="/ai-tools" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
-              AI Tools
+              <FaTools className="inline-block mr-2" /> AI Tools
             </Link>
             <Link to="/trends" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
-              Trends
+              <FaChartLine className="inline-block mr-2" /> Trends
             </Link>
             <Link to="/latest-tech" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
-              Latest Tech
+              <FaMicrochip className="inline-block mr-2" /> Latest Tech
             </Link>
             {/* Cart in mobile menu */}
             <Link to="/checkout" className="mobile-nav-link text-white font-medium py-3 border-b border-gray-700 hover:bg-[#292949]" onClick={() => setIsMenuOpen(false)}>
