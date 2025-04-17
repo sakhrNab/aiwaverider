@@ -1,5 +1,5 @@
 // src/components/AppContent.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import '../styles/globals.css'; // Tailwind global styles
 import Header from './Header';
@@ -34,6 +34,19 @@ const AppContent = () => {
 
   const openSignUpModal = () => setIsSignUpModalOpen(true);
   const closeSignUpModal = () => setIsSignUpModalOpen(false);
+  
+  // Add event listener for opening signup modal from anywhere in the app
+  useEffect(() => {
+    const handleOpenSignUpModal = () => {
+      openSignUpModal();
+    };
+    
+    document.addEventListener('open-signup-modal', handleOpenSignUpModal);
+    
+    return () => {
+      document.removeEventListener('open-signup-modal', handleOpenSignUpModal);
+    };
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen">
