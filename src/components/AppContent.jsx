@@ -23,10 +23,13 @@ import HomePage from '../pages/HomePage';
 import Dashboard from '../pages/admin/Dashboard';
 import ManageAgents from '../pages/admin/ManageAgents';
 import ManageUsers from '../pages/admin/ManageUsers';
-import Analytics from '../pages/admin/Analytics';
+import AdminAnalytics from '../pages/admin/Analytics';
 import Settings from '../pages/admin/Settings';
 import Pricing from '../pages/admin/Pricing';
 import AIToolsManager from './admin/AIToolsManager';
+import ChatBot from './ChatBot';
+import { Analytics as VercelAnalytics } from '@vercel/analytics/react';
+import ErrorBoundary from './ErrorBoundary';
 
 const AppContent = () => {
   const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);
@@ -49,131 +52,137 @@ const AppContent = () => {
   }, []);
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header openSignUpModal={openSignUpModal} />
+    <>
+      <ErrorBoundary>
+        <div className="flex flex-col min-h-screen">
+          <Header openSignUpModal={openSignUpModal} />
 
-      <div className="flex-grow">
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<HomePage />} />
-          <Route path="/sign-in" element={<SignIn />} />
-          <Route path="/sign-up" element={<SignUp />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/agents" element={<Agents />} />
-          <Route path="/ai-tools" element={<AITools />} />
-          <Route path="/latest-tech" element={<LatestTech />} />
-          <Route path="/agents/:agentId" element={<AgentDetail />} />
-          <Route path="/product/:agentId" element={<AgentDetail />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/thankyou" element={<ThankYou />} />
-          <Route path="/checkout/success" element={<CheckoutSuccess />} />
+          <div className="flex-grow">
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/" element={<HomePage />} />
+              <Route path="/sign-in" element={<SignIn />} />
+              <Route path="/sign-up" element={<SignUp />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/agents" element={<Agents />} />
+              <Route path="/ai-tools" element={<AITools />} />
+              <Route path="/latest-tech" element={<LatestTech />} />
+              <Route path="/agents/:agentId" element={<AgentDetail />} />
+              <Route path="/product/:agentId" element={<AgentDetail />} />
+              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/thankyou" element={<ThankYou />} />
+              <Route path="/checkout/success" element={<CheckoutSuccess />} />
 
-          {/* Protected: Admin only */}
-          {/* Create Post route */}
-          <Route
-            path="/posts/create" // or /admin/create
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <CreatePost />
-              </ProtectedRoute>
-            }
-          />
+              {/* Protected: Admin only */}
+              {/* Create Post route */}
+              <Route
+                path="/posts/create" // or /admin/create
+                element={
+                  <ProtectedRoute roles={['admin']}>
+                    <CreatePost />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Admin Routes */}
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <Navigate to="/admin/dashboard" replace />
-              </ProtectedRoute>
-            }
-          />
-          
-          {/* Admin Dashboard */}
-          <Route
-            path="/admin/dashboard"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          
-          {/* Manage Agents */}
-          <Route
-            path="/admin/agents"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <ManageAgents />
-              </ProtectedRoute>
-            }
-          />
+              {/* Admin Routes */}
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute roles={['admin']}>
+                    <Navigate to="/admin/dashboard" replace />
+                  </ProtectedRoute>
+                }
+              />
+              
+              {/* Admin Dashboard */}
+              <Route
+                path="/admin/dashboard"
+                element={
+                  <ProtectedRoute roles={['admin']}>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              
+              {/* Manage Agents */}
+              <Route
+                path="/admin/agents"
+                element={
+                  <ProtectedRoute roles={['admin']}>
+                    <ManageAgents />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* AI Tools Manager */}
-          <Route
-            path="/admin/ai-tools"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <AIToolsManager />
-              </ProtectedRoute>
-            }
-          />
+              {/* AI Tools Manager */}
+              <Route
+                path="/admin/ai-tools"
+                element={
+                  <ProtectedRoute roles={['admin']}>
+                    <AIToolsManager />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Manage Users */}
-          <Route
-            path="/admin/users"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <ManageUsers />
-              </ProtectedRoute>
-            }
-          />
+              {/* Manage Users */}
+              <Route
+                path="/admin/users"
+                element={
+                  <ProtectedRoute roles={['admin']}>
+                    <ManageUsers />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Analytics */}
-          <Route
-            path="/admin/analytics"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <Analytics />
-              </ProtectedRoute>
-            }
-          />
+              {/* Analytics */}
+              <Route
+                path="/admin/analytics"
+                element={
+                  <ProtectedRoute roles={['admin']}>
+                    <AdminAnalytics />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Settings */}
-          <Route
-            path="/admin/settings"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <Settings />
-              </ProtectedRoute>
-            }
-          />
+              {/* Settings */}
+              <Route
+                path="/admin/settings"
+                element={
+                  <ProtectedRoute roles={['admin']}>
+                    <Settings />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Pricing */}
-          <Route
-            path="/admin/pricing"
-            element={
-              <ProtectedRoute roles={['admin']}>
-                <Pricing />
-              </ProtectedRoute>
-            }
-          />
+              {/* Pricing */}
+              <Route
+                path="/admin/pricing"
+                element={
+                  <ProtectedRoute roles={['admin']}>
+                    <Pricing />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Post Detail */}
-          <Route path="/posts/:postId" element={<PostDetail />} />
+              {/* Post Detail */}
+              <Route path="/posts/:postId" element={<PostDetail />} />
 
-          {/* Fallback */}
-          <Route path="*" element={<HomePage />} />
-        </Routes>
-      </div>
+              {/* Fallback */}
+              <Route path="*" element={<HomePage />} />
+            </Routes>
+          </div>
 
-      <Footer />
+          <Footer />
 
-      {/* Show SignUp modal if not on /sign-up */}
-      {location.pathname !== '/sign-up' && (
-        <SignUp isOpen={isSignUpModalOpen} onClose={closeSignUpModal} />
-      )}
-    </div>
+          {/* Show SignUp modal if not on /sign-up */}
+          {location.pathname !== '/sign-up' && (
+            <SignUp isOpen={isSignUpModalOpen} onClose={closeSignUpModal} />
+          )}
+        </div>
+      </ErrorBoundary>
+      <VercelAnalytics />
+      <ChatBot />
+    </>
   );
 };
 

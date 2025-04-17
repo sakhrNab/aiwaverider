@@ -99,11 +99,15 @@ setInterval(() => {
   loginAttempts.clear();
 }, 15 * 60 * 1000);
 
-// Import main router
+// Import routes
 const apiRoutes = require('./routes/index');
+const chatRoutes = require('./routes/chatRoutes');
 
 // Mount API routes
 app.use('/api', apiRoutes);
+
+// Mount chat routes
+app.use('/api/chat', chatRoutes);
 
 // Add diagnostic route for the recommendations API
 app.get('/api-test/recommendations', (req, res) => {

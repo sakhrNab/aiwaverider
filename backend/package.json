@@ -39,7 +39,8 @@
     "redis": "^4.7.0",
     "sanitize-html": "^2.14.0",
     "stripe": "^17.7.0",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "openai": "^4.12.1"
   },
   "devDependencies": {
     "jest": "^29.7.0",
