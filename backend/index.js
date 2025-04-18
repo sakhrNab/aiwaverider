@@ -9,6 +9,7 @@ const rateLimit = require('express-rate-limit');
 const logger = require('./utils/logger');
 const { initializePassport } = require('./config/passport');
 const { db } = require('./config/firebase');
+const { initializeSettings } = require('./models/siteSettings');
 
 // Initialize express
 const app = express();
@@ -17,6 +18,11 @@ const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
 const isDevelopment = process.env.NODE_ENV === 'development';
 const PORT = process.env.PORT || (isProduction ? 8080 : 4000);
+
+// Initialize site settings
+initializeSettings(db).catch(err => {
+  logger.error('Failed to initialize site settings:', err);
+});
 
 // ------------------ CORS Configuration ------------------
 const allowedOrigins = isProduction

@@ -1,0 +1,76 @@
+.color-picker-container {
+  position: relative;
+  width: 100%;
+}
+
+.color-picker-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.color-swatch {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.2s ease;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.color-swatch:hover {
+  transform: scale(1.05);
+}
+
+.eyedropper-icon {
+  opacity: 0;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  transition: opacity 0.2s ease;
+}
+
+.color-swatch:hover .eyedropper-icon {
+  opacity: 0.8;
+}
+
+.color-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  font-family: monospace;
+  color: var(--text);
+  background-color: var(--card-bg);
+}
+
+.color-picker-popup {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 10px);
+  left: 0;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  padding: 10px;
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+}
+
+/* Adjustments for react-colorful */
+.color-picker-popup .react-colorful {
+  width: 200px;
+  height: 200px;
+}
+
+/* Make the color picker handle visible on both light and dark themes */
+.color-picker-popup .react-colorful__saturation-pointer,
+.color-picker-popup .react-colorful__hue-pointer {
+  width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(0, 0, 0, 0.2);
+} 

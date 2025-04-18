@@ -14,6 +14,7 @@ const testRoutes = require('./test');
 const paymentsRoutes = require('./payments');
 const recommendationsRoutes = require('./recommendations');
 const aiToolsRoutes = require('./ai-tools');
+const adminRoutes = require('./admin');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -28,6 +29,7 @@ router.use('/test', testRoutes);
 router.use('/payments', paymentsRoutes);
 router.use('/recommendations', recommendationsRoutes);
 router.use('/ai-tools', aiToolsRoutes);
+router.use('/admin', adminRoutes);
 
 // Add redirect for product routes to the agents routes
 // This handles legacy or alternative product URLs
