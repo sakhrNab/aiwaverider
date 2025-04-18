@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaTimes, FaPaperPlane, FaRedo } from 'react-icons/fa';
+import { FaTimes, FaPaperPlane, FaRedo, FaCommentAlt } from 'react-icons/fa';
+import chatIcon from '../assets/chat-icon.jpg';
 
 const ChatBot = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -117,26 +118,32 @@ const ChatBot = () => {
   return (
     <>
       {/* Chat Toggle Button */}
-      <div 
-        onClick={toggleChat}
-        style={{
-          position: 'fixed',
-          bottom: '20px',
-          right: '20px',
-          width: '60px',
-          height: '60px',
-          backgroundColor: '#4FD1C5',
-          borderRadius: '50%',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
-          zIndex: 1000,
-          cursor: 'pointer',
-          transition: 'all 0.3s ease'
-        }}
-      >
-        <div style={{ fontSize: '30px' }}>😊</div>
+      <div style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000 }}>
+        <div 
+          onClick={toggleChat}
+          style={{
+            width: '45px',
+            height: '45px',
+            borderRadius: '50%',
+            boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',
+            overflow: 'hidden',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <img 
+            src={chatIcon} 
+            alt="Chat with us" 
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+          />
+        </div>
       </div>
       
       {/* Chat Interface */}

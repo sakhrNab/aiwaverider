@@ -28,6 +28,7 @@ import Settings from '../pages/admin/Settings';
 import Pricing from '../pages/admin/Pricing';
 import AIToolsManager from './admin/AIToolsManager';
 import ChatBot from './ChatBot';
+import BackToTop from './BackToTop';
 import { Analytics as VercelAnalytics } from '@vercel/analytics/react';
 import ErrorBoundary from './ErrorBoundary';
 
@@ -182,6 +183,7 @@ const AppContent = () => {
       </ErrorBoundary>
       <VercelAnalytics />
       <ChatBot />
+      <BackToTop />
     </>
   );
 };

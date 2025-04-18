@@ -72,7 +72,7 @@ const HomePage = () => {
       <div className="bg-indigo-900 py-6 px-6">
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
           <div>
-            <h2 className="text-3xl font-bold text-white">Wave Rider</h2>
+            <h2 className="text-3xl font-bold text-white">AI Wave Rider</h2>
             <p className="text-yellow-500 font-medium">Your Gateway to AI Mastery</p>
           </div>
           <div className="mt-4 md:mt-0">

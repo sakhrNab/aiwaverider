@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { FaExternalLinkAlt, FaSearch, FaCalendarAlt, FaArrowRight } from 'react-icons/fa';
+import { FaExternalLinkAlt, FaSearch, FaCalendarAlt, FaArrowRight, FaTimes } from 'react-icons/fa';
 import '../styles/AITools.css';
 import * as aiToolsService from '../services/aiToolsService';
 import { useTheme } from '../contexts/ThemeContext';
@@ -152,7 +152,7 @@ const AITools = () => {
       <div className="bg-indigo-900 py-6 px-6">
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
           <div>
-            <h2 className="text-3xl font-bold text-white">Wave Rider</h2>
+            <h2 className="text-3xl font-bold text-white">AI Wave Rider</h2>
             <p className="text-yellow-500 font-medium">Your Gateway to AI Mastery</p>
           </div>
           <div className="mt-4 md:mt-0">
@@ -203,7 +203,7 @@ const AITools = () => {
             <>
               {/* Search input with better positioning - using class-based approach */}
               <div className="mb-8">
-                <div className="relative mx-auto max-w-3xl search-container">
+                <div className="relative mx-auto max-w-3xl search-container" id="ai-tools-search">
                   <div className="search-icon-wrapper">
                     <FaSearch className="search-icon" />
                   </div>
@@ -214,6 +214,16 @@ const AITools = () => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="search-input"
                   />
+                  {searchTerm && (
+                    <button 
+                      type="button" 
+                      className="search-clear-button" 
+                      onClick={() => setSearchTerm('')}
+                      aria-label="Clear search"
+                    >
+                      <FaTimes />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -226,7 +236,10 @@ const AITools = () => {
                   >
                     All
                   </button>
-                  {tags.filter(tag => tag !== 'All').map((tag) => (
+                  {tags
+                    .filter(tag => tag !== 'All')
+                    .sort((a, b) => a.localeCompare(b)) // Sort tags alphabetically
+                    .map((tag) => (
                     <button
                       key={tag}
                       onClick={() => setSelectedTag(tag)}
