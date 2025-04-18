@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaPlus, FaEdit, FaTrash, FaImage, FaSave, FaTimes } from 'react-icons/fa';
 import { addAITool, updateAITool, deleteAITool, getAllAITools } from '../../services/aiToolsService';
 import './AIToolsManager.css';
+import AdminLayout from './AdminLayout';
 
 const AIToolsManager = () => {
   const [tools, setTools] = useState([]);
@@ -188,234 +189,236 @@ const AIToolsManager = () => {
   };
 
   return (
-    <div className="ai-tools-manager">
-      <div className="manager-header">
-        <h2>Manage AI Tools</h2>
-        <button 
-          className="add-tool-btn"
-          onClick={handleAddNewTool}
-          disabled={loading}
-        >
-          <FaPlus /> Add New Tool
-        </button>
-      </div>
+    <AdminLayout>
+      <div className="ai-tools-manager">
+        <div className="manager-header">
+          <h2>Manage AI Tools</h2>
+          <button 
+            className="add-tool-btn"
+            onClick={handleAddNewTool}
+            disabled={loading}
+          >
+            <FaPlus /> Add New Tool
+          </button>
+        </div>
 
-      {error && <div className="error-message">{error}</div>}
+        {error && <div className="error-message">{error}</div>}
 
-      {loading && !isModalOpen && !isDeleteModalOpen ? (
-        <div className="loading-state">Loading AI tools...</div>
-      ) : (
-        <div className="tools-grid">
-          {tools.length === 0 ? (
-            <div className="no-tools">
-              <p>No AI tools found. Click "Add New Tool" to create your first tool.</p>
-            </div>
-          ) : (
-            tools.map(tool => (
-              <div key={tool.id} className="tool-card">
-                <div className="tool-image">
-                  <img src={tool.image} alt={tool.title} />
+        {loading && !isModalOpen && !isDeleteModalOpen ? (
+          <div className="loading-state">Loading AI tools...</div>
+        ) : (
+          <div className="tools-grid">
+            {tools.length === 0 ? (
+              <div className="no-tools">
+                <p>No AI tools found. Click "Add New Tool" to create your first tool.</p>
+              </div>
+            ) : (
+              tools.map(tool => (
+                <div key={tool.id} className="tool-card">
+                  <div className="tool-image">
+                    <img src={tool.image} alt={tool.title} />
+                  </div>
+                  <div className="tool-content">
+                    <h3>{tool.title}</h3>
+                    <p className="tool-description">{tool.description}</p>
+                    <div className="tool-keyword">Keyword: {tool.keyword}</div>
+                    <div className="tool-tags">
+                      {tool.tags.map(tag => (
+                        <span key={tag} className="tool-tag">{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="tool-actions">
+                    <button 
+                      className="edit-btn" 
+                      onClick={() => handleEditTool(tool)}
+                      title="Edit Tool"
+                    >
+                      <FaEdit />
+                    </button>
+                    <button 
+                      className="delete-btn" 
+                      onClick={() => openDeleteConfirmation(tool)}
+                      title="Delete Tool"
+                    >
+                      <FaTrash />
+                    </button>
+                  </div>
                 </div>
-                <div className="tool-content">
-                  <h3>{tool.title}</h3>
-                  <p className="tool-description">{tool.description}</p>
-                  <div className="tool-keyword">Keyword: {tool.keyword}</div>
-                  <div className="tool-tags">
-                    {tool.tags.map(tag => (
-                      <span key={tag} className="tool-tag">{tag}</span>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Tool Edit/Create Modal */}
+        {isModalOpen && (
+          <div className="modal-overlay">
+            <div className="modal">
+              <div className="modal-header">
+                <h3>{editingTool?.id ? 'Edit AI Tool' : 'Add New AI Tool'}</h3>
+                <button className="close-btn" onClick={handleCloseModal}>
+                  <FaTimes />
+                </button>
+              </div>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label htmlFor="title">Title*</label>
+                  <input
+                    type="text"
+                    id="title"
+                    name="title"
+                    value={editingTool?.title || ''}
+                    onChange={handleInputChange}
+                    placeholder="Tool title"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="description">Description*</label>
+                  <textarea
+                    id="description"
+                    name="description"
+                    value={editingTool?.description || ''}
+                    onChange={handleInputChange}
+                    placeholder="Tool description"
+                    rows={3}
+                    required
+                  />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="keyword">Keyword*</label>
+                    <input
+                      type="text"
+                      id="keyword"
+                      name="keyword"
+                      value={editingTool?.keyword || ''}
+                      onChange={handleInputChange}
+                      placeholder="ex: ADS, MAP, etc."
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="link">Link*</label>
+                    <input
+                      type="url"
+                      id="link"
+                      name="link"
+                      value={editingTool?.link || ''}
+                      onChange={handleInputChange}
+                      placeholder="https://..."
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Image*</label>
+                  <div className="image-uploader">
+                    {imagePreview ? (
+                      <div className="image-preview">
+                        <img src={imagePreview} alt="Tool preview" />
+                        <button 
+                          type="button" 
+                          className="remove-image" 
+                          onClick={() => {
+                            setImagePreview(null);
+                            setImageFile(null);
+                            if (editingTool?.id) {
+                              setEditingTool({...editingTool, image: ''});
+                            }
+                          }}
+                        >
+                          <FaTimes />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="upload-placeholder">
+                        <FaImage />
+                        <p>Upload image</p>
+                        <input
+                          type="file"
+                          id="image"
+                          name="image"
+                          onChange={handleImageChange}
+                          accept="image/*"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Tags* (select at least one)</label>
+                  <div className="tags-selector">
+                    {availableTags.map(tag => (
+                      <div 
+                        key={tag} 
+                        className={`tag-option ${editingTool?.tags?.includes(tag) ? 'selected' : ''}`}
+                        onClick={() => handleTagToggle(tag)}
+                      >
+                        {tag}
+                      </div>
                     ))}
                   </div>
                 </div>
-                <div className="tool-actions">
-                  <button 
-                    className="edit-btn" 
-                    onClick={() => handleEditTool(tool)}
-                    title="Edit Tool"
-                  >
-                    <FaEdit />
-                  </button>
-                  <button 
-                    className="delete-btn" 
-                    onClick={() => openDeleteConfirmation(tool)}
-                    title="Delete Tool"
-                  >
-                    <FaTrash />
-                  </button>
-                </div>
               </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* Tool Edit/Create Modal */}
-      {isModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h3>{editingTool?.id ? 'Edit AI Tool' : 'Add New AI Tool'}</h3>
-              <button className="close-btn" onClick={handleCloseModal}>
-                <FaTimes />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label htmlFor="title">Title*</label>
-                <input
-                  type="text"
-                  id="title"
-                  name="title"
-                  value={editingTool?.title || ''}
-                  onChange={handleInputChange}
-                  placeholder="Tool title"
-                  required
-                />
+              <div className="modal-footer">
+                <button 
+                  className="cancel-btn" 
+                  onClick={handleCloseModal}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="save-btn" 
+                  onClick={handleSaveTool}
+                  disabled={loading}
+                >
+                  {loading ? 'Saving...' : <><FaSave /> Save</>}
+                </button>
               </div>
-
-              <div className="form-group">
-                <label htmlFor="description">Description*</label>
-                <textarea
-                  id="description"
-                  name="description"
-                  value={editingTool?.description || ''}
-                  onChange={handleInputChange}
-                  placeholder="Tool description"
-                  rows={3}
-                  required
-                />
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="keyword">Keyword*</label>
-                  <input
-                    type="text"
-                    id="keyword"
-                    name="keyword"
-                    value={editingTool?.keyword || ''}
-                    onChange={handleInputChange}
-                    placeholder="ex: ADS, MAP, etc."
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="link">Link*</label>
-                  <input
-                    type="url"
-                    id="link"
-                    name="link"
-                    value={editingTool?.link || ''}
-                    onChange={handleInputChange}
-                    placeholder="https://..."
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Image*</label>
-                <div className="image-uploader">
-                  {imagePreview ? (
-                    <div className="image-preview">
-                      <img src={imagePreview} alt="Tool preview" />
-                      <button 
-                        type="button" 
-                        className="remove-image" 
-                        onClick={() => {
-                          setImagePreview(null);
-                          setImageFile(null);
-                          if (editingTool?.id) {
-                            setEditingTool({...editingTool, image: ''});
-                          }
-                        }}
-                      >
-                        <FaTimes />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="upload-placeholder">
-                      <FaImage />
-                      <p>Upload image</p>
-                      <input
-                        type="file"
-                        id="image"
-                        name="image"
-                        onChange={handleImageChange}
-                        accept="image/*"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Tags* (select at least one)</label>
-                <div className="tags-selector">
-                  {availableTags.map(tag => (
-                    <div 
-                      key={tag} 
-                      className={`tag-option ${editingTool?.tags?.includes(tag) ? 'selected' : ''}`}
-                      onClick={() => handleTagToggle(tag)}
-                    >
-                      {tag}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button 
-                className="cancel-btn" 
-                onClick={handleCloseModal}
-              >
-                Cancel
-              </button>
-              <button 
-                className="save-btn" 
-                onClick={handleSaveTool}
-                disabled={loading}
-              >
-                {loading ? 'Saving...' : <><FaSave /> Save</>}
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Delete Confirmation Modal */}
-      {isDeleteModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal delete-modal">
-            <div className="modal-header">
-              <h3>Confirm Deletion</h3>
-              <button className="close-btn" onClick={() => setIsDeleteModalOpen(false)}>
-                <FaTimes />
-              </button>
-            </div>
-            <div className="modal-body">
-              <p>Are you sure you want to delete <strong>{toolToDelete?.title}</strong>?</p>
-              <p className="delete-warning">This action cannot be undone.</p>
-            </div>
-            <div className="modal-footer">
-              <button 
-                className="cancel-btn" 
-                onClick={() => setIsDeleteModalOpen(false)}
-              >
-                Cancel
-              </button>
-              <button 
-                className="delete-confirm-btn" 
-                onClick={handleDeleteTool}
-                disabled={loading}
-              >
-                {loading ? 'Deleting...' : 'Delete'}
-              </button>
+        {/* Delete Confirmation Modal */}
+        {isDeleteModalOpen && (
+          <div className="modal-overlay">
+            <div className="modal delete-modal">
+              <div className="modal-header">
+                <h3>Confirm Deletion</h3>
+                <button className="close-btn" onClick={() => setIsDeleteModalOpen(false)}>
+                  <FaTimes />
+                </button>
+              </div>
+              <div className="modal-body">
+                <p>Are you sure you want to delete <strong>{toolToDelete?.title}</strong>?</p>
+                <p className="delete-warning">This action cannot be undone.</p>
+              </div>
+              <div className="modal-footer">
+                <button 
+                  className="cancel-btn" 
+                  onClick={() => setIsDeleteModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="delete-confirm-btn" 
+                  onClick={handleDeleteTool}
+                  disabled={loading}
+                >
+                  {loading ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </AdminLayout>
   );
 };
 
