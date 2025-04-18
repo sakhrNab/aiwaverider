@@ -19,7 +19,8 @@ import {
   FaTimes,
   FaBars,
   FaCircle,
-  FaAngleRight
+  FaAngleRight,
+  FaInfoCircle
 } from 'react-icons/fa';
 import './Header.css'; // Import custom Header CSS
 
@@ -175,12 +176,12 @@ const Header = ({ openSignUpModal }) => {
             </li>
             <li className="nav-item flex items-center">
               <Link 
-                to="/trends" 
+                to="/latest-tech" 
                 className="nav-link px-2 py-1 md:px-3 md:py-2 rounded-md font-medium flex items-center text-white hover:bg-opacity-10 hover:bg-white"
-                aria-label="Trends"
+                aria-label="Latest Tech"
               >
-                <FaChartLine className="mr-1.5" /> 
-                <span>Trends</span>
+                <FaMicrochip className="mr-1.5" /> 
+                <span>Latest Tech</span>
               </Link>
               <span className="nav-dot mx-2 text-[6px] text-white opacity-70">
                 <FaCircle />
@@ -188,12 +189,12 @@ const Header = ({ openSignUpModal }) => {
             </li>
             <li className="nav-item flex items-center">
               <Link 
-                to="/latest-tech" 
+                to="/about" 
                 className="nav-link px-2 py-1 md:px-3 md:py-2 rounded-md font-medium flex items-center text-white hover:bg-opacity-10 hover:bg-white"
-                aria-label="Latest Tech"
+                aria-label="About"
               >
-                <FaMicrochip className="mr-1.5" /> 
-                <span>Latest Tech</span>
+                <FaInfoCircle className="mr-1.5" /> 
+                <span>About Us</span>
               </Link>
             </li>
           </ul>
@@ -328,20 +329,20 @@ const Header = ({ openSignUpModal }) => {
               </li>
               <li className="mobile-nav-item">
                 <Link
-                  to="/trends"
-                  className="block px-4 py-2 rounded-md text-gray-700 hover:bg-gray-100 hover:text-teal-600 flex items-center"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  <FaChartLine className="mr-3" /> Trends
-                </Link>
-              </li>
-              <li className="mobile-nav-item">
-                <Link
                   to="/latest-tech"
                   className="block px-4 py-2 rounded-md text-gray-700 hover:bg-gray-100 hover:text-teal-600 flex items-center"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   <FaMicrochip className="mr-3" /> Latest Tech
+                </Link>
+              </li>
+              <li className="mobile-nav-item">
+                <Link
+                  to="/about"
+                  className="block px-4 py-2 rounded-md text-gray-700 hover:bg-gray-100 hover:text-teal-600 flex items-center"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <FaInfoCircle className="mr-3" /> About
                 </Link>
               </li>
               <li className="mobile-nav-item">
