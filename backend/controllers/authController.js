@@ -1,6 +1,8 @@
 const { admin, db } = require('../config/firebase');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const emailService = require('../services/emailService');
+const logger = require('../utils/logger');
 
 // Collection reference
 const usersCollection = db.collection('users');
@@ -39,6 +41,15 @@ exports.signup = async (req, res) => {
     // Create searchable field for better querying
     const searchField = `${username.toLowerCase()} ${email.toLowerCase()} ${firstName ? firstName.toLowerCase() : ''} ${lastName ? lastName.toLowerCase() : ''}`;
 
+    // Set default email preferences
+    const emailPreferences = {
+      weeklyUpdates: true,
+      announcements: true,
+      newAgents: true,
+      newTools: true,
+      marketingEmails: true
+    };
+
     // Create user document in Firestore with profile image if available
     await usersCollection.doc(uid).set({
       username,
@@ -51,9 +62,36 @@ exports.signup = async (req, res) => {
       photoURL: photoURL || firebaseUser.photoURL || '',
       searchField,
       status: 'active',
+      emailPreferences,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
+
+    // Send welcome email
+    try {
+      const userData = {
+        uid,
+        email,
+        firstName,
+        lastName,
+        displayName
+      };
+      
+      emailService.sendWelcomeEmail(userData)
+        .then(emailResult => {
+          if (emailResult.success) {
+            logger.info(`Welcome email sent to new user: ${email}`);
+          } else {
+            logger.warn(`Failed to send welcome email to new user: ${email} - ${emailResult.error}`);
+          }
+        })
+        .catch(emailError => {
+          logger.error(`Error sending welcome email: ${emailError.message}`);
+        });
+    } catch (emailError) {
+      // Don't fail registration if email fails
+      logger.error(`Error queuing welcome email: ${emailError.message}`);
+    }
 
     // Set session cookie
     const idToken = await admin.auth().createCustomToken(uid);

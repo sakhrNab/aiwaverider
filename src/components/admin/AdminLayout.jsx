@@ -10,7 +10,8 @@ import {
   FaDollarSign,
   FaBars,
   FaTimes,
-  FaTools
+  FaTools,
+  FaEnvelope
   // FaSearch
 } from 'react-icons/fa';
 import './AdminLayout.css';
@@ -40,6 +41,7 @@ const AdminLayout = ({ children }) => {
     { path: '/admin/users', icon: <FaUsers />, label: 'Manage Users' },
     { path: '/admin/analytics', icon: <FaChartBar />, label: 'Analytics' },
     { path: '/admin/pricing', icon: <FaDollarSign />, label: 'Pricing' },
+    { path: '/admin/email', icon: <FaEnvelope />, label: 'Email Management' },
     { path: '/admin/settings', icon: <FaCog />, label: 'Settings' },
   ];
   

@@ -6,7 +6,7 @@
 
 const admin = require('firebase-admin');
 const { v4: uuidv4 } = require('uuid');
-const mailer = require('../utils/mailer');
+const emailService = require('../services/emailService');
 const logger = require('../utils/logger');
 
 // Initialize Firestore
@@ -191,12 +191,14 @@ const processPaymentSuccess = async (paymentData) => {
         }
         
         // Send email with template
-        const emailResult = await mailer.sendAgentPurchaseEmail({
-          to: email,
-          name: userName,
-          agent: agent,
-          templateContent: templateContent,
-          orderId: order.id
+        const emailResult = await emailService.sendAgentPurchaseEmail({
+          email: email,
+          firstName: userName,
+          agentName: agent.title || 'AI Agent',
+          agentDescription: agent.description || 'Your new AI agent',
+          price: item.price || 0,
+          currency: orderData.currency || 'USD',
+          receiptUrl: ''
         });
         
         // Record delivery result

@@ -7,7 +7,7 @@
 
 const admin = require('firebase-admin');
 const logger = require('./logger');
-const mailer = require('./mailer');
+const emailService = require('../services/emailService');
 
 // Initialize Firestore
 const db = admin.firestore();
@@ -18,6 +18,10 @@ const NOTIFICATION_TYPES = {
   WELCOME: 'welcome',
   SHIPPING_UPDATE: 'shipping_update',
   PAYMENT_FAILED: 'payment_failed',
+  WEEKLY_UPDATE: 'weekly_update',
+  NEW_AGENT: 'new_agent',
+  NEW_TOOL: 'new_tool',
+  GLOBAL_ANNOUNCEMENT: 'global_announcement',
   GENERAL: 'general'
 };
 
@@ -177,22 +181,22 @@ const sendEmailNotification = async (options) => {
       case NOTIFICATION_TYPES.WELCOME:
         await sendWelcomeEmail(email, data);
         break;
+      case NOTIFICATION_TYPES.WEEKLY_UPDATE:
+        await sendWeeklyUpdateEmail(email, data);
+        break;
+      case NOTIFICATION_TYPES.GLOBAL_ANNOUNCEMENT:
+        await sendAnnouncementEmail(email, title, message, data);
+        break;
+      case NOTIFICATION_TYPES.NEW_AGENT:
+      case NOTIFICATION_TYPES.NEW_TOOL:
+        await sendContentNotificationEmail(email, type, title, message, data);
+        break;
       default:
         // For general notifications, use a simple email format
-        await mailer.sendEmail({
-          to: email,
-          subject: title,
-          html: `<div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px;">
-            <h1 style="color: #4a86e8;">${title}</h1>
-            <p>${message}</p>
-            ${data.additionalHtml || ''}
-          </div>`,
-          text: `${title}\n\n${message}`
-        });
-        break;
+        await emailService.sendTestEmail(email);
+        
+        logger.info(`Email notification sent to: ${email}`);
     }
-    
-    logger.info(`Email notification sent to: ${email}`);
   } catch (error) {
     logger.error(`Error sending email notification: ${error.message}`);
     throw error;
@@ -211,51 +215,23 @@ const sendOrderSuccessEmail = async (email, data) => {
   try {
     // If there's an agent in the data, use the agent purchase email template
     if (agent) {
-      await mailer.sendAgentPurchaseEmail({
-        to: email,
-        name: userName || 'Valued Customer',
-        agent: agent,
-        templateContent: data.templateContent || 'Your agent template will be available in your account.',
-        orderId: orderId
+      await emailService.sendAgentPurchaseEmail({
+        email: email,
+        firstName: userName || 'Valued Customer',
+        agentName: agent.title || 'AI Agent',
+        agentDescription: agent.description || 'Your new AI agent',
+        price: orderTotal || 0,
+        currency: data.currency || 'USD',
+        receiptUrl: data.receiptUrl || ''
       });
       return;
     }
     
-    // Otherwise, use a general order confirmation email
-    const orderDate = new Date().toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    // For non-agent purchases, use the appropriate emailService method when implemented
+    // For now, fall back to a basic email
+    await emailService.sendTestEmail(email);
     
-    // Format items for display in email
-    const itemsList = items && items.length > 0
-      ? items.map(item => `<li>${item.name || item.title} x ${item.quantity} - $${(item.price * item.quantity).toFixed(2)}</li>`).join('')
-      : '<li>Your purchased items</li>';
-    
-    await mailer.sendEmail({
-      to: email,
-      subject: `Order Confirmation #${orderId}`,
-      html: `<div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px;">
-        <h1 style="color: #4a86e8;">Order Confirmation</h1>
-        <p>Thank you for your order! Your order has been received and is being processed.</p>
-        
-        <div style="background-color: #f5f5f5; padding: 15px; border-left: 4px solid #4a86e8; margin: 20px 0;">
-          <p><strong>Order ID:</strong> ${orderId}</p>
-          <p><strong>Order Date:</strong> ${orderDate}</p>
-          <p><strong>Total:</strong> $${orderTotal?.toFixed(2) || '0.00'}</p>
-        </div>
-        
-        <h2>Order Items:</h2>
-        <ul>
-          ${itemsList}
-        </ul>
-        
-        <p>You can view your order details in your account dashboard.</p>
-        <p>If you have any questions, please contact our support team.</p>
-      </div>`,
-      text: `Order Confirmation #${orderId}\n\nThank you for your order! Your order has been received and is being processed.\n\nOrder ID: ${orderId}\nOrder Date: ${orderDate}\nTotal: $${orderTotal?.toFixed(2) || '0.00'}\n\nOrder Items:\n${items.map(item => `- ${item.name || item.title} x ${item.quantity} - $${(item.price * item.quantity).toFixed(2)}`).join('\n')}`
-    });
+    logger.info(`Order success email sent to: ${email}`);
   } catch (error) {
     logger.error(`Error sending order success email: ${error.message}`);
     throw error;
@@ -263,18 +239,23 @@ const sendOrderSuccessEmail = async (email, data) => {
 };
 
 /**
- * Send welcome email notification
+ * Send welcome email to a new user
  * @param {string} email - Recipient email
  * @param {Object} data - User data
  * @returns {Promise<void>}
  */
 const sendWelcomeEmail = async (email, data) => {
   try {
-    await mailer.sendWelcomeEmail({
-      to: email,
-      name: data.userName || data.displayName || 'New User',
-      userId: data.userId
+    const { firstName, lastName, userId } = data;
+    
+    await emailService.sendWelcomeEmail({
+      email,
+      userId,
+      firstName,
+      lastName
     });
+    
+    logger.info(`Welcome email sent to: ${email}`);
   } catch (error) {
     logger.error(`Error sending welcome email: ${error.message}`);
     throw error;
@@ -282,49 +263,459 @@ const sendWelcomeEmail = async (email, data) => {
 };
 
 /**
- * Send order success notification
- * @param {Object} options - Notification options
+ * Send weekly update email
+ * @param {string} email - Recipient email
+ * @param {Object} data - Update data
+ * @returns {Promise<void>}
+ */
+const sendWeeklyUpdateEmail = async (email, data) => {
+  try {
+    const { firstName, lastName } = data;
+    
+    await emailService.sendUpdateEmail({
+      email,
+      firstName,
+      lastName,
+      title: "Weekly Update",
+      content: data.content || "Here's what's new this week",
+      updateType: 'weekly'
+    });
+    
+    logger.info(`Weekly update email sent to: ${email}`);
+  } catch (error) {
+    logger.error(`Error sending weekly update email: ${error.message}`);
+    throw error;
+  }
+};
+
+/**
+ * Send announcement email
+ * @param {string} email - Recipient email
+ * @param {string} subject - Email subject
+ * @param {string} message - Message content
+ * @param {Object} data - Additional data
+ * @returns {Promise<void>}
+ */
+const sendAnnouncementEmail = async (email, subject, message, data) => {
+  try {
+    const { firstName, lastName } = data || {};
+    
+    await emailService.sendGlobalEmail({
+      email,
+      firstName,
+      lastName,
+      title: subject,
+      content: message
+    });
+    
+    logger.info(`Announcement email sent to: ${email}`);
+  } catch (error) {
+    logger.error(`Error sending announcement email: ${error.message}`);
+    throw error;
+  }
+};
+
+/**
+ * Send notification about new content (agent or tool)
+ * @param {string} email - Recipient email
+ * @param {string} type - Content type (new_agent, new_tool)
+ * @param {string} title - Email subject
+ * @param {string} message - Message content
+ * @param {Object} data - Additional data
+ * @returns {Promise<void>}
+ */
+const sendContentNotificationEmail = async (email, type, title, message, data) => {
+  try {
+    const { firstName, lastName } = data || {};
+    const updateType = type === NOTIFICATION_TYPES.NEW_AGENT ? 'new_agents' : 'new_tools';
+    
+    await emailService.sendUpdateEmail({
+      email,
+      firstName,
+      lastName,
+      title,
+      content: message,
+      updateType
+    });
+    
+    logger.info(`Content notification email (${type}) sent to: ${email}`);
+  } catch (error) {
+    logger.error(`Error sending content notification email: ${error.message}`);
+    throw error;
+  }
+};
+
+/**
+ * Send an order success notification (both email and in-app)
+ * @param {Object} options - Order data
  * @returns {Promise<Object>} - Notification results
  */
 const sendOrderSuccessNotification = async (options) => {
-  const { 
-    orderId, 
-    email, 
-    userId = null, 
-    items = [], 
-    agent = null,
-    orderTotal = 0,
-    userName = null
-  } = options;
+  const { orderId, email, userId, items, orderTotal, agent } = options;
   
-  // Prepare title and message for the notification
-  const title = 'Order Confirmation';
+  try {
+    // Get user's name if available
+    let userName = 'Valued Customer';
+    if (userId) {
+      try {
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          userName = userData.firstName || userData.displayName || userData.username || 'Valued Customer';
+        }
+      } catch (userError) {
+        logger.warn(`Could not get user data for notification: ${userError.message}`);
+      }
+    }
+    
+    // Prepare notification data
+    const title = 'Order Confirmed';
   const message = `Your order #${orderId} has been successfully processed.`;
-  
-  return sendNotification({
-    type: NOTIFICATION_TYPES.ORDER_SUCCESS,
-    channel: userId ? CHANNELS.BOTH : CHANNELS.EMAIL,
-    userId,
-    email,
-    title,
-    message,
-    data: {
+    const data = {
       orderId,
       items,
       agent,
       orderTotal,
       userName,
-      templateContent: options.templateContent
-    }
-  });
+      type: 'order',
+      orderDate: new Date().toISOString()
+    };
+    
+    // Send notifications
+    const result = await sendNotification({
+      type: NOTIFICATION_TYPES.ORDER_SUCCESS,
+      channel: CHANNELS.BOTH,
+      userId,
+      email,
+      title,
+      message,
+      data
+    });
+    
+    return result;
+  } catch (error) {
+    logger.error(`Error sending order success notification: ${error.message}`);
+    return {
+      success: false,
+      emailSent: false,
+      inAppSent: false,
+      errors: [error.message]
+    };
+  }
 };
 
-// Export public methods and constants
+/**
+ * Send welcome notification to a new user
+ * @param {Object} userData - User data from registration
+ * @returns {Promise<Object>} - Notification results
+ */
+const sendWelcomeNotification = async (userData) => {
+  try {
+    const { uid, email, displayName, firstName, lastName } = userData;
+    
+    // Prepare user's name
+    const userName = firstName || displayName || email.split('@')[0];
+    
+    // Prepare notification
+    const title = 'Welcome to AI Wave Rider!';
+    const message = `We're excited to have you join our community, ${userName}!`;
+    const notificationData = {
+      userId: uid,
+      name: userName,
+      firstName: firstName || '',
+      email
+    };
+    
+    // Send notifications
+    const result = await sendNotification({
+      type: NOTIFICATION_TYPES.WELCOME,
+      channel: CHANNELS.BOTH,
+      userId: uid,
+      email,
+      title,
+      message,
+      data: notificationData
+    });
+    
+    return result;
+  } catch (error) {
+    logger.error(`Error sending welcome notification: ${error.message}`);
+    return {
+      success: false,
+      emailSent: false,
+      inAppSent: false,
+      errors: [error.message]
+    };
+  }
+};
+
+/**
+ * Send a weekly update to all subscribed users
+ * @param {Object} updateData - Data for the weekly update
+ * @returns {Promise<Object>} - Results summary
+ */
+const sendWeeklyUpdate = async (updateData) => {
+  try {
+    const { newAgents, newTools, featuredContent, weekLabel } = updateData;
+    
+    // Check if there's anything to send
+    if ((!newAgents || newAgents.length === 0) && 
+        (!newTools || newTools.length === 0) && 
+        (!featuredContent || featuredContent.length === 0)) {
+      logger.warn('No content for weekly update email');
+      return {
+        success: false,
+        sent: 0,
+        errors: ['No content for weekly update']
+      };
+    }
+    
+    // Get all users who have subscribed to weekly updates
+    const usersSnapshot = await db.collection('users')
+      .where('emailPreferences.weeklyUpdates', '==', true)
+      .where('status', '==', 'active')
+      .get();
+    
+    if (usersSnapshot.empty) {
+      logger.info('No users subscribed to weekly updates');
+      return {
+        success: true,
+        sent: 0,
+        errors: []
+      };
+    }
+    
+    const results = {
+      success: true,
+      sent: 0,
+      failed: 0,
+      errors: []
+    };
+    
+    // Send emails to all subscribed users
+    const emailPromises = [];
+    usersSnapshot.forEach(doc => {
+      const user = doc.data();
+      
+      if (!user.email) {
+        results.errors.push(`User ${doc.id} has no email address`);
+        return;
+      }
+      
+      // Prepare user data
+      const userData = {
+        name: user.firstName || user.displayName || user.username || user.email.split('@')[0],
+        newAgents,
+        newTools,
+        featuredContent,
+        weekLabel
+      };
+      
+      // Queue email
+      const emailPromise = sendNotification({
+        type: NOTIFICATION_TYPES.WEEKLY_UPDATE,
+        channel: CHANNELS.EMAIL, // Weekly updates are typically email-only
+        email: user.email,
+        userId: doc.id,
+        title: `AI Wave Rider Weekly: ${weekLabel || 'Latest Updates'}`,
+        message: 'Here are this week\'s updates from AI Wave Rider',
+        data: userData
+      }).then(notificationResult => {
+        if (notificationResult.success) {
+          results.sent++;
+        } else {
+          results.failed++;
+          results.errors.push(`Failed to send to ${user.email}: ${notificationResult.errors.join(', ')}`);
+        }
+      }).catch(error => {
+        results.failed++;
+        results.errors.push(`Error sending to ${user.email}: ${error.message}`);
+      });
+      
+      emailPromises.push(emailPromise);
+    });
+    
+    // Wait for all emails to be sent
+    await Promise.all(emailPromises);
+    
+    // Log results
+    logger.info(`Weekly update email sent to ${results.sent} users, failed for ${results.failed} users`);
+    if (results.errors.length > 0) {
+      logger.error(`Weekly update errors: ${results.errors.slice(0, 5).join('; ')}${results.errors.length > 5 ? ` and ${results.errors.length - 5} more` : ''}`);
+    }
+    
+    return results;
+  } catch (error) {
+    logger.error(`Error sending weekly update: ${error.message}`);
+    return {
+      success: false,
+      sent: 0,
+      failed: 0,
+      errors: [error.message]
+    };
+  }
+};
+
+/**
+ * Send a global announcement to users
+ * @param {Object} announcementData - Announcement data
+ * @returns {Promise<Object>} - Results summary
+ */
+const sendGlobalAnnouncement = async (announcementData) => {
+  try {
+    const { 
+      subject, 
+      message, 
+      messageHtml, 
+      ctaText, 
+      ctaUrl, 
+      targetGroups = ['all'],
+      sender = 'AI Wave Rider Team'
+    } = announcementData;
+    
+    // Validate required fields
+    if (!subject || (!message && !messageHtml)) {
+      throw new Error('Announcement subject and message are required');
+    }
+    
+    let userQuery = db.collection('users').where('status', '==', 'active');
+    
+    // Apply additional filters based on target groups
+    // Exclude 'all' as it doesn't need filtering
+    const filterGroups = targetGroups.filter(group => group !== 'all');
+    
+    if (targetGroups.includes('admin')) {
+      // If 'admin' is specifically targeted and not 'all'
+      if (!targetGroups.includes('all')) {
+        userQuery = userQuery.where('role', '==', 'admin');
+      }
+    } else if (filterGroups.length > 0) {
+      // Handle other user groups as needed
+      // This is a simple implementation - extend as needed for your user groups
+      // For complex segmentation, you might need multiple queries and combine results
+      logger.info(`Targeting user groups: ${filterGroups.join(', ')}`);
+    }
+    
+    // Execute query
+    const usersSnapshot = await userQuery.get();
+    
+    if (usersSnapshot.empty) {
+      logger.info('No users match the criteria for this announcement');
+      return {
+        success: true,
+        sent: 0,
+        errors: []
+      };
+    }
+    
+    const results = {
+      success: true,
+      sent: 0,
+      failed: 0,
+      errors: []
+    };
+    
+    // Store the announcement in the database
+    const announcementRef = await db.collection('announcements').add({
+      subject,
+      message,
+      messageHtml,
+      ctaText,
+      ctaUrl,
+      targetGroups,
+      sender,
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      sentCount: 0,
+      failedCount: 0
+    });
+    
+    // Send to all matching users
+    const emailPromises = [];
+    usersSnapshot.forEach(doc => {
+      const user = doc.data();
+      
+      if (!user.email) {
+        results.errors.push(`User ${doc.id} has no email address`);
+        return;
+      }
+      
+      // Skip users who have opted out, but only if not sending to admins
+      if (!targetGroups.includes('admin') && 
+          user.emailPreferences && 
+          user.emailPreferences.announcements === false) {
+        return;
+      }
+      
+      // Prepare user data
+      const userData = {
+        name: user.firstName || user.displayName || user.username || user.email.split('@')[0],
+        messageHtml: messageHtml || `<p>${message}</p>`,
+        messageText: message,
+        ctaText,
+        ctaUrl
+      };
+      
+      // Queue notification
+      const emailPromise = sendNotification({
+        type: NOTIFICATION_TYPES.GLOBAL_ANNOUNCEMENT,
+        channel: CHANNELS.BOTH,  // Send both email and in-app
+        email: user.email,
+        userId: doc.id,
+        title: subject,
+        message: message,
+        data: userData
+      }).then(notificationResult => {
+        if (notificationResult.success) {
+          results.sent++;
+        } else {
+          results.failed++;
+          results.errors.push(`Failed to send to ${user.email}: ${notificationResult.errors.join(', ')}`);
+        }
+      }).catch(error => {
+        results.failed++;
+        results.errors.push(`Error sending to ${user.email}: ${error.message}`);
+      });
+      
+      emailPromises.push(emailPromise);
+    });
+    
+    // Wait for all notifications to be sent
+    await Promise.all(emailPromises);
+    
+    // Update the announcement record with the final counts
+    await announcementRef.update({
+      sentCount: results.sent,
+      failedCount: results.failed,
+      completedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    
+    // Log results
+    logger.info(`Announcement "${subject}" sent to ${results.sent} users, failed for ${results.failed} users`);
+    if (results.errors.length > 0) {
+      logger.error(`Announcement errors: ${results.errors.slice(0, 5).join('; ')}${results.errors.length > 5 ? ` and ${results.errors.length - 5} more` : ''}`);
+    }
+    
+    return {
+      ...results,
+      announcementId: announcementRef.id
+    };
+  } catch (error) {
+    logger.error(`Error sending global announcement: ${error.message}`);
+    return {
+      success: false,
+      sent: 0,
+      failed: 0,
+      errors: [error.message]
+    };
+  }
+};
+
 module.exports = {
-  NOTIFICATION_TYPES,
-  CHANNELS,
   sendNotification,
   sendOrderSuccessNotification,
-  sendInAppNotification,
-  sendEmailNotification
+  sendWelcomeNotification,
+  sendWeeklyUpdate,
+  sendGlobalAnnouncement,
+  NOTIFICATION_TYPES,
+  CHANNELS
 }; 

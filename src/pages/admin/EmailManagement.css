@@ -1,0 +1,265 @@
+.email-management {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.email-management h1 {
+  font-size: 28px;
+  margin-bottom: 20px;
+  color: #2d3748;
+}
+
+.email-test-section {
+  background-color: #f8fafc;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+  border: 1px solid #e2e8f0;
+}
+
+.email-test-section h2 {
+  font-size: 18px;
+  margin-bottom: 10px;
+  color: #4a5568;
+}
+
+.email-input-container {
+  display: flex;
+}
+
+.email-input-container input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.email-tabs {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+
+.email-tabs button {
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: #718096;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.email-tabs button svg {
+  font-size: 16px;
+}
+
+.email-tabs button:hover {
+  color: #4FD1C5;
+}
+
+.email-tabs button.active {
+  color: #4FD1C5;
+  border-bottom: 3px solid #4FD1C5;
+}
+
+.email-content {
+  padding: 10px 0;
+}
+
+.email-template-form {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.email-template-form h2 {
+  font-size: 20px;
+  margin-bottom: 5px;
+  color: #2d3748;
+}
+
+.template-description {
+  color: #718096;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: #4a5568;
+}
+
+.form-group input, .form-group textarea, .form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+  border-color: #4FD1C5;
+  outline: none;
+}
+
+.template-placeholders {
+  background-color: #f8fafc;
+  border-radius: 6px;
+  padding: 15px;
+  margin-bottom: 20px;
+  border: 1px dashed #cbd5e0;
+}
+
+.template-placeholders h3 {
+  font-size: 16px;
+  margin-bottom: 10px;
+  color: #4a5568;
+}
+
+.template-placeholders ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+.template-placeholders li {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #718096;
+}
+
+.template-placeholders code {
+  background-color: #edf2f7;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: monospace;
+  color: #2d3748;
+}
+
+.email-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.save-button, .test-button, .send-button {
+  padding: 10px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.save-button {
+  background-color: #4FD1C5;
+  color: white;
+  border: none;
+}
+
+.save-button:hover {
+  background-color: #38B2AC;
+}
+
+.test-button {
+  background-color: #EDF2F7;
+  color: #4A5568;
+  border: 1px solid #CBD5E0;
+}
+
+.test-button:hover {
+  background-color: #E2E8F0;
+}
+
+.send-button {
+  background-color: #3182ce;
+  color: white;
+  border: none;
+}
+
+.send-button:hover {
+  background-color: #2b6cb0;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  z-index: 1000;
+}
+
+.loading-container p {
+  margin-top: 15px;
+  color: #4a5568;
+  font-size: 16px;
+}
+
+/* Responsive styles */
+@media screen and (max-width: 768px) {
+  .email-tabs {
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  
+  .email-tabs button {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  
+  .email-actions {
+    flex-direction: column;
+  }
+  
+  .save-button, .test-button, .send-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .email-management {
+    padding: 15px 10px;
+  }
+  
+  .email-template-form {
+    padding: 15px;
+  }
+  
+  .template-placeholders {
+    padding: 10px;
+  }
+} 

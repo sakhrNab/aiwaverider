@@ -15,6 +15,9 @@ const paymentsRoutes = require('./payments');
 const recommendationsRoutes = require('./recommendations');
 const aiToolsRoutes = require('./ai-tools');
 const adminRoutes = require('./admin');
+const adminEmailRoutes = require('./admin/email');
+const chatRoutes = require('./chatRoutes');
+const emailRoutes = require('./api/email');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -30,6 +33,20 @@ router.use('/payments', paymentsRoutes);
 router.use('/recommendations', recommendationsRoutes);
 router.use('/ai-tools', aiToolsRoutes);
 router.use('/admin', adminRoutes);
+router.use('/api/admin', adminRoutes);
+router.use('/api/admin/email', adminEmailRoutes);
+router.use('/api/posts', postsRoutes);
+router.use('/api/chat', chatRoutes);
+router.use('/api/ai-tools', aiToolsRoutes);
+router.use('/api/wishlists', wishlistsRoutes);
+router.use('/api/profile', profileRoutes);
+router.use('/api/prices', pricesRoutes);
+router.use('/api/agents', agentsRoutes);
+router.use('/api/agent', agentRoutes);
+router.use('/api/payments', paymentsRoutes);
+router.use('/api/recommendations', recommendationsRoutes);
+router.use('/email', emailRoutes);
+router.use('/api/email', emailRoutes);
 
 // Add redirect for product routes to the agents routes
 // This handles legacy or alternative product URLs
@@ -51,9 +68,9 @@ router.get('/api/product/:productId', (req, res) => {
 // Health check endpoint
 router.get('/health', (req, res) => {
   res.status(200).json({ 
-    status: 'ok', 
+    status: 'UP', 
     timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version || 'development'
+    version: process.env.npm_package_version || '1.0.0'
   });
 });
 
