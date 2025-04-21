@@ -303,9 +303,16 @@ const SignUp = ({ isOpen, onClose }) => {
     try {
       const result = await signUpWithGoogle();
       if (result.firebaseUser) {
-        // Google profile image is handled automatically in the backend
-        await signInUser(result.firebaseUser, true);
-        toast.success('Successfully signed up with Google!');
+        // Check if we have a backend response
+        console.log('Google signup backend response:', result.backendResponse);
+        
+        // Check if the user was actually created in the database
+        if (result.backendResponse && result.backendResponse.message) {
+          toast.success(`${result.backendResponse.message}`);
+        } else {
+          toast.success('Successfully signed up with Google!');
+        }
+        
         navigate('/', { replace: true });
         if (isModalView) handleClose();
       }
@@ -313,20 +320,30 @@ const SignUp = ({ isOpen, onClose }) => {
       console.error("Google Sign-up Error:", error);
       if (error.code === 'auth/popup-closed-by-user') {
         toast.error('Sign-up popup was closed before completion');
+      } else if (error.response && error.response.data) {
+        // Display specific backend error if available
+        toast.error(`Google Sign-up failed: ${error.response.data.error || error.response.data.message || error.message}`);
       } else {
         toast.error(`Google Sign-up failed: ${error.message}`);
       }
     }
   };
 
-  // NEW: Microsoft sign-up (mirrors Google sign-up)
+  // Microsoft sign-up
   const handleMicrosoftSignUp = async () => {
     try {
       const result = await signUpWithMicrosoft();
       if (result.firebaseUser) {
-        // Microsoft profile image is handled automatically in the backend
-        await signInUser(result.firebaseUser, true);
-        toast.success('Successfully signed up with Microsoft!');
+        // Check if we have a backend response
+        console.log('Microsoft signup backend response:', result.backendResponse);
+        
+        // Check if the user was actually created in the database
+        if (result.backendResponse && result.backendResponse.message) {
+          toast.success(`${result.backendResponse.message}`);
+        } else {
+          toast.success('Successfully signed up with Microsoft!');
+        }
+        
         navigate('/', { replace: true });
         if (isModalView) handleClose();
       }
@@ -334,6 +351,9 @@ const SignUp = ({ isOpen, onClose }) => {
       console.error("Microsoft Sign-up Error:", error);
       if (error.code === 'auth/popup-closed-by-user') {
         toast.error('Sign-up popup was closed before completion');
+      } else if (error.response && error.response.data) {
+        // Display specific backend error if available
+        toast.error(`Microsoft Sign-up failed: ${error.response.data.error || error.response.data.message || error.message}`);
       } else {
         toast.error(`Microsoft Sign-up failed: ${error.message}`);
       }

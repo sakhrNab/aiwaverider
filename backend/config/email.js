@@ -8,15 +8,15 @@ require('dotenv').config();
 
 module.exports = {
   // SMTP Server Configuration
-  host: process.env.EMAIL_HOST || 'smtp.example.com',
-  port: parseInt(process.env.EMAIL_PORT || '587', 10),
-  secure: process.env.EMAIL_SECURE === 'true',
-  user: process.env.EMAIL_USER || 'user@example.com',
-  password: process.env.EMAIL_PASSWORD || 'password',
+  host: process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.zoho.com',
+  port: parseInt(process.env.SMTP_PORT || process.env.EMAIL_PORT || '465', 10),
+  secure: process.env.SMTP_SECURE === 'true' || process.env.EMAIL_SECURE === 'true' || true, // true for 465, false for other ports
+  user: process.env.SMTP_USER || process.env.EMAIL_USER || 'support@aiwaverider.com',
+  password: process.env.SMTP_PASS || process.env.EMAIL_PASSWORD || 'password',
   
   // Sender Information
-  fromEmail: process.env.EMAIL_FROM || 'noreply@aiwaverider.com',
-  fromName: process.env.EMAIL_FROM_NAME || 'AI Wave Rider',
+  fromEmail: process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'support@aiwaverider.com',
+  fromName: process.env.FROM_NAME || process.env.EMAIL_FROM_NAME || 'AI Wave Rider',
   
   // Website Information (for links in emails)
   websiteUrl: process.env.WEBSITE_URL || 'https://aiwaverider.com',

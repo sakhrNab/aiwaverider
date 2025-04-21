@@ -13,29 +13,67 @@ const usersCollection = db.collection('users');
 exports.signup = async (req, res) => {
   try {
     const { uid, email, username, firstName, lastName, phoneNumber, displayName, photoURL } = req.body;
+    
+    console.log('Signup request received for user:', { uid, email, username });
 
     // Verify the user exists in Firebase
-    const firebaseUser = await admin.auth().getUser(uid);
-    if (!firebaseUser) {
-      return res.status(404).json({ error: 'Firebase user not found' });
+    let firebaseUser;
+    try {
+      firebaseUser = await admin.auth().getUser(uid);
+      if (!firebaseUser) {
+        console.error('Firebase user not found:', uid);
+        return res.status(404).json({ error: 'Firebase user not found' });
+      }
+      console.log('Firebase user verified:', firebaseUser.uid);
+    } catch (authError) {
+      console.error('Error verifying Firebase user:', authError);
+      return res.status(404).json({ error: `Firebase user verification failed: ${authError.message}` });
     }
 
     // Check if user already exists in Firestore
-    const userDoc = await usersCollection.doc(uid).get();
-    if (userDoc.exists) {
-      return res.json({
-        message: 'User already exists',
-        user: {
-          uid,
-          ...userDoc.data()
-        }
-      });
+    let userDoc;
+    try {
+      userDoc = await usersCollection.doc(uid).get();
+      if (userDoc.exists) {
+        console.log('User already exists in Firestore:', uid);
+        return res.json({
+          message: 'User already exists',
+          user: {
+            uid,
+            ...userDoc.data()
+          }
+        });
+      }
+      console.log('User does not exist in Firestore, creating new document');
+    } catch (firestoreError) {
+      console.error('Error checking user in Firestore:', firestoreError);
+      return res.status(500).json({ error: `Firestore error: ${firestoreError.message}` });
     }
 
     // Check if username already exists
-    const usernameQuery = await usersCollection.where('username', '==', username).get();
-    if (!usernameQuery.empty) {
-      return res.status(400).json({ error: 'Username is already taken.' });
+    try {
+      const usernameQuery = await usersCollection.where('username', '==', username).get();
+      if (!usernameQuery.empty) {
+        console.log('Username already taken:', username);
+        return res.status(400).json({ error: 'Username is already taken.' });
+      }
+      console.log('Username is available:', username);
+    } catch (usernameError) {
+      console.error('Error checking username:', usernameError);
+      return res.status(500).json({ error: `Username check error: ${usernameError.message}` });
+    }
+
+    // Check if email already exists in Firestore (separate from Firebase Auth)
+    try {
+      const emailQuery = await usersCollection.where('email', '==', email.toLowerCase()).get();
+      if (!emailQuery.empty) {
+        console.log('Email already exists in database:', email);
+        return res.status(400).json({ error: 'An account with this email already exists in our database.' });
+      }
+      console.log('Email is available:', email);
+    } catch (emailError) {
+      console.error('Error checking email existence:', emailError);
+      return res.status(500).json({ error: `Email check error: ${emailError.message}` });
     }
 
     // Create searchable field for better querying
@@ -51,7 +89,7 @@ exports.signup = async (req, res) => {
     };
 
     // Create user document in Firestore with profile image if available
-    await usersCollection.doc(uid).set({
+    const userData = {
       username,
       firstName: firstName || '',
       lastName: lastName || '',
@@ -65,11 +103,21 @@ exports.signup = async (req, res) => {
       emailPreferences,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    };
+    
+    console.log('Creating user document in Firestore:', uid);
+    
+    try {
+      await usersCollection.doc(uid).set(userData);
+      console.log('User document created successfully in Firestore:', uid);
+    } catch (createError) {
+      console.error('Error creating user document in Firestore:', createError);
+      return res.status(500).json({ error: `Failed to create user document: ${createError.message}` });
+    }
 
     // Send welcome email
     try {
-      const userData = {
+      const emailData = {
         uid,
         email,
         firstName,
@@ -77,31 +125,36 @@ exports.signup = async (req, res) => {
         displayName
       };
       
-      emailService.sendWelcomeEmail(userData)
-        .then(emailResult => {
-          if (emailResult.success) {
-            logger.info(`Welcome email sent to new user: ${email}`);
-          } else {
-            logger.warn(`Failed to send welcome email to new user: ${email} - ${emailResult.error}`);
-          }
-        })
-        .catch(emailError => {
-          logger.error(`Error sending welcome email: ${emailError.message}`);
-        });
+      // Use await to properly handle the promise
+      const emailResult = await emailService.sendWelcomeEmail(emailData);
+      
+      if (emailResult.success) {
+        logger.info(`Welcome email sent to new user: ${email} (${emailResult.messageId})`);
+      } else {
+        logger.warn(`Failed to send welcome email to new user: ${email} - ${emailResult.error}`);
+      }
     } catch (emailError) {
       // Don't fail registration if email fails
-      logger.error(`Error queuing welcome email: ${emailError.message}`);
+      logger.error(`Error sending welcome email: ${emailError.message}`);
     }
 
     // Set session cookie
-    const idToken = await admin.auth().createCustomToken(uid);
-    res.cookie('firebaseToken', idToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
+    try {
+      const idToken = await admin.auth().createCustomToken(uid);
+      res.cookie('firebaseToken', idToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      });
+      console.log('Session cookie set successfully');
+    } catch (tokenError) {
+      console.error('Error creating custom token:', tokenError);
+      // Continue without setting cookie
+    }
 
+    console.log('Signup process completed successfully for:', uid);
+    
     return res.json({
       message: 'User created successfully',
       user: {

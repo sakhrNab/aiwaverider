@@ -74,6 +74,23 @@ async function sendEmail(mailOptions) {
       mailOptions.from = `"${config.fromName}" <${config.fromEmail}>`;
     }
     
+    // Add anti-spam headers to improve deliverability
+    mailOptions.headers = {
+      ...mailOptions.headers,
+      'List-Unsubscribe': '<https://aiwaverider.com/unsubscribe>',
+      'Precedence': 'bulk',
+      'X-AI-Wave-Rider': 'notification'
+    };
+    
+    // Add text version if HTML is provided but no text (helps deliverability)
+    if (mailOptions.html && !mailOptions.text) {
+      // Simple HTML to text conversion
+      mailOptions.text = mailOptions.html
+        .replace(/<[^>]*>/g, '') // Remove HTML tags
+        .replace(/\s+/g, ' ')    // Normalize spaces
+        .trim();
+    }
+    
     // Send email
     const info = await transporter.sendMail(mailOptions);
     logger.info(`Email sent: ${info.messageId}`);

@@ -1,3 +1,4 @@
+require('dotenv').config();
 const admin = require('firebase-admin');
 const path = require('path');
 
@@ -5,6 +6,11 @@ const initializeFirebase = () => {
   if (admin.apps.length) {
     return admin;
   }
+
+  // Debug environment variables
+  console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
+  console.log(`Service Account Path exists: ${!!process.env.FIREBASE_SERVICE_ACCOUNT_PATH}`);
+  console.log(`Service Account JSON exists: ${!!process.env.FIREBASE_SERVICE_ACCOUNT_JSON}`);
 
   let serviceAccount;
 
@@ -14,9 +20,14 @@ const initializeFirebase = () => {
       console.error('FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
       process.exit(1);
     }
-    serviceAccount = JSON.parse(
-      Buffer.from(serviceAccountJson, 'base64').toString('utf-8')
-    );
+    try {
+      serviceAccount = JSON.parse(
+        Buffer.from(serviceAccountJson, 'base64').toString('utf-8')
+      );
+    } catch (error) {
+      console.error('Failed to parse service account JSON:', error);
+      process.exit(1);
+    }
   } else {
     const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || '../server/aiwaverider8-privatekey.json';
     try {

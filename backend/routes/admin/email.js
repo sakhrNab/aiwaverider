@@ -18,19 +18,21 @@ const emailController = require('../../controllers/emailController');
  * GET /api/admin/email/campaigns
  * Get list of email campaigns with pagination
  */
-router.get('/campaigns', validateFirebaseToken, isAdmin, emailController.getCampaigns);
+// Commenting out until controller method is implemented
+// router.get('/campaigns', validateFirebaseToken, isAdmin, emailController.getCampaigns);
 
 /**
  * GET /api/admin/email/campaigns/:campaignId
  * Get details of a specific email campaign
  */
-router.get('/campaigns/:campaignId', validateFirebaseToken, isAdmin, emailController.getCampaignDetails);
+// Commenting out until controller method is implemented
+// router.get('/campaigns/:campaignId', validateFirebaseToken, isAdmin, emailController.getCampaignDetails);
 
 /**
  * GET /api/admin/email/stats
  * Get email preference statistics
  */
-router.get('/stats', validateFirebaseToken, isAdmin, emailController.getEmailPreferenceStats);
+router.get('/stats', validateFirebaseToken, isAdmin, emailController.getEmailStats);
 
 /**
  * POST /api/admin/email/welcome/:userId
@@ -49,7 +51,8 @@ router.post('/welcome/:userId', validateFirebaseToken, isAdmin, emailController.
  * - weekLabel: (Optional) Custom label for the week
  * - previewEmail: (Optional) If provided, sends only to this email as a preview
  */
-router.post('/weekly-update', validateFirebaseToken, isAdmin, emailController.sendWeeklyUpdate);
+// Commenting out until controller method is implemented
+// router.post('/weekly-update', validateFirebaseToken, isAdmin, emailController.sendWeeklyUpdate);
 
 /**
  * POST /api/admin/email/announcement
@@ -64,6 +67,7 @@ router.post('/weekly-update', validateFirebaseToken, isAdmin, emailController.se
  * - targetGroups: (Optional) Array of user groups to target (defaults to 'all')
  * - previewEmail: (Optional) If provided, sends only to this email as a preview
  */
-router.post('/announcement', validateFirebaseToken, isAdmin, emailController.sendAnnouncement);
+// Using sendGlobalAnnouncement instead of sendAnnouncement
+router.post('/announcement', validateFirebaseToken, isAdmin, emailController.sendGlobalAnnouncement);
 
 module.exports = router; 

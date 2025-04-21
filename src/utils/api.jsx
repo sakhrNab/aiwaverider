@@ -239,12 +239,15 @@ export const signOutUser = async () => {
 export const signUp = async (userData) => {
   try {
     const { email, password } = userData;
+    // Create user in Firebase Authentication
     const firebaseResult = await auth.createUserWithEmailAndPassword(email, password);
     const firebaseUser = firebaseResult.user;
+    
     // Update Firebase profile with display name
     await firebaseUser.updateProfile({
       displayName: `${userData.firstName} ${userData.lastName}`
     });
+    
     // Prepare user data for the backend (excluding password)
     const backendUserData = {
       uid: firebaseUser.uid,
@@ -255,8 +258,22 @@ export const signUp = async (userData) => {
       phoneNumber: userData.phoneNumber,
       displayName: firebaseUser.displayName
     };
+    
+    console.log('Sending user data to backend:', backendUserData);
+    
+    // Send user data to backend and wait for response
     const response = await api.post('/api/auth/signup', backendUserData);
-    return { user: firebaseUser };
+    
+    console.log('Backend signup response:', response.data);
+    
+    // Wait a moment to ensure the data is saved
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Refresh the ID token to ensure server can properly authenticate subsequent requests
+    const token = await firebaseUser.getIdToken(true);
+    localStorage.setItem('authToken', token);
+    
+    return { user: firebaseUser, backendResponse: response.data };
   } catch (error) {
     console.error('Error during sign up:', error);
     throw error;
@@ -457,16 +474,48 @@ export const signUpWithGoogle = async () => {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     const result = await auth.signInWithPopup(provider);
-    if (!result.user) {
+    const user = result.user;
+    
+    if (!user) {
       throw new Error('No user data returned from Google Sign-Up');
     }
     
     // Get profile image URL from Google
-    const photoURL = result.user.photoURL;
+    const photoURL = user.photoURL;
+    
+    // Extract first and last name from displayName
+    const firstName = user.displayName?.split(' ')[0] || '';
+    const lastName = user.displayName?.split(' ').slice(1).join(' ') || '';
+    
+    // Prepare user data for backend
+    const userData = {
+      uid: user.uid,
+      email: user.email,
+      username: `user_${user.uid.slice(0, 8)}`,
+      firstName: firstName,
+      lastName: lastName,
+      displayName: user.displayName,
+      photoURL: photoURL,
+      provider: 'google'
+    };
+    
+    console.log('Sending Google user data to backend:', userData);
+    
+    // Send user data to backend and wait for response
+    const response = await api.post('/api/auth/signup', userData);
+    console.log('Backend signup response for Google user:', response.data);
+    
+    // Wait a moment to ensure the data is saved
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Refresh the ID token
+    const token = await user.getIdToken(true);
+    localStorage.setItem('authToken', token);
     
     return { 
-      firebaseUser: result.user,
-      photoURL 
+      firebaseUser: user,
+      photoURL,
+      backendResponse: response.data
     };
   } catch (error) {
     console.error('Error in Google sign up:', error);

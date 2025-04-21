@@ -1,75 +1,77 @@
 /**
- * Email API Test
- * Tests sending emails through the API endpoints
+ * Test Script for Auth Controller Signup Welcome Email
+ * 
+ * This script tests the welcome email functionality directly via the emailService
  */
 
-const axios = require('axios');
+require('dotenv').config();
+const emailService = require('./services/emailService');
+const logger = require('./utils/logger');
 
-// Configuration
-const API_URL = 'http://localhost:4000/api';
-const TEST_EMAIL = 'aiwaverider8@gmail.com';
+// Test user data
+const userData = {
+  uid: `test-${Date.now()}`,
+  email: 'test@example.com',
+  username: `testuser-${Date.now()}`,
+  firstName: 'Test',
+  lastName: 'User',
+  displayName: 'Test User'
+};
 
-// Create a test admin token (this is a dummy token for testing)
-// In a real scenario, you would need to get a valid token from your authentication system
-const ADMIN_TOKEN = 'dummy_token';
-
-// Simple delay function
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-// Create axios instance with auth header
-const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${ADMIN_TOKEN}`
-  }
-});
-
-async function testEmailAPI() {
+// Test function
+async function testSignupEmailFlow() {
+  console.log('\n🧪 TESTING SIGNUP WELCOME EMAIL');
+  console.log('==============================');
+  console.log('Test user data:', userData);
+  
   try {
-    console.log('\n📧 EMAIL API TEST');
-    console.log('===============');
-    console.log('Testing sending email via API endpoint...');
-    console.log('NOTE: This requires your server to be running on port 4000');
-    console.log('NOTE: This requires admin authentication to work properly');
+    // Simulate the welcome email sending part from authController.signup
+    console.log('\nSimulating welcome email sending...');
     
-    console.log('\nSending test email to', TEST_EMAIL);
+    const emailResult = await emailService.sendWelcomeEmail(userData);
     
-    const response = await api.post('/email/test', {
-      email: TEST_EMAIL
-    });
-    
-    console.log('\n✅ API Response:');
-    console.log(response.data);
-    
-    console.log('\n🎉 API test successful!');
-    console.log('Check your inbox for the test email.');
-    
-  } catch (error) {
-    console.error('\n❌ API TEST FAILED:');
-    
-    if (error.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
-      console.error(`Status: ${error.response.status}`);
-      console.error('Response data:', error.response.data);
-      
-      if (error.response.status === 401 || error.response.status === 403) {
-        console.error('\nAuthentication Error: You need a valid admin token to access this endpoint.');
-        console.error('1. Make sure your server is running');
-        console.error('2. Replace the dummy token in this script with a valid admin token');
-        console.error('3. If you\'re not sure how to get a token, you can use the direct test instead');
-      }
-    } else if (error.request) {
-      // The request was made but no response was received
-      console.error('No response received from server. Is your backend running?');
-      console.error('Error details:', error.message);
+    if (emailResult.success) {
+      console.log(`\n✅ Welcome email sent successfully!`);
+      console.log(`Message ID: ${emailResult.messageId}`);
     } else {
-      // Something happened in setting up the request that triggered an Error
-      console.error('Error setting up request:', error.message);
+      console.log(`\n❌ Failed to send welcome email: ${emailResult.error}`);
     }
+    
+    console.log('\nTest completed');
+    
+    return emailResult;
+  } catch (error) {
+    console.error('\n❌ Test failed:', error.message);
+    if (error.stack) {
+      console.error(error.stack);
+    }
+    throw error;
   }
 }
 
-console.log('Starting Email API test...');
-testEmailAPI(); 
+// Analyze the email sending process
+function analyzeEmailProcess() {
+  console.log('\n📋 EMAIL PROCESS ANALYSIS');
+  console.log('========================');
+  console.log('1. During signup, the emailService.sendWelcomeEmail function is called');
+  console.log('2. The function is called with user data (uid, email, name, etc.)');
+  console.log('3. The email is sent asynchronously and does not block registration');
+  console.log('4. Success/failure is logged but does not affect signup completion');
+  console.log('\nPossible issues if welcome emails are not being received:');
+  console.log('- Email configuration in .env might be incorrect');
+  console.log('- SMTP server might be blocking emails (check spam filters)');
+  console.log('- Promise handling might cause emails to not be sent before process exits');
+  console.log('- Welcome email template might have errors');
+}
+
+// Run the test
+console.log('Starting signup welcome email test...');
+testSignupEmailFlow()
+  .then(() => {
+    analyzeEmailProcess();
+    console.log('\nTest execution completed');
+  })
+  .catch(err => {
+    console.error('Test execution failed:', err);
+    process.exit(1);
+  }); 
