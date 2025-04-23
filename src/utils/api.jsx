@@ -374,6 +374,9 @@ export const signInWithGoogle = async () => {
     provider.addScope('profile');
     provider.addScope('email');
     
+    // Add this line to force account selection dialog
+    provider.setCustomParameters({ prompt: 'select_account' });
+    
     // Sign in with popup
     const result = await auth.signInWithPopup(provider);
     
@@ -2069,6 +2072,22 @@ export const createAgent = async (agentData) => {
     if (error.response?.data?.error) {
       throw new Error(error.response.data.error);
     }
+    throw error;
+  }
+};
+
+// Update Email Preferences
+export const updateEmailPreferences = async (preferences) => {
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('User not authenticated');
+    }
+
+    const response = await api.put(`/api/email/preferences/${currentUser.uid}`, preferences);
+    return response.data;
+  } catch (error) {
+    console.error('Error updating email preferences:', error);
     throw error;
   }
 };

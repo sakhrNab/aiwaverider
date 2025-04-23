@@ -9,6 +9,8 @@ const emailService = require('../services/emailService');
 const emailNotificationModel = require('../models/emailNotification');
 const logger = require('../utils/logger');
 const { validateEmail } = require('../utils/validators');
+const { db } = require('../config/firebase');
+const config = require('../config/email');
 
 /**
  * Send a test email to verify configuration
@@ -484,6 +486,357 @@ exports.updateEmailPreferences = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update email preferences',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Send an update notification email to specific users by userIds
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.sendUpdateToUsers = async (req, res) => {
+  try {
+    const { title, content, updateType, userIds } = req.body;
+    
+    // Validate inputs
+    if (!title || !content || !updateType) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Title, content, and update type are required' 
+      });
+    }
+    
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one user ID must be provided'
+      });
+    }
+    
+    // Create campaign record
+    const campaignId = await emailNotificationModel.createCampaign({
+      title,
+      content,
+      type: updateType,
+      createdBy: req.user.uid,
+      targetUserIds: userIds
+    });
+    
+    // Mark as sending
+    await emailNotificationModel.markCampaignAsSending(campaignId);
+    
+    // Get user data for the specified userIds
+    const usersSnapshot = await Promise.all(
+      userIds.map(userId => db.collection('users').doc(userId).get())
+    );
+    
+    // Filter out non-existent users and prepare user data
+    const users = usersSnapshot
+      .filter(doc => doc.exists)
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    
+    if (users.length === 0) {
+      await emailNotificationModel.markCampaignAsCompleted(campaignId, 0, 0);
+      
+      return res.status(200).json({
+        success: true,
+        message: 'No valid recipients found',
+        data: { campaignId, recipientCount: 0 }
+      });
+    }
+    
+    // Prepare to track success/failure
+    let sentCount = 0;
+    let failedCount = 0;
+    const errors = [];
+    
+    // Check user preferences based on update type
+    const prefField = 
+      updateType === 'weeklyUpdates' ? 'weeklyUpdates' :
+      updateType === 'new_agents' ? 'newAgents' :
+      updateType === 'new_tools' ? 'newTools' : null;
+    
+    // Send emails to each user who has the preference enabled
+    for (const user of users) {
+      // Skip if user has opt-out of this notification type
+      if (prefField && 
+          user.emailPreferences && 
+          user.emailPreferences[prefField] === false) {
+        logger.info(`Skipped sending to ${user.email} - user has disabled ${prefField} notifications`);
+        continue;
+      }
+      
+      try {
+        let result;
+        
+        // For custom emails, send without template wrapping
+        if (updateType === 'custom') {
+          // Send custom email without template
+          result = await emailService.sendEmail({
+            to: user.email,
+            subject: title,
+            html: `<div style="font-family: Arial, sans-serif; color: #333;">
+                    ${content}
+                    <hr>
+                    <p style="font-size: 12px; color: #777;">
+                      This email was sent from AI Waverider. 
+                      If you no longer wish to receive these emails, you can 
+                      <a href="${config.websiteUrl}/profile">unsubscribe</a> from your profile settings.
+                    </p>
+                  </div>`
+          });
+        } else {
+          // Use the regular template for non-custom emails
+          result = await emailService.sendUpdateEmail({
+            userId: user.id,
+            email: user.email,
+            firstName: user.firstName || '',
+            lastName: user.lastName || '',
+            title,
+            content,
+            updateType
+          });
+        }
+        
+        // Log success
+        await emailNotificationModel.logEmailSend({
+          campaignId,
+          type: updateType,
+          userId: user.id,
+          email: user.email,
+          success: true,
+          messageId: result.messageId
+        });
+        
+        sentCount++;
+      } catch (error) {
+        // Log failure
+        await emailNotificationModel.logEmailSend({
+          campaignId,
+          type: updateType,
+          userId: user.id,
+          email: user.email,
+          success: false,
+          error: error.message
+        });
+        
+        failedCount++;
+        errors.push({
+          userId: user.id,
+          email: user.email,
+          error: error.message
+        });
+        
+        logger.error(`Failed to send update email to ${user.email}: ${error.message}`);
+      }
+    }
+    
+    // Mark campaign as completed
+    await emailNotificationModel.markCampaignAsCompleted(
+      campaignId, 
+      sentCount, 
+      failedCount,
+      errors
+    );
+    
+    res.status(200).json({
+      success: true,
+      message: 'Update email campaign completed',
+      data: {
+        campaignId,
+        recipientCount: users.length,
+        sentCount,
+        failedCount
+      }
+    });
+  } catch (error) {
+    logger.error(`Error sending targeted update emails: ${error.message}`);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to complete update email campaign',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Send a custom email to specific recipients
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.sendCustomEmail = async (req, res) => {
+  try {
+    const { subject, content, recipientType, recipients } = req.body;
+    
+    // Validate inputs
+    if (!subject || !content) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Subject and content are required' 
+      });
+    }
+    
+    // Create campaign record
+    const campaignId = await emailNotificationModel.createCampaign({
+      title: subject,
+      content,
+      type: 'custom',
+      recipientType,
+      createdBy: req.user.uid,
+      specificEmails: recipientType === 'specific' ? recipients.split(',').map(e => e.trim()) : null
+    });
+    
+    // Mark as sending
+    await emailNotificationModel.markCampaignAsSending(campaignId);
+    
+    // Get user data based on recipient type
+    let users = [];
+    
+    if (recipientType === 'specific' && recipients) {
+      // For specific emails
+      const emails = recipients.split(',').map(email => email.trim()).filter(email => email);
+      
+      if (emails.length === 0) {
+        await emailNotificationModel.markCampaignAsCompleted(campaignId, 0, 0);
+        
+        return res.status(200).json({
+          success: true,
+          message: 'No valid recipients specified',
+          data: { campaignId, recipientCount: 0 }
+        });
+      }
+      
+      // Get user data for these emails if they exist in our system
+      const usersSnapshot = await db.collection('users')
+        .where('email', 'in', emails.slice(0, 10)) // Firestore limit for 'in' queries
+        .get();
+      
+      users = usersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Add any emails not found as users
+      const foundEmails = users.map(u => u.email);
+      const notFoundEmails = emails.filter(email => !foundEmails.includes(email));
+      
+      // Add placeholder users for these emails
+      notFoundEmails.forEach(email => {
+        users.push({
+          id: null,
+          email,
+          firstName: '',
+          lastName: ''
+        });
+      });
+    } else {
+      // For user groups (all, premium, free)
+      let query = db.collection('users');
+      
+      if (recipientType === 'premium') {
+        query = query.where('accountType', '==', 'premium');
+      } else if (recipientType === 'free') {
+        query = query.where('accountType', '==', 'free');
+      }
+      
+      const usersSnapshot = await query.get();
+      
+      users = usersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    }
+    
+    if (users.length === 0) {
+      await emailNotificationModel.markCampaignAsCompleted(campaignId, 0, 0);
+      
+      return res.status(200).json({
+        success: true,
+        message: 'No recipients found',
+        data: { campaignId, recipientCount: 0 }
+      });
+    }
+    
+    // Prepare to track success/failure
+    let sentCount = 0;
+    let failedCount = 0;
+    const errors = [];
+    
+    // Send emails to each recipient
+    for (const user of users) {
+      try {
+        // Use the dedicated custom email function that uses a template
+        const result = await emailService.sendCustomEmail({
+          email: user.email,
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          subject: subject,
+          content: content
+        });
+        
+        // Log success
+        await emailNotificationModel.logEmailSend({
+          campaignId,
+          type: 'custom',
+          userId: user.id,
+          email: user.email,
+          success: true,
+          messageId: result.messageId
+        });
+        
+        sentCount++;
+      } catch (error) {
+        // Log failure
+        await emailNotificationModel.logEmailSend({
+          campaignId,
+          type: 'custom',
+          userId: user.id,
+          email: user.email,
+          success: false,
+          error: error.message
+        });
+        
+        failedCount++;
+        errors.push({
+          userId: user.id,
+          email: user.email,
+          error: error.message
+        });
+        
+        logger.error(`Failed to send custom email to ${user.email}: ${error.message}`);
+      }
+    }
+    
+    // Mark campaign as completed
+    await emailNotificationModel.markCampaignAsCompleted(
+      campaignId, 
+      sentCount, 
+      failedCount,
+      errors
+    );
+    
+    res.status(200).json({
+      success: true,
+      message: 'Custom email campaign completed',
+      data: {
+        campaignId,
+        recipientCount: users.length,
+        sentCount,
+        failedCount
+      }
+    });
+  } catch (error) {
+    logger.error(`Error sending custom emails: ${error.message}`);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to complete custom email campaign',
       error: error.message
     });
   }

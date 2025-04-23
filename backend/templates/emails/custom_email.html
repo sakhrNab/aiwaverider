@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Welcome to AI Waverider</title>
+  <title>{{title}} - AI Waverider</title>
   <style>
     /* Reset styles */
     body, html {
@@ -45,6 +45,13 @@
       background-color: #f4f4f4;
     }
     
+    /* Call to action */
+    .cta {
+      display: block;
+      text-align: center;
+      margin: 20px 0;
+    }
+    
     /* Button */
     .button {
       display: inline-block;
@@ -71,35 +78,31 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>Welcome to AI Waverider!</h1>
+      <h1>{{title}}</h1>
     </div>
     
     <div class="content">
-      <p>Dear {{firstName}},</p>
+      <p>Dear {{name}},</p>
       
-      <p>We're excited to welcome you to AI Waverider! You've taken the first step toward mastering the ever-evolving world of artificial intelligence.</p>
-      
-      <p>With your new account, you can:</p>
-      <ul>
-        <li>Access our library of AI tools and resources</li>
-        <li>Join our community of AI enthusiasts</li>
-        <li>Stay updated on the latest AI trends and developments</li>
-      </ul>
-      
-      <p>Get started by clicking the button below to explore your dashboard:</p>
-      
-      <div style="text-align: center;">
-        <a href="{{websiteUrl}}" class="button">Visit Your Dashboard</a>
+      <div class="message-content">
+        {{{content}}}
       </div>
       
-      <p>If you have any questions or need assistance, don't hesitate to reach out to our support team.</p>
+      <div class="cta">
+        <a href="{{websiteUrl}}" class="button">Visit AI Waverider</a>
+      </div>
+      
+      <p>If you have any questions, please contact us at <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.</p>
       
       <p>Best regards,<br>The AI Waverider Team</p>
     </div>
     
     <div class="footer">
-      <p>&copy; 2025 AI Waverider. All rights reserved.</p>
-      <p>You're receiving this email because you signed up for an account on AI Waverider.</p>
+      <p>&copy; {{currentYear}} AI Waverider. All rights reserved.</p>
+      <p>
+        You're receiving this email because you're a member of AI Waverider.<br>
+        To unsubscribe, <a href="{{websiteUrl}}/unsubscribe">click here</a>.
+      </p>
     </div>
   </div>
 </body>

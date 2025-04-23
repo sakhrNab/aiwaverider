@@ -41,6 +41,13 @@ router.post('/update', isAdmin, emailController.sendUpdateEmail);
 router.post('/global', isAdmin, emailController.sendGlobalAnnouncement);
 
 /**
+ * @route   POST /api/email/send-custom
+ * @desc    Send a custom email to specific recipients
+ * @access  Admin
+ */
+router.post('/send-custom', isAdmin, emailController.sendCustomEmail);
+
+/**
  * @route   GET /api/email/stats
  * @desc    Get email statistics
  * @access  Admin
@@ -53,5 +60,12 @@ router.get('/stats', isAdmin, emailController.getEmailStats);
  * @access  Private (own user) or Admin
  */
 router.put('/preferences/:userId', emailController.updateEmailPreferences);
+
+/**
+ * @route   POST /api/email/update/users
+ * @desc    Send update notifications to specific users
+ * @access  Admin
+ */
+router.post('/update/users', isAdmin, emailController.sendUpdateToUsers);
 
 module.exports = router; 

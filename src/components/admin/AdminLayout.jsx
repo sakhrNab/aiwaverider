@@ -42,6 +42,7 @@ const AdminLayout = ({ children }) => {
     { path: '/admin/analytics', icon: <FaChartBar />, label: 'Analytics' },
     { path: '/admin/pricing', icon: <FaDollarSign />, label: 'Pricing' },
     { path: '/admin/email', icon: <FaEnvelope />, label: 'Email Management' },
+    { path: '/admin/email-composer', icon: <FaEnvelope />, label: 'Email Composer' },
     { path: '/admin/settings', icon: <FaCog />, label: 'Settings' },
   ];
   

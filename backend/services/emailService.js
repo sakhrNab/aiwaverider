@@ -29,6 +29,16 @@ async function getCompiledTemplate(templateName) {
   try {
     // Load template file
     const templatePath = path.join(__dirname, '..', 'templates', 'emails', `${templateName}.html`);
+    logger.info(`Loading email template from: ${templatePath}`);
+    
+    // Check if file exists
+    try {
+      await fs.access(templatePath);
+    } catch (error) {
+      logger.error(`Template file does not exist: ${templatePath}`);
+      throw new Error(`Email template '${templateName}' does not exist`);
+    }
+    
     const templateSource = await fs.readFile(templatePath, 'utf-8');
     
     // Compile template
@@ -37,6 +47,7 @@ async function getCompiledTemplate(templateName) {
     // Cache for future use
     templateCache[templateName] = compiledTemplate;
     
+    logger.info(`Successfully loaded and compiled template: ${templateName}`);
     return compiledTemplate;
   } catch (error) {
     logger.error(`Failed to load email template '${templateName}': ${error.message}`);
@@ -65,7 +76,7 @@ function createTransport() {
  * @param {Object} mailOptions - Nodemailer mail options
  * @returns {Promise<Object>} - Email send result
  */
-async function sendEmail(mailOptions) {
+const sendEmail = async function(mailOptions) {
   try {
     const transporter = createTransport();
     
@@ -79,7 +90,7 @@ async function sendEmail(mailOptions) {
       ...mailOptions.headers,
       'List-Unsubscribe': '<https://aiwaverider.com/unsubscribe>',
       'Precedence': 'bulk',
-      'X-AI-Wave-Rider': 'notification'
+      'X-AI-Waverider': 'notification'
     };
     
     // Add text version if HTML is provided but no text (helps deliverability)
@@ -91,8 +102,13 @@ async function sendEmail(mailOptions) {
         .trim();
     }
     
+    // Log the email attempt with redacted content
+    logger.email(`Attempting to send email to ${mailOptions.to} with subject: "${mailOptions.subject}"`);
+    logger.email(`Email configuration: host=${config.host}, port=${config.port}, secure=${config.secure}, user=${config.user}`);
+    
     // Send email
     const info = await transporter.sendMail(mailOptions);
+    logger.email(`Email sent successfully: ${info.messageId}`);
     logger.info(`Email sent: ${info.messageId}`);
     
     return {
@@ -102,9 +118,13 @@ async function sendEmail(mailOptions) {
     };
   } catch (error) {
     logger.error(`Failed to send email: ${error.message}`);
+    logger.email(`Email sending failed: ${error.message}`);
     throw error;
   }
-}
+};
+
+// Export sendEmail
+exports.sendEmail = sendEmail;
 
 /**
  * Send a welcome email to a new user
@@ -129,7 +149,7 @@ exports.sendWelcomeEmail = async (userData) => {
     // Send the email
     return await sendEmail({
       to: userData.email,
-      subject: 'Welcome to AI Wave Rider!',
+      subject: 'Welcome to AI Waverider!',
       html
     });
   } catch (error) {
@@ -148,7 +168,7 @@ exports.sendTestEmail = async (emailAddress) => {
     // Send a simple test email
     return await sendEmail({
       to: emailAddress,
-      subject: 'AI Wave Rider - Email Configuration Test',
+      subject: 'AI Waverider - Email Configuration Test',
       html: `
         <div style="font-family: Arial, sans-serif; color: #333;">
           <h1 style="color: #4a86e8;">Email Configuration Test</h1>
@@ -157,7 +177,7 @@ exports.sendTestEmail = async (emailAddress) => {
           <p>Timestamp: ${new Date().toISOString()}</p>
           <hr>
           <p style="font-size: 12px; color: #777;">
-            This is an automated message from AI Wave Rider.
+            This is an automated message from AI Waverider.
             Please do not reply to this email.
           </p>
         </div>
@@ -180,16 +200,51 @@ exports.sendUpdateEmail = async (emailData) => {
     let templateName = 'weekly_update';
     let subjectPrefix = 'Weekly Update:';
     
-    if (emailData.updateType === 'announcements') {
-      templateName = 'announcement';
-      subjectPrefix = 'Announcement:';
-    } else if (emailData.updateType === 'new_agents') {
-      templateName = 'weekly_update'; // Use weekly update template but customize for agents
-      subjectPrefix = 'New AI Agents:';
-    } else if (emailData.updateType === 'new_tools') {
-      templateName = 'weekly_update'; // Use weekly update template but customize for tools
-      subjectPrefix = 'New AI Tools:';
+    // Use different templates for different update types
+    switch(emailData.updateType) {
+      case 'weekly':
+      case 'update':
+        templateName = 'weekly_update';
+        subjectPrefix = 'Weekly Update:';
+        break;
+      case 'announcements':
+        templateName = 'announcement';
+        subjectPrefix = 'Announcement:';
+        break;
+      case 'new_agents':
+        templateName = 'new_agents'; // Try to use dedicated template
+        try {
+          await fs.access(path.join(__dirname, '..', 'templates', 'emails', 'new_agents.html'));
+        } catch (error) {
+          // Fallback to weekly_update if new_agents template doesn't exist
+          templateName = 'weekly_update';
+          logger.info(`new_agents template not found, falling back to weekly_update`);
+        }
+        subjectPrefix = 'New AI Agents:';
+        break;
+      case 'new_tools':
+        templateName = 'new_tools'; // Try to use dedicated template
+        try {
+          await fs.access(path.join(__dirname, '..', 'templates', 'emails', 'new_tools.html'));
+        } catch (error) {
+          // Fallback to weekly_update if new_tools template doesn't exist
+          templateName = 'weekly_update';
+          logger.info(`new_tools template not found, falling back to weekly_update`);
+        }
+        subjectPrefix = 'New AI Tools:';
+        break;
+      case 'notification':
+        templateName = 'notification';
+        subjectPrefix = 'Notification:';
+        break;
+      default:
+        // For unrecognized types, use the notification template
+        templateName = 'notification';
+        subjectPrefix = 'Update:';
+        logger.info(`Unknown update type: ${emailData.updateType}, using notification template`);
     }
+    
+    logger.info(`Sending ${emailData.updateType} email using ${templateName} template`);
     
     // Get the template
     const template = await getCompiledTemplate(templateName);
@@ -294,6 +349,62 @@ exports.sendAgentPurchaseEmail = async (purchaseData) => {
     });
   } catch (error) {
     logger.error(`Failed to send agent purchase email: ${error.message}`);
+    throw error;
+  }
+};
+
+/**
+ * Send a custom email without a template
+ * @param {Object} emailData - Email content and recipient data
+ * @returns {Promise<Object>} - Email send result
+ */
+exports.sendCustomEmail = async (emailData) => {
+  try {
+    // Try to use a custom template if it exists, otherwise use inline HTML
+    let html;
+    
+    try {
+      // Try to get the custom email template
+      const template = await getCompiledTemplate('custom_email');
+      
+      // Prepare the data for the template
+      const data = {
+        name: emailData.firstName ? `${emailData.firstName}` : 'there',
+        title: emailData.subject,
+        content: emailData.content,
+        websiteUrl: config.websiteUrl,
+        supportEmail: config.supportEmail,
+        currentYear: new Date().getFullYear()
+      };
+      
+      // Render the HTML content with the template
+      html = template(data);
+      logger.info('Using custom_email template for custom email');
+    } catch (templateError) {
+      // If template doesn't exist, use a simple inline template
+      logger.info('Custom email template not found, using inline HTML');
+      html = `
+        <div style="font-family: Arial, sans-serif; color: #333;">
+          <h1 style="color: #4a86e8;">${emailData.subject}</h1>
+          <div>${emailData.content}</div>
+          <hr>
+          <p style="font-size: 12px; color: #777;">
+            This email was sent from AI Waverider. 
+            If you no longer wish to receive these emails, you can 
+            <a href="${config.websiteUrl}/unsubscribe">unsubscribe</a> from your profile settings.
+          </p>
+        </div>
+      `;
+    }
+    
+    // Send the email
+    return await sendEmail({
+      to: emailData.email,
+      subject: emailData.subject,
+      html
+    });
+  } catch (error) {
+    logger.error(`Failed to send custom email: ${error.message}`);
     throw error;
   }
 }; 

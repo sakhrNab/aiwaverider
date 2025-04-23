@@ -447,29 +447,40 @@
 .checkboxLabel {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
   cursor: pointer;
 }
 
 .checkboxLabel input[type="checkbox"] {
+  margin-right: 10px;
   width: 18px;
   height: 18px;
 }
 
+.preferencesNote {
+  font-size: 0.9rem;
+  color: #666;
+  margin-top: 10px;
+  padding: 8px;
+  background-color: #f8f9fa;
+  border-left: 3px solid #4a86e8;
+  border-radius: 4px;
+}
+
 .saveButton {
-  background-color: #1976d2;
+  padding: 10px 20px;
+  background-color: #0073e6;
   color: white;
-  padding: 12px 24px;
   border: none;
   border-radius: 4px;
+  font-size: 1rem;
   cursor: pointer;
-  font-size: 16px;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.2s;
+  margin-top: 20px;
 }
 
 .saveButton:hover {
-  background-color: #1565c0;
+  background-color: #005bb5;
 }
 
 .communitySection {

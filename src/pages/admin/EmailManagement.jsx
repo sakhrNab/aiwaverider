@@ -3,6 +3,7 @@ import { toast } from 'react-toastify';
 import AdminLayout from '../../components/admin/AdminLayout';
 import HashLoader from 'react-spinners/HashLoader';
 import { FaEnvelope, FaBell, FaGlobe, FaUserPlus, FaPencilAlt } from 'react-icons/fa';
+import { sendTestEmail, updateEmailTemplate, sendCustomEmail, handleEmailError } from '../../services/emailService';
 import './EmailManagement.css';
 
 const EmailManagement = () => {
@@ -49,13 +50,12 @@ const EmailManagement = () => {
     
     setLoading(true);
     try {
-      let endpoint = '/api/email/test';
-      let payload = { email: testEmail };
+      // Prepare payload based on the email type
+      let emailData = { email: testEmail };
       
       switch (type) {
         case 'welcome':
-          endpoint = '/api/email/test-welcome';
-          payload = {
+          emailData = {
             email: testEmail,
             firstName: 'Test',
             lastName: 'User',
@@ -64,8 +64,7 @@ const EmailManagement = () => {
           };
           break;
         case 'update':
-          endpoint = '/api/email/test-update';
-          payload = {
+          emailData = {
             email: testEmail,
             firstName: 'Test',
             lastName: 'User',
@@ -75,8 +74,7 @@ const EmailManagement = () => {
           };
           break;
         case 'global':
-          endpoint = '/api/email/test-global';
-          payload = {
+          emailData = {
             email: testEmail,
             firstName: 'Test',
             lastName: 'User',
@@ -85,37 +83,21 @@ const EmailManagement = () => {
           };
           break;
         case 'custom':
-          endpoint = '/api/email/test-custom';
-          payload = {
+          emailData = {
             email: testEmail,
             subject: customEmail.subject,
             content: customEmail.content
           };
           break;
-        default:
-          endpoint = '/api/email/test';
       }
       
-      const token = localStorage.getItem('token');
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
+      // Send test email using the emailService
+      const result = await sendTestEmail(testEmail, type, emailData);
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to send test email');
-      }
-      
-      const data = await response.json();
+      console.log(`Test ${type} email sent successfully to: ${testEmail}`);
       toast.success(`Test email sent successfully to ${testEmail}`);
     } catch (error) {
-      console.error('Error sending test email:', error);
-      toast.error(error.message || 'Failed to send test email');
+      handleEmailError(error, 'Failed to send test email');
     } finally {
       setLoading(false);
     }
@@ -124,45 +106,28 @@ const EmailManagement = () => {
   const handleSaveTemplate = async (type) => {
     setLoading(true);
     try {
-      let endpoint = '';
-      let payload = {};
+      let templateData = {};
       
       switch (type) {
         case 'welcome':
-          endpoint = '/api/email/templates/welcome';
-          payload = welcomeTemplate;
+          templateData = welcomeTemplate;
           break;
         case 'update':
-          endpoint = '/api/email/templates/update';
-          payload = updateTemplate;
+          templateData = updateTemplate;
           break;
         case 'global':
-          endpoint = '/api/email/templates/global';
-          payload = globalTemplate;
+          templateData = globalTemplate;
           break;
         default:
           throw new Error('Invalid template type');
       }
       
-      const token = localStorage.getItem('token');
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to save template');
-      }
+      // Save template using the emailService
+      await updateEmailTemplate(type, templateData);
       
       toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} email template saved successfully`);
     } catch (error) {
-      console.error('Error saving template:', error);
-      toast.error(error.message || 'Failed to save template');
+      handleEmailError(error, 'Failed to save template');
     } finally {
       setLoading(false);
     }
@@ -176,23 +141,16 @@ const EmailManagement = () => {
     
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/email/send-custom', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(customEmail)
-      });
+      // Send custom email using the emailService
+      const result = await sendCustomEmail(customEmail);
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to send emails');
+      console.log('Email sending successful:', result);
+      
+      if (result.data && result.data.recipientCount) {
+        toast.success(`Emails scheduled to be sent to ${result.data.recipientCount} users`);
+      } else {
+        toast.success('Emails scheduled successfully');
       }
-      
-      const data = await response.json();
-      toast.success(`Emails scheduled to be sent to ${data.recipientCount} users`);
       
       // Reset form
       setCustomEmail({
@@ -202,8 +160,7 @@ const EmailManagement = () => {
         recipientType: 'all'
       });
     } catch (error) {
-      console.error('Error sending custom emails:', error);
-      toast.error(error.message || 'Failed to send emails');
+      handleEmailError(error, 'Failed to send emails');
     } finally {
       setLoading(false);
     }
@@ -291,10 +248,10 @@ const EmailManagement = () => {
               <div className="template-placeholders">
                 <h3>Available Placeholders:</h3>
                 <ul>
-                  <li><code>{{firstName}}</code> - User's first name</li>
-                  <li><code>{{lastName}}</code> - User's last name</li>
-                  <li><code>{{email}}</code> - User's email address</li>
-                  <li><code>{{websiteUrl}}</code> - Your website URL</li>
+                  <li><code>{"{{firstName}}"}</code> - User's first name</li>
+                  <li><code>{"{{lastName}}"}</code> - User's last name</li>
+                  <li><code>{"{{email}}"}</code> - User's email address</li>
+                  <li><code>{"{{websiteUrl}}"}</code> - Your website URL</li>
                 </ul>
               </div>
               
@@ -361,10 +318,10 @@ const EmailManagement = () => {
               <div className="template-placeholders">
                 <h3>Available Placeholders:</h3>
                 <ul>
-                  <li><code>{{firstName}}</code> - User's first name</li>
-                  <li><code>{{lastName}}</code> - User's last name</li>
-                  <li><code>{{updateType}}</code> - Type of update</li>
-                  <li><code>{{websiteUrl}}</code> - Your website URL</li>
+                  <li><code>{"{{firstName}}"}</code> - User's first name</li>
+                  <li><code>{"{{lastName}}"}</code> - User's last name</li>
+                  <li><code>{"{{updateType}}"}</code> - Type of update</li>
+                  <li><code>{"{{websiteUrl}}"}</code> - Your website URL</li>
                 </ul>
               </div>
               
@@ -417,10 +374,10 @@ const EmailManagement = () => {
               <div className="template-placeholders">
                 <h3>Available Placeholders:</h3>
                 <ul>
-                  <li><code>{{firstName}}</code> - User's first name</li>
-                  <li><code>{{lastName}}</code> - User's last name</li>
-                  <li><code>{{websiteUrl}}</code> - Your website URL</li>
-                  <li><code>{{supportEmail}}</code> - Your support email</li>
+                  <li><code>{"{{firstName}}"}</code> - User's first name</li>
+                  <li><code>{"{{lastName}}"}</code> - User's last name</li>
+                  <li><code>{"{{websiteUrl}}"}</code> - Your website URL</li>
+                  <li><code>{"{{supportEmail}}"}</code> - Your support email</li>
                 </ul>
               </div>
               
@@ -498,10 +455,10 @@ const EmailManagement = () => {
               <div className="template-placeholders">
                 <h3>Available Placeholders:</h3>
                 <ul>
-                  <li><code>{{firstName}}</code> - User's first name</li>
-                  <li><code>{{lastName}}</code> - User's last name</li>
-                  <li><code>{{email}}</code> - User's email address</li>
-                  <li><code>{{websiteUrl}}</code> - Your website URL</li>
+                  <li><code>{"{{firstName}}"}</code> - User's first name</li>
+                  <li><code>{"{{lastName}}"}</code> - User's last name</li>
+                  <li><code>{"{{email}}"}</code> - User's email address</li>
+                  <li><code>{"{{websiteUrl}}"}</code> - Your website URL</li>
                 </ul>
               </div>
               

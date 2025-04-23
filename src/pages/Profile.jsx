@@ -8,7 +8,8 @@ import {
   updateProfile, 
   updateInterests, 
   getCommunityInfo, 
-  uploadProfileImage 
+  uploadProfileImage,
+  updateEmailPreferences
 } from '../utils/api';
 import { AuthContext } from '../contexts/AuthContext';
 import { INTEREST_CATEGORIES } from '../constants/categories';
@@ -45,6 +46,13 @@ const ProfilePage = () => {
     bio: '',
     interests: [],
     notifications: { email: true, inApp: true },
+    emailPreferences: {
+      weeklyUpdates: true,
+      newAgents: true,
+      newTools: true,
+      announcements: true,
+      marketingEmails: true
+    }
   });
   const [imageFile, setImageFile] = useState(null); // State for file input
   const [previewImage, setPreviewImage] = useState(''); // For image preview
@@ -73,6 +81,13 @@ const ProfilePage = () => {
       bio: userObj.bio || '',
       interests: userObj.interests || [],
       notifications: userObj.notifications || { email: true, inApp: true },
+      emailPreferences: userObj.emailPreferences || {
+        weeklyUpdates: true,
+        newAgents: true,
+        newTools: true,
+        announcements: true,
+        marketingEmails: true
+      }
     });
   };
 
@@ -373,6 +388,49 @@ const ProfilePage = () => {
           toast.error(error.message || 'Failed to update interests');
         }
         return;
+      }
+
+      if (activeTab === 'settings') {
+        // Update email preferences if they've changed
+        try {
+          // Update email preferences
+          await updateEmailPreferences(formData.emailPreferences);
+          
+          // Clear cache
+          localStorage.removeItem(PROFILE_CACHE_KEY);
+          
+          // Update profile state directly
+          setProfile(prev => ({
+            ...prev,
+            emailPreferences: formData.emailPreferences
+          }));
+          
+          // Update normal notifications
+          await updateProfile({
+            ...profile,
+            notifications: formData.notifications,
+            language: formData.language
+          });
+          
+          // Update user profile in AuthContext
+          if (updateUserProfile && user?.uid) {
+            await updateUserProfile(user.uid, {
+              ...user,
+              notifications: formData.notifications,
+              emailPreferences: formData.emailPreferences,
+              language: formData.language
+            });
+          }
+          
+          setSuccess('Settings updated successfully!');
+          toast.success('Settings updated successfully!');
+          return;
+        } catch (preferencesError) {
+          console.error('[Profile] Error updating email preferences:', preferencesError);
+          setError(`Error updating preferences: ${preferencesError.message || 'Unknown error'}`);
+          toast.error(`Error updating preferences: ${preferencesError.message || 'Unknown error'}`);
+          return;
+        }
       }
 
       // Rest of the code for other profile updates
@@ -737,6 +795,62 @@ const ProfilePage = () => {
                   />
                   In-App Notifications
                 </label>
+              </div>
+
+              <div className={styles.settingSection}>
+                <h3>Email Updates</h3>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    name="weeklyUpdates"
+                    checked={formData.emailPreferences?.weeklyUpdates}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        emailPreferences: {
+                          ...prev.emailPreferences,
+                          weeklyUpdates: e.target.checked
+                        }
+                      }));
+                    }}
+                  />
+                  Receive weekly updates
+                </label>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    name="newAgents"
+                    checked={formData.emailPreferences?.newAgents}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        emailPreferences: {
+                          ...prev.emailPreferences,
+                          newAgents: e.target.checked
+                        }
+                      }));
+                    }}
+                  />
+                  Receive notifications about new agents
+                </label>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    name="newTools"
+                    checked={formData.emailPreferences?.newTools}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        emailPreferences: {
+                          ...prev.emailPreferences,
+                          newTools: e.target.checked
+                        }
+                      }));
+                    }}
+                  />
+                  Receive notifications about new AI tools
+                </label>
+                <p className={styles.preferencesNote}>These notifications are enabled by default to keep you informed about new features.</p>
               </div>
 
               <button type="submit" className={styles.saveButton}>

@@ -28,6 +28,8 @@ import AdminAnalytics from '../pages/admin/Analytics';
 import Settings from '../pages/admin/Settings';
 import Pricing from '../pages/admin/Pricing';
 import AIToolsManager from './admin/AIToolsManager';
+import EmailManagement from '../pages/admin/EmailManagement';
+import EmailComposer from '../pages/admin/EmailComposer';
 import ChatBot from './ChatBot';
 import BackToTop from './BackToTop';
 import { Analytics as VercelAnalytics } from '@vercel/analytics/react';
@@ -163,6 +165,26 @@ const AppContent = () => {
                 element={
                   <ProtectedRoute roles={['admin']}>
                     <Pricing />
+                  </ProtectedRoute>
+                }
+              />
+              
+              {/* Email Management */}
+              <Route
+                path="/admin/email"
+                element={
+                  <ProtectedRoute roles={['admin']}>
+                    <EmailManagement />
+                  </ProtectedRoute>
+                }
+              />
+              
+              {/* Email Composer */}
+              <Route
+                path="/admin/email-composer"
+                element={
+                  <ProtectedRoute roles={['admin']}>
+                    <EmailComposer />
                   </ProtectedRoute>
                 }
               />

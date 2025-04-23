@@ -1,98 +1,104 @@
 /**
  * Logger Utility
  * 
- * Simple logging utility for the application with different log levels
- * and formatting options.
+ * Handles application logging with different log levels.
  */
 
-const config = {
-  // Set the minimum log level (error, warn, info, debug)
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-  // Enable timestamps in logs
-  timestamps: true,
-  // Enable colors in console output (disable in production or file logs)
-  colors: process.env.NODE_ENV !== 'production',
-  // Set to true to include stack traces in error logs
-  stackTrace: process.env.NODE_ENV !== 'production',
-};
+const winston = require('winston');
+const path = require('path');
+const fs = require('fs');
 
-// Log level hierarchy (higher number = more verbose)
-const LOG_LEVELS = {
+// Create logs directory if it doesn't exist
+const logsDir = path.join(__dirname, '../logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
+
+// Custom log levels
+const levels = {
   error: 0,
   warn: 1,
-  info: 2,
-  debug: 3,
+  email: 2, // Add dedicated level for email logs
+  info: 3,
+  http: 4,
+  debug: 5
 };
 
-// ANSI color codes
-const COLORS = {
-  reset: '\x1b[0m',
-  error: '\x1b[31m', // Red
-  warn: '\x1b[33m',  // Yellow
-  info: '\x1b[36m',  // Cyan
-  debug: '\x1b[90m', // Gray
-  time: '\x1b[90m',  // Gray
+// Log level colors
+const colors = {
+  error: 'red',
+  warn: 'yellow',
+  email: 'magenta', // Magenta for email logs
+  info: 'green',
+  http: 'blue',
+  debug: 'white'
 };
 
-/**
- * Format and output a log message
- * @param {string} level - Log level (error, warn, info, debug)
- * @param {string} message - Log message
- * @param {Object} [metadata] - Additional metadata to log
- */
-const log = (level, message, metadata = null) => {
-  // Skip if this log level is below the configured minimum
-  if (LOG_LEVELS[level] > LOG_LEVELS[config.level]) {
-    return;
-  }
+// Set winston colors
+winston.addColors(colors);
 
-  // Format timestamp
-  const timestamp = config.timestamps 
-    ? new Date().toISOString() 
-    : '';
-  
-  // Prepare color formatting
-  const colorStart = config.colors ? COLORS[level] : '';
-  const colorReset = config.colors ? COLORS.reset : '';
-  const timeColor = config.colors ? COLORS.time : '';
-  
-  // Format the basic log message
-  let logMessage = '';
-  
-  if (timestamp) {
-    logMessage += `${timeColor}[${timestamp}]${colorReset} `;
-  }
-  
-  logMessage += `${colorStart}[${level.toUpperCase()}]${colorReset} ${message}`;
-  
-  // Output to console
-  console[level === 'debug' ? 'log' : level](logMessage);
-  
-  // Log additional metadata if provided
-  if (metadata) {
-    console[level === 'debug' ? 'log' : level](metadata);
-  }
-  
-  // Log stack trace for errors if enabled
-  if (level === 'error' && config.stackTrace && metadata instanceof Error) {
-    console.error(metadata.stack);
-  }
+// Determine log level based on environment
+const level = () => {
+  const env = process.env.NODE_ENV || 'development';
+  return env === 'development' ? 'debug' : 'info';
 };
 
-// Create export methods for each log level
-const logger = {
-  error: (message, metadata) => log('error', message, metadata),
-  warn: (message, metadata) => log('warn', message, metadata),
-  info: (message, metadata) => log('info', message, metadata),
-  debug: (message, metadata) => log('debug', message, metadata),
-  
-  /**
-   * Set logger configuration
-   * @param {Object} newConfig - New configuration options
-   */
-  configure: (newConfig) => {
-    Object.assign(config, newConfig);
-  }
+// Custom format for console output
+const consoleFormat = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.colorize({ all: true }),
+  winston.format.printf(
+    (info) => `[${info.timestamp}] [${info.level}] ${info.message}`
+  )
+);
+
+// File transport format
+const fileFormat = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.json()
+);
+
+// Create the logger
+const logger = winston.createLogger({
+  levels,
+  level: level(),
+  transports: [
+    // Console logging
+    new winston.transports.Console({
+      format: consoleFormat
+    }),
+    // General error logging
+    new winston.transports.File({
+      filename: path.join(logsDir, 'error.log'),
+      level: 'error',
+      format: fileFormat,
+      maxsize: 5242880, // 5MB
+      maxFiles: 5
+    }),
+    // General application logging
+    new winston.transports.File({
+      filename: path.join(logsDir, 'app.log'),
+      format: fileFormat,
+      maxsize: 5242880, // 5MB
+      maxFiles: 5
+    }),
+    // Email-specific logging
+    new winston.transports.File({
+      filename: path.join(logsDir, 'email.log'),
+      level: 'email',
+      format: fileFormat,
+      maxsize: 5242880, // 5MB
+      maxFiles: 5
+    })
+  ]
+});
+
+// Additional convenience method for email logging
+logger.email = (message) => {
+  logger.log({
+    level: 'email',
+    message
+  });
 };
 
 module.exports = logger;

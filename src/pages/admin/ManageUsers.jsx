@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { FaUser, FaEdit, FaTrash, FaExclamationTriangle, FaSearch, FaPlus, FaSpinner, FaAngleLeft, FaAngleRight } from 'react-icons/fa';
+import { FaUser, FaEdit, FaTrash, FaExclamationTriangle, FaSearch, FaPlus, FaSpinner, FaAngleLeft, FaAngleRight, FaBell, FaEnvelope, FaTools, FaRobot } from 'react-icons/fa';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { fetchUsers, createUser, updateUser, deleteUser } from '../../utils/api';
+import { toast } from 'react-toastify';
 import './ManageUsers.css';
 
 /**
@@ -17,6 +18,15 @@ const ManageUsers = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const [notificationType, setNotificationType] = useState('weeklyUpdates');
+  const [notificationContent, setNotificationContent] = useState({
+    title: '',
+    message: ''
+  });
+  const [sendingNotification, setSendingNotification] = useState(false);
   
   // State for pagination
   const [pagination, setPagination] = useState({
@@ -264,14 +274,138 @@ const ManageUsers = () => {
     });
   };
   
+  // Handle user selection
+  const handleUserSelection = (userId) => {
+    setSelectedUsers(prev => {
+      if (prev.includes(userId)) {
+        return prev.filter(id => id !== userId);
+      } else {
+        return [...prev, userId];
+      }
+    });
+  };
+
+  // Handle select all users
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedUsers([]);
+    } else {
+      setSelectedUsers(users.map(user => user.id));
+    }
+    setSelectAll(!selectAll);
+  };
+
+  // Open notification modal
+  const handleOpenNotificationModal = () => {
+    if (selectedUsers.length === 0) {
+      toast.error("Please select at least one user to send a notification");
+      return;
+    }
+    
+    let title = '';
+    let message = '';
+    
+    switch (notificationType) {
+      case 'weeklyUpdates':
+        title = 'Weekly AI Waverider Update';
+        message = 'Here are the latest updates from AI Waverider this week...';
+        break;
+      case 'newAgents':
+        title = 'New AI Agents Available';
+        message = 'We have added new AI agents to our platform...';
+        break;
+      case 'newTools':
+        title = 'New AI Tools Available';
+        message = 'Check out these new AI tools we\'ve added to our platform...';
+        break;
+      default:
+        title = 'AI Waverider Update';
+        message = 'Here are the latest updates from AI Waverider...';
+    }
+    
+    setNotificationContent({
+      title,
+      message
+    });
+    
+    setIsNotificationModalOpen(true);
+  };
+
+  // Handle notification type change
+  const handleNotificationTypeChange = (e) => {
+    setNotificationType(e.target.value);
+  };
+
+  // Send notification to selected users
+  const handleSendNotification = async (e) => {
+    e.preventDefault();
+    
+    if (selectedUsers.length === 0) {
+      toast.error("Please select at least one user to send a notification");
+      return;
+    }
+    
+    if (!notificationContent.title || !notificationContent.message) {
+      toast.error("Please provide both a title and message for the notification");
+      return;
+    }
+    
+    setSendingNotification(true);
+    
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/email/update/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify({
+          title: notificationContent.title,
+          content: notificationContent.message,
+          updateType: notificationType,
+          userIds: selectedUsers
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to send notification: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      toast.success(`Notification sent to ${data.data.sentCount} users`);
+      setIsNotificationModalOpen(false);
+      setSelectedUsers([]);
+      setSelectAll(false);
+      setNotificationContent({
+        title: '',
+        message: ''
+      });
+    } catch (error) {
+      console.error('Error sending notification:', error);
+      toast.error(error.message);
+    } finally {
+      setSendingNotification(false);
+    }
+  };
+
   return (
     <AdminLayout>
       <div className="manage-users-page">
         <header className="page-header">
           <h1>Manage Users</h1>
-          <button className="btn-primary" onClick={handleCreateClick}>
-            <FaPlus className="mr-2" /> Add New User
-          </button>
+          <div className="action-buttons-container">
+            <button 
+              className="btn-notification" 
+              onClick={handleOpenNotificationModal}
+              disabled={selectedUsers.length === 0}
+            >
+              <FaEnvelope className="mr-2" /> Send Update
+            </button>
+            <button className="btn-primary" onClick={handleCreateClick}>
+              <FaPlus className="mr-2" /> Add New User
+            </button>
+          </div>
         </header>
         
         {error && (
@@ -282,14 +416,26 @@ const ManageUsers = () => {
         )}
         
         <div className="filters-container">
-        <div className="search-bar">
+          <div className="search-bar">
             <FaSearch className="search-icon" />
-          <input
-            type="text"
-            placeholder="Search users by name, email, or role..."
-            value={searchQuery}
+            <input
+              type="text"
+              placeholder="Search users by name, email, or role..."
+              value={searchQuery}
               onChange={handleSearchChange}
             />
+          </div>
+          
+          <div className="notification-selector">
+            <select
+              value={notificationType}
+              onChange={handleNotificationTypeChange}
+              className="notification-select"
+            >
+              <option value="weeklyUpdates">Weekly Updates</option>
+              <option value="newAgents">New Agents</option>
+              <option value="newTools">New AI Tools</option>
+            </select>
           </div>
           
           <div className="page-size-selector">
@@ -326,52 +472,66 @@ const ManageUsers = () => {
               <table className="users-table">
                 <thead>
                   <tr>
-                      <th 
-                        className={sortConfig.sortBy === 'username' ? `sorted-${sortConfig.sortDirection}` : ''}
-                        onClick={() => handleSort('username')}
-                      >
-                        Username
-                      </th>
-                      <th 
-                        className={sortConfig.sortBy === 'email' ? `sorted-${sortConfig.sortDirection}` : ''}
-                        onClick={() => handleSort('email')}
-                      >
-                        Email
-                      </th>
-                      <th 
-                        className={sortConfig.sortBy === 'role' ? `sorted-${sortConfig.sortDirection}` : ''}
-                        onClick={() => handleSort('role')}
-                      >
-                        Role
-                      </th>
-                      <th 
-                        className={sortConfig.sortBy === 'status' ? `sorted-${sortConfig.sortDirection}` : ''}
-                        onClick={() => handleSort('status')}
-                      >
-                        Status
-                      </th>
-                      <th 
-                        className={sortConfig.sortBy === 'createdAt' ? `sorted-${sortConfig.sortDirection}` : ''}
-                        onClick={() => handleSort('createdAt')}
-                      >
-                        Created
-                      </th>
+                    <th className="select-column">
+                      <input
+                        type="checkbox"
+                        checked={selectAll}
+                        onChange={handleSelectAll}
+                      />
+                    </th>
+                    <th 
+                      className={sortConfig.sortBy === 'username' ? `sorted-${sortConfig.sortDirection}` : ''}
+                      onClick={() => handleSort('username')}
+                    >
+                      Username
+                    </th>
+                    <th 
+                      className={sortConfig.sortBy === 'email' ? `sorted-${sortConfig.sortDirection}` : ''}
+                      onClick={() => handleSort('email')}
+                    >
+                      Email
+                    </th>
+                    <th 
+                      className={sortConfig.sortBy === 'role' ? `sorted-${sortConfig.sortDirection}` : ''}
+                      onClick={() => handleSort('role')}
+                    >
+                      Role
+                    </th>
+                    <th 
+                      className={sortConfig.sortBy === 'status' ? `sorted-${sortConfig.sortDirection}` : ''}
+                      onClick={() => handleSort('status')}
+                    >
+                      Status
+                    </th>
+                    <th 
+                      className={sortConfig.sortBy === 'createdAt' ? `sorted-${sortConfig.sortDirection}` : ''}
+                      onClick={() => handleSort('createdAt')}
+                    >
+                      Created
+                    </th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                    {users.map(user => (
+                  {users.map(user => (
                     <tr key={user.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedUsers.includes(user.id)}
+                          onChange={() => handleUserSelection(user.id)}
+                        />
+                      </td>
                       <td>
                         <div className="user-info">
                           <div className="user-avatar">
-                              {user.photoURL ? (
-                                <img src={user.photoURL} alt={user.username} />
-                              ) : (
-                            <FaUser />
-                              )}
-                            </div>
-                            <span>{user.username || user.displayName}</span>
+                            {user.photoURL ? (
+                              <img src={user.photoURL} alt={user.username} />
+                            ) : (
+                              <FaUser />
+                            )}
+                          </div>
+                          <span>{user.username || user.displayName}</span>
                         </div>
                       </td>
                       <td>{user.email}</td>
@@ -399,7 +559,7 @@ const ManageUsers = () => {
                             className="btn-delete" 
                             onClick={() => handleDeleteClick(user)}
                             title="Delete user"
-                              disabled={user.role === 'admin' && users.filter(u => u.role === 'admin').length <= 1}
+                            disabled={user.role === 'admin' && users.filter(u => u.role === 'admin').length <= 1}
                           >
                             <FaTrash />
                           </button>
@@ -694,6 +854,71 @@ const ManageUsers = () => {
                   {loading ? <FaSpinner className="spinner" /> : 'Delete'}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Notification Modal */}
+        {isNotificationModalOpen && (
+          <div className="modal-overlay">
+            <div className="modal-content notification-modal">
+              <h2>
+                {notificationType === 'weeklyUpdates' && <><FaBell /> Send Weekly Update</>}
+                {notificationType === 'newAgents' && <><FaRobot /> Send New Agents Notification</>}
+                {notificationType === 'newTools' && <><FaTools /> Send New Tools Notification</>}
+              </h2>
+              <p className="selected-users-count">
+                Sending to {selectedUsers.length} selected user{selectedUsers.length !== 1 ? 's' : ''}
+              </p>
+              
+              <form onSubmit={handleSendNotification}>
+                <div className="form-group">
+                  <label htmlFor="notificationTitle">Email Subject</label>
+                  <input
+                    type="text"
+                    id="notificationTitle"
+                    value={notificationContent.title}
+                    onChange={(e) => setNotificationContent({...notificationContent, title: e.target.value})}
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="notificationMessage">Email Message</label>
+                  <textarea
+                    id="notificationMessage"
+                    value={notificationContent.message}
+                    onChange={(e) => setNotificationContent({...notificationContent, message: e.target.value})}
+                    rows={6}
+                    required
+                  ></textarea>
+                  <p className="form-helper-text">This will be sent to all selected users who have enabled the corresponding notification preference.</p>
+                </div>
+                
+                <div className="modal-actions">
+                  <button 
+                    type="button" 
+                    className="btn-secondary" 
+                    onClick={() => setIsNotificationModalOpen(false)}
+                    disabled={sendingNotification}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="btn-primary" 
+                    disabled={sendingNotification}
+                  >
+                    {sendingNotification ? (
+                      <>
+                        <FaSpinner className="spinner" /> Sending...
+                      </>
+                    ) : (
+                      <>Send Notification</>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

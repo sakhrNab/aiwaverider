@@ -194,8 +194,8 @@ const sendEmailNotification = async (options) => {
       default:
         // For general notifications, use a simple email format
         await emailService.sendTestEmail(email);
-        
-        logger.info(`Email notification sent to: ${email}`);
+    
+    logger.info(`Email notification sent to: ${email}`);
     }
   } catch (error) {
     logger.error(`Error sending email notification: ${error.message}`);
