@@ -48,6 +48,20 @@ router.post('/global', isAdmin, emailController.sendGlobalAnnouncement);
 router.post('/send-custom', isAdmin, emailController.sendCustomEmail);
 
 /**
+ * @route   POST /api/email/send-agent-update
+ * @desc    Send an AI agent update email to specific recipients
+ * @access  Admin
+ */
+router.post('/send-agent-update', isAdmin, emailController.sendUpdateToUsers);
+
+/**
+ * @route   POST /api/email/send-tool-update
+ * @desc    Send an AI tool update email to specific recipients
+ * @access  Admin
+ */
+router.post('/send-tool-update', isAdmin, emailController.sendToolUpdateEmail);
+
+/**
  * @route   GET /api/email/stats
  * @desc    Get email statistics
  * @access  Admin
@@ -67,5 +81,61 @@ router.put('/preferences/:userId', emailController.updateEmailPreferences);
  * @access  Admin
  */
 router.post('/update/users', isAdmin, emailController.sendUpdateToUsers);
+
+/**
+ * @route   GET /api/email/templates/:templateType
+ * @desc    Get an email template
+ * @access  Admin
+ */
+router.get('/templates/:templateType', isAdmin, emailController.getEmailTemplate);
+
+/**
+ * @route   POST /api/email/templates/:templateType
+ * @desc    Update an email template
+ * @access  Admin
+ */
+router.post('/templates/:templateType', isAdmin, emailController.updateEmailTemplate);
+
+/**
+ * @route   POST /api/email/test-welcome
+ * @desc    Send a test welcome email
+ * @access  Admin
+ */
+router.post('/test-welcome', isAdmin, emailController.sendTestWelcomeEmail);
+
+/**
+ * @route   POST /api/email/test-update
+ * @desc    Send a test update email
+ * @access  Admin
+ */
+router.post('/test-update', isAdmin, emailController.sendTestUpdateEmail);
+
+/**
+ * @route   POST /api/email/test-global
+ * @desc    Send a test global announcement email
+ * @access  Admin
+ */
+router.post('/test-global', isAdmin, emailController.sendTestGlobalEmail);
+
+/**
+ * @route   POST /api/email/test-agent
+ * @desc    Send a test agent update email
+ * @access  Admin
+ */
+router.post('/test-agent', isAdmin, emailController.sendTestAgentEmail);
+
+/**
+ * @route   POST /api/email/test-tool
+ * @desc    Send a test tool update email
+ * @access  Admin
+ */
+router.post('/test-tool', isAdmin, emailController.sendTestToolEmail);
+
+/**
+ * @route   POST /api/email/test-custom
+ * @desc    Send a test custom email
+ * @access  Admin
+ */
+router.post('/test-custom', isAdmin, emailController.sendTestCustomEmail);
 
 module.exports = router; 

@@ -498,7 +498,7 @@ exports.updateEmailPreferences = async (req, res) => {
  */
 exports.sendUpdateToUsers = async (req, res) => {
   try {
-    const { title, content, updateType, userIds } = req.body;
+    const { title, content, updateType, userIds, emailAddresses } = req.body;
     
     // Validate inputs
     if (!title || !content || !updateType) {
@@ -508,12 +508,17 @@ exports.sendUpdateToUsers = async (req, res) => {
       });
     }
     
-    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+    // Either userIds OR emailAddresses must be provided
+    if ((!userIds || !Array.isArray(userIds) || userIds.length === 0) && 
+        (!emailAddresses || !Array.isArray(emailAddresses) || emailAddresses.length === 0)) {
       return res.status(400).json({
         success: false,
-        message: 'At least one user ID must be provided'
+        message: 'Either userIds or emailAddresses must be provided'
       });
     }
+    
+    // Log the incoming request data
+    logger.info(`Sending ${updateType} update to ${userIds?.length || 0} user IDs and ${emailAddresses?.length || 0} email addresses`);
     
     // Create campaign record
     const campaignId = await emailNotificationModel.createCampaign({
@@ -521,24 +526,81 @@ exports.sendUpdateToUsers = async (req, res) => {
       content,
       type: updateType,
       createdBy: req.user.uid,
-      targetUserIds: userIds
+      targetUserIds: userIds || [],
+      targetEmails: emailAddresses || []
     });
     
     // Mark as sending
     await emailNotificationModel.markCampaignAsSending(campaignId);
     
-    // Get user data for the specified userIds
-    const usersSnapshot = await Promise.all(
-      userIds.map(userId => db.collection('users').doc(userId).get())
-    );
+    // Get user data for the specified userIds or emailAddresses
+    let users = [];
     
-    // Filter out non-existent users and prepare user data
-    const users = usersSnapshot
-      .filter(doc => doc.exists)
-      .map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+    // If we have userIds, fetch user data by IDs
+    if (userIds && userIds.length > 0) {
+      const usersSnapshot = await Promise.all(
+        userIds.map(userId => db.collection('users').doc(userId).get())
+      );
+      
+      // Filter out non-existent users and prepare user data
+      users = usersSnapshot
+        .filter(doc => doc.exists)
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+      logger.info(`Found ${users.length} of ${userIds.length} users by ID`);
+    }
+    
+    // If we have emailAddresses, fetch additional user data by email
+    if (emailAddresses && emailAddresses.length > 0) {
+      try {
+        // Process emails in batches (Firestore has 'in' query limit)
+        const batchSize = 10;
+        let emailUsers = [];
+        
+        for (let i = 0; i < emailAddresses.length; i += batchSize) {
+          const batch = emailAddresses.slice(i, i + batchSize);
+          const snapshot = await db.collection('users')
+            .where('email', 'in', batch)
+            .get();
+            
+          emailUsers = [...emailUsers, ...snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }))];
+        }
+        
+        logger.info(`Found ${emailUsers.length} of ${emailAddresses.length} users by email`);
+        
+        // Add users found by email, avoiding duplicates
+        const existingIds = new Set(users.map(u => u.id));
+        emailUsers.forEach(user => {
+          if (!existingIds.has(user.id)) {
+            users.push(user);
+            existingIds.add(user.id);
+          }
+        });
+        
+        // Add placeholder users for emails not found in the database
+        const foundEmails = new Set(users.map(u => u.email));
+        emailAddresses.forEach(email => {
+          if (!foundEmails.has(email)) {
+            users.push({
+              id: null,
+              email,
+              firstName: '',
+              lastName: ''
+            });
+            foundEmails.add(email);
+          }
+        });
+      } catch (error) {
+        logger.error(`Error fetching users by email: ${error.message}`);
+        // Continue with the users we already have
+      }
+    }
     
     if (users.length === 0) {
       await emailNotificationModel.markCampaignAsCompleted(campaignId, 0, 0);
@@ -560,6 +622,46 @@ exports.sendUpdateToUsers = async (req, res) => {
       updateType === 'weeklyUpdates' ? 'weeklyUpdates' :
       updateType === 'new_agents' ? 'newAgents' :
       updateType === 'new_tools' ? 'newTools' : null;
+    
+    // If this is a tool update, fetch the latest tools to include in the email
+    let additionalContent = '';
+    if (updateType === 'new_tools') {
+      try {
+        // Fetch the 5 most recent tools from the database
+        const toolsSnapshot = await db.collection('tools')
+          .orderBy('createdAt', 'desc')
+          .limit(5)
+          .get();
+        
+        if (!toolsSnapshot.empty) {
+          // Create HTML for the tools section
+          additionalContent = `
+            <div style="margin-top: 20px; margin-bottom: 20px;">
+              <h3 style="color: #4a86e8;">Our Latest AI Tools</h3>
+              <ul style="padding-left: 20px;">
+          `;
+          
+          toolsSnapshot.forEach(doc => {
+            const tool = doc.data();
+            additionalContent += `
+              <li style="margin-bottom: 15px;">
+                <div style="font-weight: bold; color: #333;">${tool.name || 'New Tool'}</div>
+                <div style="color: #666;">${tool.description || 'No description available'}</div>
+              </li>
+            `;
+          });
+          
+          additionalContent += `
+              </ul>
+              <p><a href="${config.websiteUrl}/tools" style="color: #4a86e8; text-decoration: none;">Explore all our AI tools →</a></p>
+            </div>
+          `;
+        }
+      } catch (error) {
+        logger.error(`Error fetching latest tools: ${error.message}`);
+        // Continue without the latest tools if there's an error
+      }
+    }
     
     // Send emails to each user who has the preference enabled
     for (const user of users) {
@@ -591,6 +693,9 @@ exports.sendUpdateToUsers = async (req, res) => {
                   </div>`
           });
         } else {
+          // Prepare final content with additional content if available
+          const finalContent = additionalContent ? `${content}${additionalContent}` : content;
+          
           // Use the regular template for non-custom emails
           result = await emailService.sendUpdateEmail({
             userId: user.id,
@@ -598,7 +703,7 @@ exports.sendUpdateToUsers = async (req, res) => {
             firstName: user.firstName || '',
             lastName: user.lastName || '',
             title,
-            content,
+            content: finalContent,
             updateType
           });
         }
@@ -672,7 +777,7 @@ exports.sendUpdateToUsers = async (req, res) => {
  */
 exports.sendCustomEmail = async (req, res) => {
   try {
-    const { subject, content, recipientType, recipients } = req.body;
+    const { subject, headerTitle, content, recipientType, recipients } = req.body;
     
     // Validate inputs
     if (!subject || !content) {
@@ -685,6 +790,7 @@ exports.sendCustomEmail = async (req, res) => {
     // Create campaign record
     const campaignId = await emailNotificationModel.createCampaign({
       title: subject,
+      headerTitle: headerTitle || subject,
       content,
       type: 'custom',
       recipientType,
@@ -703,7 +809,7 @@ exports.sendCustomEmail = async (req, res) => {
       const emails = recipients.split(',').map(email => email.trim()).filter(email => email);
       
       if (emails.length === 0) {
-        await emailNotificationModel.markCampaignAsCompleted(campaignId, 0, 0);
+        await emailNotificationModel.markCampaignAsCompleted(campaignId, 0, 0, []);
         
         return res.status(200).json({
           success: true,
@@ -754,7 +860,7 @@ exports.sendCustomEmail = async (req, res) => {
     }
     
     if (users.length === 0) {
-      await emailNotificationModel.markCampaignAsCompleted(campaignId, 0, 0);
+      await emailNotificationModel.markCampaignAsCompleted(campaignId, 0, 0, []);
       
       return res.status(200).json({
         success: true,
@@ -771,35 +877,42 @@ exports.sendCustomEmail = async (req, res) => {
     // Send emails to each recipient
     for (const user of users) {
       try {
-        // Use the dedicated custom email function that uses a template
+        // Send email to this user
         const result = await emailService.sendCustomEmail({
           email: user.email,
           firstName: user.firstName || '',
           lastName: user.lastName || '',
-          subject: subject,
-          content: content
+          subject,
+          headerTitle: headerTitle || subject,
+          content,
+          emailType: req.body.emailType || 'custom',
+          updateType: req.body.updateType
         });
         
-        // Log success
+        // Log this send
         await emailNotificationModel.logEmailSend({
-          campaignId,
           type: 'custom',
-          userId: user.id,
+          campaignId,
           email: user.email,
+          userId: user.id,
           success: true,
           messageId: result.messageId
         });
         
         sentCount++;
       } catch (error) {
-        // Log failure
+        logger.error(`Failed to send custom email to ${user.email}: ${error.message}`);
+        
+        // Log the failure
         await emailNotificationModel.logEmailSend({
-          campaignId,
           type: 'custom',
-          userId: user.id,
+          campaignId,
           email: user.email,
+          userId: user.id,
           success: false,
           error: error.message
+        }).catch(e => {
+          logger.error(`Failed to log email failure: ${e.message}`);
         });
         
         failedCount++;
@@ -808,8 +921,6 @@ exports.sendCustomEmail = async (req, res) => {
           email: user.email,
           error: error.message
         });
-        
-        logger.error(`Failed to send custom email to ${user.email}: ${error.message}`);
       }
     }
     
@@ -837,6 +948,626 @@ exports.sendCustomEmail = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to complete custom email campaign',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get an email template
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.getEmailTemplate = async (req, res) => {
+  try {
+    const { templateType } = req.params;
+    
+    // Validate template type
+    const validTemplateTypes = ['welcome', 'update', 'agent', 'tool', 'global', 'custom'];
+    if (!templateType || !validTemplateTypes.includes(templateType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid template type'
+      });
+    }
+    
+    // Get template from database or file system
+    const template = await emailNotificationModel.getEmailTemplate(templateType);
+    
+    if (!template) {
+      return res.status(404).json({
+        success: false,
+        message: `Template ${templateType} not found`
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: template
+    });
+  } catch (error) {
+    logger.error(`Error getting email template: ${error.message}`);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get email template',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Update an email template
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.updateEmailTemplate = async (req, res) => {
+  try {
+    const { templateType } = req.params;
+    const templateData = req.body;
+    
+    // Validate template type
+    const validTemplateTypes = ['welcome', 'update', 'agent', 'tool', 'global', 'custom'];
+    if (!templateType || !validTemplateTypes.includes(templateType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid template type'
+      });
+    }
+    
+    // Validate template data
+    if (!templateData || !templateData.subject || !templateData.content) {
+      return res.status(400).json({
+        success: false,
+        message: 'Template must include subject and content'
+      });
+    }
+    
+    // Update template in database or file system
+    const result = await emailNotificationModel.updateEmailTemplate(templateType, templateData);
+    
+    res.status(200).json({
+      success: true,
+      message: `Template ${templateType} updated successfully`,
+      data: result
+    });
+  } catch (error) {
+    logger.error(`Error updating email template: ${error.message}`);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update email template',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Send a test welcome email
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.sendTestWelcomeEmail = async (req, res) => {
+  try {
+    const { email, firstName, lastName } = req.body;
+    
+    // Validate email
+    if (!email || !validateEmail(email)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Valid email address is required' 
+      });
+    }
+    
+    // Send test welcome email
+    const result = await emailService.sendWelcomeEmail({
+      email,
+      firstName: firstName || 'Test',
+      lastName: lastName || 'User',
+      userId: req.user?.uid || 'test-user'
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Test welcome email sent successfully',
+      data: { messageId: result.messageId }
+    });
+  } catch (error) {
+    logger.error(`Error sending test welcome email: ${error.message}`);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send test welcome email',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Send a test update email
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.sendTestUpdateEmail = async (req, res) => {
+  try {
+    const { email, subject, content } = req.body;
+    
+    // Validate email
+    if (!email || !validateEmail(email)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Valid email address is required' 
+      });
+    }
+    
+    // Send test update email
+    const result = await emailService.sendUpdateEmail({
+      email,
+      firstName: 'Test',
+      lastName: 'User',
+      title: subject || 'Weekly Update Test',
+      content: content || '<p>This is a test of the weekly update email.</p>',
+      updateType: 'weekly'
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Test update email sent successfully',
+      data: { messageId: result.messageId }
+    });
+  } catch (error) {
+    logger.error(`Error sending test update email: ${error.message}`);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send test update email',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Send a test global announcement email
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.sendTestGlobalEmail = async (req, res) => {
+  try {
+    const { email, subject, content } = req.body;
+    
+    // Validate email
+    if (!email || !validateEmail(email)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Valid email address is required' 
+      });
+    }
+    
+    // Send test global email
+    const result = await emailService.sendGlobalEmail({
+      email,
+      firstName: 'Test',
+      lastName: 'User',
+      title: subject || 'Global Announcement Test',
+      content: content || '<p>This is a test of the global announcement email.</p>'
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Test global email sent successfully',
+      data: { messageId: result.messageId }
+    });
+  } catch (error) {
+    logger.error(`Error sending test global email: ${error.message}`);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send test global email',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Send a test agent update email
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.sendTestAgentEmail = async (req, res) => {
+  try {
+    const { email, subject, content } = req.body;
+    
+    // Validate email
+    if (!email || !validateEmail(email)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Valid email address is required' 
+      });
+    }
+    
+    // Send test agent email
+    const result = await emailService.sendUpdateEmail({
+      email,
+      firstName: 'Test',
+      lastName: 'User',
+      title: subject || 'New AI Agents Test',
+      content: content || '<p>This is a test of the AI agents update email.</p>',
+      updateType: 'new_agents'
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Test agent email sent successfully',
+      data: { messageId: result.messageId }
+    });
+  } catch (error) {
+    logger.error(`Error sending test agent email: ${error.message}`);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send test agent email',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Send a test tool update email
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.sendTestToolEmail = async (req, res) => {
+  try {
+    const { email, subject, content } = req.body;
+    
+    // Validate email
+    if (!email || !validateEmail(email)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Valid email address is required' 
+      });
+    }
+    
+    // Send test tool email
+    const result = await emailService.sendUpdateEmail({
+      email,
+      firstName: 'Test',
+      lastName: 'User',
+      title: subject || 'New AI Tools Test',
+      content: content || '<p>This is a test of the AI tools update email.</p>',
+      updateType: 'new_tools'
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Test tool email sent successfully',
+      data: { messageId: result.messageId }
+    });
+  } catch (error) {
+    logger.error(`Error sending test tool email: ${error.message}`);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send test tool email',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Send a test custom email
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.sendTestCustomEmail = async (req, res) => {
+  try {
+    const { email, subject, headerTitle, content } = req.body;
+    
+    // Validate email
+    if (!email || !validateEmail(email)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Valid email address is required' 
+      });
+    }
+    
+    // Send test custom email
+    const result = await emailService.sendCustomEmail({
+      email,
+      firstName: 'Test',
+      lastName: 'User',
+      subject: subject || 'Custom Email Test',
+      headerTitle: headerTitle || subject || 'Custom Email Test',
+      content: content || '<p>This is a test of the custom email.</p>'
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Test custom email sent successfully',
+      data: { messageId: result.messageId }
+    });
+  } catch (error) {
+    logger.error(`Error sending test custom email: ${error.message}`);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send test custom email',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get latest tools for email content
+ * @param {string} content - Existing content
+ * @returns {Promise<string>} - Enhanced content with latest tools
+ */
+async function getLatestToolsContent(content) {
+  let enhancedContent = content;
+  
+  try {
+    // Fetch the 5 most recent tools from the database
+    const toolsSnapshot = await db.collection('tools')
+      .orderBy('createdAt', 'desc')
+      .limit(5)
+      .get();
+    
+    if (!toolsSnapshot.empty) {
+      // Create HTML for the tools section
+      const toolsContent = `
+        <div style="margin-top: 20px; margin-bottom: 20px;">
+          <h3 style="color: #4a86e8;">Our Latest AI Tools</h3>
+          <ul style="padding-left: 20px;">
+      `;
+      
+      let toolsList = '';
+      toolsSnapshot.forEach(doc => {
+        const tool = doc.data();
+        toolsList += `
+          <li style="margin-bottom: 15px;">
+            <div style="font-weight: bold; color: #333;">${tool.name || 'New Tool'}</div>
+            <div style="color: #666;">${tool.description || 'No description available'}</div>
+          </li>
+        `;
+      });
+      
+      const toolsFooter = `
+          </ul>
+          <p><a href="${config.websiteUrl}/tools" style="color: #4a86e8; text-decoration: none;">Explore all our AI tools →</a></p>
+        </div>
+      `;
+      
+      enhancedContent = `${content}${toolsContent}${toolsList}${toolsFooter}`;
+    }
+  } catch (error) {
+    logger.error(`Error fetching latest tools for email: ${error.message}`);
+    // Return original content if there's an error
+  }
+  
+  return enhancedContent;
+}
+
+/**
+ * Send a tool update email to specific recipients
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.sendToolUpdateEmail = async (req, res) => {
+  try {
+    // Log the request body for debugging
+    console.log('Tool update email request:', JSON.stringify(req.body, null, 2));
+    
+    // Use the same structure as sendCustomEmail, but add latest tools
+    const { title, content, recipientType, recipients } = req.body;
+    
+    // Validate inputs
+    if (!title || !content || !recipientType) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Title, content, and recipient type are required' 
+      });
+    }
+    
+    if (recipientType === 'specific' && (!recipients || recipients.trim() === '')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Recipients are required when using specific recipient type'
+      });
+    }
+    
+    // Set update type for tools
+    const updateType = 'new_tools';
+    
+    // Create campaign record
+    const campaignId = await emailNotificationModel.createCampaign({
+      title,
+      content,
+      type: updateType,
+      recipientType,
+      createdBy: req.user.uid,
+      specificEmails: recipientType === 'specific' ? recipients.split(',').map(e => e.trim()) : null
+    });
+    
+    // Mark as sending
+    await emailNotificationModel.markCampaignAsSending(campaignId);
+    
+    // Get enhanced content with latest tools
+    const enhancedContent = await getLatestToolsContent(content);
+    
+    // The rest of the function follows the same pattern as sendCustomEmail
+    // Get user data based on recipient type
+    let users = [];
+    
+    if (recipientType === 'specific' && recipients) {
+      // For specific emails
+      const emails = recipients.split(',').map(email => email.trim()).filter(email => email);
+      
+      console.log(`Processing ${emails.length} specific recipient emails`);
+      
+      if (emails.length === 0) {
+        await emailNotificationModel.markCampaignAsCompleted(campaignId, 0, 0);
+        
+        return res.status(200).json({
+          success: true,
+          message: 'No valid recipients specified',
+          data: { campaignId, recipientCount: 0 }
+        });
+      }
+      
+      // Get user data for these emails if they exist in our system
+      try {
+        // Firestore has a limit for 'in' queries, so we may need to process in batches
+        const batchSize = 10; // Firestore limit
+        let processedUsers = [];
+        
+        // Process emails in batches to avoid Firestore limits
+        for (let i = 0; i < emails.length; i += batchSize) {
+          const batch = emails.slice(i, i + batchSize);
+          const usersSnapshot = await db.collection('users')
+            .where('email', 'in', batch)
+            .get();
+          
+          processedUsers = [...processedUsers, ...usersSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }))];
+        }
+        
+        users = processedUsers;
+        
+        // Add any emails not found as users
+        const foundEmails = users.map(u => u.email);
+        const notFoundEmails = emails.filter(email => !foundEmails.includes(email));
+        
+        console.log(`Found ${users.length} registered users, adding ${notFoundEmails.length} non-registered emails`);
+        
+        // Add placeholder users for these emails
+        notFoundEmails.forEach(email => {
+          users.push({
+            id: null,
+            email,
+            firstName: '',
+            lastName: ''
+          });
+        });
+      } catch (error) {
+        logger.error(`Error fetching users for tool update: ${error.message}`);
+        
+        // Continue with just the emails as a fallback
+        users = emails.map(email => ({
+          id: null,
+          email,
+          firstName: '',
+          lastName: ''
+        }));
+      }
+    } else {
+      // For user groups (all, premium, free)
+      let query = db.collection('users');
+      
+      if (recipientType === 'premium') {
+        query = query.where('accountType', '==', 'premium');
+      } else if (recipientType === 'free') {
+        query = query.where('accountType', '==', 'free');
+      }
+      
+      const usersSnapshot = await query.get();
+      
+      users = usersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log(`Found ${users.length} users for ${recipientType} recipient type`);
+    }
+    
+    if (users.length === 0) {
+      await emailNotificationModel.markCampaignAsCompleted(campaignId, 0, 0);
+      
+      return res.status(200).json({
+        success: true,
+        message: 'No recipients found',
+        data: { campaignId, recipientCount: 0 }
+      });
+    }
+    
+    // Prepare to track success/failure
+    let sentCount = 0;
+    let failedCount = 0;
+    const errors = [];
+    
+    // Send emails to each recipient
+    for (const user of users) {
+      try {
+        // Use the appropriate function for tool updates
+        const result = await emailService.sendUpdateEmail({
+          userId: user.id,
+          email: user.email,
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          title,
+          content: enhancedContent,
+          updateType
+        });
+        
+        // Log success
+        await emailNotificationModel.logEmailSend({
+          campaignId,
+          type: updateType,
+          userId: user.id,
+          email: user.email,
+          success: true,
+          messageId: result.messageId
+        });
+        
+        sentCount++;
+        console.log(`Tool update email sent to ${user.email} successfully`);
+      } catch (error) {
+        // Log failure
+        await emailNotificationModel.logEmailSend({
+          campaignId,
+          type: updateType,
+          userId: user.id,
+          email: user.email,
+          success: false,
+          error: error.message
+        });
+        
+        failedCount++;
+        errors.push({
+          userId: user.id,
+          email: user.email,
+          error: error.message
+        });
+        
+        logger.error(`Failed to send tool update email to ${user.email}: ${error.message}`);
+      }
+    }
+    
+    // Mark campaign as completed
+    await emailNotificationModel.markCampaignAsCompleted(
+      campaignId, 
+      sentCount, 
+      failedCount,
+      errors
+    );
+    
+    res.status(200).json({
+      success: true,
+      message: 'Tool update email campaign completed',
+      data: {
+        campaignId,
+        recipientCount: users.length,
+        sentCount,
+        failedCount
+      }
+    });
+  } catch (error) {
+    logger.error(`Error sending tool update emails: ${error.message}`);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to complete tool update email campaign',
       error: error.message
     });
   }

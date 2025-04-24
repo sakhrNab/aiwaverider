@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{title}} - AI Waverider</title>
+  <title>{{subject}} - AI Waverider</title>
   <style>
     /* Reset styles */
     body, html {
@@ -26,14 +26,24 @@
     /* Header */
     .header {
       text-align: center;
-      padding: 20px 0;
-      background-color: #4a86e8;
+      padding: 30px 0;
+      background-color: #3498db;
       color: white;
+      margin-bottom: 20px;
     }
     
     /* Content */
     .content {
       padding: 20px;
+    }
+    
+    /* Message box */
+    .message-box {
+      margin: 20px 0;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-left: 4px solid #3498db;
+      border-radius: 4px;
     }
     
     /* Footer */
@@ -43,6 +53,7 @@
       font-size: 12px;
       color: #666;
       background-color: #f4f4f4;
+      margin-top: 20px;
     }
     
     /* Call to action */
@@ -57,11 +68,36 @@
       display: inline-block;
       padding: 10px 20px;
       margin: 20px 0;
-      background-color: #4a86e8;
+      background-color: #3498db;
       color: #ffffff;
       text-decoration: none;
       border-radius: 4px;
       text-align: center;
+    }
+    
+    /* Banner image */
+    .banner-image {
+      width: 100%;
+      max-height: 200px;
+      object-fit: cover;
+      margin-bottom: 20px;
+    }
+    
+    /* Website link */
+    .website-link {
+      display: block;
+      text-align: center;
+      margin: 15px 0;
+    }
+    
+    .website-link a {
+      color: #3498db;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    
+    .website-link a:hover {
+      text-decoration: underline;
     }
     
     /* Responsive */
@@ -72,24 +108,35 @@
       .content {
         padding: 10px;
       }
+      .header {
+        padding: 20px 0;
+      }
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>{{title}}</h1>
+      <h1>{{headerTitle}}</h1>
     </div>
     
     <div class="content">
       <p>Dear {{name}},</p>
       
-      <div class="message-content">
+      {{#if imageUrl}}
+      <img src="{{imageUrl}}" alt="Email Banner" class="banner-image">
+      {{/if}}
+      
+      <div class="message-box">
         {{{content}}}
       </div>
       
+      <div class="website-link">
+        <a href="{{websiteUrl}}">Visit our website: {{websiteUrl}}</a>
+      </div>
+      
       <div class="cta">
-        <a href="{{websiteUrl}}" class="button">Visit AI Waverider</a>
+        <a href="{{actionUrl}}" class="button" style="color: #ffffff;">{{actionText}}</a>
       </div>
       
       <p>If you have any questions, please contact us at <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.</p>
@@ -100,8 +147,8 @@
     <div class="footer">
       <p>&copy; {{currentYear}} AI Waverider. All rights reserved.</p>
       <p>
-        You're receiving this email because you're a member of AI Waverider.<br>
-        To unsubscribe, <a href="{{websiteUrl}}/unsubscribe">click here</a>.
+        You received this email because you're a valued member of the AI Waverider community.<br>
+        You can <a href="{{websiteUrl}}/profile">manage your notification preferences</a> at any time.
       </p>
     </div>
   </div>

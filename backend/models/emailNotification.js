@@ -20,12 +20,13 @@ const usersCollection = db.collection('users');
  */
 exports.createCampaign = async (campaignData) => {
   try {
-    const campaignRef = await emailCampaignsCollection.add({
+    const campaignRef = db.collection('emailCampaigns').doc();
+    
+    await campaignRef.set({
       ...campaignData,
-      startedAt: admin.firestore.FieldValue.serverTimestamp(),
-      status: 'draft',
-      sentCount: 0,
-      failedCount: 0
+      status: 'created',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     
     return campaignRef.id;
@@ -57,15 +58,16 @@ exports.updateCampaign = async (campaignId, updateData) => {
 };
 
 /**
- * Mark an email campaign as sending
+ * Mark campaign as sending
  * @param {string} campaignId - Campaign ID
  * @returns {Promise<void>}
  */
 exports.markCampaignAsSending = async (campaignId) => {
   try {
-    await emailCampaignsCollection.doc(campaignId).update({
+    await db.collection('emailCampaigns').doc(campaignId).update({
       status: 'sending',
-      startedAt: admin.firestore.FieldValue.serverTimestamp()
+      startedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
   } catch (error) {
     logger.error(`Error marking campaign as sending: ${error.message}`);
@@ -74,21 +76,22 @@ exports.markCampaignAsSending = async (campaignId) => {
 };
 
 /**
- * Mark an email campaign as completed
+ * Mark campaign as completed
  * @param {string} campaignId - Campaign ID
  * @param {number} sentCount - Number of emails sent
  * @param {number} failedCount - Number of emails failed
- * @param {Array} errors - Array of errors
+ * @param {Array} errors - Errors encountered
  * @returns {Promise<void>}
  */
 exports.markCampaignAsCompleted = async (campaignId, sentCount, failedCount, errors = []) => {
   try {
-    await emailCampaignsCollection.doc(campaignId).update({
+    await db.collection('emailCampaigns').doc(campaignId).update({
       status: 'completed',
       sentCount,
       failedCount,
-      errors: errors.slice(0, 20), // Store only first 20 errors
-      completedAt: admin.firestore.FieldValue.serverTimestamp()
+      errors: errors || [],
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
   } catch (error) {
     logger.error(`Error marking campaign as completed: ${error.message}`);
@@ -97,31 +100,17 @@ exports.markCampaignAsCompleted = async (campaignId, sentCount, failedCount, err
 };
 
 /**
- * Log an email send for tracking
- * @param {Object} logData - Email log data
- * @returns {Promise<string>} - Log ID
+ * Log an email send event
+ * @param {Object} sendData - Send data
+ * @returns {Promise<string>} - Log entry ID
  */
-exports.logEmailSend = async (logData) => {
+exports.logEmailSend = async (sendData) => {
   try {
-    const {
-      campaignId,
-      type,
-      userId,
-      email,
-      success,
-      messageId,
-      error
-    } = logData;
+    const logRef = db.collection('emailLogs').doc();
     
-    const logRef = await emailLogsCollection.add({
-      campaignId,
-      type,
-      userId,
-      email,
-      success,
-      messageId,
-      error,
-      sentAt: admin.firestore.FieldValue.serverTimestamp()
+    await logRef.set({
+      ...sendData,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
     
     return logRef.id;
@@ -132,96 +121,47 @@ exports.logEmailSend = async (logData) => {
 };
 
 /**
- * Get users based on email preferences for targeting
- * @param {Object} options - Query options
- * @param {Array} options.emailTypes - Email preference types to filter by
- * @param {Array} options.userIds - Specific user IDs to include (optional)
- * @param {Boolean} options.activeOnly - Only include active users (default true)
- * @returns {Promise<Array>} - Array of user documents
+ * Get users by email preferences
+ * @param {Object} options - Filter options
+ * @returns {Promise<Array>} - Filtered users
  */
-exports.getUsersByPreferences = async (options) => {
+exports.getUsersByPreferences = async (options = {}) => {
   try {
-    const { emailTypes = [], userIds = [], activeOnly = true } = options;
+    const { emailTypes = [] } = options;
     
-    // If specific users are provided, fetch those users
-    if (userIds.length > 0) {
-      const userDocs = await Promise.all(
-        userIds.map(id => usersCollection.doc(id).get())
-      );
-      
-      return userDocs
-        .filter(doc => doc.exists)
-        .map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-    }
+    // Query users collection
+    let query = db.collection('users').where('status', '==', 'active');
     
-    // Otherwise, query by preferences
-    let query = usersCollection;
-    
-    // Only include active users
-    if (activeOnly) {
-      query = query.where('status', '==', 'active');
-    }
-    
-    // If email types are specified, add preference conditions
-    if (emailTypes.length > 0) {
-      // Get users with the first preference type
-      query = query.where(`emailPreferences.${emailTypes[0]}`, '==', true);
-      
-      // Execute query
+    // No preferences filter if no types specified
+    if (emailTypes.length === 0) {
       const usersSnapshot = await query.get();
       
-      // If multiple preferences, filter in memory
-      if (emailTypes.length > 1) {
-        const results = [];
+      return usersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    }
+    
+    // Complex query for email preferences
+    const usersSnapshot = await query.get();
+    
+    // Filter in memory due to Firestore limitations on nested field queries
+    const filteredUsers = usersSnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .filter(user => {
+        // Default to true if no preferences specified
+        if (!user.emailPreferences) return true;
         
-        usersSnapshot.forEach(doc => {
-          const userData = doc.data();
-          
-          // Check if user has all required preferences
-          const hasAllPreferences = emailTypes.slice(1).every(type => 
-            userData.emailPreferences && 
-            userData.emailPreferences[type] === true
-          );
-          
-          if (hasAllPreferences) {
-            results.push({
-              id: doc.id,
-              ...userData
-            });
-          }
-        });
-        
-        return results;
-      } else {
-        // If only one preference type, return all results
-        const results = [];
-        
-        usersSnapshot.forEach(doc => {
-          results.push({
-            id: doc.id,
-            ...doc.data()
-          });
-        });
-        
-        return results;
-      }
-    } else {
-      // If no specific preferences, just return all users
-      const usersSnapshot = await query.get();
-      const results = [];
-      
-      usersSnapshot.forEach(doc => {
-        results.push({
-          id: doc.id,
-          ...doc.data()
-        });
+        // Match any of the specified preference types
+        return emailTypes.some(type => 
+          user.emailPreferences[type] !== false
+        );
       });
-      
-      return results;
-    }
+    
+    return filteredUsers;
   } catch (error) {
     logger.error(`Error getting users by preferences: ${error.message}`);
     throw error;
@@ -229,62 +169,35 @@ exports.getUsersByPreferences = async (options) => {
 };
 
 /**
- * Get email subscription statistics
- * @returns {Promise<Object>} - Email preference statistics
+ * Get email preference statistics
+ * @returns {Promise<Object>} - Email preference stats
  */
 exports.getEmailPreferenceStats = async () => {
   try {
+    const usersSnapshot = await db.collection('users').get();
+    
     const stats = {
-      totalActiveUsers: 0,
-      weeklyUpdates: 0,
-      announcements: 0,
-      newAgents: 0,
-      newTools: 0,
-      marketingEmails: 0
+      totalUsers: usersSnapshot.size,
+      preferences: {
+        weeklyUpdates: 0,
+        announcements: 0,
+        newAgents: 0,
+        newTools: 0,
+        marketingEmails: 0
+      }
     };
     
-    // Get total active users
-    const activeUsersSnapshot = await usersCollection
-      .where('status', '==', 'active')
-      .count()
-      .get();
-    
-    stats.totalActiveUsers = activeUsersSnapshot.data().count;
-    
-    // Get counts for each preference type
-    const preferenceCounts = await Promise.all([
-      usersCollection
-        .where('status', '==', 'active')
-        .where('emailPreferences.weeklyUpdates', '==', true)
-        .count()
-        .get(),
-      usersCollection
-        .where('status', '==', 'active')
-        .where('emailPreferences.announcements', '==', true)
-        .count()
-        .get(),
-      usersCollection
-        .where('status', '==', 'active')
-        .where('emailPreferences.newAgents', '==', true)
-        .count()
-        .get(),
-      usersCollection
-        .where('status', '==', 'active')
-        .where('emailPreferences.newTools', '==', true)
-        .count()
-        .get(),
-      usersCollection
-        .where('status', '==', 'active')
-        .where('emailPreferences.marketingEmails', '==', true)
-        .count()
-        .get()
-    ]);
-    
-    stats.weeklyUpdates = preferenceCounts[0].data().count;
-    stats.announcements = preferenceCounts[1].data().count;
-    stats.newAgents = preferenceCounts[2].data().count;
-    stats.newTools = preferenceCounts[3].data().count;
-    stats.marketingEmails = preferenceCounts[4].data().count;
+    usersSnapshot.forEach(doc => {
+      const user = doc.data();
+      
+      if (user.emailPreferences) {
+        Object.keys(stats.preferences).forEach(pref => {
+          if (user.emailPreferences[pref] === true) {
+            stats.preferences[pref]++;
+          }
+        });
+      }
+    });
     
     return stats;
   } catch (error) {
@@ -296,17 +209,116 @@ exports.getEmailPreferenceStats = async () => {
 /**
  * Update a user's email preferences
  * @param {string} userId - User ID
- * @param {Object} preferences - Email preferences object
+ * @param {Object} preferences - Email preferences
  * @returns {Promise<void>}
  */
 exports.updateUserEmailPreferences = async (userId, preferences) => {
   try {
-    await usersCollection.doc(userId).update({
+    await db.collection('users').doc(userId).update({
       'emailPreferences': preferences,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
   } catch (error) {
-    logger.error(`Error updating user email preferences: ${error.message}`);
+    logger.error(`Error updating email preferences: ${error.message}`);
     throw error;
   }
-}; 
+};
+
+/**
+ * Get an email template
+ * @param {string} templateType - Template type
+ * @returns {Promise<Object>} - Template data
+ */
+exports.getEmailTemplate = async (templateType) => {
+  try {
+    const templateRef = db.collection('emailTemplates').doc(templateType);
+    const templateDoc = await templateRef.get();
+    
+    if (!templateDoc.exists) {
+      // Return default template if not found
+      return {
+        subject: getDefaultSubject(templateType),
+        content: getDefaultContent(templateType)
+      };
+    }
+    
+    return templateDoc.data();
+  } catch (error) {
+    logger.error(`Error getting email template: ${error.message}`);
+    throw error;
+  }
+};
+
+/**
+ * Update an email template
+ * @param {string} templateType - Template type
+ * @param {Object} templateData - Template data
+ * @returns {Promise<Object>} - Updated template
+ */
+exports.updateEmailTemplate = async (templateType, templateData) => {
+  try {
+    const templateRef = db.collection('emailTemplates').doc(templateType);
+    
+    const updatedTemplate = {
+      ...templateData,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    await templateRef.set(updatedTemplate, { merge: true });
+    
+    return updatedTemplate;
+  } catch (error) {
+    logger.error(`Error updating email template: ${error.message}`);
+    throw error;
+  }
+};
+
+/**
+ * Get default subject for a template type
+ * @param {string} templateType - Template type
+ * @returns {string} - Default subject
+ */
+function getDefaultSubject(templateType) {
+  switch(templateType) {
+    case 'welcome':
+      return 'Welcome to AI Waverider!';
+    case 'update':
+      return 'Weekly AI Waverider Update';
+    case 'agent':
+      return 'New AI Agents Available - AI Waverider';
+    case 'tool':
+      return 'New AI Tools Released - AI Waverider';
+    case 'global':
+      return 'Important Announcement from AI Waverider';
+    case 'custom':
+      return 'Message from AI Waverider';
+    default:
+      return 'AI Waverider Notification';
+  }
+}
+
+/**
+ * Get default content for a template type
+ * @param {string} templateType - Template type
+ * @returns {string} - Default HTML content
+ */
+function getDefaultContent(templateType) {
+  switch(templateType) {
+    case 'welcome':
+      return '<p>Welcome to AI Waverider! We\'re excited to have you join our community.</p><p>Get started by exploring our AI tools and agents.</p>';
+    case 'update':
+      return '<p>Here are the latest updates from AI Waverider this week:</p><ul><li>Update item 1</li><li>Update item 2</li></ul>';
+    case 'agent':
+      return '<p>We\'re excited to announce new AI agents on our platform!</p><ul><li><strong>Agent 1</strong>: Description of the first agent</li><li><strong>Agent 2</strong>: Description of the second agent</li></ul>';
+    case 'tool':
+      return '<p>Check out our latest AI tools that have just been released:</p><ul><li><strong>Tool 1</strong>: Description of the first tool</li><li><strong>Tool 2</strong>: Description of the second tool</li></ul>';
+    case 'global':
+      return '<p>We have an important announcement to share with you...</p>';
+    case 'custom':
+      return '<p>This is a custom message from AI Waverider.</p>';
+    default:
+      return '<p>Thank you for being part of the AI Waverider community!</p>';
+  }
+}
+
+module.exports = exports; 

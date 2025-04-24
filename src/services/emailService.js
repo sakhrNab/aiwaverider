@@ -14,7 +14,7 @@ const API_URL = import.meta.env.VITE_API_URL;
 /**
  * Send a test email
  * @param {string} email - Email address to send test to
- * @param {string} type - Type of test email (welcome, update, global, custom)
+ * @param {string} type - Type of test email (welcome, update, global, agent, tool, custom)
  * @param {Object} data - Additional data for the test email
  * @returns {Promise<Object>} - API response
  */
@@ -39,9 +39,17 @@ export const sendTestEmail = async (email, type = '', data = {}) => {
       case 'global':
         endpoint = `${API_URL}/api/email/test-global`;
         break;
+      case 'agent':
+        endpoint = `${API_URL}/api/email/test-agent`;
+        break;
+      case 'tool':
+        endpoint = `${API_URL}/api/email/test-tool`;
+        break;
       case 'custom':
         endpoint = `${API_URL}/api/email/test-custom`;
         break;
+      default:
+        console.warn(`Unknown email type: ${type}. Using default test endpoint.`);
     }
     
     // Ensure email is included in payload
@@ -52,21 +60,28 @@ export const sendTestEmail = async (email, type = '', data = {}) => {
     
     console.log(`Sending test ${type} email to: ${email}`);
     
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Failed to send test email: ${response.status} ${response.statusText}`);
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to send test email: ${response.status} ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        throw new Error(`API endpoint not available: ${endpoint}. Ensure the backend supports this email type.`);
+      }
+      throw error;
     }
-    
-    return await response.json();
   } catch (error) {
     console.error(`Test ${type} email error:`, error);
     throw error;
@@ -120,23 +135,112 @@ export const sendCustomEmail = async (emailData) => {
       throw new Error('Authentication token not found');
     }
     
-    const response = await fetch(`${API_URL}/api/email/send-custom`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(emailData)
-    });
+    // Use different endpoints based on email type
+    let endpoint = `${API_URL}/api/email/send-custom`;
     
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || 'Failed to send custom email');
+    // Prepare the payload based on endpoint requirements
+    let payload = { ...emailData };
+    
+    if (emailData.emailType === 'agent') {
+      endpoint = `${API_URL}/api/email/send-agent-update`;
+      
+      // For agent/tool updates, ensure we have title, content and updateType
+      if (!emailData.title || !emailData.content || !emailData.updateType) {
+        throw new Error('Title, content, and update type are required for agent updates');
+      }
+      
+      // Ensure the payload uses the expected field names for the backend
+      if (emailData.subject && !emailData.title) {
+        payload.title = emailData.subject;
+      }
+      
+      // Convert recipients from comma-separated string to userIds array format
+      // that is expected by the backend controller
+      if (emailData.recipients && payload.recipientType === 'specific') {
+        // Check if we have userIds already
+        if (emailData.userIds) {
+          payload.userIds = emailData.userIds;
+        } 
+        // Check if we have recipients string and need to convert to userIds
+        else if (emailData.recipients && typeof emailData.recipients === 'string') {
+          // If we have user IDs data available, use it
+          if (emailData.recipientUsersData && Array.isArray(emailData.recipientUsersData)) {
+            payload.userIds = emailData.recipientUsersData
+              .filter(user => user && user.id)
+              .map(user => user.id);
+            
+            // Log the conversion
+            console.log(`Converted ${payload.userIds.length} recipient emails to user IDs`);
+          } else {
+            // Otherwise create a special payload for the backend to handle
+            // Set the email addresses as the userIds temporarily 
+            // (backend will need to look up users by email)
+            payload.emailAddresses = emailData.recipients.split(',').filter(Boolean);
+            delete payload.recipients; // Remove the recipients field to avoid confusion
+            
+            if (payload.emailAddresses.length === 0) {
+              throw new Error('No valid email addresses provided');
+            }
+            
+            console.log(`Using ${payload.emailAddresses.length} email addresses for lookup`);
+          }
+        }
+      }
+      
+    } else if (emailData.emailType === 'tool') {
+      endpoint = `${API_URL}/api/email/send-tool-update`;
+      
+      // For agent/tool updates, ensure we have title, content and updateType
+      if (!emailData.title || !emailData.content || !emailData.updateType) {
+        throw new Error('Title, content, and update type are required for tool updates');
+      }
+      
+      // Ensure the payload uses the expected field names for the backend
+      if (emailData.subject && !emailData.title) {
+        payload.title = emailData.subject;
+      }
+      
+      // Log detailed payload for debugging tool update emails
+      console.log('Tool update email payload:', JSON.stringify(payload, null, 2));
+      
+    } else if (emailData.emailType) {
+      console.warn(`Using default endpoint for email type: ${emailData.emailType}`);
     }
     
-    return await response.json();
+    console.log(`Sending to ${endpoint} with payload:`, payload);
+    
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        // Try to get detailed error response
+        const errorData = await response.json().catch(() => ({}));
+        console.error('API Error Response:', errorData);
+        
+        if (response.status === 404) {
+          throw new Error(`Endpoint not found: ${endpoint}. Check if the API route is configured correctly.`);
+        }
+        
+        throw new Error(errorData.message || `Failed to send email (${response.status}): ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        throw new Error(`API endpoint not available: ${endpoint}. Ensure the backend supports this email type.`);
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Custom email error:', error);
+    toast.error(`Email sending failed: ${error.message}`);
     throw error;
   }
 };
@@ -172,6 +276,53 @@ export const getEmailStats = async () => {
 };
 
 /**
+ * Get email template
+ * @param {string} templateType - Template type to get
+ * @returns {Promise<Object>} - API response
+ */
+export const getEmailTemplate = async (templateType) => {
+  try {
+    const token = localStorage.getItem('authToken');
+    
+    if (!token) {
+      throw new Error('Authentication token not found');
+    }
+    
+    // Ensure template type is valid
+    const validTemplateTypes = ['welcome', 'update', 'agent', 'tool', 'global', 'custom'];
+    if (!validTemplateTypes.includes(templateType)) {
+      throw new Error(`Invalid template type: ${templateType}`);
+    }
+    
+    const endpoint = `${API_URL}/api/email/templates/${templateType}`;
+    
+    try {
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to get email template');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        throw new Error(`API endpoint not available: ${endpoint}. Ensure the backend supports this template type.`);
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.error('Template fetch error:', error);
+    throw error;
+  }
+};
+
+/**
  * Update email template
  * @param {string} templateType - Template type to update
  * @param {Object} templateData - Template data to save
@@ -185,21 +336,43 @@ export const updateEmailTemplate = async (templateType, templateData) => {
       throw new Error('Authentication token not found');
     }
     
-    const response = await fetch(`${API_URL}/api/email/templates/${templateType}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(templateData)
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || 'Failed to update email template');
+    // Ensure template type is valid
+    const validTemplateTypes = ['welcome', 'update', 'agent', 'tool', 'global', 'custom'];
+    if (!validTemplateTypes.includes(templateType)) {
+      throw new Error(`Invalid template type: ${templateType}`);
     }
     
-    return await response.json();
+    // Validate template data
+    if (!templateData.subject || !templateData.content) {
+      throw new Error('Template must include subject and content');
+    }
+    
+    const endpoint = `${API_URL}/api/email/templates/${templateType}`;
+    
+    console.log(`Updating ${templateType} email template:`, templateData);
+    
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(templateData)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to update email template');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        throw new Error(`API endpoint not available: ${endpoint}. Ensure the backend supports this template type.`);
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Template update error:', error);
     throw error;
@@ -222,6 +395,7 @@ export default {
   sendWelcomeEmail,
   sendCustomEmail,
   getEmailStats,
+  getEmailTemplate,
   updateEmailTemplate,
   handleEmailError
 }; 

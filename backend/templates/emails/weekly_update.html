@@ -1,164 +1,85 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Weekly AI Updates from AI Wave Rider</title>
+  <title>{{title}} - AI Waverider</title>
   <style>
     /* Reset styles */
-    body, p, h1, h2, h3, h4, h5, h6, ul, ol, li {
+    body, html {
       margin: 0;
       padding: 0;
-    }
-    
-    body {
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 16px;
-      line-height: 1.5;
-      color: #333333;
-      background-color: #f5f5f5;
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background-color: #f9f9f9;
     }
     
     /* Container */
     .container {
       max-width: 600px;
       margin: 0 auto;
+      padding: 20px;
       background-color: #ffffff;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
     
     /* Header */
     .header {
-      background-color: #7533A8;
-      padding: 30px 20px;
       text-align: center;
-      color: #ffffff;
-    }
-    
-    .header h1 {
-      font-size: 28px;
-      margin-bottom: 5px;
-    }
-    
-    .header p {
-      font-size: 18px;
-      opacity: 0.9;
+      padding: 20px 0;
+      background-color: #27ae60; /* Green color for weekly updates */
+      color: white;
     }
     
     /* Content */
     .content {
-      padding: 30px 20px;
+      padding: 20px;
     }
     
-    .content h2 {
-      font-size: 22px;
-      margin-bottom: 15px;
-      color: #7533A8;
-    }
-    
-    .content p {
-      margin-bottom: 15px;
-    }
-    
-    /* Update section */
+    /* Update Section */
     .update-section {
       margin: 20px 0;
-    }
-    
-    .update-section h3 {
-      color: #4A66A0;
-      margin-bottom: 12px;
-      font-size: 20px;
-      border-bottom: 1px solid #e0e0e0;
-      padding-bottom: 5px;
-    }
-    
-    /* Item card */
-    .item-card {
-      margin-bottom: 25px;
       padding: 15px;
-      border: 1px solid #e0e0e0;
-      border-radius: 6px;
-      background-color: #f9f9f9;
-    }
-    
-    .item-card h4 {
-      color: #333333;
-      margin-bottom: 10px;
-      font-size: 18px;
-    }
-    
-    .item-card p {
-      margin-bottom: 10px;
-      color: #555555;
-    }
-    
-    .item-link {
-      display: inline-block;
-      padding: 8px 15px;
-      background-color: #4A66A0;
-      color: #ffffff;
-      text-decoration: none;
+      background-color: #f2fff5;
+      border-left: 4px solid #27ae60;
       border-radius: 4px;
-      font-weight: 500;
-      font-size: 14px;
+    }
+    
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 12px;
+      color: #666;
+      background-color: #f4f4f4;
+    }
+    
+    /* Call to action */
+    .cta {
+      display: block;
+      text-align: center;
+      margin: 20px 0;
     }
     
     /* Button */
     .button {
       display: inline-block;
-      padding: 12px 25px;
-      background-color: #7533A8;
+      padding: 10px 20px;
+      margin: 20px 0;
+      background-color: #27ae60;
       color: #ffffff;
       text-decoration: none;
       border-radius: 4px;
-      font-weight: bold;
-      margin-top: 15px;
-    }
-    
-    /* Footer */
-    .footer {
-      background-color: #f5f5f5;
-      padding: 30px 20px;
       text-align: center;
-      color: #777777;
-      font-size: 14px;
-      border-top: 1px solid #e0e0e0;
-    }
-    
-    .footer p {
-      margin-bottom: 10px;
-    }
-    
-    .footer a {
-      color: #4A66A0;
-      text-decoration: none;
-    }
-    
-    .unsubscribe {
-      margin-top: 20px;
-      font-size: 12px;
-      color: #999999;
     }
     
     /* Responsive */
-    @media only screen and (max-width: 480px) {
-      .header {
-        padding: 20px 15px;
+    @media only screen and (max-width: 600px) {
+      .container {
+        width: 100%;
       }
-      
-      .header h1 {
-        font-size: 24px;
-      }
-      
-      .header p {
-        font-size: 16px;
-      }
-      
       .content {
-        padding: 20px 15px;
+        padding: 10px;
       }
     }
   </style>
@@ -166,70 +87,32 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>AI Wave Rider Weekly</h1>
-      <p>{{weekLabel}}</p>
+      <h1>{{title}}</h1>
     </div>
     
     <div class="content">
-      <h2>Hello {{name}},</h2>
+      <p>Dear {{name}},</p>
       
-      <p>Here's what's new in the world of AI this week!</p>
+      <p>Here's your weekly update from AI Waverider:</p>
       
-      {{#if newAgents}}
       <div class="update-section">
-        <h3>New AI Agents</h3>
-        {{#each newAgents}}
-        <div class="item-card">
-          <h4>{{this.title}}</h4>
-          <p>{{this.description}}</p>
-          <a href="{{../websiteUrl}}/agents/{{this.id}}" class="item-link">Check it out</a>
-        </div>
-        {{/each}}
+        {{{content}}}
       </div>
-      {{/if}}
       
-      {{#if newTools}}
-      <div class="update-section">
-        <h3>New AI Tools</h3>
-        {{#each newTools}}
-        <div class="item-card">
-          <h4>{{this.name}}</h4>
-          <p>{{this.description}}</p>
-          <a href="{{../websiteUrl}}/tools/{{this.id}}" class="item-link">Learn more</a>
-        </div>
-        {{/each}}
+      <div class="cta">
+        <a href="{{websiteUrl}}/dashboard" class="button">View Dashboard</a>
       </div>
-      {{/if}}
       
-      {{#if featuredContent}}
-      <div class="update-section">
-        <h3>Featured Content</h3>
-        {{#each featuredContent}}
-        <div class="item-card">
-          <h4>{{this.title}}</h4>
-          <p>{{this.excerpt}}</p>
-          <a href="{{../websiteUrl}}{{this.url}}" class="item-link">Read more</a>
-        </div>
-        {{/each}}
-      </div>
-      {{/if}}
+      <p>If you have any questions about this update, please contact us at <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.</p>
       
-      <p>Want to explore more? Visit our marketplace for the latest AI agents and tools:</p>
-      
-      <a href="{{websiteUrl}}/marketplace" class="button">Explore Marketplace</a>
-      
-      <p style="margin-top: 25px;">Stay innovative,<br>The AI Wave Rider Team</p>
+      <p>Best regards,<br>The AI Waverider Team</p>
     </div>
     
     <div class="footer">
-      <p>&copy; 2025 AI Wave Rider. All rights reserved.</p>
+      <p>&copy; {{currentYear}} AI Waverider. All rights reserved.</p>
       <p>
-        <a href="{{websiteUrl}}">Visit our website</a> | 
-        <a href="{{websiteUrl}}/blog">Read our blog</a> | 
-        <a href="{{websiteUrl}}/contact">Contact us</a>
-      </p>
-      <p class="unsubscribe">
-        If you no longer wish to receive these emails, you can <a href="{{websiteUrl}}/profile/notifications">unsubscribe</a> from your profile settings.
+        You received this email because you opted in to weekly updates from AI Waverider.<br>
+        You can <a href="{{websiteUrl}}/profile">manage your notification preferences</a> at any time.
       </p>
     </div>
   </div>

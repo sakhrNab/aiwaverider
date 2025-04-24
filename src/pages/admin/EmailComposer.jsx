@@ -2,16 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import AdminLayout from '../../components/admin/AdminLayout';
 import HashLoader from 'react-spinners/HashLoader';
-import { FaEnvelope, FaUsers, FaUser, FaSearch, FaEye, FaPaperPlane } from 'react-icons/fa';
+import { FaEnvelope, FaUsers, FaUser, FaSearch, FaEye, FaPaperPlane, FaRobot, FaTools } from 'react-icons/fa';
 import { fetchUsers } from '../../utils/api';
 import { sendCustomEmail } from '../../services/emailService';
+import RichTextEditor from '../../components/RichTextEditor';
 import './EmailComposer.css';
 
 const EmailComposer = () => {
   // Email composition states
   const [subject, setSubject] = useState('');
+  const [headerTitle, setHeaderTitle] = useState('');
   const [content, setContent] = useState('');
-  const [emailType, setEmailType] = useState('update'); // update, announcement, custom
+  const [emailType, setEmailType] = useState('update'); // update, announcement, agent, tool, custom
   const [previewMode, setPreviewMode] = useState(false);
   
   // User selection states
@@ -70,14 +72,27 @@ const EmailComposer = () => {
     switch(type) {
       case 'update':
         setSubject('Weekly AI Waverider Update');
+        setHeaderTitle('Weekly AI Waverider Update');
         setContent('Here are the latest updates from AI Waverider this week...');
+        break;
+      case 'agent':
+        setSubject('New AI Agents Available - AI Waverider');
+        setHeaderTitle('New AI Agents Available');
+        setContent('<p>We\'re excited to announce new AI agents on our platform!</p><ul><li><strong>Agent 1</strong>: Description of the first agent</li><li><strong>Agent 2</strong>: Description of the second agent</li></ul>');
+        break;
+      case 'tool':
+        setSubject('New AI Tools Released - AI Waverider');
+        setHeaderTitle('New AI Tools Released');
+        setContent('<p>Check out our latest AI tools that have just been released:</p><ul><li><strong>Tool 1</strong>: Description of the first tool</li><li><strong>Tool 2</strong>: Description of the second tool</li></ul>');
         break;
       case 'announcement':
         setSubject('Important Announcement from AI Waverider');
+        setHeaderTitle('Important Announcement');
         setContent('We have an important announcement to share with you...');
         break;
       case 'custom':
         setSubject('');
+        setHeaderTitle('');
         setContent('');
         break;
       default:
@@ -131,36 +146,73 @@ const EmailComposer = () => {
     setLoading(true);
     
     try {
-      // Extract emails for custom emails
-      let emailList = [];
-      if (emailType === 'custom') {
-        emailList = selectedUsers
-          .map(userId => {
-            const user = filteredUsers.find(u => u.id === userId);
-            return user ? user.email : null;
-          })
-          .filter(email => email); // Filter out any null values
-          
-        if (emailList.length === 0) {
-          throw new Error('No valid email addresses found for selected users');
-        }
-        
-        console.log(`Sending custom email to ${emailList.length} recipients:`, emailList);
+      // Extract emails and prepare user data for selected users
+      const recipientUsers = selectedUsers.map(userId => {
+        const user = filteredUsers.find(u => u.id === userId);
+        return user || null;
+      }).filter(Boolean);
+      
+      if (recipientUsers.length === 0) {
+        throw new Error('No valid recipients selected');
       }
       
-      // Use different endpoints based on email type
+      console.log(`Sending ${emailType} email to ${recipientUsers.length} recipients`);
+      
+      // Use the emailService for all email types
       let result;
       
-      if (emailType === 'custom') {
-        // For custom emails, use the emailService
-        result = await sendCustomEmail({
-          subject: subject,
-          content: content,
+      // For custom, agent, and tool emails, use sendCustomEmail
+      if (emailType === 'custom' || emailType === 'agent' || emailType === 'tool') {
+        // Get email addresses for these users
+        const emailAddresses = recipientUsers.map(user => user.email).filter(Boolean);
+        
+        if (emailAddresses.length === 0) {
+          throw new Error('No valid email addresses found for selected recipients');
+        }
+        
+        // Log email addresses for debugging
+        console.log(`Sending to ${emailAddresses.length} email addresses:`, emailAddresses);
+        
+        // Extract user IDs for these users
+        const userIds = recipientUsers.map(user => user.id).filter(Boolean);
+        
+        // Prepare payload with the correct field names expected by the API
+        const payload = {
           recipientType: 'specific',
-          recipients: emailList.join(',')
-        });
+          recipients: emailAddresses.join(','),
+          recipientUsersData: recipientUsers, // Include full user data for ID extraction
+          userIds: userIds, // Include user IDs directly when available
+          emailType: emailType
+        };
+        
+        // For agent/tool updates, use title instead of subject and add updateType
+        if (emailType === 'agent' || emailType === 'tool') {
+          payload.title = subject;
+          payload.headerTitle = headerTitle || subject;
+          payload.content = content;
+          payload.updateType = emailType === 'agent' ? 'new_agents' : 'new_tools';
+          
+          // Add console logging for debugging
+          console.log(`Preparing ${emailType} update with type ${payload.updateType}`);
+          console.log(`Selected ${userIds.length} user IDs:`, userIds);
+        } else {
+          // For custom emails, use subject as is
+          payload.subject = subject;
+          payload.headerTitle = headerTitle || subject;
+          payload.content = content;
+        }
+        
+        try {
+          result = await sendCustomEmail(payload);
+          console.log(`${emailType} email sent successfully:`, result);
+        } catch (error) {
+          console.error(`Error sending ${emailType} email:`, error);
+          throw error;
+        }
       } else {
-        // For other email types, use the update service
+        // For update and announcement emails, use the update/users endpoint
+        const userIds = recipientUsers.map(user => user.id);
+        
         result = await fetch(`${import.meta.env.VITE_API_URL}/api/email/update/users`, {
           method: 'POST',
           headers: {
@@ -169,9 +221,10 @@ const EmailComposer = () => {
           },
           body: JSON.stringify({
             title: subject,
+            headerTitle: headerTitle || subject,
             content: content,
             updateType: emailType,
-            userIds: selectedUsers
+            userIds: userIds
           })
         });
         
@@ -197,6 +250,7 @@ const EmailComposer = () => {
       
       // Reset form after successful send
       setSubject('');
+      setHeaderTitle('');
       setContent('');
       setSelectedUsers([]);
       setSelectedAll(false);
@@ -243,6 +297,18 @@ const EmailComposer = () => {
                 Weekly Update
               </button>
               <button 
+                className={emailType === 'agent' ? 'active' : ''}
+                onClick={() => handleEmailTypeChange('agent')}
+              >
+                <FaRobot /> AI Agents
+              </button>
+              <button 
+                className={emailType === 'tool' ? 'active' : ''}
+                onClick={() => handleEmailTypeChange('tool')}
+              >
+                <FaTools /> AI Tools
+              </button>
+              <button 
                 className={emailType === 'announcement' ? 'active' : ''}
                 onClick={() => handleEmailTypeChange('announcement')}
               >
@@ -258,35 +324,49 @@ const EmailComposer = () => {
             
             {!previewMode ? (
               <div className="email-editor">
-                <div className="form-group">
-                  <label>Subject</label>
+                <div className="input-group">
+                  <label htmlFor="email-subject">Email Subject (appears in inbox)</label>
                   <input
                     type="text"
+                    id="email-subject"
+                    placeholder="Enter email subject..."
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    placeholder="Enter email subject"
+                    aria-label="Email subject"
+                  />
+                </div>
+
+                <div className="input-group">
+                  <label htmlFor="email-header-title">Email Header Title (appears at the top of the email)</label>
+                  <input
+                    type="text"
+                    id="email-header-title"
+                    placeholder="Enter email header title..."
+                    value={headerTitle}
+                    onChange={(e) => setHeaderTitle(e.target.value)}
+                    aria-label="Email header title"
                   />
                 </div>
                 
-                <div className="form-group">
-                  <label>Content</label>
-                  <textarea
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder="Enter email content..."
-                    rows={12}
-                  ></textarea>
-                </div>
-                
-                <div className="template-placeholders">
-                  <h3>Available Placeholders:</h3>
-                  <ul>
-                    <li><code>{"{{name}}"}</code> - User's name</li>
-                    <li><code>{"{{firstName}}"}</code> - User's first name</li>
-                    <li><code>{"{{lastName}}"}</code> - User's last name</li>
-                    <li><code>{"{{email}}"}</code> - User's email address</li>
-                    <li><code>{"{{websiteUrl}}"}</code> - Your website URL</li>
-                  </ul>
+                <div className="input-group">
+                  <label htmlFor="email-content">Email Content</label>
+                  <div className="editor-container">
+                    <RichTextEditor 
+                      value={content}
+                      onChange={setContent}
+                      placeholder="Compose your email content here..."
+                    />
+                  </div>
+                  
+                  <div className="placeholder-help">
+                    <p><strong>Available placeholders:</strong></p>
+                    <ul>
+                      <li><code>{'{{name}}'}</code> - Recipient's first name or "there" if not available</li>
+                      <li><code>{'{{websiteUrl}}'}</code> - Your website URL</li>
+                      <li><code>{'{{supportEmail}}'}</code> - Support email address</li>
+                      <li><code>{'{{currentYear}}'}</code> - Current year (for copyright)</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -297,11 +377,7 @@ const EmailComposer = () => {
                 <div className="preview-subject">
                   <strong>Subject:</strong> {subject}
                 </div>
-                <div className="preview-content">
-                  {content.split('\n').map((paragraph, index) => (
-                    <p key={index}>{paragraph}</p>
-                  ))}
-                </div>
+                <div className="preview-content" dangerouslySetInnerHTML={{ __html: content }} />
               </div>
             )}
             
@@ -309,6 +385,7 @@ const EmailComposer = () => {
               <button 
                 className="preview-button"
                 onClick={togglePreview}
+                aria-label={previewMode ? "Edit email" : "Preview email"}
               >
                 {previewMode ? <><FaEnvelope /> Edit</> : <><FaEye /> Preview</>}
               </button>
@@ -316,6 +393,7 @@ const EmailComposer = () => {
                 className="send-button"
                 onClick={handleSendEmail}
                 disabled={loading || selectedUsers.length === 0 || !subject || !content}
+                aria-label="Send email to selected recipients"
               >
                 <FaPaperPlane /> Send Email ({selectedUsers.length})
               </button>
@@ -333,12 +411,14 @@ const EmailComposer = () => {
                   placeholder="Search users..."
                   value={searchQuery}
                   onChange={handleSearchChange}
+                  aria-label="Search users"
                 />
               </div>
               
               <button 
                 className="select-all-button"
                 onClick={handleSelectAll}
+                aria-label={selectedAll ? "Deselect all users" : "Select all users"}
               >
                 {selectedAll ? 'Deselect All' : 'Select All'}
               </button>
@@ -360,6 +440,14 @@ const EmailComposer = () => {
                     key={user.id} 
                     className={`recipient-item ${selectedUsers.includes(user.id) ? 'selected' : ''}`}
                     onClick={() => handleUserSelection(user.id)}
+                    role="checkbox" 
+                    aria-checked={selectedUsers.includes(user.id)}
+                    tabIndex={0}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        handleUserSelection(user.id);
+                      }
+                    }}
                   >
                     <div className="user-avatar">
                       {user.photoURL ? (

@@ -59,11 +59,11 @@
   padding: 10px 0;
 }
 
-.form-group {
+.input-group {
   margin-bottom: 20px;
 }
 
-.form-group label {
+.input-group label {
   display: block;
   font-size: 14px;
   font-weight: 500;
@@ -71,8 +71,8 @@
   color: #4a5568;
 }
 
-.form-group input,
-.form-group textarea {
+.input-group input,
+.input-group textarea {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid #cbd5e0;
@@ -81,13 +81,21 @@
   transition: border-color 0.2s;
 }
 
-.form-group input:focus,
-.form-group textarea:focus {
+.input-group input:focus,
+.input-group textarea:focus {
   border-color: #4FD1C5;
   outline: none;
+  box-shadow: 0 0 0 3px rgba(79, 209, 197, 0.2);
 }
 
-.template-placeholders {
+.editor-container {
+  margin-bottom: 15px;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.placeholder-help {
   background-color: #f8fafc;
   border-radius: 6px;
   padding: 15px;
@@ -95,13 +103,13 @@
   border: 1px dashed #cbd5e0;
 }
 
-.template-placeholders h3 {
-  font-size: 16px;
+.placeholder-help p {
+  font-size: 14px;
   margin-bottom: 10px;
   color: #4a5568;
 }
 
-.template-placeholders ul {
+.placeholder-help ul {
   list-style-type: none;
   padding: 0;
   margin: 0;
@@ -110,14 +118,14 @@
   gap: 10px;
 }
 
-.template-placeholders li {
+.placeholder-help li {
   margin-bottom: 8px;
   font-size: 14px;
   color: #718096;
   flex: 1 0 40%;
 }
 
-.template-placeholders code {
+.placeholder-help code {
   background-color: #edf2f7;
   padding: 2px 6px;
   border-radius: 3px;
@@ -428,4 +436,41 @@ button:disabled {
     width: 100%;
     justify-content: center;
   }
+}
+
+/* Support for legacy styles */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: #4a5568;
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  border-color: #4FD1C5;
+  outline: none;
+}
+
+.template-placeholders {
+  background-color: #f8fafc;
+  border-radius: 6px;
+  padding: 15px;
+  margin-top: 20px;
+  border: 1px dashed #cbd5e0;
 } 

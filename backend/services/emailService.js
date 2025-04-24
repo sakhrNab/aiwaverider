@@ -27,16 +27,46 @@ async function getCompiledTemplate(templateName) {
   }
   
   try {
-    // Load template file
-    const templatePath = path.join(__dirname, '..', 'templates', 'emails', `${templateName}.html`);
+    // Define template path
+    let templatePath = path.join(__dirname, '..', 'templates', 'emails', `${templateName}.html`);
     logger.info(`Loading email template from: ${templatePath}`);
     
     // Check if file exists
     try {
       await fs.access(templatePath);
     } catch (error) {
-      logger.error(`Template file does not exist: ${templatePath}`);
-      throw new Error(`Email template '${templateName}' does not exist`);
+      // Try fallback template names if the original doesn't exist
+      const fallbacks = {
+        'custom': ['custom_email', 'custom-email'],
+        'custom_email': ['custom', 'custom-email'],
+        'custom-email': ['custom', 'custom_email'],
+        'update': ['weekly_update', 'weekly-update'],
+        'weekly_update': ['update', 'weekly-update'],
+        'weekly-update': ['update', 'weekly_update']
+      };
+      
+      if (fallbacks[templateName]) {
+        // Try each fallback in order
+        for (const fallback of fallbacks[templateName]) {
+          const fallbackPath = path.join(__dirname, '..', 'templates', 'emails', `${fallback}.html`);
+          try {
+            await fs.access(fallbackPath);
+            logger.info(`Template '${templateName}' not found, using fallback: ${fallback}`);
+            templatePath = fallbackPath;
+            break;
+          } catch (fbError) {
+            // Continue to next fallback
+          }
+        }
+      }
+      
+      // If we still can't find a template, throw the original error
+      try {
+        await fs.access(templatePath);
+      } catch (finalError) {
+        logger.error(`Template file does not exist: ${templatePath}`);
+        throw new Error(`Email template '${templateName}' does not exist`);
+      }
     }
     
     const templateSource = await fs.readFile(templatePath, 'utf-8');
@@ -360,32 +390,73 @@ exports.sendAgentPurchaseEmail = async (purchaseData) => {
  */
 exports.sendCustomEmail = async (emailData) => {
   try {
-    // Try to use a custom template if it exists, otherwise use inline HTML
-    let html;
+    // Log all incoming data for debugging purposes
+    logger.info(`Sending custom email to: ${emailData.email}`);
+    logger.info(`Email type: ${emailData.emailType || 'custom'}`);
+    logger.debug(`Email data: ${JSON.stringify({
+      subject: emailData.subject,
+      title: emailData.title,
+      headerTitle: emailData.headerTitle,
+      content: emailData.content ? '[CONTENT LENGTH: ' + emailData.content.length + ' chars]' : 'No content'
+    })}`);
+
+    // Determine which template to use
+    let templateName = 'custom';
+    let subject = emailData.subject || emailData.title || 'Message from AI Waverider';
     
+    // Check for specific email types and adjust template accordingly
+    if (emailData.emailType === 'agent' || emailData.updateType === 'new_agents') {
+      templateName = 'new_agents';
+      subject = emailData.title || 'New AI Agents Available!';
+    } else if (emailData.emailType === 'tool' || emailData.updateType === 'new_tools') {
+      templateName = 'new_tools';
+      subject = emailData.title || 'New AI Tools Released!';
+    }
+    
+    logger.info(`Using template: ${templateName} for email to ${emailData.email}`);
+    
+    // Ensure we have all the required data
+    if (!emailData.content) {
+      throw new Error('Email content is required');
+    }
+    
+    // Try to use the selected template if it exists
+    let html;
     try {
-      // Try to get the custom email template
-      const template = await getCompiledTemplate('custom_email');
+      // Try to get the appropriate template
+      const template = await getCompiledTemplate(templateName);
       
       // Prepare the data for the template
       const data = {
         name: emailData.firstName ? `${emailData.firstName}` : 'there',
-        title: emailData.subject,
+        title: emailData.title || subject,
+        headerTitle: emailData.headerTitle || emailData.title || subject, // Use headerTitle if provided, otherwise fall back to title or subject
+        subject: subject,
         content: emailData.content,
         websiteUrl: config.websiteUrl,
         supportEmail: config.supportEmail,
-        currentYear: new Date().getFullYear()
+        currentYear: new Date().getFullYear(),
+        actionUrl: emailData.actionUrl || config.websiteUrl,
+        actionText: emailData.actionText || 'Visit Website',
+        imageUrl: emailData.imageUrl || null
       };
+      
+      // Log the data being passed to the template
+      logger.debug(`Template data for ${templateName}: ${JSON.stringify({
+        headerTitle: data.headerTitle,
+        subject: data.subject,
+        title: data.title
+      })}`);
       
       // Render the HTML content with the template
       html = template(data);
-      logger.info('Using custom_email template for custom email');
+      logger.info(`Successfully rendered email using ${templateName} template`);
     } catch (templateError) {
-      // If template doesn't exist, use a simple inline template
-      logger.info('Custom email template not found, using inline HTML');
+      // If template doesn't exist or fails, use fallback inline template
+      logger.warning(`Template ${templateName} not found or error rendering, using fallback HTML: ${templateError.message}`);
       html = `
         <div style="font-family: Arial, sans-serif; color: #333;">
-          <h1 style="color: #4a86e8;">${emailData.subject}</h1>
+          <h1 style="color: #4a86e8;">${emailData.headerTitle || subject}</h1>
           <div>${emailData.content}</div>
           <hr>
           <p style="font-size: 12px; color: #777;">
@@ -397,12 +468,23 @@ exports.sendCustomEmail = async (emailData) => {
       `;
     }
     
+    // Add extra headers to improve deliverability
+    const headers = {
+      'X-Priority': '3',
+      'List-Unsubscribe': `<mailto:unsubscribe@${config.fromEmail.split('@')[1]}?subject=unsubscribe>`,
+      'X-Report-Abuse': `Please report abuse to ${config.supportEmail}`
+    };
+    
     // Send the email
-    return await sendEmail({
+    const result = await sendEmail({
       to: emailData.email,
-      subject: emailData.subject,
-      html
+      subject: subject,
+      html: html,
+      headers: headers
     });
+    
+    logger.info(`Custom email sent successfully to ${emailData.email} with message ID: ${result.messageId}`);
+    return result;
   } catch (error) {
     logger.error(`Failed to send custom email: ${error.message}`);
     throw error;

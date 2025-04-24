@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>New AI Agents - AI Waverider</title>
+  <title>{{title}} - AI Waverider</title>
   <style>
     /* Reset styles */
     body, html {
@@ -27,7 +27,7 @@
     .header {
       text-align: center;
       padding: 20px 0;
-      background-color: #6b42d1; /* Purple color for agents */
+      background-color: #4a86e8; /* Blue color for agents */
       color: white;
     }
     
@@ -38,8 +38,8 @@
     
     /* Agent Box */
     .agent-box {
-      background-color: #f5f0ff;
-      border-left: 4px solid #6b42d1;
+      background-color: #e6f0ff;
+      border-left: 4px solid #4a86e8;
       padding: 15px;
       margin: 20px 0;
       border-radius: 4px;
@@ -66,7 +66,7 @@
       display: inline-block;
       padding: 10px 20px;
       margin: 20px 0;
-      background-color: #6b42d1;
+      background-color: #4a86e8;
       color: #ffffff;
       text-decoration: none;
       border-radius: 4px;
@@ -76,7 +76,7 @@
     /* Badge */
     .badge {
       display: inline-block;
-      background-color: #6b42d1;
+      background-color: #4a86e8;
       color: white;
       padding: 3px 10px;
       border-radius: 20px;
@@ -99,15 +99,13 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>New AI Agents Available!</h1>
+      <h1>{{title}}</h1>
     </div>
     
     <div class="content">
       <p>Dear {{name}},</p>
       
-      <p>We're excited to introduce our latest AI agents to enhance your experience!</p>
-      
-      <h2>{{title}}</h2>
+      <p>We're excited to announce new AI agents that can assist you with more tasks!</p>
       
       <div class="agent-box">
         <span class="badge">NEW</span>
@@ -117,10 +115,10 @@
       </div>
       
       <div class="cta">
-        <a href="{{websiteUrl}}/agents" class="button">Explore New Agents</a>
+        <a href="{{websiteUrl}}/agents" class="button">Try New Agents</a>
       </div>
       
-      <p>If you have any questions about these new additions, please contact us at <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.</p>
+      <p>If you have any questions or need help with these agents, please contact us at <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.</p>
       
       <p>Best regards,<br>The AI Waverider Team</p>
     </div>
