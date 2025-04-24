@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { 
   FaImage, 
   FaDollarSign, 
@@ -10,12 +10,16 @@ import {
   FaTools
 } from 'react-icons/fa';
 import { getAgentPrice, updateAgentPrice } from '../../services/priceService';
+import { AuthContext } from '../../contexts/AuthContext';
 import './AgentForm.css';
 
 /**
  * Form component for creating and editing agents
  */
 const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
+  // Get current user from AuthContext
+  const { user } = useContext(AuthContext);
+
   // Handle blob URLs in image fields more safely
   const isBlobUrl = (url) => {
     return url && typeof url === 'string' && url.startsWith('blob:');
@@ -69,8 +73,11 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
     imageUrl: generatePlaceholderImage('image', 'Agent Image'),
     iconUrl: generatePlaceholderImage('icon', 'AI'),
     creator: {
-      name: '',
-      email: ''
+      name: user?.displayName || user?.firstName || '',
+      email: user?.email || '',
+      username: user?.username || (user?.displayName?.replace(/\s+/g, '')) || (user?.email?.split('@')[0]) || '',
+      role: user?.role || 'Admin',
+      id: user?.uid || ''
     },
     isFree: false,
     features: [''],
@@ -92,9 +99,12 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
   
   // State for form data
   const [formData, setFormData] = useState(() => {
-    if (!agent) return { ...defaultFormData };
+    if (!agent) {
+      // For new agents, use current user info for creator
+      return { ...defaultFormData };
+    }
     
-    // Ensure agent is treated as an object even if it's undefined or null
+    // For existing agents, use the agent's data
     const safeAgent = agent || {};
     
     // Helper functions for safe image handling
@@ -128,8 +138,11 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
       creator: {
         ...defaultFormData.creator,
         ...(safeAgent.creator || {}),
-        name: safeAgent.creator?.name || '',
-        email: safeAgent.creator?.email || ''
+        name: safeAgent.creator?.name || defaultFormData.creator.name,
+        email: safeAgent.creator?.email || defaultFormData.creator.email,
+        username: safeAgent.creator?.username || defaultFormData.creator.username,
+        role: safeAgent.creator?.role || defaultFormData.creator.role,
+        id: safeAgent.creator?.id || defaultFormData.creator.id
       },
       features: Array.isArray(safeAgent.features) && safeAgent.features.length > 0 ? safeAgent.features : [''],
       tags: Array.isArray(safeAgent.tags) && safeAgent.tags.length > 0 ? safeAgent.tags : ['']
@@ -505,8 +518,15 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
         isSubscription: formData.isSubscription ?? false,
         creator: {
           ...(formData.creator || {}),
-          name: formData.creator?.name ?? '',
-          email: formData.creator?.email ?? ''
+          name: formData.creator?.name ?? user?.displayName ?? 'Admin',
+          email: formData.creator?.email ?? user?.email ?? '',
+          id: formData.creator?.id ?? user?.uid ?? '',
+          username: formData.creator?.username ?? 
+                   user?.username ?? 
+                   (formData.creator?.name?.replace(/\s+/g, '') || user?.displayName?.replace(/\s+/g, '')) ?? 
+                   user?.email?.split('@')[0] ?? 
+                   'AIWaverider',
+          role: formData.creator?.role ?? user?.role ?? 'Admin'
         }
       };
       
@@ -649,15 +669,14 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
               name="name"
               value={formData.name}
               onChange={handleChange}
-              placeholder="Short name for the agent"
-              className={errors.name ? 'has-error' : ''}
+              className={errors.name ? 'error' : ''}
             />
             {errors.name && <div className="error-message">{errors.name}</div>}
           </div>
           
           <div className="form-group">
             <label htmlFor="title">
-              Display Title*
+              Agent Title*
               <span className="field-required">Required</span>
             </label>
             <input
@@ -666,8 +685,7 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
               name="title"
               value={formData.title}
               onChange={handleChange}
-              placeholder="Longer title shown to users"
-              className={errors.title ? 'has-error' : ''}
+              className={errors.title ? 'error' : ''}
             />
             {errors.title && <div className="error-message">{errors.title}</div>}
           </div>
@@ -682,9 +700,8 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
               name="description"
               value={formData.description}
               onChange={handleChange}
-              placeholder="Detailed description of the agent's capabilities"
-              rows="4"
-              className={errors.description ? 'has-error' : ''}
+              rows={4}
+              className={errors.description ? 'error' : ''}
             />
             {errors.description && <div className="error-message">{errors.description}</div>}
           </div>
@@ -699,16 +716,63 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
               name="category"
               value={formData.category}
               onChange={handleChange}
-              className={errors.category ? 'has-error' : ''}
+              className={errors.category ? 'error' : ''}
             >
               <option value="">Select a category</option>
               {categories.map(category => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
+                <option key={category} value={category}>{category}</option>
               ))}
             </select>
             {errors.category && <div className="error-message">{errors.category}</div>}
+          </div>
+          
+          {/* Creator Information Section */}
+          <div className="form-group creator-info">
+            <h4>Creator Information</h4>
+            <div className="creator-fields">
+              <div className="creator-field">
+                <label>Name:</label>
+                <input
+                  type="text"
+                  value={formData.creator?.name || ''}
+                  onChange={(e) => handleNestedChange('creator', 'name', e.target.value)}
+                />
+              </div>
+              
+              <div className="creator-field">
+                <label>Email:</label>
+                <input
+                  type="email"
+                  value={formData.creator?.email || ''}
+                  onChange={(e) => handleNestedChange('creator', 'email', e.target.value)}
+                  disabled={!!agent} // Only allow editing for new agents
+                />
+              </div>
+              
+              <div className="creator-field">
+                <label>Username:</label>
+                <input
+                  type="text"
+                  value={formData.creator?.username || ''}
+                  onChange={(e) => handleNestedChange('creator', 'username', e.target.value)}
+                />
+              </div>
+              
+              <div className="creator-field">
+                <label>Role:</label>
+                <select
+                  value={formData.creator?.role || 'Admin'}
+                  onChange={(e) => handleNestedChange('creator', 'role', e.target.value)}
+                >
+                  <option value="Admin">Admin</option>
+                  <option value="Partner">Partner</option>
+                  <option value="User">User</option>
+                </select>
+              </div>
+            </div>
+            <p className="creator-note">
+              These fields will be displayed as the creator of this agent.
+            </p>
           </div>
           
           <div className="form-group">
@@ -719,32 +783,8 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
               name="version"
               value={formData.version}
               onChange={handleChange}
-              placeholder="e.g. 1.0.0"
+              placeholder="e.g., 1.0.0"
             />
-          </div>
-          
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="creatorName">Creator Name</label>
-              <input
-                type="text"
-                id="creatorName"
-                value={formData.creator?.name || ''}
-                onChange={(e) => handleNestedChange('creator', 'name', e.target.value)}
-                placeholder="Creator name"
-              />
-            </div>
-            
-            <div className="form-group checkbox-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={formData.creator?.verified || false}
-                  onChange={(e) => handleNestedChange('creator', 'verified', e.target.checked)}
-                />
-                <span>Verified Creator</span>
-              </label>
-            </div>
           </div>
         </div>
         

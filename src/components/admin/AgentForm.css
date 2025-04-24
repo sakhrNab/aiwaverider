@@ -442,4 +442,58 @@ input[type="file"]:hover {
 .mock-agent-notice svg {
   margin-right: 8px;
   color: #17a2b8;
+}
+
+/* Creator Information Section */
+.creator-info {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #f5f8ff;
+  border-radius: 8px;
+  border: 1px solid #dce4f9;
+}
+
+.creator-info h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #3a3a3a;
+  font-size: 16px;
+}
+
+.creator-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.creator-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.creator-field label {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 5px;
+  color: #555;
+}
+
+.creator-field input,
+.creator-field select {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: white;
+}
+
+.creator-field input:disabled {
+  background-color: #f0f0f0;
+  cursor: not-allowed;
+}
+
+.creator-note {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #666;
+  font-style: italic;
 } 

@@ -608,7 +608,11 @@ function getSampleAgentsForEmail() {
       name: 'AI Personal Tutor',
       url: `${config.websiteUrl}/agents/ai-personal-tutor`,
       imageUrl: `${config.websiteUrl}/images/agents/tutor.png`,
-      creator: 'AIWaverider',
+      creator: {
+        name: 'AI Waverider Team',
+        username: 'AIWaverider',
+        role: 'Admin'
+      },
       rating: { average: 4, count: 128 },
       price: 49.99,
       priceDetails: {
@@ -621,7 +625,11 @@ function getSampleAgentsForEmail() {
       name: 'Social Media Manager',
       url: `${config.websiteUrl}/agents/social-media-manager`,
       imageUrl: `${config.websiteUrl}/images/agents/social.png`,
-      creator: 'AIWaverider',
+      creator: {
+        name: 'Colorland Studio',
+        username: 'Colorland',
+        role: 'Partner'
+      },
       rating: { average: 5, count: 87 },
       price: 39.99
     },
@@ -630,7 +638,11 @@ function getSampleAgentsForEmail() {
       name: 'AI Writing Assistant',
       url: `${config.websiteUrl}/agents/writing-assistant`,
       imageUrl: `${config.websiteUrl}/images/agents/writing.png`,
-      creator: 'AIWaverider',
+      creator: {
+        name: 'Berlin Media Group',
+        username: 'BerlinMedia',
+        role: 'Partner'
+      },
       rating: { average: 4, count: 215 },
       price: 29.99,
       priceDetails: {
@@ -643,7 +655,11 @@ function getSampleAgentsForEmail() {
       name: 'Financial Advisor',
       url: `${config.websiteUrl}/agents/financial-advisor`,
       imageUrl: `${config.websiteUrl}/images/agents/finance.png`,
-      creator: 'AIWaverider',
+      creator: {
+        name: 'Flawless Financial Services',
+        username: 'FlawlessFinance',
+        role: 'Partner'
+      },
       rating: { average: 4, count: 76 },
       price: 59.99
     },
@@ -652,7 +668,11 @@ function getSampleAgentsForEmail() {
       name: 'Fitness Coach',
       url: `${config.websiteUrl}/agents/fitness-coach`,
       imageUrl: `${config.websiteUrl}/images/agents/fitness.png`,
-      creator: 'AIWaverider',
+      creator: {
+        name: 'Monique Martin Wellness',
+        username: 'MoniqueMartin',
+        role: 'Partner'
+      },
       rating: { average: 5, count: 93 },
       price: 34.99
     }

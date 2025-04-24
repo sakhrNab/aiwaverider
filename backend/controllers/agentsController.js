@@ -682,7 +682,8 @@ const generateMockAgents = (count) => {
         id: `creator-${Math.floor(Math.random() * 10) + 1}`,
         name: `AI Labs ${Math.floor(Math.random() * 100) + 1}`,
         username: `AIWaverider${Math.floor(Math.random() * 100) + 1}`,
-        verified: Math.random() > 0.7 // 30% verified
+        verified: Math.random() > 0.7, // 30% verified
+        role: 'Admin'
       },
       iconUrl,
       features,
@@ -834,14 +835,47 @@ const createAgent = async (req, res) => {
     agentData.createdAt = now;
     agentData.updatedAt = now;
     
-    // Set creator information from the authenticated user if not provided
-    if (!agentData.creator || !agentData.creator.name) {
+    // Ensure creator information is complete
+    if (!agentData.creator) {
+      // If creator is missing, create it from the authenticated user
       agentData.creator = {
         name: req.user.displayName || 'Admin',
         email: req.user.email || '',
-        id: req.user.uid
+        id: req.user.uid,
+        role: req.user.role || 'Admin',
+        username: req.user.username || 
+                 (req.user.displayName?.replace(/\s+/g, '')) || 
+                 req.user.email?.split('@')[0] || 
+                 'AIWaverider'
       };
+    } else {
+      // If creator exists but is incomplete, fill in missing fields
+      if (!agentData.creator.id && req.user.uid) {
+        agentData.creator.id = req.user.uid;
+      }
+      
+      if (!agentData.creator.email && req.user.email) {
+        agentData.creator.email = req.user.email;
+      }
+      
+      if (!agentData.creator.name) {
+        agentData.creator.name = req.user.displayName || 'Admin';
+      }
+      
+      if (!agentData.creator.username) {
+        // Generate username from name or email
+        agentData.creator.username = agentData.creator.name?.replace(/\s+/g, '') || 
+                                    req.user.username || 
+                                    req.user.email?.split('@')[0] || 
+                                    'AIWaverider';
+      }
+      
+      if (!agentData.creator.role) {
+        agentData.creator.role = req.user.role || 'Admin';
+      }
     }
+    
+    console.log('Creating agent with creator:', agentData.creator);
     
     // Create the agent in Firestore
     const agentRef = await db.collection('agents').add(agentData);
@@ -1243,8 +1277,9 @@ const getLatestAgents = async (limit = 5) => {
         description: agentData.description || 'An AI agent to help with your tasks',
         price: agentData.price || 0,
         creator: {
-          name: agentData.creator?.name || 'AI Waverider',
-          username: agentData.creator?.username || 'AIWaverider',
+          name: agentData.creator?.name || '',
+          username: agentData.creator?.username || agentData.creator?.name || 'AIWaverider',
+          role: agentData.creator?.role || 'Admin',
           ...agentData.creator
         },
         rating: {
@@ -1280,8 +1315,9 @@ const getLatestAgents = async (limit = 5) => {
             description: agentData.description || 'An AI agent to help with your tasks',
             price: agentData.price || 0,
             creator: {
-              name: agentData.creator?.name || 'AI Waverider',
-              username: agentData.creator?.username || 'AIWaverider',
+              name: agentData.creator?.name || '',
+              username: agentData.creator?.username || agentData.creator?.name || 'AIWaverider',
+              role: agentData.creator?.role || 'Admin',
               ...agentData.creator
             },
             rating: {
@@ -1319,8 +1355,9 @@ const getLatestAgents = async (limit = 5) => {
             description: agentData.description || 'An AI agent to help with your tasks',
             price: agentData.price || 0,
             creator: {
-              name: agentData.creator?.name || 'AI Waverider',
-              username: agentData.creator?.username || 'AIWaverider',
+              name: agentData.creator?.name || '',
+              username: agentData.creator?.username || agentData.creator?.name || 'AIWaverider',
+              role: agentData.creator?.role || 'Admin',
               ...agentData.creator
             },
             rating: {
@@ -1357,8 +1394,9 @@ const getLatestAgents = async (limit = 5) => {
             description: agentData.description || 'An AI agent to help with your tasks',
             price: agentData.price || 0,
             creator: {
-              name: agentData.creator?.name || 'AI Waverider',
-              username: agentData.creator?.username || 'AIWaverider',
+              name: agentData.creator?.name || '',
+              username: agentData.creator?.username || agentData.creator?.name || 'AIWaverider',
+              role: agentData.creator?.role || 'Admin',
               ...agentData.creator
             },
             rating: {
@@ -1392,8 +1430,9 @@ const getLatestAgents = async (limit = 5) => {
             discountPercentage: 33
           },
           creator: { 
-            name: 'Colorland',
-            username: 'Colorland'
+            name: 'Colorland Studio',
+            username: 'Colorland',
+            role: 'Partner'
           },
           rating: { average: 4.8, count: 1578 },
           location: 'Online'
@@ -1412,8 +1451,9 @@ const getLatestAgents = async (limit = 5) => {
           },
           promoCode: 'mit Code PROMO. Endet am 23.4',
           creator: { 
-            name: 'Berlin, BERLIN',
-            username: 'BerlinBERLIN'
+            name: 'Berlin Cleaning Services',
+            username: 'BerlinBERLIN',
+            role: 'Partner'
           },
           rating: { average: 4.5, count: 47 }
         },
@@ -1430,8 +1470,9 @@ const getLatestAgents = async (limit = 5) => {
             discountPercentage: 91
           },
           creator: { 
-            name: 'Flawless Medical Beauty',
-            username: 'FlawlessBeauty'
+            name: 'Flawless Medical Beauty Center',
+            username: 'FlawlessBeauty',
+            role: 'Partner'
           },
           location: 'Berlin',
           rating: { average: 4.6, count: 83 }
@@ -1450,8 +1491,9 @@ const getLatestAgents = async (limit = 5) => {
           },
           promoCode: 'mit Code PROMO. Endet am 23.4',
           creator: { 
-            name: 'Lebensförderung Monique Martin',
-            username: 'MoniqueMartin'
+            name: 'Monique Martin Wellness',
+            username: 'MoniqueMartin',
+            role: 'Partner'
           },
           location: 'Berlin, BE',
           rating: { average: 5.0, count: 14 }
@@ -1469,8 +1511,9 @@ const getLatestAgents = async (limit = 5) => {
             discountPercentage: 50
           },
           creator: { 
-            name: 'AI Waverider',
-            username: 'AIWaverider'
+            name: 'AI Waverider Team',
+            username: 'AIWaverider',
+            role: 'Admin'
           },
           expiryDate: '05.05.2023',
           rating: { average: 4.9, count: 156 }

@@ -675,10 +675,15 @@ const ManageAgents = () => {
         return;
       }
 
+      // Add a timestamp to prevent caching issues
+      const timestamp = Date.now();
+      
       // Use our apiRequest helper with fallback to mock data
       const data = await apiRequest(
         "http://localhost:4000/api/agents",
         "GET",
+        null,
+        { timestamp } // Add timestamp as query parameter
       ).catch((error) => {
         console.warn("Using mock data due to API error:", error.message);
         // Return mock data structure
@@ -693,8 +698,11 @@ const ManageAgents = () => {
           "agents",
         );
 
+        // Clear the entire cache to ensure fresh data
+        setAgentCache({});
+        
         // Update cache for all agents
-        const newCache = { ...agentCache };
+        const newCache = {};
         data.agents.forEach((agent) => {
           newCache[agent.id] = {
             data: agent,
@@ -974,8 +982,10 @@ const ManageAgents = () => {
         // Show success message
         toast.success(agentId ? 'Agent updated successfully' : 'Agent created successfully');
         
-        // Refresh the agents list
-        fetchAgents();
+        // Force refresh the agents list to show the new agent
+        setLoading(true);
+        await fetchAgents();
+        setLoading(false);
         
         // Close the form
         setShowAgentForm(false);

@@ -372,7 +372,9 @@ const AgentDetail = () => {
             
             <div className="creator-info">
               <span className="by-text">by</span>
-              <a href="#" className="creator-name">{agent.creator?.name || "Unknown Creator"}</a>
+              <a href="#" className="creator-name">
+                {agent.creator?.username || agent.creator?.name || agent.creator?.role || "Unknown Creator"}
+              </a>
             </div>
             
             <div className="rating-display">
