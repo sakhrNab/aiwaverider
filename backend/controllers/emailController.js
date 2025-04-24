@@ -11,6 +11,7 @@ const logger = require('../utils/logger');
 const { validateEmail } = require('../utils/validators');
 const { db } = require('../config/firebase');
 const config = require('../config/email');
+const agentsController = require('../controllers/agentsController');
 
 /**
  * Send a test email to verify configuration
@@ -1568,6 +1569,281 @@ exports.sendToolUpdateEmail = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to complete tool update email campaign',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Send a test agent update email with latest agents
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.sendTestAgentUpdateEmail = async (req, res) => {
+  try {
+    const { email, title, content, headerTitle } = req.body;
+    
+    // Validate email
+    if (!email || !validateEmail(email)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Valid email address is required' 
+      });
+    }
+    
+    // Make sure no hardcoded Agent bullet points are included
+    let cleanContent = content || "";
+    if (cleanContent.includes('Agent 1:') || cleanContent.includes('Agent 2:')) {
+      cleanContent = cleanContent.split('\n')
+        .filter(line => !line.includes('Agent 1:') && !line.includes('Agent 2:') && !line.includes('Agent 3:'))
+        .join('\n');
+      
+      console.log('Removed static agent bullet points from custom content');
+    }
+    
+    // Get latest agents
+    const latestAgents = await agentsController.getLatestAgents(5);
+    
+    console.log(`Fetched ${latestAgents.length} latest agents for test email`);
+    
+    if (latestAgents.length > 0) {
+      console.log('Sample agent data:', JSON.stringify(latestAgents[0], null, 2).substring(0, 200) + '...');
+    }
+    
+    // Send agent update email
+    const result = await emailService.sendAgentUpdateEmail({
+      email,
+      name: req.user?.displayName || 'Waverider',
+      title: title || headerTitle || 'New AI Agents Available - Test',
+      content: cleanContent, // Use content directly for the template
+      latestAgents
+    });
+    
+    // Log the send
+    await emailNotificationModel.logEmailSend({
+      type: 'test-agent-update',
+      email,
+      userId: req.user?.uid || null,
+      success: true,
+      messageId: result.messageId
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Agent update test email sent successfully',
+      data: { 
+        messageId: result.messageId,
+        agentCount: latestAgents.length
+      }
+    });
+  } catch (error) {
+    logger.error(`Error sending agent update test email: ${error.message}`);
+    
+    // Log the failure
+    if (req.body.email) {
+      await emailNotificationModel.logEmailSend({
+        type: 'test-agent-update',
+        email: req.body.email,
+        userId: req.user?.uid || null,
+        success: false,
+        error: error.message
+      }).catch(e => {
+        logger.error(`Failed to log email failure: ${e.message}`);
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send agent update test email',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Send an agent update email to specific recipients
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.sendAgentUpdateEmail = async (req, res) => {
+  try {
+    const { title, content, recipientType, recipients, recipientUsersData } = req.body;
+    
+    // Validate inputs
+    if (!title || !content || !recipientType) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Title, content, and recipient type are required' 
+      });
+    }
+    
+    if (recipientType === 'specific' && (!recipients || recipients.trim() === '') && 
+        (!recipientUsersData || !Array.isArray(recipientUsersData) || recipientUsersData.length === 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Recipients are required when using specific recipient type'
+      });
+    }
+    
+    // Set update type for agents
+    const updateType = 'new_agents';
+    
+    // Create campaign record
+    const campaignId = await emailNotificationModel.createCampaign({
+      title,
+      content,
+      type: updateType,
+      recipientType,
+      createdBy: req.user?.uid || 'system',
+      specificEmails: recipientType === 'specific' && recipients ? recipients.split(',').map(e => e.trim()) : null
+    });
+    
+    // Mark as sending
+    await emailNotificationModel.markCampaignAsSending(campaignId);
+    
+    // Get latest agents
+    const latestAgents = await agentsController.getLatestAgents(5);
+    
+    console.log(`Fetched ${latestAgents.length} latest agents for agent update email`);
+    
+    if (latestAgents.length > 0) {
+      console.log('Sample agent data:', JSON.stringify(latestAgents[0], null, 2).substring(0, 200) + '...');
+    }
+    
+    // Get user data based on recipient type
+    let users = [];
+    
+    if (recipientType === 'specific') {
+      // If recipientUsersData is provided directly (from frontend)
+      if (recipientUsersData && Array.isArray(recipientUsersData) && recipientUsersData.length > 0) {
+        users = recipientUsersData;
+      } 
+      // Otherwise extract from the comma-separated list of emails
+      else if (recipients) {
+        const emails = recipients.split(',').map(email => email.trim());
+        
+        // Check if we have valid email addresses
+        if (emails.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'No valid email addresses provided'
+          });
+        }
+        
+        // For each email, create a minimal user object
+        users = emails.map(email => ({
+          id: null, // We don't have user IDs for manual emails
+          email: email,
+          firstName: '', // We don't have names for manual emails
+          lastName: ''
+        }));
+      }
+    } else {
+      // For user groups (all, premium, free)
+      let query = db.collection('users');
+      
+      if (recipientType === 'premium') {
+        query = query.where('accountType', '==', 'premium');
+      } else if (recipientType === 'free') {
+        query = query.where('accountType', '==', 'free');
+      }
+      
+      const usersSnapshot = await query.get();
+      
+      users = usersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      console.log(`Found ${users.length} users for ${recipientType} recipient type`);
+    }
+    
+    if (users.length === 0) {
+      await emailNotificationModel.markCampaignAsCompleted(campaignId, 0, 0);
+      
+      return res.status(200).json({
+        success: true,
+        message: 'No recipients found',
+        data: { campaignId, recipientCount: 0 }
+      });
+    }
+    
+    // Prepare to track success/failure
+    let sentCount = 0;
+    let failedCount = 0;
+    const errors = [];
+    
+    // Send emails to each recipient
+    for (const user of users) {
+      try {
+        // Use the agent update email function
+        const result = await emailService.sendAgentUpdateEmail({
+          email: user.email,
+          name: user.firstName || 'Waverider',
+          title: title || 'New AI Agents Available',
+          content: content,
+          latestAgents
+        });
+        
+        // Log success
+        await emailNotificationModel.logEmailSend({
+          campaignId,
+          type: updateType,
+          userId: user.id,
+          email: user.email,
+          success: true,
+          messageId: result.messageId
+        });
+        
+        sentCount++;
+        console.log(`Agent update email sent to ${user.email} successfully`);
+      } catch (error) {
+        // Log failure
+        await emailNotificationModel.logEmailSend({
+          campaignId,
+          type: updateType,
+          userId: user.id,
+          email: user.email,
+          success: false,
+          error: error.message
+        });
+        
+        failedCount++;
+        errors.push({
+          userId: user.id,
+          email: user.email,
+          error: error.message
+        });
+        
+        logger.error(`Failed to send agent update email to ${user.email}: ${error.message}`);
+      }
+    }
+    
+    // Mark campaign as completed
+    await emailNotificationModel.markCampaignAsCompleted(
+      campaignId, 
+      sentCount, 
+      failedCount,
+      errors
+    );
+    
+    res.status(200).json({
+      success: true,
+      message: 'Agent update email campaign completed',
+      data: {
+        campaignId,
+        recipientCount: users.length,
+        sentCount,
+        failedCount,
+        agentCount: latestAgents.length
+      }
+    });
+  } catch (error) {
+    logger.error(`Error sending agent update emails: ${error.message}`);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to complete agent update email campaign',
       error: error.message
     });
   }

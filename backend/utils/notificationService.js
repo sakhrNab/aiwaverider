@@ -8,6 +8,7 @@
 const admin = require('firebase-admin');
 const logger = require('./logger');
 const emailService = require('../services/emailService');
+const agentsController = require('../controllers/agentsController');
 
 // Initialize Firestore
 const db = admin.firestore();
@@ -327,18 +328,98 @@ const sendAnnouncementEmail = async (email, subject, message, data) => {
 const sendContentNotificationEmail = async (email, type, title, message, data) => {
   try {
     const { firstName, lastName } = data || {};
-    const updateType = type === NOTIFICATION_TYPES.NEW_AGENT ? 'new_agents' : 'new_tools';
     
-    await emailService.sendUpdateEmail({
-      email,
-      firstName,
-      lastName,
-      title,
-      content: message,
-      updateType
-    });
-    
-    logger.info(`Content notification email (${type}) sent to: ${email}`);
+    // For agent notifications, use our new template with latest agents
+    if (type === NOTIFICATION_TYPES.NEW_AGENT) {
+      // Get the latest 5 agents - try multiple methods
+      let latestAgents = [];
+      
+      try {
+        // First method: direct database query
+        latestAgents = await agentsController.getLatestAgents(5);
+        console.log(`First attempt to get agents found: ${latestAgents.length} agents`);
+      } catch (err) {
+        console.error('Error getting agents with first method:', err);
+      }
+      
+      // If no agents yet, try again with different approach
+      if (!latestAgents || latestAgents.length === 0) {
+        try {
+          // Second method: use the controller more directly and get any 5 agents
+          const agentsResult = await db.collection('agents').limit(5).get();
+          
+          // Format agents
+          latestAgents = [];
+          agentsResult.forEach(doc => {
+            const agentData = doc.data();
+            latestAgents.push({
+              id: doc.id,
+              url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents/${doc.id}`,
+              name: agentData.name || agentData.title || 'AI Agent',
+              imageUrl: agentData.imageUrl || agentData.image || 'https://via.placeholder.com/300x200?text=AI+Agent',
+              description: agentData.description || 'An AI agent to help with your tasks',
+              price: agentData.price || 0,
+              creator: {
+                name: agentData.creator?.name || 'AI Waverider',
+                ...agentData.creator
+              },
+              rating: {
+                average: agentData.rating?.average || 4.5,
+                count: agentData.rating?.count || 0
+              },
+              ...agentData
+            });
+          });
+          
+          console.log(`Second attempt to get agents found: ${latestAgents.length} agents`);
+        } catch (err) {
+          console.error('Error getting agents with second method:', err);
+        }
+      }
+      
+      console.log(`Sending agent notification email with ${latestAgents.length} agents`);
+      if (latestAgents.length > 0) {
+        console.log(`First agent: ${latestAgents[0].name}, Price: ${latestAgents[0].price}`);
+      } else {
+        console.log('No agents found for email notification');
+      }
+      
+      // Don't include the bullet points in the message
+      let cleanMessage = message;
+      if (message && message.includes('Agent 1:')) {
+        // This removes any lines containing "Agent 1:" or "Agent 2:" etc.
+        cleanMessage = message.split('\n')
+          .filter(line => !line.includes('Agent 1:') && !line.includes('Agent 2:') && !line.includes('Agent 3:'))
+          .join('\n');
+        
+        console.log('Removed static agent descriptions from message');
+      }
+      
+      // Send using the new agent update template
+      await emailService.sendAgentUpdateEmail({
+        email,
+        name: firstName ? `${firstName}` : 'Waverider',
+        title: title || 'New AI Agents Available',
+        content: cleanMessage, // Use content directly for the template
+        latestAgents
+      });
+      
+      logger.info(`Agent notification email sent to: ${email} with ${latestAgents.length} latest agents`);
+    } else {
+      // For other notification types, use the standard update template
+      const updateType = type === NOTIFICATION_TYPES.NEW_TOOL ? 'new_tools' : 'notification';
+      
+      await emailService.sendUpdateEmail({
+        email,
+        firstName,
+        lastName,
+        title,
+        content: message,
+        updateType
+      });
+      
+      logger.info(`Content notification email (${type}) sent to: ${email}`);
+    }
   } catch (error) {
     logger.error(`Error sending content notification email: ${error.message}`);
     throw error;

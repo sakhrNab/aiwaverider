@@ -9,7 +9,8 @@ const CACHE_KEYS = {
   FEATURED: 'featured_agents',
   AGENT: 'agent_',
   WISHLISTS: 'user_wishlists_',
-  WISHLIST: 'wishlist_'
+  WISHLIST: 'wishlist_',
+  LATEST: 'latest_agents'
 };
 
 // Cache TTL for agents (5 minutes)
@@ -1204,6 +1205,300 @@ const incrementDownloadCount = async (req, res) => {
   }
 };
 
+/**
+ * Get latest agents for email notifications
+ * @param {number} limit - Number of latest agents to return
+ * @returns {Array} Array of latest agents
+ */
+const getLatestAgents = async (limit = 5) => {
+  try {
+    console.log(`Fetching latest ${limit} agents for email notification`);
+    
+    // Create cache key for latest agents
+    const cacheKey = `${CACHE_KEYS.LATEST}:${limit}`;
+    
+    // Try to get real agents first
+    let agents = [];
+    
+    // Query agents sorted by createdAt (descending)
+    let query = db.collection('agents')
+      .orderBy('createdAt', 'desc')
+      .limit(parseInt(limit));
+    
+    const agentsSnapshot = await query.get();
+    
+    // Log what we found in the database
+    console.log(`Found ${agentsSnapshot.size} agents in the database by createdAt`);
+
+    agentsSnapshot.forEach(doc => {
+      const agentData = doc.data();
+      
+      // Ensure we have all the required fields for the email template
+      const formattedAgent = {
+        id: doc.id,
+        url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents/${doc.id}`,
+        name: agentData.name || agentData.title || 'AI Agent',
+        imageUrl: agentData.imageUrl || agentData.image || 'https://via.placeholder.com/300x200?text=AI+Agent',
+        description: agentData.description || 'An AI agent to help with your tasks',
+        price: agentData.price || 0,
+        creator: {
+          name: agentData.creator?.name || 'AI Waverider',
+          ...agentData.creator
+        },
+        rating: {
+          average: agentData.rating?.average || 4.5,
+          count: agentData.rating?.count || 0
+        },
+        ...agentData
+      };
+      
+      agents.push(formattedAgent);
+    });
+    
+    // If we don't have agents by createdAt, try by dateCreated
+    if (agents.length === 0) {
+      console.log('No agents found with createdAt, trying dateCreated field');
+      
+      query = db.collection('agents')
+        .orderBy('dateCreated', 'desc')
+        .limit(parseInt(limit));
+      
+      const dateCreatedSnapshot = await query.get();
+      console.log(`Found ${dateCreatedSnapshot.size} agents in the database by dateCreated`);
+      
+      dateCreatedSnapshot.forEach(doc => {
+        if (!agents.some(agent => agent.id === doc.id)) {
+          const agentData = doc.data();
+          
+          const formattedAgent = {
+            id: doc.id,
+            url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents/${doc.id}`,
+            name: agentData.name || agentData.title || 'AI Agent',
+            imageUrl: agentData.imageUrl || agentData.image || 'https://via.placeholder.com/300x200?text=AI+Agent',
+            description: agentData.description || 'An AI agent to help with your tasks',
+            price: agentData.price || 0,
+            creator: {
+              name: agentData.creator?.name || 'AI Waverider',
+              ...agentData.creator
+            },
+            rating: {
+              average: agentData.rating?.average || 4.5,
+              count: agentData.rating?.count || 0
+            },
+            ...agentData
+          };
+          
+          agents.push(formattedAgent);
+        }
+      });
+    }
+    
+    // If we still don't have agents, try to get featured/bestsellers
+    if (agents.length === 0) {
+      console.log('No agents found by date, trying featured/bestseller agents');
+      
+      query = db.collection('agents')
+        .where('isBestseller', '==', true)
+        .limit(parseInt(limit));
+      
+      const featuredSnapshot = await query.get();
+      console.log(`Found ${featuredSnapshot.size} featured agents in the database`);
+      
+      featuredSnapshot.forEach(doc => {
+        if (!agents.some(agent => agent.id === doc.id)) {
+          const agentData = doc.data();
+          
+          const formattedAgent = {
+            id: doc.id,
+            url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents/${doc.id}`,
+            name: agentData.name || agentData.title || 'AI Agent',
+            imageUrl: agentData.imageUrl || agentData.image || 'https://via.placeholder.com/300x200?text=AI+Agent',
+            description: agentData.description || 'An AI agent to help with your tasks',
+            price: agentData.price || 0,
+            creator: {
+              name: agentData.creator?.name || 'AI Waverider',
+              ...agentData.creator
+            },
+            rating: {
+              average: agentData.rating?.average || 4.5,
+              count: agentData.rating?.count || 0
+            },
+            ...agentData
+          };
+          
+          agents.push(formattedAgent);
+        }
+      });
+    }
+    
+    // If still no agents, try to get ANY agents without filtering
+    if (agents.length === 0) {
+      console.log('Still no agents found, trying to get any agents without filtering');
+      
+      query = db.collection('agents')
+        .limit(parseInt(limit));
+      
+      const anyAgentsSnapshot = await query.get();
+      console.log(`Found ${anyAgentsSnapshot.size} total agents in the database`);
+      
+      anyAgentsSnapshot.forEach(doc => {
+        if (!agents.some(agent => agent.id === doc.id)) {
+          const agentData = doc.data();
+          
+          const formattedAgent = {
+            id: doc.id,
+            url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents/${doc.id}`,
+            name: agentData.name || agentData.title || 'AI Agent',
+            imageUrl: agentData.imageUrl || agentData.image || 'https://via.placeholder.com/300x200?text=AI+Agent',
+            description: agentData.description || 'An AI agent to help with your tasks',
+            price: agentData.price || 0,
+            creator: {
+              name: agentData.creator?.name || 'AI Waverider',
+              ...agentData.creator
+            },
+            rating: {
+              average: agentData.rating?.average || 4.5,
+              count: agentData.rating?.count || 0
+            },
+            ...agentData
+          };
+          
+          agents.push(formattedAgent);
+        }
+      });
+    }
+    
+    // If still no real agents from the database, use the sample agents as a last resort
+    if (agents.length === 0) {
+      console.log('No real agents found in database, using sample agents');
+      
+      // Create a few sample agents
+      const sampleAgents = [
+        {
+          id: 'sample-agent-1',
+          url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents`,
+          name: 'Writing Assistant',
+          imageUrl: 'https://via.placeholder.com/300x200?text=Writing+Assistant',
+          description: 'AI assistant that helps with writing tasks',
+          price: 19.99,
+          priceDetails: {
+            originalPrice: 29.99,
+            discountedPrice: 19.99,
+            discountPercentage: 33
+          },
+          creator: { name: 'Colorland' },
+          rating: { average: 4.8, count: 1578 },
+          location: 'Online'
+        },
+        {
+          id: 'sample-agent-2',
+          url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents`,
+          name: 'CLEAN CAR ONE',
+          imageUrl: 'https://via.placeholder.com/300x200?text=Clean+Car',
+          description: 'Interior & exterior cleaning service',
+          price: 29.90,
+          priceDetails: {
+            originalPrice: 69.90,
+            discountedPrice: 29.90,
+            discountPercentage: 57
+          },
+          promoCode: 'mit Code PROMO. Endet am 23.4',
+          creator: { name: 'Berlin, BERLIN' },
+          rating: { average: 4.5, count: 47 }
+        },
+        {
+          id: 'sample-agent-3',
+          url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents`,
+          name: 'Laser Hair Removal',
+          imageUrl: 'https://via.placeholder.com/300x200?text=Laser+Hair+Removal',
+          description: 'Professional laser hair removal',
+          price: 39.90,
+          priceDetails: {
+            originalPrice: 267.00,
+            discountedPrice: 39.90,
+            discountPercentage: 91
+          },
+          creator: { name: 'Flawless Medical Beauty' },
+          location: 'Berlin',
+          rating: { average: 4.6, count: 83 }
+        },
+        {
+          id: 'sample-agent-4',
+          url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents`,
+          name: 'Full Body Massage',
+          imageUrl: 'https://via.placeholder.com/300x200?text=Body+Massage',
+          description: '30 or 70 min full body massage',
+          price: 27.19,
+          priceDetails: {
+            originalPrice: 45.90,
+            discountedPrice: 27.19,
+            discountPercentage: 40
+          },
+          promoCode: 'mit Code PROMO. Endet am 23.4',
+          creator: { name: 'Lebensförderung Monique Martin' },
+          location: 'Berlin, BE',
+          rating: { average: 5.0, count: 14 }
+        },
+        {
+          id: 'sample-agent-5',
+          url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents`,
+          name: 'Code Generator Pro',
+          imageUrl: 'https://via.placeholder.com/300x200?text=Code+Generator',
+          description: 'Generate high-quality code snippets',
+          price: 19.99,
+          priceDetails: {
+            originalPrice: 39.99,
+            discountedPrice: 19.99,
+            discountPercentage: 50
+          },
+          creator: { name: 'AI Waverider' },
+          expiryDate: '05.05.2023',
+          rating: { average: 4.9, count: 156 }
+        }
+      ];
+      
+      // Add sample agents up to the requested limit
+      agents = sampleAgents.slice(0, limit);
+    }
+    
+    console.log(`Successfully retrieved ${agents.length} latest agents for email`);
+    
+    // Return the agents, limited to the requested number
+    return agents.slice(0, limit);
+  } catch (error) {
+    console.error('Error fetching latest agents for email:', error);
+    console.error(error.stack); // Log the full stack trace for debugging
+    return [];
+  }
+};
+
+/**
+ * Get the latest agents for email notifications and the frontend
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getLatestAgentsRoute = async (req, res) => {
+  try {
+    const { limit = 5 } = req.query;
+    
+    // Use the existing function to get latest agents
+    const latestAgents = await getLatestAgents(parseInt(limit));
+    
+    return res.status(200).json({ 
+      success: true,
+      agents: latestAgents,
+      count: latestAgents.length
+    });
+  } catch (error) {
+    console.error('Error getting latest agents:', error);
+    return res.status(500).json({ 
+      success: false,
+      error: 'Failed to get latest agents', 
+      message: error.message 
+    });
+  }
+};
+
 // Log the status of each function before exporting
 console.log("Before export - function status:");
 console.log("- getAgents:", typeof getAgents === 'function');
@@ -1226,5 +1521,7 @@ module.exports = {
   combinedUpdate,
   createAgentWithPrice,
   getDownloadCount,
-  incrementDownloadCount
+  incrementDownloadCount,
+  getLatestAgents,
+  getLatestAgentsRoute
 }; 

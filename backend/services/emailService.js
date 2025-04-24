@@ -11,6 +11,31 @@ const path = require('path');
 const handlebars = require('handlebars');
 const config = require('../config/email');
 const logger = require('../utils/logger');
+const Handlebars = require('handlebars');
+
+// Register Handlebars helpers
+Handlebars.registerHelper('times', function(n, block) {
+  var accum = '';
+  for(var i = 0; i < n; ++i)
+    accum += block.fn(i);
+  return accum;
+});
+
+Handlebars.registerHelper('formatPrice', function(price) {
+  if (!price && price !== 0) return 'Free';
+  if (price === 0) return 'Free';
+  return `$${parseFloat(price).toFixed(2)}`;
+});
+
+Handlebars.registerHelper('formatDate', function(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+});
 
 // Cache for compiled email templates
 const templateCache = {};
@@ -489,4 +514,138 @@ exports.sendCustomEmail = async (emailData) => {
     logger.error(`Failed to send custom email: ${error.message}`);
     throw error;
   }
-}; 
+};
+
+/**
+ * Send an agent update email to user
+ * @param {Object} options - Email sending options
+ * @returns {Promise} - Email send result
+ */
+exports.sendAgentUpdateEmail = async (options) => {
+  const {
+    email,
+    name,
+    title = 'New AI Agents Available',
+    content,
+    latestAgents = []
+  } = options;
+  
+  try {
+    // Ensure we have agents to display
+    let agentsToDisplay = latestAgents;
+    
+    // If no agents provided, fetch latest 5 as fallback
+    if (!agentsToDisplay || agentsToDisplay.length === 0) {
+      console.log('No agents provided to email service. Fetching latest agents as fallback.');
+      
+      const agentsController = require('../controllers/agentsController');
+      agentsToDisplay = await agentsController.getLatestAgents(5);
+      
+      console.log(`Fetched ${agentsToDisplay.length} agents as fallback`);
+      
+      // If we still have no agents, create sample ones 
+      if (!agentsToDisplay || agentsToDisplay.length === 0) {
+        console.log('Falling back to sample agents as no agents found in database');
+        agentsToDisplay = getSampleAgentsForEmail();
+      }
+    }
+    
+    // Log agents for debugging
+    if (agentsToDisplay.length > 0) {
+      console.log(`Sending email with ${agentsToDisplay.length} agents`);
+      console.log('First agent data:', JSON.stringify(agentsToDisplay[0], null, 2).substring(0, 500) + '...');
+    } else {
+      console.log('Warning: No agents available for email notification');
+    }
+    
+    // Get the compiled template
+    const template = await getCompiledTemplate('new_agents');
+    
+    // Prepare template data
+    const templateData = {
+      title,
+      name,
+      content,
+      latestAgents: agentsToDisplay,
+      supportEmail: config.supportEmail,
+      websiteUrl: config.websiteUrl,
+      currentYear: new Date().getFullYear()
+    };
+    
+    // Render the template with data
+    const html = template(templateData);
+    
+    // Send the email
+    return await sendEmail({
+      to: email,
+      subject: title,
+      html
+    });
+  } catch (error) {
+    logger.error(`Error sending agent update email: ${error.message}`);
+    throw error;
+  }
+};
+
+/**
+ * Get sample agents for email template when real ones are not available
+ * @returns {Array} - Array of sample agent objects
+ */
+function getSampleAgentsForEmail() {
+  // Create sample agent data for fallback
+  return [
+    {
+      id: 'sample-001',
+      name: 'AI Personal Tutor',
+      url: `${config.websiteUrl}/agents/ai-personal-tutor`,
+      imageUrl: `${config.websiteUrl}/images/agents/tutor.png`,
+      creator: { name: 'AI Waverider' },
+      rating: { average: 4, count: 128 },
+      price: 49.99,
+      priceDetails: {
+        originalPrice: 69.99,
+        discountPercentage: 28
+      }
+    },
+    {
+      id: 'sample-002',
+      name: 'Social Media Manager',
+      url: `${config.websiteUrl}/agents/social-media-manager`,
+      imageUrl: `${config.websiteUrl}/images/agents/social.png`,
+      creator: { name: 'AI Waverider' },
+      rating: { average: 5, count: 87 },
+      price: 39.99
+    },
+    {
+      id: 'sample-003',
+      name: 'AI Writing Assistant',
+      url: `${config.websiteUrl}/agents/writing-assistant`,
+      imageUrl: `${config.websiteUrl}/images/agents/writing.png`,
+      creator: { name: 'AI Waverider' },
+      rating: { average: 4, count: 215 },
+      price: 29.99,
+      priceDetails: {
+        originalPrice: 49.99,
+        discountPercentage: 40
+      }
+    },
+    {
+      id: 'sample-004',
+      name: 'Financial Advisor',
+      url: `${config.websiteUrl}/agents/financial-advisor`,
+      imageUrl: `${config.websiteUrl}/images/agents/finance.png`,
+      creator: { name: 'AI Waverider' },
+      rating: { average: 4, count: 76 },
+      price: 59.99
+    },
+    {
+      id: 'sample-005',
+      name: 'Fitness Coach',
+      url: `${config.websiteUrl}/agents/fitness-coach`,
+      imageUrl: `${config.websiteUrl}/images/agents/fitness.png`,
+      creator: { name: 'AI Waverider' },
+      rating: { average: 5, count: 93 },
+      price: 34.99
+    }
+  ];
+} 

@@ -42,6 +42,9 @@ export const sendTestEmail = async (email, type = '', data = {}) => {
       case 'agent':
         endpoint = `${API_URL}/api/email/test-agent`;
         break;
+      case 'send-agent-update':
+        endpoint = `${API_URL}/api/email/test-agent-update`;
+        break;
       case 'tool':
         endpoint = `${API_URL}/api/email/test-tool`;
         break;

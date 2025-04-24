@@ -52,7 +52,7 @@ router.post('/send-custom', isAdmin, emailController.sendCustomEmail);
  * @desc    Send an AI agent update email to specific recipients
  * @access  Admin
  */
-router.post('/send-agent-update', isAdmin, emailController.sendUpdateToUsers);
+router.post('/send-agent-update', isAdmin, emailController.sendAgentUpdateEmail);
 
 /**
  * @route   POST /api/email/send-tool-update
@@ -137,5 +137,12 @@ router.post('/test-tool', isAdmin, emailController.sendTestToolEmail);
  * @access  Admin
  */
 router.post('/test-custom', isAdmin, emailController.sendTestCustomEmail);
+
+/**
+ * @route   POST /api/email/test-agent-update
+ * @desc    Send a test agent update email with latest agents
+ * @access  Admin
+ */
+router.post('/test-agent-update', isAdmin, emailController.sendTestAgentUpdateEmail);
 
 module.exports = router; 

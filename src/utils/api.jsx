@@ -2092,4 +2092,32 @@ export const updateEmailPreferences = async (preferences) => {
   }
 };
 
+/**
+ * Fetch the latest agents for email notifications
+ * @param {number} limit - Number of latest agents to return (default 5)
+ * @returns {Promise<Array>} - Array of latest agents
+ */
+export const fetchLatestAgents = async (limit = 5) => {
+  try {
+    console.log(`Fetching latest ${limit} agents from API`);
+    const response = await api.get(`/api/agents/latest?limit=${limit}`);
+    console.log('Successfully fetched latest agents from API:', response.data.agents.length);
+    
+    // Validate agents to ensure they exist and have valid IDs
+    const validAgents = response.data.agents.filter(agent => {
+      return agent && agent.id && typeof agent.id === 'string';
+    });
+    
+    if (validAgents.length !== response.data.agents.length) {
+      console.warn(`Filtered out ${response.data.agents.length - validAgents.length} invalid latest agents`);
+    }
+    
+    return validAgents;
+  } catch (error) {
+    console.error('Error fetching latest agents from API:', error);
+    // Return empty array on error
+    return [];
+  }
+};
+
 export default api;
