@@ -5,8 +5,8 @@
  */
 
 require('dotenv').config();
-const emailService = require('./services/emailService');
-const logger = require('./utils/logger');
+const emailService = require('../services/emailService');
+const logger = require('../utils/logger');
 
 // Test user data
 const userData = {
