@@ -526,6 +526,7 @@ exports.sendAgentUpdateEmail = async (options) => {
     email,
     name,
     title = 'New AI Agents Available',
+    headerTitle = 'New AI Agents Available',
     content,
     latestAgents = []
   } = options;
@@ -564,6 +565,7 @@ exports.sendAgentUpdateEmail = async (options) => {
     // Prepare template data
     const templateData = {
       title,
+      headerTitle,
       name,
       content,
       latestAgents: agentsToDisplay,
@@ -571,6 +573,13 @@ exports.sendAgentUpdateEmail = async (options) => {
       websiteUrl: config.websiteUrl,
       currentYear: new Date().getFullYear()
     };
+    
+    // Log template data for debugging
+    console.log('Agent update email template data:', JSON.stringify({
+      title,
+      headerTitle,
+      name: name ? name.substring(0, 10) + '...' : 'null' // Truncate for privacy
+    }));
     
     // Render the template with data
     const html = template(templateData);
@@ -599,7 +608,7 @@ function getSampleAgentsForEmail() {
       name: 'AI Personal Tutor',
       url: `${config.websiteUrl}/agents/ai-personal-tutor`,
       imageUrl: `${config.websiteUrl}/images/agents/tutor.png`,
-      creator: { name: 'AI Waverider' },
+      creator: 'AIWaverider',
       rating: { average: 4, count: 128 },
       price: 49.99,
       priceDetails: {
@@ -612,7 +621,7 @@ function getSampleAgentsForEmail() {
       name: 'Social Media Manager',
       url: `${config.websiteUrl}/agents/social-media-manager`,
       imageUrl: `${config.websiteUrl}/images/agents/social.png`,
-      creator: { name: 'AI Waverider' },
+      creator: 'AIWaverider',
       rating: { average: 5, count: 87 },
       price: 39.99
     },
@@ -621,7 +630,7 @@ function getSampleAgentsForEmail() {
       name: 'AI Writing Assistant',
       url: `${config.websiteUrl}/agents/writing-assistant`,
       imageUrl: `${config.websiteUrl}/images/agents/writing.png`,
-      creator: { name: 'AI Waverider' },
+      creator: 'AIWaverider',
       rating: { average: 4, count: 215 },
       price: 29.99,
       priceDetails: {
@@ -634,7 +643,7 @@ function getSampleAgentsForEmail() {
       name: 'Financial Advisor',
       url: `${config.websiteUrl}/agents/financial-advisor`,
       imageUrl: `${config.websiteUrl}/images/agents/finance.png`,
-      creator: { name: 'AI Waverider' },
+      creator: 'AIWaverider',
       rating: { average: 4, count: 76 },
       price: 59.99
     },
@@ -643,7 +652,7 @@ function getSampleAgentsForEmail() {
       name: 'Fitness Coach',
       url: `${config.websiteUrl}/agents/fitness-coach`,
       imageUrl: `${config.websiteUrl}/images/agents/fitness.png`,
-      creator: { name: 'AI Waverider' },
+      creator: 'AIWaverider',
       rating: { average: 5, count: 93 },
       price: 34.99
     }

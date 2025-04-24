@@ -1781,6 +1781,7 @@ exports.sendAgentUpdateEmail = async (req, res) => {
           email: user.email,
           name: user.firstName || 'Waverider',
           title: title || 'New AI Agents Available',
+          headerTitle: req.body.headerTitle || title || 'New AI Agents Available',
           content: content,
           latestAgents
         });

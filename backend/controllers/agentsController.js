@@ -681,6 +681,7 @@ const generateMockAgents = (count) => {
       creator: {
         id: `creator-${Math.floor(Math.random() * 10) + 1}`,
         name: `AI Labs ${Math.floor(Math.random() * 100) + 1}`,
+        username: `AIWaverider${Math.floor(Math.random() * 100) + 1}`,
         verified: Math.random() > 0.7 // 30% verified
       },
       iconUrl,
@@ -1243,6 +1244,7 @@ const getLatestAgents = async (limit = 5) => {
         price: agentData.price || 0,
         creator: {
           name: agentData.creator?.name || 'AI Waverider',
+          username: agentData.creator?.username || 'AIWaverider',
           ...agentData.creator
         },
         rating: {
@@ -1279,6 +1281,7 @@ const getLatestAgents = async (limit = 5) => {
             price: agentData.price || 0,
             creator: {
               name: agentData.creator?.name || 'AI Waverider',
+              username: agentData.creator?.username || 'AIWaverider',
               ...agentData.creator
             },
             rating: {
@@ -1317,6 +1320,7 @@ const getLatestAgents = async (limit = 5) => {
             price: agentData.price || 0,
             creator: {
               name: agentData.creator?.name || 'AI Waverider',
+              username: agentData.creator?.username || 'AIWaverider',
               ...agentData.creator
             },
             rating: {
@@ -1354,6 +1358,7 @@ const getLatestAgents = async (limit = 5) => {
             price: agentData.price || 0,
             creator: {
               name: agentData.creator?.name || 'AI Waverider',
+              username: agentData.creator?.username || 'AIWaverider',
               ...agentData.creator
             },
             rating: {
@@ -1386,7 +1391,10 @@ const getLatestAgents = async (limit = 5) => {
             discountedPrice: 19.99,
             discountPercentage: 33
           },
-          creator: { name: 'Colorland' },
+          creator: { 
+            name: 'Colorland',
+            username: 'Colorland'
+          },
           rating: { average: 4.8, count: 1578 },
           location: 'Online'
         },
@@ -1403,7 +1411,10 @@ const getLatestAgents = async (limit = 5) => {
             discountPercentage: 57
           },
           promoCode: 'mit Code PROMO. Endet am 23.4',
-          creator: { name: 'Berlin, BERLIN' },
+          creator: { 
+            name: 'Berlin, BERLIN',
+            username: 'BerlinBERLIN'
+          },
           rating: { average: 4.5, count: 47 }
         },
         {
@@ -1418,7 +1429,10 @@ const getLatestAgents = async (limit = 5) => {
             discountedPrice: 39.90,
             discountPercentage: 91
           },
-          creator: { name: 'Flawless Medical Beauty' },
+          creator: { 
+            name: 'Flawless Medical Beauty',
+            username: 'FlawlessBeauty'
+          },
           location: 'Berlin',
           rating: { average: 4.6, count: 83 }
         },
@@ -1435,7 +1449,10 @@ const getLatestAgents = async (limit = 5) => {
             discountPercentage: 40
           },
           promoCode: 'mit Code PROMO. Endet am 23.4',
-          creator: { name: 'Lebensförderung Monique Martin' },
+          creator: { 
+            name: 'Lebensförderung Monique Martin',
+            username: 'MoniqueMartin'
+          },
           location: 'Berlin, BE',
           rating: { average: 5.0, count: 14 }
         },
@@ -1451,7 +1468,10 @@ const getLatestAgents = async (limit = 5) => {
             discountedPrice: 19.99,
             discountPercentage: 50
           },
-          creator: { name: 'AI Waverider' },
+          creator: { 
+            name: 'AI Waverider',
+            username: 'AIWaverider'
+          },
           expiryDate: '05.05.2023',
           rating: { average: 4.9, count: 156 }
         }

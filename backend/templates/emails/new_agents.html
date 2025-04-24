@@ -276,11 +276,11 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>{{title}}</h1>
+      <h1>{{headerTitle}}</h1>
     </div>
     
     <div class="content">
-      <p>Dear {{name}},</p>
+      <p>Dear <span style="font-weight: bold; font-size: 1.2em;">{{name}},</span></p>
       
       <div class="update-box">
         <div class="new-badge">NEW</div>
@@ -297,7 +297,7 @@
               <img src="{{imageUrl}}" alt="{{name}}" class="agent-image">
               <div class="agent-info">
                 <div class="agent-title">{{name}}</div>
-                <div class="agent-creator">by {{creator.name}}</div>
+                <div class="agent-creator">by {{#if creator.username}}{{creator.username}}{{else}}{{#if creator.name}}{{creator.name}}{{else}}{{#if creator}}{{creator}}{{else}}Admin{{/if}}{{/if}}{{/if}}</div>
                 
                 <div class="agent-rating">
                   {{#times rating.average}}
