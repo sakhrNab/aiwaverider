@@ -266,14 +266,10 @@
       
       <div class="update-box">
         <div class="new-badge">NEW</div>
-        <p class="announcement-text">We're excited to announce new AI agents on our platform!</p>
+        {{#if content}}
+        <div class="announcement-text">{{{content}}}</div>
+        {{/if}}
       </div>
-
-      {{#if content}}
-      <div class="custom-content">
-        {{{content}}}
-      </div>
-      {{/if}}
       
       <div class="agents-container">
         <h3 class="agents-heading">Latest AI Agents</h3>

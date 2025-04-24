@@ -309,7 +309,7 @@ function getDefaultContent(templateType) {
     case 'update':
       return '<p>Here are the latest updates from AI Waverider this week:</p><ul><li>Update item 1</li><li>Update item 2</li></ul>';
     case 'agent':
-      return '<p>We\'re excited to announce new AI agents on our platform!</p><ul><li><strong>Agent 1</strong>: Description of the first agent</li><li><strong>Agent 2</strong>: Description of the second agent</li></ul>';
+      return '<p>We\'re excited to announce new AI agents on our platform!</p>';
     case 'tool':
       return '<p>Check out our latest AI tools that have just been released:</p><ul><li><strong>Tool 1</strong>: Description of the first tool</li><li><strong>Tool 2</strong>: Description of the second tool</li></ul>';
     case 'global':

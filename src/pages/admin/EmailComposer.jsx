@@ -78,7 +78,7 @@ const EmailComposer = () => {
       case 'agent':
         setSubject('New AI Agents Available - AI Waverider');
         setHeaderTitle('New AI Agents Available');
-        setContent('<p>We\'re excited to announce new AI agents on our platform!</p><ul><li><strong>Agent 1</strong>: Description of the first agent</li><li><strong>Agent 2</strong>: Description of the second agent</li></ul>');
+        setContent('<p>We\'re excited to announce new AI agents on our platform!</p>');
         break;
       case 'tool':
         setSubject('New AI Tools Released - AI Waverider');
