@@ -253,6 +253,24 @@
       line-height: 1.6;
       margin-bottom: 15px;
     }
+
+    /* Agents container within update box */
+    .update-box .agents-container {
+      margin-top: 20px;
+    }
+    
+    .update-box .agent-card {
+      background-color: #ffffff;
+      border: 1px solid #d9e8f7;
+      margin-bottom: 12px;
+    }
+    
+    .update-box .agents-heading {
+      color: #2980b9;
+      margin-top: 5px;
+      padding-top: 10px;
+      border-top: 1px solid #b3d1e8;
+    }
   </style>
 </head>
 <body>
@@ -269,58 +287,58 @@
         {{#if content}}
         <div class="announcement-text">{{{content}}}</div>
         {{/if}}
-      </div>
-      
-      <div class="agents-container">
-        <h3 class="agents-heading">Latest AI Agents</h3>
         
-        {{#if latestAgents.length}}
-          {{#each latestAgents}}
-          <a href="{{url}}" class="agent-card">
-            <img src="{{imageUrl}}" alt="{{name}}" class="agent-image">
-            <div class="agent-info">
-              <div class="agent-title">{{name}}</div>
-              <div class="agent-creator">by {{creator.name}}</div>
-              
-              <div class="agent-rating">
-                {{#times rating.average}}
-                <span class="star">★</span>
-                {{/times}}
-                <span class="rating-count">({{rating.count}})</span>
-              </div>
-              
-              {{#if location}}
-              <div class="location">{{location}}</div>
-              {{/if}}
-              
-              <div class="price-discount">
-                <div>
-                  {{#if priceDetails.originalPrice}}
-                  <span class="original-price">{{formatPrice priceDetails.originalPrice}}</span>
-                  {{/if}}
-                  <span class="agent-price">{{formatPrice price}}</span>
+        <div class="agents-container">
+          <h3 class="agents-heading">Latest AI Agents</h3>
+          
+          {{#if latestAgents.length}}
+            {{#each latestAgents}}
+            <a href="{{url}}" class="agent-card">
+              <img src="{{imageUrl}}" alt="{{name}}" class="agent-image">
+              <div class="agent-info">
+                <div class="agent-title">{{name}}</div>
+                <div class="agent-creator">by {{creator.name}}</div>
+                
+                <div class="agent-rating">
+                  {{#times rating.average}}
+                  <span class="star">★</span>
+                  {{/times}}
+                  <span class="rating-count">({{rating.count}})</span>
                 </div>
                 
-                {{#if priceDetails.discountPercentage}}
-                <span class="discount-badge">-{{priceDetails.discountPercentage}}%</span>
+                {{#if location}}
+                <div class="location">{{location}}</div>
+                {{/if}}
+                
+                <div class="price-discount">
+                  <div>
+                    {{#if priceDetails.originalPrice}}
+                    <span class="original-price">{{formatPrice priceDetails.originalPrice}}</span>
+                    {{/if}}
+                    <span class="agent-price">{{formatPrice price}}</span>
+                  </div>
+                  
+                  {{#if priceDetails.discountPercentage}}
+                  <span class="discount-badge">-{{priceDetails.discountPercentage}}%</span>
+                  {{/if}}
+                </div>
+                
+                {{#if promoCode}}
+                <div class="promo-code">{{promoCode}}</div>
+                {{/if}}
+                
+                {{#if expiryDate}}
+                <div class="expiry">Ends on {{formatDate expiryDate}}</div>
                 {{/if}}
               </div>
-              
-              {{#if promoCode}}
-              <div class="promo-code">{{promoCode}}</div>
-              {{/if}}
-              
-              {{#if expiryDate}}
-              <div class="expiry">Ends on {{formatDate expiryDate}}</div>
-              {{/if}}
+            </a>
+            {{/each}}
+          {{else}}
+            <div class="no-agents">
+              <p>We're currently preparing new AI agents for you. Stay tuned for exciting updates coming soon!</p>
             </div>
-          </a>
-          {{/each}}
-        {{else}}
-          <div class="no-agents">
-            <p>We're currently preparing new AI agents for you. Stay tuned for exciting updates coming soon!</p>
-          </div>
-        {{/if}}
+          {{/if}}
+        </div>
       </div>
       
       <div class="cta">
