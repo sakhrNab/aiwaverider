@@ -44,7 +44,10 @@ const AgentCard = ({ agent }) => {
   // Format the price for display
   const formatPrice = () => {
     // First check if agent is marked as free
-    if (agent.isFree) return 'Free';
+    if (agent.isFree) return <span className="free-price">Free</span>;
+    
+    // Check if price is 0
+    if (agent.price === 0) return <span className="free-price">Free</span>;
     
     // Check if we have price details object
     if (agent.priceDetails) {
@@ -52,6 +55,11 @@ const AgentCard = ({ agent }) => {
       const currencySymbol = currency === 'USD' ? '$' : 
                             currency === 'EUR' ? '€' :
                             currency === 'GBP' ? '£' : currency;
+      
+      // If price is 0, it's free
+      if (basePrice === 0 || discountedPrice === 0) {
+        return <span className="free-price">Free</span>;
+      }
       
       // If there's a discount, show both prices
       if (discountedPrice !== undefined && discountedPrice < basePrice) {
@@ -71,7 +79,11 @@ const AgentCard = ({ agent }) => {
     // Handle string or number price
     if (agent.price !== undefined) {
       if (typeof agent.price === 'number') {
-        return agent.price === 0 ? 'Free' : `$${agent.price.toFixed(2)}`;
+        return agent.price === 0 ? <span className="free-price">Free</span> : `$${agent.price.toFixed(2)}`;
+      }
+      // Check if price string is "Free" or "0"
+      if (agent.price === 'Free' || agent.price === '0') {
+        return <span className="free-price">Free</span>;
       }
       return agent.price; // Return as is if it's a string
     }
