@@ -49,10 +49,18 @@ const AgentCard = ({ agent }) => {
     // Check if we have price details object
     if (agent.priceDetails) {
       const { basePrice, discountedPrice, currency } = agent.priceDetails;
-      const currencySymbol = currency === 'USD' ? '$' : currency;
+      const currencySymbol = currency === 'USD' ? '$' : 
+                            currency === 'EUR' ? '€' :
+                            currency === 'GBP' ? '£' : currency;
       
+      // If there's a discount, show both prices
       if (discountedPrice !== undefined && discountedPrice < basePrice) {
-        return `${currencySymbol}${discountedPrice.toFixed(2)}`;
+        return (
+          <div className="price-display">
+            <span className="original-price">{currencySymbol}{basePrice.toFixed(2)}</span>
+            <span className="discounted-price">{currencySymbol}{discountedPrice.toFixed(2)}</span>
+          </div>
+        );
       }
       
       if (basePrice !== undefined) {

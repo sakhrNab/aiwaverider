@@ -247,4 +247,22 @@
   .marketplace-agent-image-container {
     padding-top: 65%; /* Slightly higher aspect ratio for mobile */
   }
+}
+
+.price-display {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.original-price {
+  text-decoration: line-through;
+  color: #888;
+  font-size: 0.85em;
+  margin-bottom: 2px;
+}
+
+.discounted-price {
+  color: #e53e3e;
+  font-weight: bold;
 } 

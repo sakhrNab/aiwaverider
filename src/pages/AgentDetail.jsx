@@ -392,7 +392,26 @@ const AgentDetail = () => {
                           <h3 className="font-medium text-gray-800 mb-1 truncate">{relatedAgent.name}</h3>
                           <div className="flex items-center justify-between">
                             <div className="text-sm text-gray-500">
-                              <span className="font-medium text-indigo-600">${relatedAgent.price.toFixed(2)}</span>
+                              {relatedAgent.priceDetails ? (
+                                relatedAgent.priceDetails.discountedPrice < relatedAgent.priceDetails.basePrice ? (
+                                  <div className="flex flex-col">
+                                    <span className="text-gray-400 line-through text-xs">
+                                      ${relatedAgent.priceDetails.basePrice.toFixed(2)}
+                                    </span>
+                                    <span className="font-medium text-indigo-600">
+                                      ${relatedAgent.priceDetails.discountedPrice.toFixed(2)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="font-medium text-indigo-600">
+                                    ${relatedAgent.priceDetails.basePrice.toFixed(2)}
+                                  </span>
+                                )
+                              ) : (
+                                <span className="font-medium text-indigo-600">
+                                  ${relatedAgent.price.toFixed(2)}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center text-sm">
                               <FaStar className="text-yellow-400 mr-1" />
@@ -421,7 +440,28 @@ const AgentDetail = () => {
             </div>
             
             <div className="flex items-center gap-4 mb-6">
-              <div className="text-3xl font-bold text-indigo-600">${agent.price.toFixed(2)}</div>
+              {agent.priceDetails ? (
+                <div className="flex flex-col">
+                  {agent.priceDetails.discountedPrice < agent.priceDetails.basePrice ? (
+                    <>
+                      <div className="text-lg text-gray-500 line-through">
+                        ${agent.priceDetails.basePrice.toFixed(2)}
+                      </div>
+                      <div className="text-3xl font-bold text-indigo-600">
+                        ${agent.priceDetails.discountedPrice.toFixed(2)}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-3xl font-bold text-indigo-600">
+                      ${agent.priceDetails.basePrice.toFixed(2)}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-3xl font-bold text-indigo-600">
+                  ${agent.price.toFixed(2)}
+                </div>
+              )}
               <button 
                 className={`wishlist-button flex items-center justify-center h-10 w-10 rounded-full border ${isWishlisted ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}
                 onClick={handleWishlist}
