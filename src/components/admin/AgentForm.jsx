@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { 
   FaImage, 
   FaDollarSign, 
@@ -7,7 +7,9 @@ import {
   FaSave, 
   FaRegCheckCircle,
   FaFeatherAlt,
-  FaTools
+  FaTools,
+  FaArrowUp,
+  FaChevronRight
 } from 'react-icons/fa';
 import { getAgentPrice, updateAgentPrice } from '../../services/priceService';
 import { AuthContext } from '../../contexts/AuthContext';
@@ -19,6 +21,43 @@ import './AgentForm.css';
 const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
   // Get current user from AuthContext
   const { user } = useContext(AuthContext);
+  
+  // Refs for each section
+  const basicInfoRef = useRef(null);
+  const mediaRef = useRef(null);
+  const pricingRef = useRef(null);
+  const featuresRef = useRef(null);
+  const statusRef = useRef(null);
+  const formRef = useRef(null);
+  
+  // State for showing/hiding back to top button
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  
+  // Scroll handler for back to top button
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.pageYOffset > 300) {
+        setShowBackToTop(true);
+      } else {
+        setShowBackToTop(false);
+      }
+    };
+    
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+  
+  // Scroll to section function
+  const scrollToSection = (ref) => {
+    if (ref && ref.current) {
+      ref.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+  
+  // Scroll to top function
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Handle blob URLs in image fields more safely
   const isBlobUrl = (url) => {
@@ -616,477 +655,454 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
     'Productivity'
   ];
   
-  // Render the agent form with tabs
+  // Render the agent form as a single page with sections
   return (
-    <form className="agent-form" onSubmit={handleSubmit}>
-      {/* Form tabs */}
-      <div className="form-tabs">
-        <button 
-          type="button"
-          className={`tab-button ${activeTab === 'basic' ? 'active' : ''}`}
-          onClick={() => setActiveTab('basic')}
-        >
+    <form className="agent-form" onSubmit={handleSubmit} ref={formRef}>
+      {/* Section Navigation */}
+      <div className="section-navigation">
+        <div className="section-link" onClick={() => scrollToSection(basicInfoRef)}>
           <FaInfoCircle /> Basic Info
-        </button>
-        <button 
-          type="button"
-          className={`tab-button ${activeTab === 'media' ? 'active' : ''}`}
-          onClick={() => setActiveTab('media')}
-        >
+        </div>
+        <div className="section-link" onClick={() => scrollToSection(mediaRef)}>
           <FaImage /> Media
-        </button>
-        <button 
-          type="button"
-          className={`tab-button ${activeTab === 'price' ? 'active' : ''}`}
-          onClick={() => setActiveTab('price')}
-        >
+        </div>
+        <div className="section-link" onClick={() => scrollToSection(pricingRef)}>
           <FaDollarSign /> Pricing
-        </button>
-        <button 
-          type="button"
-          className={`tab-button ${activeTab === 'features' ? 'active' : ''}`}
-          onClick={() => setActiveTab('features')}
-        >
+        </div>
+        <div className="section-link" onClick={() => scrollToSection(featuresRef)}>
           <FaTools /> Features
-        </button>
-        <button 
-          type="button"
-          className={`tab-button ${activeTab === 'status' ? 'active' : ''}`}
-          onClick={() => setActiveTab('status')}
-        >
+        </div>
+        <div className="section-link" onClick={() => scrollToSection(statusRef)}>
           <FaRegCheckCircle /> Status
-        </button>
+        </div>
       </div>
       
-      {/* Form tab content */}
-      <div className="form-content">
-        {/* Basic Information */}
-        <div className={`tab-content ${activeTab === 'basic' ? 'active' : ''}`}>
-          <h3><FaInfoCircle /> Basic Information</h3>
-          
-          <div className="form-group">
-            <label htmlFor="name">
-              Agent Name*
-              <span className="field-required">Required</span>
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              className={errors.name ? 'error' : ''}
-            />
-            {errors.name && <div className="error-message">{errors.name}</div>}
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="title">
-              Agent Title*
-              <span className="field-required">Required</span>
-            </label>
-            <input
-              type="text"
-              id="title"
-              name="title"
-              value={formData.title}
-              onChange={handleChange}
-              className={errors.title ? 'error' : ''}
-            />
-            {errors.title && <div className="error-message">{errors.title}</div>}
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="description">
-              Description*
-              <span className="field-required">Required</span>
-            </label>
-            <textarea
-              id="description"
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows={4}
-              className={errors.description ? 'error' : ''}
-            />
-            {errors.description && <div className="error-message">{errors.description}</div>}
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="category">
-              Category*
-              <span className="field-required">Required</span>
-            </label>
-            <select
-              id="category"
-              name="category"
-              value={formData.category}
-              onChange={handleChange}
-              className={errors.category ? 'error' : ''}
-            >
-              <option value="">Select a category</option>
-              {categories.map(category => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
-            {errors.category && <div className="error-message">{errors.category}</div>}
-          </div>
-          
-          {/* Creator Information Section */}
-          <div className="form-group creator-info">
-            <h4>Creator Information</h4>
-            <div className="creator-fields">
-              <div className="creator-field">
-                <label>Name:</label>
-                <input
-                  type="text"
-                  value={formData.creator?.name || ''}
-                  onChange={(e) => handleNestedChange('creator', 'name', e.target.value)}
-                />
-              </div>
-              
-              <div className="creator-field">
-                <label>Email:</label>
-                <input
-                  type="email"
-                  value={formData.creator?.email || ''}
-                  onChange={(e) => handleNestedChange('creator', 'email', e.target.value)}
-                  disabled={!!agent} // Only allow editing for new agents
-                />
-              </div>
-              
-              <div className="creator-field">
-                <label>Username:</label>
-                <input
-                  type="text"
-                  value={formData.creator?.username || ''}
-                  onChange={(e) => handleNestedChange('creator', 'username', e.target.value)}
-                />
-              </div>
-              
-              <div className="creator-field">
-                <label>Role:</label>
-                <select
-                  value={formData.creator?.role || 'Admin'}
-                  onChange={(e) => handleNestedChange('creator', 'role', e.target.value)}
-                >
-                  <option value="Admin">Admin</option>
-                  <option value="Partner">Partner</option>
-                  <option value="User">User</option>
-                </select>
-              </div>
-            </div>
-            <p className="creator-note">
-              These fields will be displayed as the creator of this agent.
-            </p>
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="version">Version</label>
-            <input
-              type="text"
-              id="version"
-              name="version"
-              value={formData.version}
-              onChange={handleChange}
-              placeholder="e.g., 1.0.0"
-            />
-          </div>
+      {/* Basic Information Section */}
+      <div className="form-section" ref={basicInfoRef} id="basic-info">
+        <h3 className="form-section-heading"><FaInfoCircle /> Basic Information</h3>
+        
+        <div className="form-group">
+          <label htmlFor="name">
+            Agent Name*
+            <span className="field-required">Required</span>
+          </label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            className={errors.name ? 'error' : ''}
+          />
+          {errors.name && <div className="error-message">{errors.name}</div>}
         </div>
         
-        {/* Media */}
-        <div className={`tab-content ${activeTab === 'media' ? 'active' : ''}`}>
-          <h3><FaImage /> Media & Images</h3>
-          
-          <div className="form-group">
-            <label htmlFor="imageSection">Agent Image</label>
-            <div className="media-options">
-              <div className="media-option">
-                <input
-                  type="file"
-                  id="imageUpload"
-                  accept="image/*"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      try {
-                        // For preview only - actual upload happens when form is submitted
-                        const imageUrl = URL.createObjectURL(e.target.files[0]);
-                        console.log('Image file selected:', e.target.files[0]);
-                        setFormData({
-                          ...formData,
-                          imageUrl: imageUrl,
-                          _imageFile: e.target.files[0] // Store the file for later upload
-                        });
-                      } catch (error) {
-                        console.error('Error creating object URL:', error);
-                        // Fallback to placeholder if createObjectURL fails
-                        setFormData({
-                          ...formData,
-                          imageUrl: generatePlaceholderImage('image', formData.name?.charAt(0) || 'A'),
-                          _imageFile: null
-                        });
-                      }
-                    }
-                  }}
-                  className={errors.imageUrl ? 'error' : ''}
-                />
-                <span className="field-help">Upload Image from Computer (Required)<br />Supported formats: JPG, PNG, GIF. Max size: 5MB</span>
-                {errors.imageUrl && <div className="error-message">{errors.imageUrl}</div>}
-              </div>
-            </div>
-          </div>
-          
-          <div className="preview-section">
-            <div className="image-preview">
-              <h4>Image Preview</h4>
-              <div className="preview-container">
-                {formData.imageUrl && isValidImageUrl(formData.imageUrl) ? (
-                  <img 
-                    src={formData.imageUrl} 
-                    alt="Agent image preview" 
-                    onError={(e) => {
-                      console.log('Image failed to load:', formData.imageUrl);
-                      // Check if it's a blob URL that might be invalid
-                      if (isBlobUrl(formData.imageUrl)) {
-                        console.log('Detected blob URL that may be invalid, reverting to placeholder');
-                        // Revoke the invalid blob URL to free up memory
-                        URL.revokeObjectURL(formData.imageUrl);
-                        // Update the form data to remove the invalid URL
-                        setFormData(prev => ({
-                          ...prev,
-                          imageUrl: generatePlaceholderImage('image', formData.name?.charAt(0) || 'A'),
-                          _imageFile: null
-                        }));
-                      } else {
-                        // Set a placeholder image directly on the element
-                        e.target.src = generatePlaceholderImage('image', formData.name?.charAt(0) || 'A');
-                        e.target.onerror = null; // Prevent infinite error loops
-                      }
-                    }}
-                  />
-                ) : (
-                  <div className="no-image">
-                    <FaImage />
-                    <span>Agent Image</span>
-                  </div>
-                )}
-              </div>
+        <div className="form-group">
+          <label htmlFor="title">
+            Agent Title*
+            <span className="field-required">Required</span>
+          </label>
+          <input
+            type="text"
+            id="title"
+            name="title"
+            value={formData.title}
+            onChange={handleChange}
+            className={errors.title ? 'error' : ''}
+          />
+          {errors.title && <div className="error-message">{errors.title}</div>}
+        </div>
+        
+        <div className="form-group">
+          <label htmlFor="description">
+            Description*
+            <span className="field-required">Required</span>
+          </label>
+          <textarea
+            id="description"
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            rows={4}
+            className={errors.description ? 'error' : ''}
+          />
+          {errors.description && <div className="error-message">{errors.description}</div>}
+        </div>
+        
+        <div className="form-group">
+          <label htmlFor="category">
+            Category*
+            <span className="field-required">Required</span>
+          </label>
+          <select
+            id="category"
+            name="category"
+            value={formData.category}
+            onChange={handleChange}
+            className={errors.category ? 'error' : ''}
+          >
+            <option value="">Select a category</option>
+            {categories.map(category => (
+              <option key={category} value={category}>{category}</option>
+            ))}
+          </select>
+          {errors.category && <div className="error-message">{errors.category}</div>}
+        </div>
+        
+        {/* Creator Information Section */}
+        <div className="form-group creator-info">
+          <h4>Creator Information</h4>
+          <div className="creator-fields">
+            <div className="creator-field">
+              <label>Name:</label>
+              <input
+                type="text"
+                value={formData.creator?.name || ''}
+                onChange={(e) => handleNestedChange('creator', 'name', e.target.value)}
+              />
             </div>
             
-            <div className="icon-preview">
-              <h4>Icon Preview</h4>
-              <div className="preview-container">
-                {formData.iconUrl && isValidImageUrl(formData.iconUrl) ? (
-                  <img 
-                    src={formData.iconUrl} 
-                    alt="Agent icon preview" 
-                    onError={(e) => {
-                      console.log('Icon failed to load:', formData.iconUrl);
-                      // Check if it's a blob URL that might be invalid
-                      if (isBlobUrl(formData.iconUrl)) {
-                        console.log('Detected blob URL that may be invalid, reverting to placeholder');
-                        // Revoke the invalid blob URL to free up memory
-                        URL.revokeObjectURL(formData.iconUrl);
-                        // Update the form data to remove the invalid URL
-                        setFormData(prev => ({
-                          ...prev,
-                          iconUrl: generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A'),
-                          _iconFile: null
-                        }));
-                      } else {
-                        // Set a placeholder image directly on the element
-                        e.target.src = generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A');
-                        e.target.onerror = null; // Prevent infinite error loops
-                      }
-                    }}
-                  />
-                ) : (
-                  <div className="no-image">
-                    <FaImage />
-                    <span>AI</span>
-                  </div>
-                )}
-              </div>
+            <div className="creator-field">
+              <label>Email:</label>
+              <input
+                type="email"
+                value={formData.creator?.email || ''}
+                onChange={(e) => handleNestedChange('creator', 'email', e.target.value)}
+                disabled={!!agent} // Only allow editing for new agents
+              />
+            </div>
+            
+            <div className="creator-field">
+              <label>Username:</label>
+              <input
+                type="text"
+                value={formData.creator?.username || ''}
+                onChange={(e) => handleNestedChange('creator', 'username', e.target.value)}
+              />
+            </div>
+            
+            <div className="creator-field">
+              <label>Role:</label>
+              <select
+                value={formData.creator?.role || 'Admin'}
+                onChange={(e) => handleNestedChange('creator', 'role', e.target.value)}
+              >
+                <option value="Admin">Admin</option>
+                <option value="Partner">Partner</option>
+                <option value="User">User</option>
+              </select>
+            </div>
+          </div>
+          <p className="creator-note">
+            These fields will be displayed as the creator of this agent.
+          </p>
+        </div>
+        
+        <div className="form-group">
+          <label htmlFor="version">Version</label>
+          <input
+            type="text"
+            id="version"
+            name="version"
+            value={formData.version}
+            onChange={handleChange}
+            placeholder="e.g., 1.0.0"
+          />
+        </div>
+      </div>
+      
+      {/* Media Section */}
+      <div className="form-section" ref={mediaRef} id="media">
+        <h3 className="form-section-heading"><FaImage /> Media & Images</h3>
+        
+        <div className="form-group">
+          <label htmlFor="imageSection">Agent Image</label>
+          <div className="media-options">
+            <div className="media-option">
+              <input
+                type="file"
+                id="imageUpload"
+                accept="image/*"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    try {
+                      // For preview only - actual upload happens when form is submitted
+                      const imageUrl = URL.createObjectURL(e.target.files[0]);
+                      console.log('Image file selected:', e.target.files[0]);
+                      setFormData({
+                        ...formData,
+                        imageUrl: imageUrl,
+                        _imageFile: e.target.files[0] // Store the file for later upload
+                      });
+                    } catch (error) {
+                      console.error('Error creating object URL:', error);
+                      // Fallback to placeholder if createObjectURL fails
+                      setFormData({
+                        ...formData,
+                        imageUrl: generatePlaceholderImage('image', formData.name?.charAt(0) || 'A'),
+                        _imageFile: null
+                      });
+                    }
+                  }
+                }}
+                className={errors.imageUrl ? 'error' : ''}
+              />
+              <span className="field-help">Upload Image from Computer (Required)<br />Supported formats: JPG, PNG, GIF. Max size: 5MB</span>
+              {errors.imageUrl && <div className="error-message">{errors.imageUrl}</div>}
             </div>
           </div>
         </div>
         
-        {/* Pricing */}
-        <div className={`tab-content ${activeTab === 'price' ? 'active' : ''}`}>
-          <h3><FaDollarSign /> Pricing</h3>
-          
-          <div className="form-group checkbox-group">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                name="isFree"
-                checked={formData.isFree}
-                onChange={handleCheckboxChange}
-              />
-              <span>Free Agent</span>
-            </label>
+        <div className="preview-section">
+          <div className="image-preview">
+            <h4>Image Preview</h4>
+            <div className="preview-container">
+              {formData.imageUrl && isValidImageUrl(formData.imageUrl) ? (
+                <img 
+                  src={formData.imageUrl} 
+                  alt="Agent image preview" 
+                  onError={(e) => {
+                    console.log('Image failed to load:', formData.imageUrl);
+                    // Check if it's a blob URL that might be invalid
+                    if (isBlobUrl(formData.imageUrl)) {
+                      console.log('Detected blob URL that may be invalid, reverting to placeholder');
+                      // Revoke the invalid blob URL to free up memory
+                      URL.revokeObjectURL(formData.imageUrl);
+                      // Update the form data to remove the invalid URL
+                      setFormData(prev => ({
+                        ...prev,
+                        imageUrl: generatePlaceholderImage('image', formData.name?.charAt(0) || 'A'),
+                        _imageFile: null
+                      }));
+                    } else {
+                      // Set a placeholder image directly on the element
+                      e.target.src = generatePlaceholderImage('image', formData.name?.charAt(0) || 'A');
+                      e.target.onerror = null; // Prevent infinite error loops
+                    }
+                  }}
+                />
+              ) : (
+                <div className="no-image">
+                  <FaImage />
+                  <span>Agent Image</span>
+                </div>
+              )}
+            </div>
           </div>
           
-          <div className="form-group checkbox-group">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                name="isSubscription"
-                checked={formData.isSubscription}
-                onChange={handleCheckboxChange}
-                disabled={formData.isFree}
-              />
-              <span>Subscription-based</span>
-            </label>
+          <div className="icon-preview">
+            <h4>Icon Preview</h4>
+            <div className="preview-container">
+              {formData.iconUrl && isValidImageUrl(formData.iconUrl) ? (
+                <img 
+                  src={formData.iconUrl} 
+                  alt="Agent icon preview" 
+                  onError={(e) => {
+                    console.log('Icon failed to load:', formData.iconUrl);
+                    // Check if it's a blob URL that might be invalid
+                    if (isBlobUrl(formData.iconUrl)) {
+                      console.log('Detected blob URL that may be invalid, reverting to placeholder');
+                      // Revoke the invalid blob URL to free up memory
+                      URL.revokeObjectURL(formData.iconUrl);
+                      // Update the form data to remove the invalid URL
+                      setFormData(prev => ({
+                        ...prev,
+                        iconUrl: generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A'),
+                        _iconFile: null
+                      }));
+                    } else {
+                      // Set a placeholder image directly on the element
+                      e.target.src = generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A');
+                      e.target.onerror = null; // Prevent infinite error loops
+                    }
+                  }}
+                />
+              ) : (
+                <div className="no-image">
+                  <FaImage />
+                  <span>AI</span>
+                </div>
+              )}
+            </div>
           </div>
-          
-          {!formData.isFree && (
-            <>
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="basePrice">
-                    Base Price
-                    <span className="field-required">Required</span>
-                  </label>
-                  <div className="price-input">
-                    <span className="currency-symbol">$</span>
-                    <input
-                      type="number"
-                      id="basePrice"
-                      name="basePrice"
-                      value={priceData?.basePrice ?? 0}
-                      onChange={handlePriceChange}
-                      step="0.01"
-                      min="0"
-                      className={errors.basePrice ? 'has-error' : ''}
-                    />
-                  </div>
-                  {errors.basePrice && <div className="error-message">{errors.basePrice}</div>}
+        </div>
+      </div>
+      
+      {/* Pricing Section */}
+      <div className="form-section" ref={pricingRef} id="pricing">
+        <h3 className="form-section-heading"><FaDollarSign /> Pricing</h3>
+        
+        <div className="form-group checkbox-group">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              name="isFree"
+              checked={formData.isFree}
+              onChange={handleCheckboxChange}
+            />
+            <span>Free Agent</span>
+          </label>
+        </div>
+        
+        <div className="form-group checkbox-group">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              name="isSubscription"
+              checked={formData.isSubscription}
+              onChange={handleCheckboxChange}
+              disabled={formData.isFree}
+            />
+            <span>Subscription-based</span>
+          </label>
+        </div>
+        
+        {!formData.isFree && (
+          <>
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="basePrice">
+                  Base Price
+                  <span className="field-required">Required</span>
+                </label>
+                <div className="price-input">
+                  <span className="currency-symbol">$</span>
+                  <input
+                    type="number"
+                    id="basePrice"
+                    name="basePrice"
+                    value={priceData?.basePrice ?? 0}
+                    onChange={handlePriceChange}
+                    step="0.01"
+                    min="0"
+                    className={errors.basePrice ? 'has-error' : ''}
+                  />
                 </div>
-                
-                <div className="form-group">
-                  <label htmlFor="discountedPrice">Discounted Price</label>
-                  <div className="price-input">
-                    <span className="currency-symbol">$</span>
-                    <input
-                      type="number"
-                      id="discountedPrice"
-                      name="discountedPrice"
-                      value={priceData?.discountedPrice ?? 0}
-                      onChange={handlePriceChange}
-                      step="0.01"
-                      min="0"
-                    />
-                  </div>
-                </div>
+                {errors.basePrice && <div className="error-message">{errors.basePrice}</div>}
               </div>
               
               <div className="form-group">
-                <label htmlFor="currency">Currency</label>
-                <select
-                  id="currency"
-                  name="currency"
-                  value={priceData.currency || 'USD'}
-                  onChange={handlePriceChange}
-                >
-                  <option value="USD">USD ($)</option>
-                  <option value="EUR">EUR (€)</option>
-                  <option value="GBP">GBP (£)</option>
-                </select>
+                <label htmlFor="discountedPrice">Discounted Price</label>
+                <div className="price-input">
+                  <span className="currency-symbol">$</span>
+                  <input
+                    type="number"
+                    id="discountedPrice"
+                    name="discountedPrice"
+                    value={priceData?.discountedPrice ?? 0}
+                    onChange={handlePriceChange}
+                    step="0.01"
+                    min="0"
+                  />
+                </div>
               </div>
-            </>
-          )}
+            </div>
+            
+            <div className="form-group">
+              <label htmlFor="currency">Currency</label>
+              <select
+                id="currency"
+                name="currency"
+                value={priceData.currency || 'USD'}
+                onChange={handlePriceChange}
+              >
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+              </select>
+            </div>
+          </>
+        )}
+      </div>
+      
+      {/* Features & Tags Section */}
+      <div className="form-section" ref={featuresRef} id="features">
+        <h3 className="form-section-heading"><FaTools /> Features & Tags</h3>
+        
+        <div className="form-group">
+          <label htmlFor="features">
+            Features
+            <span className="field-help">Comma-separated list of features</span>
+          </label>
+          <textarea
+            id="features"
+            value={formData.features?.join(', ') || ''}
+            onChange={(e) => handleArrayInput('features', e.target.value)}
+            placeholder="Desktop App, Voice Enabled, Web Interface"
+            rows="3"
+          />
         </div>
         
-        {/* Features & Tags */}
-        <div className={`tab-content ${activeTab === 'features' ? 'active' : ''}`}>
-          <h3><FaTools /> Features & Tags</h3>
-          
-          <div className="form-group">
-            <label htmlFor="features">
-              Features
-              <span className="field-help">Comma-separated list of features</span>
-            </label>
-            <textarea
-              id="features"
-              value={formData.features?.join(', ') || ''}
-              onChange={(e) => handleArrayInput('features', e.target.value)}
-              placeholder="Desktop App, Voice Enabled, Web Interface"
-              rows="3"
-            />
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="tags">
-              Tags
-              <span className="field-help">Comma-separated list of tags</span>
-            </label>
-            <textarea
-              id="tags"
-              value={formData.tags?.join(', ') || ''}
-              onChange={(e) => handleArrayInput('tags', e.target.value)}
-              placeholder="Education, Assistant, AI, Creative"
-              rows="3"
-            />
-          </div>
+        <div className="form-group">
+          <label htmlFor="tags">
+            Tags
+            <span className="field-help">Comma-separated list of tags</span>
+          </label>
+          <textarea
+            id="tags"
+            value={formData.tags?.join(', ') || ''}
+            onChange={(e) => handleArrayInput('tags', e.target.value)}
+            placeholder="Education, Assistant, AI, Creative"
+            rows="3"
+          />
         </div>
+      </div>
+      
+      {/* Status & Visibility Section */}
+      <div className="form-section" ref={statusRef} id="status">
+        <h3 className="form-section-heading"><FaRegCheckCircle /> Status & Visibility</h3>
         
-        {/* Status & Visibility */}
-        <div className={`tab-content ${activeTab === 'status' ? 'active' : ''}`}>
-          <h3><FaRegCheckCircle /> Status & Visibility</h3>
+        <div className="status-toggles">
+          <div className="form-group checkbox-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                name="isFeatured"
+                checked={formData.isFeatured}
+                onChange={handleCheckboxChange}
+              />
+              <span>Featured</span>
+            </label>
+            <p className="field-help">Display in the featured section</p>
+          </div>
           
-          <div className="status-toggles">
-            <div className="form-group checkbox-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  name="isFeatured"
-                  checked={formData.isFeatured}
-                  onChange={handleCheckboxChange}
-                />
-                <span>Featured</span>
-              </label>
-              <p className="field-help">Display in the featured section</p>
-            </div>
-            
-            <div className="form-group checkbox-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  name="isBestseller"
-                  checked={formData.isBestseller}
-                  onChange={handleCheckboxChange}
-                />
-                <span>Bestseller</span>
-              </label>
-              <p className="field-help">Mark as a bestselling agent</p>
-            </div>
-            
-            <div className="form-group checkbox-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  name="isNew"
-                  checked={formData.isNew}
-                  onChange={handleCheckboxChange}
-                />
-                <span>New</span>
-              </label>
-              <p className="field-help">Mark as newly added</p>
-            </div>
-            
-            <div className="form-group checkbox-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  name="isTrending"
-                  checked={formData.isTrending}
-                  onChange={handleCheckboxChange}
-                />
-                <span>Trending</span>
-              </label>
-              <p className="field-help">Mark as trending</p>
-            </div>
+          <div className="form-group checkbox-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                name="isBestseller"
+                checked={formData.isBestseller}
+                onChange={handleCheckboxChange}
+              />
+              <span>Bestseller</span>
+            </label>
+            <p className="field-help">Mark as a bestselling agent</p>
+          </div>
+          
+          <div className="form-group checkbox-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                name="isNew"
+                checked={formData.isNew}
+                onChange={handleCheckboxChange}
+              />
+              <span>New</span>
+            </label>
+            <p className="field-help">Mark as newly added</p>
+          </div>
+          
+          <div className="form-group checkbox-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                name="isTrending"
+                checked={formData.isTrending}
+                onChange={handleCheckboxChange}
+              />
+              <span>Trending</span>
+            </label>
+            <p className="field-help">Mark as trending</p>
           </div>
         </div>
       </div>
@@ -1125,6 +1141,11 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
           {formError}
         </div>
       )}
+      
+      {/* Back to top button */}
+      <div className={`back-to-top ${showBackToTop ? 'visible' : ''}`} onClick={scrollToTop}>
+        <FaArrowUp />
+      </div>
     </form>
   );
 };
