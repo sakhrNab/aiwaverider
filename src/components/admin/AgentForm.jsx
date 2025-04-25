@@ -965,7 +965,7 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
                   Base Price
                   <span className="field-required">Required</span>
                 </label>
-                <div className="price-input">
+                <div className={`price-input ${errors.basePrice ? 'has-error' : ''}`}>
                   <span className="currency-symbol">$</span>
                   <input
                     type="number"
@@ -975,7 +975,6 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
                     onChange={handlePriceChange}
                     step="0.01"
                     min="0"
-                    className={errors.basePrice ? 'has-error' : ''}
                   />
                 </div>
                 {errors.basePrice && <div className="error-message">{errors.basePrice}</div>}
