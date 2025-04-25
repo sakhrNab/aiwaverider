@@ -455,6 +455,22 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
   // Handle price changes
   const handlePriceChange = (e) => {
     const { name, value } = e.target;
+    
+    // Handle currency selection differently from numeric fields
+    if (name === 'currency') {
+      setPriceData(prev => ({
+        ...(prev || {}),
+        currency: value
+      }));
+      
+      // Notify parent about currency field change
+      if (onFieldChange) {
+        onFieldChange(name, value, originalData?.[name]);
+      }
+      return;
+    }
+    
+    // For numeric fields, parse the value
     const numericValue = parseFloat(value) || 0;
     
     if (name === 'basePrice') {
@@ -497,11 +513,11 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
           onFieldChange('isFree', false, originalData?.isFree);
         }
       }
-    } else {
-      // For other price fields, just update the value
+    } else if (name === 'discountedPrice') {
+      // For discounted price, just update the value
       setPriceData(prev => ({
         ...(prev || {}), // Ensure prev is an object
-        [name]: numericValue
+        discountedPrice: numericValue
       }));
     }
     
@@ -654,6 +670,20 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
     'Writing',
     'Productivity'
   ];
+  
+  // Add this helper function to get the currency symbol
+  const getCurrencySymbol = (currencyCode) => {
+    switch(currencyCode) {
+      case 'USD':
+        return '$';
+      case 'EUR':
+        return '€';
+      case 'GBP':
+        return '£';
+      default:
+        return '$';
+    }
+  };
   
   // Render the agent form as a single page with sections
   return (
@@ -966,7 +996,7 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
                   <span className="field-required">Required</span>
                 </label>
                 <div className={`price-input ${errors.basePrice ? 'has-error' : ''}`}>
-                  <span className="currency-symbol">$</span>
+                  <span className="currency-symbol">{getCurrencySymbol(priceData?.currency || 'USD')}</span>
                   <input
                     type="number"
                     id="basePrice"
@@ -983,7 +1013,7 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
               <div className="form-group">
                 <label htmlFor="discountedPrice">Discounted Price</label>
                 <div className="price-input">
-                  <span className="currency-symbol">$</span>
+                  <span className="currency-symbol">{getCurrencySymbol(priceData?.currency || 'USD')}</span>
                   <input
                     type="number"
                     id="discountedPrice"
