@@ -1,7 +1,7 @@
 /**
- * Test Agent Email Update
+ * Test Agent Email Update Using Object Parameter
  * 
- * This test script will send an agent update email directly using the email service.
+ * This test script will send an agent update email using the object parameter format.
  */
 
 // Load environment variables
@@ -56,15 +56,15 @@ async function testAgentUpdateEmail() {
     console.log(`Sending email with ${sampleAgents.length} agents`);
     console.log(`First agent data: ${JSON.stringify(sampleAgents[0], null, 2)}`);
     
-    // Call the sendAgentUpdateEmail function with the correct parameter order
-    const result = await emailService.sendAgentUpdateEmail(
-      TEST_EMAIL,
-      'Test User',
-      'Test: New AI Agents Available',
-      '<p>This is a test email to verify the agent update email functionality.</p>' +
-      '<p>Check out our latest AI agents that can help you with various tasks!</p>',
-      sampleAgents
-    );
+    // Call the sendAgentUpdateEmail function with an object parameter
+    const result = await emailService.sendAgentUpdateEmail({
+      email: TEST_EMAIL,
+      name: 'Test User (Object Params)',
+      title: 'Test: New AI Agents (Object Format)',
+      content: '<p>This is a test email using the object parameter format.</p>' +
+        '<p>Check out our latest AI agents that can help you with various tasks!</p>',
+      latestAgents: sampleAgents
+    });
     
     console.log('Email sent successfully!');
     console.log('Message ID:', result.messageId);
@@ -78,7 +78,7 @@ async function testAgentUpdateEmail() {
 }
 
 // Run the test
-console.log('Starting agent update email test...');
+console.log('Starting agent update email test with object parameters...');
 testAgentUpdateEmail()
   .then(() => {
     console.log('Test completed successfully!');

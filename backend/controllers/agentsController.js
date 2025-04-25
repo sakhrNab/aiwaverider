@@ -1,7 +1,11 @@
 console.log('Loading agentsController.js');
 
 // Import necessary modules
-const { db, admin } = require('../config/firebase');
+const { db } = require('../config/firebase');
+const admin = require('firebase-admin');
+const axios = require('axios');
+const logger = require('../utils/logger');
+const { parseCustomFilters } = require('../utils/queryParser');
 
 // Cache keys for consistent cache handling
 const CACHE_KEYS = {
@@ -823,10 +827,155 @@ const createAgent = async (req, res) => {
       return res.status(403).json({ error: 'Only administrators can create agents' });
     }
 
-    const agentData = req.body;
+    console.log('Request body received:', req.body);
+    console.log('Files received:', req.files || req.file || 'No files');
+
+    // Get agent data from request
+    let agentData = req.body;
+    let imageInfo = null;
+    let iconInfo = null;
+    
+    // Check if request contains files (multipart/form-data)
+    if (req.files || req.file) {
+      console.log('Files detected in request:', req.files || req.file);
+      
+      // If data was sent as string (from formData), parse it
+      if (req.body.data && typeof req.body.data === 'string') {
+        try {
+          const parsedData = JSON.parse(req.body.data);
+          console.log('Parsed agent data from form data:', parsedData);
+          
+          // Merge with top-level fields from the form (they take precedence)
+          agentData = {
+            ...parsedData,
+            // Ensure name and category from form data take precedence
+            name: req.body.name || parsedData.name,
+            category: req.body.category || parsedData.category
+          };
+          
+          // Remove _imageFile and _iconFile properties if they exist
+          delete agentData._imageFile;
+          delete agentData._iconFile;
+          
+          console.log('Merged agent data:', agentData);
+        } catch (parseError) {
+          console.error('Error parsing JSON from form data:', parseError);
+          // Continue with what we have in req.body
+          agentData = req.body;
+        }
+      }
+      
+      // Handle uploaded image
+      if (req.files?.image || req.file?.fieldname === 'image') {
+        const imageFile = req.files?.image?.[0] || (req.file?.fieldname === 'image' ? req.file : null);
+        
+        if (imageFile) {
+          console.log('Uploading agent image file:', imageFile.originalname);
+          
+          try {
+            // Upload to Firebase Storage
+            const storage = admin.storage();
+            const bucket = storage.bucket();
+            
+            // Generate a unique file name
+            const fileName = `agents/${Date.now()}_${imageFile.originalname.replace(/[^a-zA-Z0-9_.]/g, '_')}`;
+            const fileRef = bucket.file(fileName);
+            
+            // Upload the file
+            await fileRef.save(imageFile.buffer, {
+              metadata: {
+                contentType: imageFile.mimetype
+              }
+            });
+            
+            // Make file publicly accessible
+            await fileRef.makePublic();
+            
+            // Get the public URL
+            const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+            console.log('Image uploaded successfully. URL:', imageUrl);
+            
+            // Store image info separately for the image field
+            imageInfo = {
+              url: imageUrl,
+              fileName: fileName,
+              originalName: imageFile.originalname,
+              contentType: imageFile.mimetype,
+              size: imageFile.size
+            };
+            
+            // Update agent data with the new image URL
+            agentData.imageUrl = imageUrl;
+          } catch (uploadError) {
+            console.error('Error uploading image to Firebase Storage:', uploadError);
+            // Continue with agent creation, but log the error
+          }
+        }
+      } else if (agentData._hasBlobImageUrl && agentData.imageUrl) {
+        // There's a blob URL in the data but no actual file was sent
+        console.log('Blob image URL detected but no file sent. This may indicate a frontend issue.');
+        
+        // Return clear error message to the frontend about the missing image file
+        return res.status(400).json({ 
+          error: 'Image file is required but was not received. Please ensure the file is properly selected and uploaded.' 
+        });
+      }
+      
+      // Handle uploaded icon
+      if (req.files?.icon || req.file?.fieldname === 'icon') {
+        const iconFile = req.files?.icon?.[0] || (req.file?.fieldname === 'icon' ? req.file : null);
+        
+        if (iconFile) {
+          console.log('Uploading agent icon file:', iconFile.originalname);
+          
+          try {
+            // Upload to Firebase Storage
+            const storage = admin.storage();
+            const bucket = storage.bucket();
+            
+            // Generate a unique file name
+            const fileName = `agent_icons/${Date.now()}_${iconFile.originalname.replace(/[^a-zA-Z0-9_.]/g, '_')}`;
+            const fileRef = bucket.file(fileName);
+            
+            // Upload the file
+            await fileRef.save(iconFile.buffer, {
+              metadata: {
+                contentType: iconFile.mimetype
+              }
+            });
+            
+            // Make file publicly accessible
+            await fileRef.makePublic();
+            
+            // Get the public URL
+            const iconUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+            console.log('Icon uploaded successfully. URL:', iconUrl);
+            
+            // Store icon info
+            iconInfo = {
+              url: iconUrl,
+              fileName: fileName,
+              originalName: iconFile.originalname,
+              contentType: iconFile.mimetype,
+              size: iconFile.size
+            };
+            
+            // Update agent data with the new icon URL
+            agentData.iconUrl = iconUrl;
+          } catch (uploadError) {
+            console.error('Error uploading icon to Firebase Storage:', uploadError);
+            // Continue with agent creation, but log the error
+          }
+        }
+      }
+    }
     
     // Validate required fields
     if (!agentData.name || !agentData.category) {
+      console.error('Missing required fields:', { 
+        name: agentData.name || '[missing]', 
+        category: agentData.category || '[missing]' 
+      });
       return res.status(400).json({ error: 'Name and category are required' });
     }
     
@@ -875,15 +1024,33 @@ const createAgent = async (req, res) => {
       }
     }
     
-    console.log('Creating agent with creator:', agentData.creator);
+    // Create the final agent document structure
+    const finalAgentData = {
+      name: agentData.name,
+      category: agentData.category,
+      data: JSON.stringify(agentData), // Store the complete data as JSON string
+      image: imageInfo || {}, // Add the image field with the file info
+      icon: iconInfo || {}, // Add the icon field with the file info
+      createdAt: now,
+      updatedAt: now,
+      creator: agentData.creator // Keep creator at top level for easier access
+    };
+    
+    console.log('Creating agent with final data structure:', {
+      name: finalAgentData.name,
+      category: finalAgentData.category,
+      image: imageInfo ? 'Present' : 'Not provided',
+      icon: iconInfo ? 'Present' : 'Not provided',
+      creator: finalAgentData.creator.name
+    });
     
     // Create the agent in Firestore
-    const agentRef = await db.collection('agents').add(agentData);
+    const agentRef = await db.collection('agents').add(finalAgentData);
     
     // Return the created agent with its ID
     const newAgent = {
       id: agentRef.id,
-      ...agentData
+      ...finalAgentData
     };
     
     return res.status(201).json(newAgent);
@@ -904,43 +1071,200 @@ const updateAgent = async (req, res) => {
       return res.status(403).json({ error: 'Only administrators can update agents' });
     }
 
-    // Extract agentId from either params.agentId or params.id
-    let agentId = req.params.agentId || req.params.id;
-    
-    // Check if the ID contains extra path segments
-    if (agentId && agentId.includes('/')) {
-      // Extract just the agent ID part
-      agentId = agentId.split('/')[0];
-    }
-    
+    const { agentId } = req.params;
+    console.log(`Updating agent ${agentId}`);
+    console.log('Request body received:', req.body);
+    console.log('Files received:', req.files || req.file || 'No files');
 
-    // Validate agent ID to prevent Firestore errors
-    if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
-      console.error('Invalid agent ID for update:', agentId);
-      return res.status(400).json({ error: 'Invalid agent ID provided' });
-    }
-
-    const sanitizedAgentId = agentId.trim();
-    console.log('Processing agent update for ID:', sanitizedAgentId);
-    const updateData = req.body;
-    
-    // Check if agent exists
-    const agentDoc = await db.collection('agents').doc(sanitizedAgentId).get();
+    // Get the existing agent
+    const agentDoc = await db.collection('agents').doc(agentId).get();
     if (!agentDoc.exists) {
-      return res.status(404).json({ error: 'Agent not found' });
+      return res.status(404).json({ error: `Agent with ID ${agentId} not found` });
+    }
+
+    const existingAgent = agentDoc.data();
+    let agentData = req.body;
+    let imageInfo = existingAgent.image || null;
+    let iconInfo = existingAgent.icon || null;
+    
+    // If there is existing data stored as a string, parse it
+    let existingData = {};
+    if (existingAgent.data && typeof existingAgent.data === 'string') {
+      try {
+        existingData = JSON.parse(existingAgent.data);
+      } catch (error) {
+        console.error('Error parsing existing agent data:', error);
+      }
     }
     
-    // Add update timestamp
-    updateData.updatedAt = new Date().toISOString();
+    // Check if request contains files (multipart/form-data)
+    if (req.files || req.file) {
+      console.log('Files detected in request:', req.files || req.file);
+      
+      // If data was sent as string (from formData), parse it
+      if (req.body.data && typeof req.body.data === 'string') {
+        try {
+          const parsedData = JSON.parse(req.body.data);
+          console.log('Parsed agent data from form data for update');
+          
+          // Merge with existing data, then with top-level fields
+          agentData = {
+            ...existingData,
+            ...parsedData,
+            // Ensure name and category from form data take precedence
+            name: req.body.name || parsedData.name || existingAgent.name,
+            category: req.body.category || parsedData.category || existingAgent.category
+          };
+          
+          // Remove file properties
+          delete agentData._imageFile;
+          delete agentData._iconFile;
+          
+        } catch (parseError) {
+          console.error('Error parsing JSON from form data:', parseError);
+          // Continue with what we have in req.body
+          agentData = { ...existingData, ...req.body };
+        }
+      } else {
+        // Merge with existing data
+        agentData = { ...existingData, ...agentData };
+      }
+      
+      // Handle uploaded image
+      if (req.files?.image || req.file?.fieldname === 'image') {
+        const imageFile = req.files?.image?.[0] || (req.file?.fieldname === 'image' ? req.file : null);
+        
+        if (imageFile) {
+          console.log('Uploading updated agent image file:', imageFile.originalname);
+          
+          try {
+            // Upload to Firebase Storage
+            const storage = admin.storage();
+            const bucket = storage.bucket();
+            
+            // Generate a unique file name
+            const fileName = `agents/${Date.now()}_${imageFile.originalname.replace(/[^a-zA-Z0-9_.]/g, '_')}`;
+            const fileRef = bucket.file(fileName);
+            
+            // Upload the file
+            await fileRef.save(imageFile.buffer, {
+              metadata: {
+                contentType: imageFile.mimetype
+              }
+            });
+            
+            // Make file publicly accessible
+            await fileRef.makePublic();
+            
+            // Get the public URL
+            const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+            console.log('Image uploaded successfully. URL:', imageUrl);
+            
+            // Store image info separately for the image field
+            imageInfo = {
+              url: imageUrl,
+              fileName: fileName,
+              originalName: imageFile.originalname,
+              contentType: imageFile.mimetype,
+              size: imageFile.size
+            };
+            
+            // Update agent data with the new image URL
+            agentData.imageUrl = imageUrl;
+          } catch (uploadError) {
+            console.error('Error uploading image to Firebase Storage:', uploadError);
+          }
+        }
+      } else if (agentData._hasBlobImageUrl && agentData.imageUrl) {
+        // There's a blob URL in the data but no actual file was sent
+        console.log('Blob image URL detected but no file sent. This may indicate a frontend issue.');
+        
+        // Return clear error message to the frontend about the missing image file
+        return res.status(400).json({ 
+          error: 'Image file is required but was not received. Please ensure the file is properly selected and uploaded.' 
+        });
+      }
+      
+      // Handle uploaded icon
+      if (req.files?.icon || req.file?.fieldname === 'icon') {
+        const iconFile = req.files?.icon?.[0] || (req.file?.fieldname === 'icon' ? req.file : null);
+        
+        if (iconFile) {
+          console.log('Uploading updated agent icon file:', iconFile.originalname);
+          
+          try {
+            // Upload to Firebase Storage
+            const storage = admin.storage();
+            const bucket = storage.bucket();
+            
+            // Generate a unique file name
+            const fileName = `agent_icons/${Date.now()}_${iconFile.originalname.replace(/[^a-zA-Z0-9_.]/g, '_')}`;
+            const fileRef = bucket.file(fileName);
+            
+            // Upload the file
+            await fileRef.save(iconFile.buffer, {
+              metadata: {
+                contentType: iconFile.mimetype
+              }
+            });
+            
+            // Make file publicly accessible
+            await fileRef.makePublic();
+            
+            // Get the public URL
+            const iconUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+            console.log('Icon uploaded successfully. URL:', iconUrl);
+            
+            // Store icon info
+            iconInfo = {
+              url: iconUrl,
+              fileName: fileName,
+              originalName: iconFile.originalname,
+              contentType: iconFile.mimetype,
+              size: iconFile.size
+            };
+            
+            // Update agent data with the new icon URL
+            agentData.iconUrl = iconUrl;
+          } catch (uploadError) {
+            console.error('Error uploading icon to Firebase Storage:', uploadError);
+          }
+        }
+      }
+    } else {
+      // No files, just merge with existing data
+      agentData = { ...existingData, ...agentData };
+    }
     
-    // Update the agent
-    await db.collection('agents').doc(sanitizedAgentId).update(updateData);
+    // Update timestamps
+    const now = new Date().toISOString();
+    agentData.updatedAt = now;
     
-    // Get the updated agent data
-    const updatedAgentDoc = await db.collection('agents').doc(sanitizedAgentId).get();
+    // Create the final agent document structure
+    const finalAgentData = {
+      name: agentData.name,
+      category: agentData.category,
+      data: JSON.stringify(agentData), // Store the complete data as JSON string
+      image: imageInfo || {}, // Add the image field with the file info
+      icon: iconInfo || {}, // Add the icon field with the file info
+      updatedAt: now,
+      creator: agentData.creator || existingAgent.creator // Keep creator at top level for easier access
+    };
+    
+    console.log('Updating agent with final data structure:', {
+      name: finalAgentData.name,
+      category: finalAgentData.category,
+      image: imageInfo ? 'Updated' : 'Unchanged',
+      icon: iconInfo ? 'Updated' : 'Unchanged'
+    });
+    
+    // Update the agent in Firestore
+    await db.collection('agents').doc(agentId).update(finalAgentData);
+    
+    // Return the updated agent with its ID
     const updatedAgent = {
-      id: updatedAgentDoc.id,
-      ...updatedAgentDoc.data()
+      id: agentId,
+      ...finalAgentData
     };
     
     return res.status(200).json(updatedAgent);

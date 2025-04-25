@@ -1212,4 +1212,19 @@ select {
   .manage-agents-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* Agent card title section with icon */
+.manage-agent-title-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.manage-agent-small-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
 } 

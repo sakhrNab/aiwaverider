@@ -4,6 +4,7 @@ const router = express.Router();
 const agentsController = require('../controllers/agentsController');
 const validateFirebaseToken = require('../middleware/authenticate');
 const publicCacheMiddleware = require('../middleware/publicCacheMiddleware');
+const upload = require('../middleware/upload');
 
 // Public endpoints (cached)
 router.get('/', publicCacheMiddleware({ duration: 300 }), agentsController.getAgents);
@@ -40,8 +41,18 @@ router.post('/wishlists/:agentId', validateFirebaseToken, agentsController.toggl
 router.get('/wishlists/:wishlistId', validateFirebaseToken, agentsController.getWishlistById);
 
 // Admin endpoints for agent management (require admin role)
-router.post('/', validateFirebaseToken, agentsController.createAgent);
-router.patch('/:agentId', validateFirebaseToken, agentsController.updateAgent);
+// Use upload middleware to handle file uploads - set up fields for both image and icon
+router.post('/', validateFirebaseToken, upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'icon', maxCount: 1 }
+]), agentsController.createAgent);
+
+// Also update the patch route to handle file uploads
+router.patch('/:agentId', validateFirebaseToken, upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'icon', maxCount: 1 }
+]), agentsController.updateAgent);
+
 router.delete('/:agentId', validateFirebaseToken, agentsController.deleteAgent);
 
 // Development endpoint - only available in development environment

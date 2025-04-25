@@ -72,7 +72,71 @@ const AgentCard = ({ agent }) => {
       return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='24' text-anchor='middle' fill='white'%3EAgent Image%3C/text%3E%3C/svg%3E";
     }
     
-    return agent.imageUrl || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='24' text-anchor='middle' fill='white'%3EAgent Image%3C/text%3E%3C/svg%3E";
+    // Check for different possible image URL locations in the agent object
+    if (agent.imageUrl) {
+      console.log("Using agent.imageUrl:", agent.imageUrl);
+      return agent.imageUrl;
+    }
+    
+    // Check if image info exists in a nested structure
+    if (agent.image && agent.image.url) {
+      console.log("Using agent.image.url:", agent.image.url);
+      return agent.image.url;
+    }
+    
+    // Try to parse the data field if it's a string
+    if (agent.data && typeof agent.data === 'string') {
+      try {
+        const parsedData = JSON.parse(agent.data);
+        if (parsedData.imageUrl) {
+          console.log("Using parsed data.imageUrl:", parsedData.imageUrl);
+          return parsedData.imageUrl;
+        }
+      } catch (e) {
+        console.error("Error parsing agent.data:", e);
+      }
+    }
+    
+    console.log("No image URL found, using fallback");
+    return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='24' text-anchor='middle' fill='white'%3EAgent Image%3C/text%3E%3C/svg%3E";
+  };
+
+  // Get icon URL with fallback
+  const getIconUrl = () => {
+    // Check for different possible icon URL locations in the agent object
+    if (agent.iconUrl) {
+      console.log("Using agent.iconUrl:", agent.iconUrl);
+      return agent.iconUrl;
+    }
+    
+    // Check if icon info exists in a nested structure
+    if (agent.icon && agent.icon.url) {
+      console.log("Using agent.icon.url:", agent.icon.url);
+      return agent.icon.url;
+    }
+    
+    // Try to parse the data field if it's a string
+    if (agent.data && typeof agent.data === 'string') {
+      try {
+        const parsedData = JSON.parse(agent.data);
+        if (parsedData.iconUrl) {
+          console.log("Using parsed data.iconUrl:", parsedData.iconUrl);
+          return parsedData.iconUrl;
+        }
+      } catch (e) {
+        console.error("Error parsing agent.data for icon:", e);
+      }
+    }
+    
+    // If no icon is found, use the image as the icon
+    const imageUrl = getImageUrl();
+    if (imageUrl && !imageUrl.includes('data:image/svg+xml')) {
+      console.log("Using image as icon fallback");
+      return imageUrl;
+    }
+    
+    console.log("No icon URL found, using default icon");
+    return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50' viewBox='0 0 50 50'%3E%3Crect width='50' height='50' fill='%234a4de7'/%3E%3Ctext x='25' y='25' font-family='Arial' font-size='8' text-anchor='middle' dominant-baseline='middle' fill='%23ffffff'%3EAI%3C/text%3E%3C/svg%3E";
   };
 
   // Handle image loading errors

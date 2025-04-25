@@ -1152,6 +1152,75 @@ const ManageAgents = () => {
       return false;
     }
   };
+  
+  // Get the agent image URL from multiple possible locations
+  const getAgentImageUrl = (agent) => {
+    // Check for different possible image URL locations
+    if (agent.imageUrl && isSafeImageUrl(agent.imageUrl)) {
+      console.log("Using agent.imageUrl:", agent.imageUrl);
+      return agent.imageUrl;
+    }
+    
+    // Check if image info exists in a nested structure
+    if (agent.image && agent.image.url && isSafeImageUrl(agent.image.url)) {
+      console.log("Using agent.image.url:", agent.image.url);
+      return agent.image.url;
+    }
+    
+    // Try to parse the data field if it's a string
+    if (agent.data && typeof agent.data === 'string') {
+      try {
+        const parsedData = JSON.parse(agent.data);
+        if (parsedData.imageUrl && isSafeImageUrl(parsedData.imageUrl)) {
+          console.log("Using parsed data.imageUrl:", parsedData.imageUrl);
+          return parsedData.imageUrl;
+        }
+      } catch (e) {
+        console.error("Error parsing agent.data for image:", e);
+      }
+    }
+    
+    console.log("No valid image URL found, using placeholder for:", agent.id);
+    return null;
+  };
+  
+  // Get the agent icon URL from multiple possible locations
+  const getAgentIconUrl = (agent) => {
+    // Check for different possible icon URL locations
+    if (agent.iconUrl && isSafeImageUrl(agent.iconUrl)) {
+      console.log("Using agent.iconUrl:", agent.iconUrl);
+      return agent.iconUrl;
+    }
+    
+    // Check if icon info exists in a nested structure
+    if (agent.icon && agent.icon.url && isSafeImageUrl(agent.icon.url)) {
+      console.log("Using agent.icon.url:", agent.icon.url);
+      return agent.icon.url;
+    }
+    
+    // Try to parse the data field if it's a string
+    if (agent.data && typeof agent.data === 'string') {
+      try {
+        const parsedData = JSON.parse(agent.data);
+        if (parsedData.iconUrl && isSafeImageUrl(parsedData.iconUrl)) {
+          console.log("Using parsed data.iconUrl:", parsedData.iconUrl);
+          return parsedData.iconUrl;
+        }
+      } catch (e) {
+        console.error("Error parsing agent.data for icon:", e);
+      }
+    }
+    
+    // If no icon URL is found, try to use the image URL
+    const imageUrl = getAgentImageUrl(agent);
+    if (imageUrl) {
+      console.log("Using image as icon fallback");
+      return imageUrl;
+    }
+    
+    console.log("No valid icon URL found, using placeholder for:", agent.id);
+    return null;
+  };
 
   // Fetch data based on current view mode
   useEffect(() => {
@@ -2245,22 +2314,51 @@ const ManageAgents = () => {
                       <div key={agent.id} className="manage-agent-card">
                         <div className="manage-agent-header">
                           <div className="manage-agent-image">
-                            {agent.imageUrl && isSafeImageUrl(agent.imageUrl) ? (
-                              <img 
-                                src={agent.imageUrl} 
-                                alt={agent.name}
-                                onError={(e) => {
-                                  e.target.onerror = null;
-                                  e.target.src = generateAgentIconPlaceholder(agent);
-                                }}
-                              />
-                            ) : (
-                              <div className="manage-agent-icon-placeholder">
-                                {agent.name ? agent.name.charAt(0).toUpperCase() : 'A'}
-                              </div>
-                            )}
+                            {/* Use our new image URL function */}
+                            {(() => {
+                              const imageUrl = getAgentImageUrl(agent);
+                              if (imageUrl) {
+                                return (
+                                  <img 
+                                    src={imageUrl} 
+                                    alt={agent.name}
+                                    onError={(e) => {
+                                      e.target.onerror = null;
+                                      e.target.src = generateAgentIconPlaceholder(agent);
+                                    }}
+                                  />
+                                );
+                              } else {
+                                return (
+                                  <div className="manage-agent-icon-placeholder">
+                                    {agent.name ? agent.name.charAt(0).toUpperCase() : 'A'}
+                                  </div>
+                                );
+                              }
+                            })()}
                           </div>
-                          <h3 className="manage-agent-name">{agent.name || "Assistant Pro"}</h3>
+                          
+                          {/* Add icon next to the name if available */}
+                          <div className="manage-agent-title-section">
+                            <h3 className="manage-agent-name">{agent.name || "Assistant Pro"}</h3>
+                            {(() => {
+                              const iconUrl = getAgentIconUrl(agent);
+                              if (iconUrl && iconUrl !== getAgentImageUrl(agent)) {
+                                return (
+                                  <img 
+                                    src={iconUrl} 
+                                    alt="Icon"
+                                    className="manage-agent-small-icon"
+                                    onError={(e) => {
+                                      e.target.onerror = null;
+                                      e.target.style.display = 'none';
+                                    }}
+                                  />
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
                         </div>
                         
                         <div className="manage-agent-details">

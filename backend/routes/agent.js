@@ -5,6 +5,7 @@ const agentsController = require('../controllers/agentsController');
 const priceController = require('../controllers/priceController');
 const validateFirebaseToken = require('../middleware/authenticate');
 const publicCacheMiddleware = require('../middleware/publicCacheMiddleware');
+const upload = require('../middleware/upload');
 
 // Log that this file is being loaded
 console.log('Loading agent.js routes file with proper imports');
@@ -89,9 +90,19 @@ router.put('/:id/combined-update', (req, res, next) => {
 }, validateFirebaseToken, safeHandler(agentsController.combinedUpdate, 'combinedUpdate'));
 
 // === Single agent CRUD operations ===
-router.post('/', validateFirebaseToken, safeHandler(agentsController.createAgent, 'createAgent'));
+router.post('/', validateFirebaseToken, upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'icon', maxCount: 1 }
+]), safeHandler(agentsController.createAgent, 'createAgent'));
 router.get('/:id', publicCacheMiddleware({ maxAge: 600 }), safeHandler(agentsController.getAgentById, 'getAgentById'));
-router.patch('/:id', validateFirebaseToken, safeHandler(agentsController.updateAgent, 'updateAgent'));
+router.put('/:id', validateFirebaseToken, upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'icon', maxCount: 1 }
+]), safeHandler(agentsController.updateAgent, 'updateAgent'));
+router.patch('/:id', validateFirebaseToken, upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'icon', maxCount: 1 }
+]), safeHandler(agentsController.updateAgent, 'updateAgent'));
 router.delete('/:id', validateFirebaseToken, safeHandler(agentsController.deleteAgent, 'deleteAgent'));
 router.post('/:id', validateFirebaseToken, safeHandler(agentsController.updateAgent, 'updateAgent'));
 

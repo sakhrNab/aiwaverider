@@ -482,6 +482,11 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
     if (!formData.description) newErrors.description = 'Description is required';
     if (!formData.category) newErrors.category = 'Category is required';
     
+    // Validate image - now required
+    if (!formData.imageUrl || !isValidImageUrl(formData.imageUrl)) {
+      newErrors.imageUrl = 'Please upload an image for the agent';
+    }
+    
     // Validate price
     if (!formData.isFree && (!priceData || priceData.basePrice <= 0)) {
       newErrors.basePrice = 'Price must be greater than 0 for non-free agents';
@@ -511,7 +516,8 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
         category: formData.category ?? '',
         version: formData.version ?? '',
         imageUrl: formData.imageUrl ?? '',
-        iconUrl: formData.iconUrl ?? '',
+        // Always use the placeholder image for icon
+        iconUrl: formData.iconUrl ?? generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A'),
         features: formData.features ?? [''],
         tags: formData.tags ?? [''],
         isFree: formData.isFree ?? false,
@@ -793,158 +799,114 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
           <h3><FaImage /> Media & Images</h3>
           
           <div className="form-group">
-            <label htmlFor="iconUrl">Icon URL</label>
-            <input
-              type="text"
-              id="iconUrl"
-              name="iconUrl"
-              value={formData.iconUrl}
-              onChange={handleChange}
-              placeholder="URL for agent icon"
-            />
-            <span className="field-help">Enter an URL or use the file uploader below</span>
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="iconUpload">Upload Icon</label>
-            <input
-              type="file"
-              id="iconUpload"
-              accept="image/*"
-              onChange={(e) => {
-                if (e.target.files && e.target.files[0]) {
-                  try {
-                    // For preview only - in a real implementation you would upload to a server
-                    const iconUrl = URL.createObjectURL(e.target.files[0]);
-                    setFormData({
-                      ...formData,
-                      iconUrl: iconUrl,
-                      _iconFile: e.target.files[0] // Store the file for later upload
-                    });
-                  } catch (error) {
-                    console.error('Error creating object URL:', error);
-                    // Fallback to placeholder if createObjectURL fails
-                    setFormData({
-                      ...formData,
-                      iconUrl: generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A')
-                    });
-                  }
-                }
-              }}
-            />
-            <span className="field-help">Supported formats: JPG, PNG, GIF. Max size: 5MB</span>
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="imageUrl">Image URL</label>
-            <input
-              type="text"
-              id="imageUrl"
-              name="imageUrl"
-              value={formData.imageUrl}
-              onChange={handleChange}
-              placeholder="URL for agent main image"
-            />
-            <span className="field-help">Enter an URL or use the file uploader below</span>
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="imageUpload">Upload Image</label>
-            <input
-              type="file"
-              id="imageUpload"
-              accept="image/*"
-              onChange={(e) => {
-                if (e.target.files && e.target.files[0]) {
-                  try {
-                    // For preview only - in a real implementation you would upload to a server
-                    const imageUrl = URL.createObjectURL(e.target.files[0]);
-                    setFormData({
-                      ...formData,
-                      imageUrl: imageUrl,
-                      _imageFile: e.target.files[0] // Store the file for later upload
-                    });
-                  } catch (error) {
-                    console.error('Error creating object URL:', error);
-                    // Fallback to placeholder if createObjectURL fails
-                    setFormData({
-                      ...formData,
-                      imageUrl: generatePlaceholderImage('image', formData.name?.charAt(0) || 'A')
-                    });
-                  }
-                }
-              }}
-            />
-            <span className="field-help">Supported formats: JPG, PNG, GIF. Max size: 5MB</span>
-          </div>
-          
-          <div className="image-preview">
-            <h4>Image Preview</h4>
-            <div className="preview-container">
-              {formData.imageUrl && isValidImageUrl(formData.imageUrl) ? (
-                <img 
-                  src={formData.imageUrl} 
-                  alt="Agent image preview" 
-                  onError={(e) => {
-                    console.log('Image failed to load:', formData.imageUrl);
-                    // Check if it's a blob URL that might be invalid
-                    if (isBlobUrl(formData.imageUrl)) {
-                      console.log('Detected blob URL that may be invalid, reverting to placeholder');
-                      // Revoke the invalid blob URL to free up memory
-                      URL.revokeObjectURL(formData.imageUrl);
-                      // Update the form data to remove the invalid URL
-                      setFormData(prev => ({
-                        ...prev,
-                        imageUrl: generatePlaceholderImage('image', formData.name?.charAt(0) || 'A')
-                      }));
-                    } else {
-                      // Set a placeholder image directly on the element
-                      e.target.src = generatePlaceholderImage('image', formData.name?.charAt(0) || 'A');
-                      e.target.onerror = null; // Prevent infinite error loops
+            <label htmlFor="imageSection">Agent Image</label>
+            <div className="media-options">
+              <div className="media-option">
+                <input
+                  type="file"
+                  id="imageUpload"
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      try {
+                        // For preview only - actual upload happens when form is submitted
+                        const imageUrl = URL.createObjectURL(e.target.files[0]);
+                        console.log('Image file selected:', e.target.files[0]);
+                        setFormData({
+                          ...formData,
+                          imageUrl: imageUrl,
+                          _imageFile: e.target.files[0] // Store the file for later upload
+                        });
+                      } catch (error) {
+                        console.error('Error creating object URL:', error);
+                        // Fallback to placeholder if createObjectURL fails
+                        setFormData({
+                          ...formData,
+                          imageUrl: generatePlaceholderImage('image', formData.name?.charAt(0) || 'A'),
+                          _imageFile: null
+                        });
+                      }
                     }
                   }}
+                  className={errors.imageUrl ? 'error' : ''}
                 />
-              ) : (
-                <div className="no-image">
-                  <FaImage />
-                  <span>No valid image provided</span>
-                </div>
-              )}
+                <span className="field-help">Upload Image from Computer (Required)<br />Supported formats: JPG, PNG, GIF. Max size: 5MB</span>
+                {errors.imageUrl && <div className="error-message">{errors.imageUrl}</div>}
+              </div>
             </div>
           </div>
           
-          <div className="image-preview">
-            <h4>Icon Preview</h4>
-            <div className="preview-container">
-              {formData.iconUrl && isValidImageUrl(formData.iconUrl) ? (
-                <img 
-                  src={formData.iconUrl} 
-                  alt="Agent icon preview" 
-                  onError={(e) => {
-                    console.log('Icon failed to load:', formData.iconUrl);
-                    // Check if it's a blob URL that might be invalid
-                    if (isBlobUrl(formData.iconUrl)) {
-                      console.log('Detected blob URL that may be invalid, reverting to placeholder');
-                      // Revoke the invalid blob URL to free up memory
-                      URL.revokeObjectURL(formData.iconUrl);
-                      // Update the form data to remove the invalid URL
-                      setFormData(prev => ({
-                        ...prev,
-                        iconUrl: generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A')
-                      }));
-                    } else {
-                      // Set a placeholder image directly on the element
-                      e.target.src = generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A');
-                      e.target.onerror = null; // Prevent infinite error loops
-                    }
-                  }}
-                />
-              ) : (
-                <div className="no-image">
-                  <FaImage />
-                  <span>No valid icon provided</span>
-                </div>
-              )}
+          <div className="preview-section">
+            <div className="image-preview">
+              <h4>Image Preview</h4>
+              <div className="preview-container">
+                {formData.imageUrl && isValidImageUrl(formData.imageUrl) ? (
+                  <img 
+                    src={formData.imageUrl} 
+                    alt="Agent image preview" 
+                    onError={(e) => {
+                      console.log('Image failed to load:', formData.imageUrl);
+                      // Check if it's a blob URL that might be invalid
+                      if (isBlobUrl(formData.imageUrl)) {
+                        console.log('Detected blob URL that may be invalid, reverting to placeholder');
+                        // Revoke the invalid blob URL to free up memory
+                        URL.revokeObjectURL(formData.imageUrl);
+                        // Update the form data to remove the invalid URL
+                        setFormData(prev => ({
+                          ...prev,
+                          imageUrl: generatePlaceholderImage('image', formData.name?.charAt(0) || 'A'),
+                          _imageFile: null
+                        }));
+                      } else {
+                        // Set a placeholder image directly on the element
+                        e.target.src = generatePlaceholderImage('image', formData.name?.charAt(0) || 'A');
+                        e.target.onerror = null; // Prevent infinite error loops
+                      }
+                    }}
+                  />
+                ) : (
+                  <div className="no-image">
+                    <FaImage />
+                    <span>Agent Image</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="icon-preview">
+              <h4>Icon Preview</h4>
+              <div className="preview-container">
+                {formData.iconUrl && isValidImageUrl(formData.iconUrl) ? (
+                  <img 
+                    src={formData.iconUrl} 
+                    alt="Agent icon preview" 
+                    onError={(e) => {
+                      console.log('Icon failed to load:', formData.iconUrl);
+                      // Check if it's a blob URL that might be invalid
+                      if (isBlobUrl(formData.iconUrl)) {
+                        console.log('Detected blob URL that may be invalid, reverting to placeholder');
+                        // Revoke the invalid blob URL to free up memory
+                        URL.revokeObjectURL(formData.iconUrl);
+                        // Update the form data to remove the invalid URL
+                        setFormData(prev => ({
+                          ...prev,
+                          iconUrl: generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A'),
+                          _iconFile: null
+                        }));
+                      } else {
+                        // Set a placeholder image directly on the element
+                        e.target.src = generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A');
+                        e.target.onerror = null; // Prevent infinite error loops
+                      }
+                    }}
+                  />
+                ) : (
+                  <div className="no-image">
+                    <FaImage />
+                    <span>AI</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

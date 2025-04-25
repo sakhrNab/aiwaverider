@@ -2064,9 +2064,154 @@ export const deleteAITool = async (id) => {
 export const createAgent = async (agentData) => {
   try {
     console.log('Creating new agent:', agentData);
-    const response = await api.post('/api/agents', agentData);
-    console.log('Successfully created agent:', response.data);
-    return response.data;
+    
+    // Check if there are any file uploads to handle
+    // More robust check for files that might have lost their File prototype
+    const hasImageFile = agentData._imageFile && 
+      (agentData._imageFile instanceof File || 
+       (typeof agentData._imageFile === 'object' && Object.keys(agentData._imageFile).length > 0));
+       
+    const hasIconFile = agentData._iconFile && 
+      (agentData._iconFile instanceof File || 
+       (typeof agentData._iconFile === 'object' && Object.keys(agentData._iconFile).length > 0));
+    
+    // Check for blob URLs in imageUrl and iconUrl, which indicate files were uploaded
+    const hasBlobImageUrl = agentData.imageUrl && typeof agentData.imageUrl === 'string' && agentData.imageUrl.startsWith('blob:');
+    const hasBlobIconUrl = agentData.iconUrl && typeof agentData.iconUrl === 'string' && agentData.iconUrl.startsWith('blob:');
+    
+    // If we have files or blob URLs, use FormData
+    if (hasImageFile || hasIconFile || hasBlobImageUrl || hasBlobIconUrl) {
+      // Use FormData to send files
+      const formData = new FormData();
+      console.log('does has hasImageFile', hasImageFile);
+      console.log('does has hasIconFile', hasIconFile);
+      console.log('does has hasBlobImageUrl', hasBlobImageUrl);
+      console.log('does has hasBlobIconUrl', hasBlobIconUrl);
+      
+      // Add required fields explicitly
+      console.log('angentData_imageFile instance of File', agentData._imageFile instanceof File);
+      formData.append('name', agentData.name || '');
+      formData.append('category', agentData.category || '');
+      
+      // Create a copy of agentData without the file objects to avoid duplication
+      const dataWithoutFiles = { ...agentData };
+      
+      // Remove file fields from the JSON data to avoid duplication
+      delete dataWithoutFiles._imageFile;
+      delete dataWithoutFiles._iconFile;
+      
+      // Check for blob URLs without corresponding files - this is an error condition
+      // A blob URL without a file means the user selected a file but the file data was lost
+      if (hasBlobImageUrl && !hasImageFile) {
+        console.error('Blob image URL detected but no file data is present.');
+        throw new Error('Image file is required. Please select an image file again.');
+      }
+      
+      // If we have blob URLs, add a note for the backend
+      if (hasBlobImageUrl) {
+        dataWithoutFiles._hasBlobImageUrl = true;
+      }
+      if (hasBlobIconUrl) {
+        dataWithoutFiles._hasBlobIconUrl = true;
+      }
+      
+      // Add agent data as JSON - the backend will parse this
+      formData.append('data', JSON.stringify(dataWithoutFiles));
+      
+      // Add image files if present
+      if (hasImageFile && agentData._imageFile instanceof File) {
+        // Use only "image" field name to match backend expectation
+        formData.append('image', agentData._imageFile);
+        console.log('Appending image file:', agentData._imageFile.name);
+        
+        // Log file details for debugging
+        console.log('Image file details:', {
+          name: agentData._imageFile.name,
+          type: agentData._imageFile.type,
+          size: agentData._imageFile.size,
+          lastModified: new Date(agentData._imageFile.lastModified).toISOString()
+        });
+      } else if (hasImageFile) {
+        // If it's not a File instance but still has data, log warning
+        console.warn('Image file is not a File instance but contains data:', agentData._imageFile);
+        formData.append('imageData', JSON.stringify(agentData._imageFile));
+      }
+      
+      if (hasIconFile && agentData._iconFile instanceof File) {
+        formData.append('icon', agentData._iconFile);
+        console.log('Appending icon file:', agentData._iconFile.name);
+      } else if (hasIconFile) {
+        // If it's not a File instance but still has data, log warning
+        console.warn('Icon file is not a File instance but contains data:', agentData._iconFile);
+        formData.append('iconData', JSON.stringify(agentData._iconFile));
+      }
+      
+      // Log all FormData entries before sending
+      console.log('FormData entries being sent:');
+      for (let pair of formData.entries()) {
+        if (pair[1] instanceof File) {
+          console.log(pair[0], `[File: ${pair[1].name}, ${pair[1].size} bytes, type: ${pair[1].type}]`);
+        } else {
+          console.log(pair[0], pair[1]);
+        }
+      }
+      
+      // Try sending to the singular endpoint (/api/agent) with direct fetch for more control
+      try {
+        console.log(`Sending to singular endpoint: ${API_URL}/api/agent`);
+        
+        const response = await fetch(`${API_URL}/api/agent`, {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+          headers: {
+            // Don't set Content-Type - browser will set with boundary
+            'Authorization': localStorage.getItem('authToken') ? 
+              `Bearer ${localStorage.getItem('authToken')}` : ''
+          }
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error response from /api/agent:', errorText);
+          throw new Error(`Agent creation failed: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('Successfully created agent:', data);
+        return data;
+      } catch (singularError) {
+        console.error('Error with singular endpoint:', singularError);
+        
+        // Fall back to plural endpoint if singular fails
+        console.log('Falling back to plural endpoint: /api/agents');
+        const pluralResponse = await fetch(`${API_URL}/api/agents`, {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+          headers: {
+            // Don't set Content-Type - browser will set with boundary
+            'Authorization': localStorage.getItem('authToken') ? 
+              `Bearer ${localStorage.getItem('authToken')}` : ''
+          }
+        });
+        
+        if (!pluralResponse.ok) {
+          const errorText = await pluralResponse.text();
+          console.error('Error response from /api/agents:', errorText);
+          throw new Error(`Agent creation failed: ${pluralResponse.status} ${pluralResponse.statusText}`);
+        }
+        
+        const data = await pluralResponse.json();
+        console.log('Successfully created agent using plural endpoint:', data);
+        return data;
+      }
+    } else {
+      // No files to upload, send as regular JSON
+      const response = await api.post('/api/agents', agentData);
+      console.log('Successfully created agent:', response.data);
+      return response.data;
+    }
   } catch (error) {
     console.error('Error creating agent:', error);
     if (error.response?.data?.error) {
@@ -2120,4 +2265,207 @@ export const fetchLatestAgents = async (limit = 5) => {
   }
 };
 
+/**
+ * Update an existing agent
+ * @param {string} id - The ID of the agent to update
+ * @param {Object} agentData - The updated agent data
+ * @returns {Promise<Object>} - Updated agent data
+ */
+export const updateAgent = async (id, agentData) => {
+  try {
+    console.log(`Updating agent ${id}:`, agentData);
+    
+    // More robust check for files that might have lost their File prototype
+    const hasImageFile = agentData._imageFile && 
+      (agentData._imageFile instanceof File || 
+       (typeof agentData._imageFile === 'object' && Object.keys(agentData._imageFile).length > 0));
+       
+    const hasIconFile = agentData._iconFile && 
+      (agentData._iconFile instanceof File || 
+       (typeof agentData._iconFile === 'object' && Object.keys(agentData._iconFile).length > 0));
+    
+    // Check for blob URLs in imageUrl and iconUrl, which indicate files were uploaded
+    const hasBlobImageUrl = agentData.imageUrl && typeof agentData.imageUrl === 'string' && agentData.imageUrl.startsWith('blob:');
+    const hasBlobIconUrl = agentData.iconUrl && typeof agentData.iconUrl === 'string' && agentData.iconUrl.startsWith('blob:');
+    
+    // If we have files or blob URLs, use FormData
+    if (hasImageFile || hasIconFile || hasBlobImageUrl || hasBlobIconUrl) {
+      // Use FormData to send files
+      const formData = new FormData();
+      
+      // Add required fields explicitly
+      formData.append('name', agentData.name || '');
+      formData.append('category', agentData.category || '');
+      
+      // Create a copy of agentData without the file objects to avoid duplication
+      const dataWithoutFiles = { ...agentData };
+      
+      // Remove file fields from the JSON data to avoid duplication
+      delete dataWithoutFiles._imageFile;
+      delete dataWithoutFiles._iconFile;
+      
+      // Check for blob URLs without corresponding files - this is an error condition
+      // A blob URL without a file means the user selected a file but the file data was lost
+      if (hasBlobImageUrl && !hasImageFile) {
+        console.error('Blob image URL detected but no file data is present.');
+        throw new Error('Image file is required. Please select an image file again.');
+      }
+      
+      // If we have blob URLs, add a note for the backend
+      if (hasBlobImageUrl) {
+        dataWithoutFiles._hasBlobImageUrl = true;
+      }
+      if (hasBlobIconUrl) {
+        dataWithoutFiles._hasBlobIconUrl = true;
+      }
+      
+      // Add agent data as JSON - the backend will parse this
+      formData.append('data', JSON.stringify(dataWithoutFiles));
+      
+      // Add image files if present
+      if (hasImageFile && agentData._imageFile instanceof File) {
+        // Use only "image" field name to match backend expectation
+        formData.append('image', agentData._imageFile);
+        console.log('Appending image file:', agentData._imageFile.name);
+        
+        // Log file details for debugging
+        console.log('Image file details:', {
+          name: agentData._imageFile.name,
+          type: agentData._imageFile.type,
+          size: agentData._imageFile.size,
+          lastModified: new Date(agentData._imageFile.lastModified).toISOString()
+        });
+      } else if (hasImageFile) {
+        // If it's not a File instance but still has data, log warning
+        console.warn('Image file is not a File instance but contains data:', agentData._imageFile);
+        formData.append('imageData', JSON.stringify(agentData._imageFile));
+      }
+      
+      if (hasIconFile && agentData._iconFile instanceof File) {
+        formData.append('icon', agentData._iconFile);
+        console.log('Appending icon file:', agentData._iconFile.name);
+      } else if (hasIconFile) {
+        // If it's not a File instance but still has data, log warning
+        console.warn('Icon file is not a File instance but contains data:', agentData._iconFile);
+        formData.append('iconData', JSON.stringify(agentData._iconFile));
+      }
+      
+      // Log all FormData entries before sending
+      console.log('FormData entries being sent:');
+      for (let pair of formData.entries()) {
+        if (pair[1] instanceof File) {
+          console.log(pair[0], `[File: ${pair[1].name}, ${pair[1].size} bytes, type: ${pair[1].type}]`);
+        } else {
+          console.log(pair[0], pair[1]);
+        }
+      }
+      
+      // Try sending to the singular endpoint (/api/agent/:id) with direct fetch for more control
+      try {
+        console.log(`Sending to singular endpoint: ${API_URL}/api/agent/${id}`);
+        
+        const response = await fetch(`${API_URL}/api/agent/${id}`, {
+          method: 'PUT',
+          body: formData,
+          credentials: 'include',
+          headers: {
+            // Don't set Content-Type - browser will set with boundary
+            'Authorization': localStorage.getItem('authToken') ? 
+              `Bearer ${localStorage.getItem('authToken')}` : ''
+          }
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error response from /api/agent:', errorText);
+          throw new Error(`Agent update failed: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('Successfully updated agent:', data);
+        return data;
+      } catch (singularError) {
+        console.error('Error with singular endpoint:', singularError);
+        
+        // Fall back to plural endpoint if singular fails
+        console.log('Falling back to plural endpoint: /api/agents');
+        const pluralResponse = await fetch(`${API_URL}/api/agents/${id}`, {
+          method: 'PUT',
+          body: formData,
+          credentials: 'include',
+          headers: {
+            // Don't set Content-Type - browser will set with boundary
+            'Authorization': localStorage.getItem('authToken') ? 
+              `Bearer ${localStorage.getItem('authToken')}` : ''
+          }
+        });
+        
+        if (!pluralResponse.ok) {
+          const errorText = await pluralResponse.text();
+          console.error('Error response from /api/agents:', errorText);
+          throw new Error(`Agent update failed: ${pluralResponse.status} ${pluralResponse.statusText}`);
+        }
+        
+        const data = await pluralResponse.json();
+        console.log('Successfully updated agent using plural endpoint:', data);
+        return data;
+      }
+    } else {
+      // No files to upload, send as regular JSON
+      const response = await api.put(`/api/agents/${id}`, agentData);
+      console.log(`Successfully updated agent ${id}:`, response.data);
+      return response.data;
+    }
+  } catch (error) {
+    console.error(`Error updating agent ${id}:`, error);
+    if (error.response?.data?.error) {
+      throw new Error(error.response.data.error);
+    }
+    throw error;
+  }
+};
+
 export default api;
+
+/**
+ * Test file upload directly
+ * @param {File} file - The file to upload
+ * @returns {Promise<Object>} - Upload result
+ */
+export const testFileUpload = async (file) => {
+  try {
+    if (!file || !(file instanceof File)) {
+      throw new Error('Invalid file object');
+    }
+    
+    console.log('Testing direct file upload:', file.name, file.type, file.size);
+    
+    // Create simple FormData with just the file
+    const formData = new FormData();
+    formData.append('testFile', file);
+    
+    // Log all form data entries
+    console.log('FormData entries for test:');
+    for (let pair of formData.entries()) {
+      console.log(pair[0], pair[1] instanceof File ? `[File: ${pair[1].name}, ${pair[1].size} bytes]` : pair[1]);
+    }
+    
+    // Send without any extra options
+    const response = await fetch(`${API_URL}/api/test/upload`, {
+      method: 'POST',
+      body: formData,
+      // No headers - let browser set them
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    console.log('Test upload result:', result);
+    return result;
+  } catch (error) {
+    console.error('Test file upload error:', error);
+    throw error;
+  }
+};

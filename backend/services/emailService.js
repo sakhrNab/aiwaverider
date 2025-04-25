@@ -12,6 +12,7 @@ const handlebars = require('handlebars');
 const config = require('../config/email');
 const logger = require('../utils/logger');
 const Handlebars = require('handlebars');
+const { v4: uuidv4 } = require('uuid');
 
 // Register Handlebars helpers
 Handlebars.registerHelper('times', function(n, block) {
@@ -133,6 +134,12 @@ function createTransport() {
  */
 const sendEmail = async function(mailOptions) {
   try {
+    // Validate recipient
+    if (!mailOptions.to) {
+      logger.error('No recipients defined in email options');
+      throw new Error('No recipients defined');
+    }
+    
     const transporter = createTransport();
     
     // Add default from address if not provided
@@ -517,92 +524,181 @@ exports.sendCustomEmail = async (emailData) => {
 };
 
 /**
- * Send an agent update email to user
- * @param {Object} options - Email sending options
- * @returns {Promise} - Email send result
+ * Send agent update email
+ * @param {string} emailOrOptions - The email address or options object to send the update to
+ * @param {string} name - The recipient's name
+ * @param {string} title - The email title
+ * @param {string} content - The email content
+ * @param {Array} latestAgents - The latest agents
+ * @returns {Promise} - Promise that resolves with the email response
  */
-exports.sendAgentUpdateEmail = async (options) => {
-  const {
-    email,
-    name,
-    title = 'New AI Agents Available',
-    headerTitle = 'New AI Agents Available',
-    content,
-    latestAgents = []
-  } = options;
-  
+const sendAgentUpdateEmail = async (emailOrOptions, name, title, content, latestAgents = []) => {
   try {
-    // Ensure we have agents to display
-    let agentsToDisplay = latestAgents;
+    let email, recipientName, emailTitle, emailContent, agents;
     
-    // If no agents provided, fetch latest 5 as fallback
-    if (!agentsToDisplay || agentsToDisplay.length === 0) {
-      console.log('No agents provided to email service. Fetching latest agents as fallback.');
-      
-      const agentsController = require('../controllers/agentsController');
-      agentsToDisplay = await agentsController.getLatestAgents(5);
-      
-      console.log(`Fetched ${agentsToDisplay.length} agents as fallback`);
-      
-      // If we still have no agents, create sample ones 
-      if (!agentsToDisplay || agentsToDisplay.length === 0) {
-        console.log('Falling back to sample agents as no agents found in database');
-        agentsToDisplay = getSampleAgentsForEmail();
+    // Determine if we're using the object format or separate parameters
+    if (typeof emailOrOptions === 'object' && emailOrOptions !== null) {
+      // Object format being used
+      const options = emailOrOptions;
+      email = options.email;
+      recipientName = options.name;
+      emailTitle = options.title;
+      emailContent = options.content;
+      agents = options.latestAgents || [];
+    } else {
+      // Separate parameters being used
+      email = emailOrOptions;
+      recipientName = name;
+      emailTitle = title;
+      emailContent = content;
+      agents = latestAgents;
+    }
+    
+    // Validate required parameters
+    if (!email) {
+      throw new Error('Recipient email is required');
+    }
+    
+    console.log(`Sending agent update email to ${email} with title: ${emailTitle}`);
+    
+    // If no agents are provided, fetch the latest
+    if (!Array.isArray(agents) || agents.length === 0) {
+      try {
+        // First try to get the latest agents from the agents controller
+        const agentsController = require('../controllers/agentsController');
+        agents = await agentsController.getLatestAgents(5);
+        console.log(`Fetched ${agents.length} latest agents from controller`);
+      } catch (error) {
+        console.error('Error fetching latest agents:', error);
+        // Use sample agents as fallback
+        agents = getSampleAgentsForEmail();
+        console.log('Using sample agents as fallback');
       }
     }
     
-    // Log agents for debugging
-    if (agentsToDisplay.length > 0) {
-      console.log(`Sending email with ${agentsToDisplay.length} agents`);
-      console.log('First agent data:', JSON.stringify(agentsToDisplay[0], null, 2).substring(0, 500) + '...');
-    } else {
-      console.log('Warning: No agents available for email notification');
-    }
+    // Ensure all agents have absolute image URLs
+    agents = agents.map(agent => {
+      // Log the original image URL for debugging
+      console.log(`Processing agent ${agent.id} with original imageUrl: ${agent.imageUrl}`);
+      
+      // Process agent image URL to ensure it will work in emails
+      if (agent.imageUrl) {
+        // Check for invalid or problematic URLs
+        if (agent.imageUrl.includes('blob:') || 
+            agent.imageUrl.includes('data:') || 
+            agent.imageUrl.includes('localhost') ||
+            !agent.imageUrl.startsWith('http')) {
+          // Replace with a placeholder image
+          console.log(`Replacing problematic URL for agent ${agent.id}`);
+          agent.imageUrl = `https://via.placeholder.com/300x200/3498db/ffffff?text=${encodeURIComponent(agent.name || 'AI Agent')}`;
+        }
+      } else {
+        // If no imageUrl is provided, use a placeholder
+        agent.imageUrl = `https://via.placeholder.com/300x200/3498db/ffffff?text=${encodeURIComponent(agent.name || 'AI Agent')}`;
+      }
+      
+      // Log the processed image URL
+      console.log(`Processed imageUrl for agent ${agent.id}: ${agent.imageUrl}`);
+      
+      // Ensure creator is properly formatted
+      agent.creator = agent.creator || {
+        name: 'Admin',
+        username: 'AIWaverider',
+        role: 'Admin'
+      };
+      
+      // Make sure creator is an object
+      if (typeof agent.creator === 'string') {
+        agent.creator = {
+          name: agent.creator,
+          username: agent.creator,
+          role: 'Admin'
+        };
+      }
+      
+      return agent;
+    });
+
+    // Log the agents data that will be passed to the template
+    console.log('Agent data for email template:', 
+      agents.map(a => ({
+        id: a.id,
+        name: a.name,
+        imageUrl: a.imageUrl,
+        creator: a.creator
+      }))
+    );
     
-    // Get the compiled template
-    const template = await getCompiledTemplate('new_agents');
-    
-    // Prepare template data
+    // Prepare the template data
     const templateData = {
-      title,
-      headerTitle,
-      name,
-      content,
-      latestAgents: agentsToDisplay,
-      supportEmail: config.supportEmail,
+      title: emailTitle || 'New AI Agents Available!',
+      headerTitle: emailTitle || 'Check Out Our Latest AI Agents',
+      name: recipientName || 'AI Enthusiast',
+      content: emailContent || 'We have some exciting new AI agents for you to try out.',
+      latestAgents: agents,
       websiteUrl: config.websiteUrl,
+      supportEmail: config.supportEmail,
       currentYear: new Date().getFullYear()
     };
     
-    // Log template data for debugging
-    console.log('Agent update email template data:', JSON.stringify({
-      title,
-      headerTitle,
-      name: name ? name.substring(0, 10) + '...' : 'null' // Truncate for privacy
-    }));
+    console.log(`Sending email to ${email} with template data:`, JSON.stringify(templateData, null, 2));
     
-    // Render the template with data
+    // Get and compile the template
+    const template = await getCompiledTemplate('new_agents');
+    
+    // Render the HTML with the template data
     const html = template(templateData);
     
-    // Send the email
+    // Ensure the recipient is a valid email and properly formatted
+    const recipient = email.trim();
+    if (!recipient || !recipient.includes('@')) {
+      throw new Error(`Invalid recipient email: ${email}`);
+    }
+    
+    // Send the email with the rendered HTML
     return await sendEmail({
-      to: email,
-      subject: title,
-      html
+      to: recipient,
+      subject: emailTitle || 'New AI Agents Available!',
+      html: html,
+      from: `"${config.fromName}" <${config.fromEmail}>`,
+      headers: {
+        'X-Entity-Ref-ID': uuidv4(),
+        'List-Unsubscribe': `<${config.websiteUrl}/unsubscribe?email=${encodeURIComponent(recipient)}>`,
+        'Precedence': 'Bulk'
+      }
     });
   } catch (error) {
-    logger.error(`Error sending agent update email: ${error.message}`);
+    console.error(`Error sending agent update email:`, error);
     throw error;
   }
 };
 
 /**
- * Get sample agents for email template when real ones are not available
- * @returns {Array} - Array of sample agent objects
+ * Generate sample agents for email testing
+ * @returns {Array} Array of sample agents
  */
-function getSampleAgentsForEmail() {
-  // Create sample agent data for fallback
+const getSampleAgentsForEmail = () => {
   return [
+    {
+      id: 'agent1',
+      name: 'AI Assistant Pro',
+      url: `${config.websiteUrl}/agents/agent1`,
+      imageUrl: 'https://via.placeholder.com/300x200/3498db/ffffff?text=AI+Assistant',
+      creator: {
+        name: 'John Smith',
+        username: 'johnsmith',
+        role: 'Developer'
+      },
+      rating: {
+        average: 4.8,
+        count: 120
+      },
+      price: 2999,
+      priceDetails: {
+        originalPrice: 4999,
+        discountPercentage: 40
+      }
+    },
     {
       id: 'sample-001',
       name: 'AI Personal Tutor',
@@ -677,4 +773,7 @@ function getSampleAgentsForEmail() {
       price: 34.99
     }
   ];
-} 
+};
+
+// Export the sendAgentUpdateEmail function
+exports.sendAgentUpdateEmail = sendAgentUpdateEmail; 

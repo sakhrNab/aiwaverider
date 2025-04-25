@@ -43,7 +43,41 @@ const AgentDetail = () => {
         
         // Try to load the agent data
         const data = await fetchAgentById(agentId);
-        console.log('Successfully loaded agent data:', data ? data.id : 'No data');
+        console.log('Successfully loaded agent data:', data);
+        
+        // Debug - check the image URL structures
+        console.log('Image URL check:',
+          { 
+            imageUrl: data?.imageUrl,
+            imageObj: data?.image,
+            imageObjUrl: data?.image?.url, 
+            hasDataField: !!data?.data,
+            dataFieldType: data?.data ? typeof data.data : 'none'
+          }
+        );
+        
+        // If data.data is a string, try to parse it to see if it contains the image URL
+        if (data?.data && typeof data.data === 'string') {
+          try {
+            const parsedData = JSON.parse(data.data);
+            console.log('Parsed data.data for imageUrl:', parsedData?.imageUrl);
+            
+            // If data has a parsed imageUrl but the main object doesn't, add it
+            if (parsedData.imageUrl && !data.imageUrl) {
+              data.imageUrl = parsedData.imageUrl;
+              console.log('Added imageUrl from parsed data:', data.imageUrl);
+            }
+          } catch (e) {
+            console.error('Error parsing data.data:', e);
+          }
+        }
+        
+        // If we have image object but no imageUrl, use the image.url
+        if (!data.imageUrl && data.image && data.image.url) {
+          data.imageUrl = data.image.url;
+          console.log('Using image.url as imageUrl:', data.imageUrl);
+        }
+        
         setAgent(data);
         
         // Fetch the download count
@@ -251,11 +285,37 @@ const AgentDetail = () => {
     
     // If agent has images array, use it
     if (agent.images && Array.isArray(agent.images) && agent.images.length > 0) {
+      console.log('Using agent.images array:', agent.images);
       return agent.images;
     }
     
-    // Otherwise use the main image or fallback
-    return [agent.imageUrl || null];
+    // If agent has a direct imageUrl, use it
+    if (agent.imageUrl) {
+      console.log('Using direct agent.imageUrl:', agent.imageUrl);
+      return [agent.imageUrl];
+    }
+    
+    // Check if image info exists in a nested structure
+    if (agent.image && agent.image.url) {
+      console.log('Using agent.image.url:', agent.image.url);
+      return [agent.image.url];
+    }
+    
+    // Try to extract from data field if it's a string
+    if (agent.data && typeof agent.data === 'string') {
+      try {
+        const parsedData = JSON.parse(agent.data);
+        if (parsedData.imageUrl) {
+          console.log('Using parsed imageUrl from agent.data:', parsedData.imageUrl);
+          return [parsedData.imageUrl];
+        }
+      } catch (e) {
+        console.error('Error parsing agent.data in getImageUrls:', e);
+      }
+    }
+    
+    console.log('No image found, using fallback');
+    return [null];
   };
 
   // Handle add to cart click
