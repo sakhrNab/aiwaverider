@@ -6,19 +6,46 @@ const validateFirebaseToken = require('../middleware/authenticate');
 const publicCacheMiddleware = require('../middleware/publicCacheMiddleware');
 const upload = require('../middleware/upload');
 
+// Cache durations based on environment
+const getDefaultCacheDuration = () => {
+  return process.env.NODE_ENV === 'development' ? 30 : 300; // 30 seconds in dev, 5 minutes in production
+};
+
+const getFeaturedCacheDuration = () => {
+  return process.env.NODE_ENV === 'development' ? 60 : 900; // 1 minute in dev, 15 minutes in production
+};
+
 // Public endpoints (cached)
-router.get('/', publicCacheMiddleware({ duration: 300 }), agentsController.getAgents);
-router.get('/featured', publicCacheMiddleware({ duration: 900 }), agentsController.getFeaturedAgents);
+router.get('/', publicCacheMiddleware({ duration: getDefaultCacheDuration() }), agentsController.getAgents);
+router.get('/featured', publicCacheMiddleware({ duration: getFeaturedCacheDuration() }), agentsController.getFeaturedAgents);
+
+// Cache busting route
+router.get('/refresh-cache', validateFirebaseToken, (req, res) => {
+  // Clear the cache for the agents routes
+  if (req.app.locals.cache) {
+    const cacheKeys = Array.from(req.app.locals.cache.keys());
+    const agentCacheKeys = cacheKeys.filter(key => key.includes('/api/agents'));
+    
+    agentCacheKeys.forEach(key => {
+      req.app.locals.cache.del(key);
+    });
+    
+    console.log(`Cleared ${agentCacheKeys.length} agent cache entries`);
+    return res.status(200).json({ message: `Cleared ${agentCacheKeys.length} agent cache entries` });
+  }
+  
+  return res.status(200).json({ message: 'No cache to clear' });
+});
 
 // Add a specific route for Firebase document IDs
-router.get('/doc/:docId', publicCacheMiddleware({ duration: 600 }), (req, res) => {
+router.get('/doc/:docId', publicCacheMiddleware({ duration: getDefaultCacheDuration() }), (req, res) => {
   // Set the agentId parameter to the docId and forward to the getAgentById controller
   req.params.id = req.params.docId;
   return agentsController.getAgentById(req, res);
 });
 
 // Add a specific route for the 'agent-XX' format IDs
-router.get('/agent-:numericId([0-9]+)', publicCacheMiddleware({ duration: 600 }), (req, res) => {
+router.get('/agent-:numericId([0-9]+)', publicCacheMiddleware({ duration: getDefaultCacheDuration() }), (req, res) => {
   // Set the agentId parameter and forward to the getAgentById controller
   // This captures 'agent-41' format directly using route parameter
   const agentId = `agent-${req.params.numericId}`;
@@ -27,7 +54,7 @@ router.get('/agent-:numericId([0-9]+)', publicCacheMiddleware({ duration: 600 })
   return agentsController.getAgentById(req, res);
 });
 
-router.get('/:agentId', publicCacheMiddleware({ duration: 600 }), agentsController.getAgentById);
+router.get('/:agentId', publicCacheMiddleware({ duration: getDefaultCacheDuration() }), agentsController.getAgentById);
 
 // GET /api/agents/:agentId/downloads - Get download count for an agent
 router.get('/:agentId/downloads', agentsController.getDownloadCount);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useContext } from "react";
+import React, { useState, useEffect, useCallback, useRef, useContext, useMemo } from "react";
 import {
   FaPlus,
   FaEdit,
@@ -17,6 +17,7 @@ import {
   FaExclamationTriangle,
   FaVial,
   FaExclamationCircle,
+  FaSync,
 } from "react-icons/fa";
 import Modal from "../../components/Modal";
 import AdminLayout from "../../components/admin/AdminLayout";
@@ -976,8 +977,17 @@ const ManageAgents = () => {
 
       // Update the UI
       if (savedAgent) {
-        // Invalidate cache for this agent
+        // Invalidate local cache for this agent
         invalidateAgentCache(savedAgent.id);
+        
+        // Also clear server-side cache by calling the refresh-cache endpoint
+        try {
+          const cacheResponse = await apiRequest('/api/agents/refresh-cache', 'GET');
+          console.log('Cache refresh response:', cacheResponse);
+        } catch (cacheError) {
+          console.warn('Failed to refresh server cache:', cacheError);
+          // Continue anyway since local cache is cleared
+        }
         
         // Show success message
         toast.success(agentId ? 'Agent updated successfully' : 'Agent created successfully');
@@ -994,9 +1004,10 @@ const ManageAgents = () => {
 
       return savedAgent;
     } catch (error) {
-      console.error('Error saving agent:', error);
-      toast.error(error.message || 'Failed to save agent');
-      throw error;
+      console.error('Error submitting agent form:', error);
+      toast.error(`Failed to ${selectedAgent ? 'update' : 'create'} agent: ${error.message}`);
+      // Keep form open on error
+      return null;
     }
   };
 
@@ -1765,6 +1776,36 @@ const ManageAgents = () => {
     setShowUserForm(true);
   };
 
+  // Add a function to clear the server cache
+  const clearServerCache = async () => {
+    try {
+      toast.info('Refreshing server cache...');
+      const response = await apiRequest('/api/agents/refresh-cache', 'GET');
+      console.log('Cache refresh response:', response);
+      toast.success(`Server cache cleared: ${response.message || 'Success'}`);
+      
+      // Also refresh the agents list
+      setLoading(true);
+      await fetchAgents();
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to clear server cache:', error);
+      toast.error(`Failed to clear cache: ${error.message}`);
+    }
+  };
+
+  // JSX for the refresh button
+  const RefreshButton = () => (
+    <button 
+      className="btn btn-info" 
+      onClick={clearServerCache}
+      disabled={loading}
+      title="Refresh server cache and reload agents"
+    >
+      <FaSync className={loading ? 'icon-spin' : ''} /> Refresh Cache
+    </button>
+  );
+
   return (
     <AdminLayout>
       <div className="manage-agents-page">
@@ -2229,6 +2270,15 @@ const ManageAgents = () => {
                 <FaPlus /> Create New Agent
               </button>
 
+              <button
+                className="btn btn-secondary refresh-button"
+                onClick={clearServerCache}
+                disabled={loading}
+                style={{ marginTop: "20px", marginLeft: "10px" }}
+              >
+                <FaSync className={loading ? "icon-spin" : ""} /> Refresh Cache
+              </button>
+
               <div className="filters">
                 <div className="search-filter">
                   <label htmlFor="search">Search:</label>
@@ -2478,6 +2528,9 @@ const ManageAgents = () => {
             }}
           />
         )}
+
+        {/* Refresh Cache Button */}
+        <RefreshButton />
       </div>
     </AdminLayout>
   );

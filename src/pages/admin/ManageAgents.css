@@ -1227,4 +1227,14 @@ select {
   height: 24px;
   border-radius: 4px;
   object-fit: cover;
+}
+
+/* Spinner animation for refresh icon */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.icon-spin {
+  animation: spin 1s linear infinite;
 } 

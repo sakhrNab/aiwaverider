@@ -162,7 +162,28 @@ const getAgents = async (req, res) => {
 
     // Apply sorting based on filter type
     if (filter === 'Hot & Now') {
-      agents.sort((a, b) => b.popularity - a.popularity);
+      agents.sort((a, b) => {
+        // First prioritize new agents (has createdAt or dateCreated within last 7 days)
+        const now = new Date();
+        const aDate = a.createdAt ? new Date(a.createdAt) : 
+                     (a.dateCreated ? new Date(a.dateCreated) : null);
+        const bDate = b.createdAt ? new Date(b.createdAt) : 
+                     (b.dateCreated ? new Date(b.dateCreated) : null);
+                     
+        // If both have recent dates (within 7 days), sort by date descending
+        if (aDate && bDate) {
+          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          const aIsRecent = aDate > weekAgo;
+          const bIsRecent = bDate > weekAgo;
+          
+          if (aIsRecent && !bIsRecent) return -1;
+          if (!aIsRecent && bIsRecent) return 1;
+          if (aIsRecent && bIsRecent) return bDate - aDate;
+        }
+        
+        // Fall back to popularity if dates aren't available or aren't recent
+        return (b.popularity || 0) - (a.popularity || 0);
+      });
     } else if (filter === 'Top Rated') {
       agents.sort((a, b) => {
         const ratingA = a.rating?.average ? parseFloat(a.rating.average) : 0;

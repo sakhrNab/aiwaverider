@@ -1853,4 +1853,39 @@
 .warning-icon {
   color: #fbbf24; /* Yellow-400 */
   margin-right: 0.5rem;
+}
+
+/* Spinner animation for refresh icon */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.icon-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Refresh button styling */
+.refresh-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  background-color: rgba(155, 89, 182, 0.7);
+  color: white;
+  border: none;
+}
+
+.refresh-button:hover {
+  background-color: rgba(142, 68, 173, 0.8);
+}
+
+.refresh-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 } 

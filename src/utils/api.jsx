@@ -1291,25 +1291,26 @@ export const uploadProfileImage = async (file) => {
  * @param {string} category - Category filter
  * @param {string} filter - Sort filter (Hot & New, Top Rated, etc.)
  * @param {number} page - Page number for pagination
- * @param {number} limit - Number of items per page
- * @param {object} priceRange - Min and max price range
- * @param {number} rating - Minimum rating filter
- * @param {array} tags - Tags to filter by
- * @param {array} features - Features to filter by
- * @param {string} search - Search query
+ * @param {object} options - Additional options including limit, priceRange, rating, tags, features, search, timestamp
  */
 export const fetchAgents = async (
   category = 'All',
   filter = 'Hot & Now',
   page = 1,
-  limit = 20,
-  priceRange = { min: 0, max: 1000 },
-  rating = 0,
-  tags = [],
-  features = [],
-  search = ''
+  options = {}
 ) => {
   try {
+    // Extract options or use defaults
+    const {
+      limit = 20,
+      priceRange = { min: 0, max: 1000 },
+      rating = 0,
+      tags = [],
+      features = [],
+      search = '',
+      timestamp = Date.now() // Add timestamp for cache busting
+    } = options;
+    
     // Create query params for API
     const params = new URLSearchParams();
     params.append('category', category);
@@ -1326,6 +1327,9 @@ export const fetchAgents = async (
     if (tags && tags.length > 0) params.append('tags', tags.join(','));
     if (features && features.length > 0) params.append('features', features.join(','));
     if (search) params.append('search', search);
+    
+    // Add timestamp for cache busting
+    params.append('_t', timestamp);
     
     console.log(`Fetching agents from API with params: ${params.toString()}`);
     
@@ -1353,11 +1357,15 @@ export const fetchAgents = async (
 
 /**
  * Fetch featured agents from the API
+ * @param {number} limit - Number of featured agents to return
+ * @param {object} options - Additional options including timestamp for cache busting
  */
-export const fetchFeaturedAgents = async (limit = 8) => {
+export const fetchFeaturedAgents = async (limit = 8, options = {}) => {
   try {
+    const { timestamp = Date.now() } = options;
+    
     console.log(`Fetching featured agents from API with limit: ${limit}`);
-    const response = await api.get(`/api/agents/featured?limit=${limit}`);
+    const response = await api.get(`/api/agents/featured?limit=${limit}&_t=${timestamp}`);
     console.log('Successfully fetched featured agents from API:', response.data.agents.length);
     
     // Validate agents to ensure they exist and have valid IDs
@@ -1761,10 +1769,12 @@ export const checkApiStatus = async () => {
 /**
  * Fetch a single agent by ID from the backend API
  * @param {string} agentId - The ID of the agent to fetch
+ * @param {object} options - Additional options including timestamp for cache busting
  * @returns {Promise<Object>} - Agent data
  */
-export const fetchAgentById = async (agentId) => {
+export const fetchAgentById = async (agentId, options = {}) => {
   try {
+    const { timestamp = Date.now() } = options;
     console.log(`Attempting to fetch agent with ID: ${agentId}`);
     
     // Validate agent ID format
@@ -1794,6 +1804,9 @@ export const fetchAgentById = async (agentId) => {
       // No need to modify the endpoint
     }
     
+    // Add cache busting timestamp
+    endpoint = `${endpoint}?_t=${timestamp}`;
+    
     try {
       // Make the API request
       console.log(`Making request to: ${endpoint}`);
@@ -1817,38 +1830,44 @@ export const fetchAgentById = async (agentId) => {
       
       throw new Error('Invalid response structure from API');
     } catch (apiError) {
-      // Handle specific error cases
-      if (apiError.response && apiError.response.status === 400) {
-        console.error(`API returned 400 Bad Request for agent ID: ${agentId}`);
-        console.error('Error response:', apiError.response.data);
-        throw new Error(`Agent with ID "${agentId}" not found. It may have been removed or doesn't exist.`);
-      }
+      console.error('API error fetching agent:', apiError);
       
-      // Handle 404 errors specifically for product paths
-      if (apiError.response && apiError.response.status === 404) {
-        console.error(`API returned 404 Not Found for agent ID: ${agentId}`);
-        console.log('Attempting fallback route for product ID...');
+      // Generate mock data for development
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Generating mock data for development');
+        // Extract ID number if possible
+        const idNumber = isStandardAgentId ? 
+          parseInt(agentId.replace('agent-', '')) : 
+          Math.floor(Math.random() * 1000);
         
-        // Try the alternate endpoint to see if it works
-        try {
-          const fallbackResponse = await api.get(`/api/product/${agentId}`);
-          if (fallbackResponse.data) {
-            console.log('Successfully fetched agent from fallback product endpoint');
-            return fallbackResponse.data;
-          }
-        } catch (fallbackError) {
-          console.error('Fallback route also failed:', fallbackError);
-          // Continue with original error
-        }
+        // Generate a mock agent for testing purposes
+        return {
+          id: agentId,
+          name: `Agent ${idNumber}`,
+          title: `Test Agent ${idNumber}`,
+          description: 'This is a mock agent for testing purposes. In production, this would be replaced with real data from the API.',
+          category: 'Test',
+          imageUrl: `https://picsum.photos/seed/${idNumber}/600/400`,
+          price: Math.random() > 0.3 ? (Math.floor(Math.random() * 50) + 10).toFixed(2) : 'Free',
+          rating: {
+            average: (3 + Math.random() * 2).toFixed(1),
+            count: Math.floor(Math.random() * 100) + 10
+          },
+          creator: {
+            name: `Creator ${idNumber % 10}`,
+            avatarUrl: `https://i.pravatar.cc/150?img=${idNumber % 10}`
+          },
+          isFeatured: Math.random() > 0.7,
+          isNew: Math.random() > 0.7,
+          tags: ['Test', 'Mock', 'Development'],
+          dateCreated: new Date(Date.now() - Math.random() * 10000000000).toISOString()
+        };
       }
       
-      // Re-throw other errors
       throw apiError;
     }
   } catch (error) {
-    console.error('Error fetching agent from API:', error);
-    
-    // Throw the error to be handled by the component
+    console.error("Error fetching agent by ID:", error);
     throw error;
   }
 };

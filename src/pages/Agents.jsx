@@ -9,7 +9,7 @@ import FilterSidebar from '../components/agents/FilterSidebar';
 import AgentCard from '../components/agents/AgentCard';
 import AgentCarousel from '../components/agents/AgentCarousel';
 import { useTheme } from '../contexts/ThemeContext';
-import { FaExclamationTriangle, FaCalendarAlt, FaArrowRight, FaBars, FaTimes, FaFilter } from 'react-icons/fa';
+import { FaExclamationTriangle, FaCalendarAlt, FaArrowRight, FaBars, FaTimes, FaFilter, FaSync } from 'react-icons/fa';
 import { HashLoader } from 'react-spinners';
 import '../styles/Agents.css';
 
@@ -37,6 +37,7 @@ const Agents = () => {
   const [featureCounts, setFeatureCounts] = useState({}); // Dynamic feature counts
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [mobileOptionsOpen, setMobileOptionsOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Add a ref for the agents container
   const agentsContainerRef = useRef(null);
@@ -128,8 +129,11 @@ const Agents = () => {
       setIsLoading(true);
       setIsRecommendationsLoading(true);
       
-      // Load agents data from API
-      const allAgentsData = await fetchAgents();
+      // Add cache busting timestamp
+      const timestamp = new Date().getTime();
+      
+      // Load agents data from API with cache busting
+      const allAgentsData = await fetchAgents(undefined, undefined, undefined, { timestamp });
       
       // Save all agents to state for filtering
       if (allAgentsData && allAgentsData.length > 0) {
@@ -148,12 +152,12 @@ const Agents = () => {
         applyFilters(processedAgents);
       }
       
-      // Load featured agents
-      const featuredData = await fetchFeaturedAgents(8);
+      // Load featured agents with cache busting
+      const featuredData = await fetchFeaturedAgents(8, { timestamp });
       setFeaturedAgents(featuredData || []);
       
-      // Create recommended agents - try to get from API
-      let recommendedData = await fetchAgents('All', 'Top Rated', 1, 6);
+      // Create recommended agents - try to get from API with cache busting
+      let recommendedData = await fetchAgents('All', 'Top Rated', 1, { timestamp, limit: 6 });
       
       // Ensure we have some recommended agents, but no mocking
       if (!recommendedData || recommendedData.length === 0) {
@@ -448,6 +452,39 @@ const Agents = () => {
     setMobileOptionsOpen(!mobileOptionsOpen);
   };
 
+  // Function to manually force refresh the data
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      // Use a unique timestamp for this refresh
+      const timestamp = new Date().getTime();
+      
+      // Load agents data from API with cache busting
+      const allAgentsData = await fetchAgents(undefined, undefined, undefined, { timestamp });
+      
+      // Save all agents to state for filtering
+      if (allAgentsData && allAgentsData.length > 0) {
+        // Process the agents data
+        const processedAgents = allAgentsData.map(agent => {
+          return agent;
+        });
+        
+        setAllAgents(processedAgents);
+        calculateFilterCounts(processedAgents);
+        applyFilters(processedAgents);
+      }
+      
+      // Also refresh featured agents
+      const featuredData = await fetchFeaturedAgents(8, { timestamp });
+      setFeaturedAgents(featuredData || []);
+      
+      setIsRefreshing(false);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      setIsRefreshing(false);
+    }
+  };
+
   // Render the agent grid with appropriate filtering
   const renderAgentGrid = () => {
     const isMockData = agents.some(agent => 
@@ -713,13 +750,24 @@ const Agents = () => {
                     </button>
                   ))}
                 </div>
-                <div className="search-wrapper mt-3 sm:mt-0">
+
+                <div className="search-wrapper mt-3 sm:mt-0 flex">
                   <SearchBar
                     initialQuery={searchQuery}
                     onSearch={handleSearch}
                     placeholder="Search agents..."
-                    className="w-full"
+                    className="flex-1"
                   />
+                  
+                  <button 
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className="refresh-button ml-2 whitespace-nowrap flex items-center gap-2"
+                    title="Refresh agents list"
+                  >
+                    <FaSync className={isRefreshing ? "icon-spin" : ""} />
+                    {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                  </button>
                 </div>
               </div>
 
