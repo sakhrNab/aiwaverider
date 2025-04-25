@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { FaStar, FaHeart, FaRegHeart } from 'react-icons/fa';
 import { addToWishlist, removeFromWishlist } from '../../utils/api';
@@ -8,7 +8,19 @@ const AgentCard = ({ agent }) => {
   const [isWishlisted, setIsWishlisted] = useState(agent.isWishlisted || false);
   const [isLoading, setIsLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState(null);
+  const imageRef = useRef(null);
 
+  // Handle image load to determine aspect ratio
+  const handleImageLoad = () => {
+    if (imageRef.current) {
+      const { naturalWidth, naturalHeight } = imageRef.current;
+      const ratio = naturalWidth / naturalHeight;
+      // Consider images with ratio less than 1 as portrait
+      setAspectRatio(ratio < 1 ? 'portrait' : 'landscape');
+    }
+  };
+  
   // Handle wishlist toggling
   const handleWishlist = async (e) => {
     e.preventDefault();
@@ -151,10 +163,13 @@ const AgentCard = ({ agent }) => {
           {/* Card image with wishlist button */}
           <div className="marketplace-agent-image-container">
             <img 
+              ref={imageRef}
               src={getImageUrl()} 
               alt={agent.title || agent.name} 
               className="marketplace-agent-image" 
               onError={handleImageError}
+              onLoad={handleImageLoad}
+              data-aspect={aspectRatio}
             />
             <button 
               className={`marketplace-wishlist-button ${isWishlisted ? 'active' : ''} ${isLoading ? 'loading' : ''}`}

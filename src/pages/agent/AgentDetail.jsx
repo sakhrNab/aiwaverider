@@ -22,9 +22,11 @@ const AgentDetail = () => {
   const [copySuccess, setCopySuccess] = useState('');
   const [downloadCount, setDownloadCount] = useState(0);
   const [viewTracked, setViewTracked] = useState(false);
+  const [imageAspectRatio, setImageAspectRatio] = useState(null);
   
   // Image slider refs
   const sliderRef = useRef(null);
+  const imageRef = useRef(null);
 
   useEffect(() => {
     const loadAgent = async () => {
@@ -345,6 +347,16 @@ const AgentDetail = () => {
     }
   };
 
+  // Handle image load to determine aspect ratio
+  const handleImageLoad = () => {
+    if (imageRef.current) {
+      const { naturalWidth, naturalHeight } = imageRef.current;
+      const ratio = naturalWidth / naturalHeight;
+      // Consider images with ratio less than 1 as portrait
+      setImageAspectRatio(ratio < 1 ? 'portrait' : 'landscape');
+    }
+  };
+
   if (loading) {
     return (
       <div className="agent-detail-container">
@@ -391,9 +403,12 @@ const AgentDetail = () => {
               
               <div className="slide">
                 <img 
+                  ref={imageRef}
                   src={imageUrls[currentSlide] || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"%3E%3Crect width="300" height="200" fill="%234a4de7"/%3E%3Ctext x="150" y="100" font-family="Arial" font-size="24" text-anchor="middle" fill="white"%3EAgent%3C/text%3E%3C/svg%3E'} 
                   alt={`${agent.title} - slide ${currentSlide + 1}`} 
                   className="slide-image" 
+                  onLoad={handleImageLoad}
+                  data-aspect={imageAspectRatio}
                 />
               </div>
               

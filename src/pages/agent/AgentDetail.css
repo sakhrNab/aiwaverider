@@ -78,19 +78,28 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  aspect-ratio: 16/9;
+  background-color: #f5f5f5;
 }
 
 .slide {
   width: 100%;
+  height: 100%;
   position: relative;
 }
 
 .slide-image {
   width: 100%;
   display: block;
-  height: auto;
-  aspect-ratio: 16/9;
+  height: 100%;
   object-fit: cover;
+  background-color: #f5f5f5;
+}
+
+/* Special handling for portrait images */
+.slide-image[data-aspect="portrait"] {
+  object-fit: contain;
+  background-color: #4a4de7;
 }
 
 .slider-arrow {

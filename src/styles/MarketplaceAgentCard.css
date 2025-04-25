@@ -40,6 +40,12 @@
   transition: transform 0.3s ease;
 }
 
+/* For portrait images */
+.marketplace-agent-image[data-aspect="portrait"] {
+  object-fit: contain;
+  background-color: #4a4de7;
+}
+
 .marketplace-agent-card:hover .marketplace-agent-image {
   transform: scale(1.05);
 }

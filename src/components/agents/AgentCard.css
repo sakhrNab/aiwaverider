@@ -39,6 +39,13 @@
   transition: transform 0.3s ease;
 }
 
+/* Special handling for portrait (9:16) images */
+.agent-image[data-aspect="portrait"] {
+  object-fit: contain;
+  background-color: #4a4de7; /* Same color as fallback images */
+  padding: 0;
+}
+
 .agent-card:hover .agent-image {
   transform: scale(1.05);
 }
