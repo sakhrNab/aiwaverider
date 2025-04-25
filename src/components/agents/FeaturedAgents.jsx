@@ -44,13 +44,54 @@ const AgentCard = ({ agent }) => {
     return typeof rating === 'number' ? rating.toFixed(1) : parseFloat(rating).toFixed(1);
   };
 
-  // Format price to show only one decimal place
-  const formatPrice = (price) => {
-    if (!price && price !== 0) return 'Free';
-    if (typeof price === 'string') return price;
-    if (typeof price === 'number') {
-      return price === 0 ? 'Free' : `$${price.toFixed(2)}`;
+  // Format price to show with appropriate styling
+  const formatPrice = () => {
+    // First check if agent is marked as free
+    if (agent.isFree) return <span className="free-price">Free</span>;
+    
+    // Check if price is 0
+    if (agent.price === 0) return <span className="free-price">Free</span>;
+    
+    // Check if we have price details object
+    if (agent.priceDetails) {
+      const { basePrice, discountedPrice, currency } = agent.priceDetails;
+      const currencySymbol = currency === 'USD' ? '$' : 
+                            currency === 'EUR' ? '€' :
+                            currency === 'GBP' ? '£' : currency;
+      
+      // If price is 0, it's free
+      if (basePrice === 0 || discountedPrice === 0) {
+        return <span className="free-price">Free</span>;
+      }
+      
+      // If there's a discount, show both prices
+      if (discountedPrice !== undefined && discountedPrice < basePrice) {
+        return (
+          <div className="price-display">
+            <span className="original-price">{currencySymbol}{basePrice.toFixed(2)}</span>
+            <span className="discounted-price">{currencySymbol}{discountedPrice.toFixed(2)}</span>
+          </div>
+        );
+      }
+      
+      if (basePrice !== undefined) {
+        return `${currencySymbol}${basePrice.toFixed(2)}`;
+      }
     }
+    
+    // Handle string or number price
+    if (agent.price !== undefined) {
+      if (typeof agent.price === 'number') {
+        return agent.price === 0 ? <span className="free-price">Free</span> : `$${agent.price.toFixed(2)}`;
+      }
+      // Check if price string is "Free" or "0"
+      if (agent.price === 'Free' || agent.price === '0') {
+        return <span className="free-price">Free</span>;
+      }
+      return agent.price; // Return as is if it's a string
+    }
+    
+    // Default fallback
     return 'Price unavailable';
   };
 
@@ -74,42 +115,59 @@ const AgentCard = ({ agent }) => {
 
   return (
     <div className="featured-card-wrapper">
-      <Link to={`/agents/${agent.id}`} className={`agent-card glass-effect ${getTypeColorClass()}`}>
-        <div className="agent-card-image-container">
-          <img 
-            src={agent.imageUrl || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3C/svg%3E"} 
-            alt={agent.title || agent.name || 'AI Agent'} 
-            className="agent-card-image"
-            onError={handleImageError}
-          />
-          {getBadge()}
-        </div>
-        <div className="agent-card-content">
-          <div className="agent-card-header">
-            <h3 className="agent-card-title">{agent.title || agent.name || 'AI Assistant'}</h3>
-            <div className="agent-creator">
-              <FaUser className="creator-icon" />
-              <span className="creator-name">{agent.creator?.name || agent.creator?.id || 'AI Labs'}</span> 
+      <Link to={`/agents/${agent.id}`} className="marketplace-agent-card-link">
+        <div className="marketplace-agent-card">
+          <div className="marketplace-agent-card-inner">
+            {/* Card image with badges */}
+            <div className="marketplace-agent-image-container">
+              <img 
+                src={agent.imageUrl || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3C/svg%3E"} 
+                alt={agent.title || agent.name || 'AI Agent'} 
+                className="marketplace-agent-image"
+                onError={handleImageError}
+              />
+              
+              {/* Badges */}
+              {agent.isBestseller && <div className="marketplace-badge bestseller">Bestseller</div>}
+              {agent.isNew && <div className="marketplace-badge new">New</div>}
+              {agent.isTrending && <div className="marketplace-badge trending">Trending</div>}
             </div>
-          </div>
-          
-          <div className="agent-card-footer">
-            <div className="agent-card-meta">
-              <div className="agent-card-price">
-                {formatPrice(agent.price)}
+
+            {/* Card content */}
+            <div className="marketplace-agent-content">
+              <h3 className="marketplace-agent-title">{agent.title || agent.name || 'AI Assistant'}</h3>
+              
+              {/* Only show description if available */}
+              {agent.description && (
+                <p className="marketplace-agent-description">{agent.description}</p>
+              )}
+              
+              <div className="marketplace-agent-creator">
+                By {agent.creator?.name || agent.creator?.id || "AI Labs"}
               </div>
-              <div className="agent-card-rating">
-                {formatRating(agent.rating?.average || 0)}
-                <FaStar className="star-icon" />
-                <span className="agent-card-rating-count">({agent.rating?.count || 0})</span>
+              
+              <div className="marketplace-agent-meta">
+                <div className="marketplace-agent-rating">
+                  {agent.rating?.average ? (
+                    <>
+                      <span className="marketplace-rating-score">{formatRating(agent.rating.average)}</span>
+                      <FaStar className="marketplace-star-icon" />
+                      <span className="marketplace-rating-count">({agent.rating.count || 0})</span>
+                    </>
+                  ) : (
+                    <span className="marketplace-no-rating">No ratings yet</span>
+                  )}
+                </div>
+                
+                <div className="marketplace-agent-price">
+                  {formatPrice()}
+                </div>
               </div>
+              
+              {agent.version && 
+                <div className="marketplace-agent-version">v{agent.version}</div>
+              }
             </div>
-            
-            {agent.category && (
-              <div className="agent-card-categories">
-                <span className="agent-card-category">{agent.category}</span>
-              </div>
-            )}
           </div>
         </div>
       </Link>
