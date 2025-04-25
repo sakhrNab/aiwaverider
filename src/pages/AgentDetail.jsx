@@ -6,6 +6,7 @@ import { AuthContext } from '../contexts/AuthContext';
 import { toggleWishlist } from '../utils/api';
 import { toast } from 'react-toastify';
 import DOMPurify from 'dompurify';
+import './AgentDetail.css';
 
 const StarRating = ({ rating }) => {
   return (
@@ -398,7 +399,7 @@ const AgentDetail = () => {
                                     <span className="text-gray-400 line-through text-xs">
                                       ${relatedAgent.priceDetails.basePrice.toFixed(2)}
                                     </span>
-                                    <span className="font-medium text-indigo-600">
+                                    <span className="font-medium text-red-600">
                                       ${relatedAgent.priceDetails.discountedPrice.toFixed(2)}
                                     </span>
                                   </div>
@@ -441,14 +442,17 @@ const AgentDetail = () => {
             
             <div className="flex items-center gap-4 mb-6">
               {agent.priceDetails ? (
-                <div className="flex flex-col">
+                <div className="price-display-container">
                   {agent.priceDetails.discountedPrice < agent.priceDetails.basePrice ? (
                     <>
-                      <div className="text-lg text-gray-500 line-through">
+                      <div className="original-price-detail text-lg text-gray-500 line-through">
                         ${agent.priceDetails.basePrice.toFixed(2)}
                       </div>
-                      <div className="text-3xl font-bold text-indigo-600">
+                      <div className="discounted-price-detail text-3xl font-bold text-red-600">
                         ${agent.priceDetails.discountedPrice.toFixed(2)}
+                        <span className="discount-badge ml-2">
+                          {Math.round((1 - agent.priceDetails.discountedPrice / agent.priceDetails.basePrice) * 100)}% OFF
+                        </span>
                       </div>
                     </>
                   ) : (

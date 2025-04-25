@@ -178,22 +178,60 @@
   flex-wrap: wrap;
 }
 
+/* Styling for price displays */
 .price-display {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  position: relative;
 }
 
 .price-value {
-  font-size: 22px;
+  font-size: 1.75rem;
   font-weight: 700;
-  color: var(--primary-color);
+  color: #111;
+}
+
+.price-value.discount-price {
+  color: #e53e3e; /* Red color for discounted price */
 }
 
 .original-price {
-  font-size: 16px;
-  color: var(--text-light);
   text-decoration: line-through;
+  color: #888;
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+  position: relative;
+}
+
+.discount-badge {
+  background-color: #e53e3e;
+  color: white;
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 0.5rem;
+  font-weight: 600;
+  display: inline-block;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.pricing-note {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: #666;
 }
 
 .creator-info {

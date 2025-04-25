@@ -156,16 +156,29 @@ const AgentDetail = () => {
       });
   };
 
-  // Format price for display
+  // Update the formatPrice function to better handle price details
   const formatPrice = (price) => {
     if (!price && price !== 0) return 'Free';
+    
+    // Handle price details object
+    if (price && typeof price === 'object' && price.basePrice !== undefined) {
+      const currencySymbol = price.currency === 'EUR' ? '€' : 
+                            price.currency === 'GBP' ? '£' : '$';
+      
+      if (price.basePrice === 0) return 'Free';
+      return `${currencySymbol}${price.basePrice.toFixed(2)}`;
+    }
+    
+    // Handle string and number types
     if (typeof price === 'string') {
       if (price.toLowerCase() === 'free') return 'Free';
       return price.startsWith('$') ? price : `$${price}`;
     }
+    
     if (typeof price === 'number') {
       return price === 0 ? 'Free' : `$${price.toFixed(2)}`;
     }
+    
     return 'Price unavailable';
   };
   
@@ -439,9 +452,21 @@ const AgentDetail = () => {
           
           <div className="agent-meta-row">
             <div className="price-display">
-              <span className="price-value">{formatPrice(agent.price)}</span>
-              {agent.priceDetails?.discountPercentage > 0 && (
-                <span className="original-price">{formatPrice(agent.priceDetails.originalPrice)}</span>
+              {agent.priceDetails && agent.priceDetails.basePrice > 0 && 
+               agent.priceDetails.discountedPrice < agent.priceDetails.basePrice ? (
+                <>
+                  <span className="price-value discount-price">
+                    ${agent.priceDetails.discountedPrice.toFixed(2)}
+                  </span>
+                  <span className="original-price">
+                    ${agent.priceDetails.basePrice.toFixed(2)}
+                  </span>
+                  <span className="discount-badge">
+                    {Math.round((1 - agent.priceDetails.discountedPrice / agent.priceDetails.basePrice) * 100)}% OFF
+                  </span>
+                </>
+              ) : (
+                <span className="price-value">{formatPrice(agent.price)}</span>
               )}
             </div>
             
@@ -480,7 +505,12 @@ const AgentDetail = () => {
                 />
               </div>
               <p className="minimum-price-note">
-                The minimum price is {formatPrice(minPrice)}
+                {agent.priceDetails && agent.priceDetails.basePrice > 0 && 
+                 agent.priceDetails.discountedPrice < agent.priceDetails.basePrice ? (
+                  <>The minimum price is ${minPrice.toFixed(2)} <span className="pricing-note">(Discounted from ${agent.priceDetails.basePrice.toFixed(2)})</span></>
+                ) : (
+                  <>The minimum price is {formatPrice(minPrice)}</>
+                )}
               </p>
             </div>
             
