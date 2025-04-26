@@ -1,75 +1,53 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { FaStar, FaChevronLeft, FaChevronRight, FaUser } from 'react-icons/fa';
+import useEmblaCarousel from 'embla-carousel-react';
+import Autoplay from 'embla-carousel-autoplay';
+import { FaStar, FaUser, FaChevronLeft, FaChevronRight, FaPause, FaPlay } from 'react-icons/fa';
 import './FeaturedAgents.css';
-import '../../styles/MarketplaceAgentCard.css';
 
-// Custom arrow components for the slider
-const PrevArrow = (props) => {
-  const { onClick } = props;
-  return (
-    <button onClick={onClick} className="carousel-control prev-arrow" aria-label="Previous">
-      <FaChevronLeft />
-    </button>
-  );
-};
+// Utility functions for image fallbacks
+const getPlaceholderImage = () => 
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3C/svg%3E";
 
-const NextArrow = (props) => {
-  const { onClick } = props;
-  return (
-    <button onClick={onClick} className="carousel-control next-arrow" aria-label="Next">
-      <FaChevronRight />
-    </button>
-  );
-};
+const getAvatarPlaceholder = () => 
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23e0e0e0'/%3E%3Ctext x='20' y='25' font-family='Arial' font-size='20' text-anchor='middle' fill='%23999'%3E?%3C/text%3E%3C/svg%3E";
 
-const AgentCard = ({ agent }) => {
-  // Function to handle image errors and use a default placeholder
+// Featured Agent Card Component
+const FeaturedAgentCard = ({ agent }) => {
+  // Handle image loading errors
   const handleImageError = (e) => {
-    // Use a data URI for the placeholder instead of a missing file
-    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3C/svg%3E";
-    e.target.onerror = null;
-  };
-  
-  // Function to handle avatar image errors
-  const handleAvatarError = (e) => {
-    // Use a data URI for the placeholder instead of a missing file
-    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23e0e0e0'/%3E%3Ctext x='20' y='25' font-family='Arial' font-size='20' text-anchor='middle' fill='%23999'%3E?%3C/text%3E%3C/svg%3E";
+    e.target.src = getPlaceholderImage();
     e.target.onerror = null;
   };
 
-  // Format rating to show only one decimal place
+  // Format rating to one decimal place
   const formatRating = (rating) => {
     if (!rating) return '0';
     return typeof rating === 'number' ? rating.toFixed(1) : parseFloat(rating).toFixed(1);
   };
 
-  // Format price to show with appropriate styling
+  // Format price display
   const formatPrice = () => {
-    // First check if agent is marked as free
-    if (agent.isFree) return <span className="free-price">Free</span>;
+    // Check if agent is free
+    if (agent.isFree) return <span className="featured-card__price--free">Free</span>;
+    if (agent.price === 0) return <span className="featured-card__price--free">Free</span>;
     
-    // Check if price is 0
-    if (agent.price === 0) return <span className="free-price">Free</span>;
-    
-    // Check if we have price details object
+    // Check price details object if available
     if (agent.priceDetails) {
       const { basePrice, discountedPrice, currency } = agent.priceDetails;
       const currencySymbol = currency === 'USD' ? '$' : 
                             currency === 'EUR' ? '€' :
                             currency === 'GBP' ? '£' : currency;
       
-      // If price is 0, it's free
       if (basePrice === 0 || discountedPrice === 0) {
-        return <span className="free-price">Free</span>;
+        return <span className="featured-card__price--free">Free</span>;
       }
       
-      // If there's a discount, show both prices
       if (discountedPrice !== undefined && discountedPrice < basePrice) {
         return (
-          <div className="price-display">
-            <span className="original-price">{currencySymbol}{basePrice.toFixed(2)}</span>
-            <span className="discounted-price">{currencySymbol}{discountedPrice.toFixed(2)}</span>
+          <div className="featured-card__price-display">
+            <span className="featured-card__price-original">{currencySymbol}{basePrice.toFixed(2)}</span>
+            <span className="featured-card__price-discounted">{currencySymbol}{discountedPrice.toFixed(2)}</span>
           </div>
         );
       }
@@ -82,175 +60,348 @@ const AgentCard = ({ agent }) => {
     // Handle string or number price
     if (agent.price !== undefined) {
       if (typeof agent.price === 'number') {
-        return agent.price === 0 ? <span className="free-price">Free</span> : `$${agent.price.toFixed(2)}`;
+        return agent.price === 0 ? <span className="featured-card__price--free">Free</span> : `$${agent.price.toFixed(2)}`;
       }
-      // Check if price string is "Free" or "0"
       if (agent.price === 'Free' || agent.price === '0') {
-        return <span className="free-price">Free</span>;
+        return <span className="featured-card__price--free">Free</span>;
       }
-      return agent.price; // Return as is if it's a string
+      return agent.price;
     }
     
-    // Default fallback
     return 'Price unavailable';
   };
 
-  // Determine badge to show (priority: Trending, then New)
-  const getBadge = () => {
-    if (agent.isTrending) {
-      return <div className="badge badge-trending">Trending</div>;
-    } else if (agent.isNew) {
-      return <div className="badge badge-new">New</div>;
+  // Prepare badges
+  const renderBadges = () => {
+    const badges = [];
+    
+    if (agent.isFeatured) {
+      badges.push(
+        <div key="featured" className="featured-card__badge featured-card__badge--featured">
+          Featured
+        </div>
+      );
     }
-    return null;
-  };
-
-  // Get color based on agent type (for default styling)
-  const getTypeColorClass = () => {
-    if (agent.title && agent.title.includes('Drawing')) return 'drawing-type';
-    if (agent.title && agent.title.includes('Self Improvement')) return 'improvement-type';
-    if (agent.title && agent.title.includes('Assistant')) return 'assistant-type';
-    return '';
+    
+    if (agent.isBestseller) {
+      badges.push(
+        <div key="bestseller" className="featured-card__badge featured-card__badge--bestseller">
+          Bestseller
+        </div>
+      );
+    }
+    
+    if (agent.isNew) {
+      badges.push(
+        <div key="new" className="featured-card__badge featured-card__badge--new">
+          New
+        </div>
+      );
+    }
+    
+    if (agent.isTrending) {
+      badges.push(
+        <div key="trending" className="featured-card__badge featured-card__badge--trending">
+          Trending
+        </div>
+      );
+    }
+    
+    return badges.length > 0 ? (
+      <div className="featured-card__badges">
+        {badges}
+      </div>
+    ) : null;
   };
 
   return (
-    <div className="featured-card-wrapper">
-      <Link to={`/agents/${agent.id}`} className="marketplace-agent-card-link">
-        <div className="marketplace-agent-card">
-          <div className="marketplace-agent-card-inner">
-            {/* Card image with badges */}
-            <div className="marketplace-agent-image-container">
-              <img 
-                src={agent.imageUrl || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3C/svg%3E"} 
-                alt={agent.title || agent.name || 'AI Agent'} 
-                className="marketplace-agent-image"
-                onError={handleImageError}
-              />
-              
-              {/* Badges */}
-              {agent.isBestseller && <div className="marketplace-badge bestseller">Bestseller</div>}
-              {agent.isNew && <div className="marketplace-badge new">New</div>}
-              {agent.isTrending && <div className="marketplace-badge trending">Trending</div>}
-            </div>
+    <Link to={`/agents/${agent.id}`} className="block h-full">
+      <div className="featured-card">
+        <div className="featured-card__image-container">
+          <img 
+            src={agent.imageUrl || getPlaceholderImage()} 
+            alt={agent.title || agent.name || 'AI Agent'} 
+            className="featured-card__image"
+            onError={handleImageError}
+          />
+          {renderBadges()}
+        </div>
 
-            {/* Card content */}
-            <div className="marketplace-agent-content">
-              <h3 className="marketplace-agent-title">{agent.title || agent.name || 'AI Assistant'}</h3>
-              
-              {/* Only show description if available */}
-              {agent.description && (
-                <p className="marketplace-agent-description">{agent.description}</p>
+        <div className="featured-card__content">
+          <h3 className="featured-card__title">
+            {agent.title || agent.name || 'AI Assistant'}
+          </h3>
+          
+          {agent.description && (
+            <p className="featured-card__description">{agent.description}</p>
+          )}
+          
+          <div className="featured-card__creator">
+            <FaUser className="featured-card__creator-icon" />
+            {agent.creator?.name || agent.creator?.id || "AI Labs"}
+          </div>
+          
+          <div className="featured-card__meta">
+            <div className="featured-card__rating">
+              {agent.rating?.average ? (
+                <>
+                  <span className="featured-card__rating-score">{formatRating(agent.rating.average)}</span>
+                  <FaStar className="featured-card__rating-star" />
+                  <span className="featured-card__rating-count">({agent.rating.count || 0})</span>
+                </>
+              ) : (
+                <span className="featured-card__no-rating">No ratings</span>
               )}
-              
-              <div className="marketplace-agent-creator">
-                By {agent.creator?.name || agent.creator?.id || "AI Labs"}
-              </div>
-              
-              <div className="marketplace-agent-meta">
-                <div className="marketplace-agent-rating">
-                  {agent.rating?.average ? (
-                    <>
-                      <span className="marketplace-rating-score">{formatRating(agent.rating.average)}</span>
-                      <FaStar className="marketplace-star-icon" />
-                      <span className="marketplace-rating-count">({agent.rating.count || 0})</span>
-                    </>
-                  ) : (
-                    <span className="marketplace-no-rating">No ratings yet</span>
-                  )}
-                </div>
-                
-                <div className="marketplace-agent-price">
-                  {formatPrice()}
-                </div>
-              </div>
-              
-              {agent.version && 
-                <div className="marketplace-agent-version">v{agent.version}</div>
-              }
+            </div>
+            
+            <div className="featured-card__price">
+              {formatPrice()}
             </div>
           </div>
+          
+          {agent.version && (
+            <div className="featured-card__version">v{agent.version}</div>
+          )}
         </div>
-      </Link>
-    </div>
+      </div>
+    </Link>
   );
 };
 
 const FeaturedAgents = ({ agents, isLoading }) => {
+  // Create a ref for the autoplay plugin
+  const autoplayRef = useRef(null);
+  
+  // Initialize autoplay options
+  const autoplayOptions = {
+    delay: 5000,
+    stopOnInteraction: false,
+    stopOnMouseEnter: true
+  };
+
+  // Initialize carousel with autoplay plugin
+  const [emblaRef, emblaApi] = useEmblaCarousel(
+    { 
+      loop: true,
+      align: 'start',
+      skipSnaps: false
+    }, 
+    [Autoplay(autoplayOptions)]
+  );
+  
+  // Create a ref for the progress bar
+  const progressBarRef = useRef(null);
+  
+  // Set up state variables for carousel control
+  const [prevBtnEnabled, setPrevBtnEnabled] = useState(false);
+  const [nextBtnEnabled, setNextBtnEnabled] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [scrollSnaps, setScrollSnaps] = useState([]);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [progress, setProgress] = useState(0);
+  
+  // Scroll handlers
+  const scrollPrev = useCallback(() => emblaApi && emblaApi.scrollPrev(), [emblaApi]);
+  const scrollNext = useCallback(() => emblaApi && emblaApi.scrollNext(), [emblaApi]);
+  const scrollTo = useCallback((index) => emblaApi && emblaApi.scrollTo(index), [emblaApi]);
+  
+  // Toggle play/pause
+  const toggleAutoplay = useCallback(() => {
+    if (!emblaApi) return;
+    
+    const autoplay = emblaApi.plugins().autoplay;
+    if (!autoplay) return;
+    
+    if (autoplay.isPlaying()) {
+      autoplay.stop();
+      setIsPlaying(false);
+    } else {
+      autoplay.play();
+      setIsPlaying(true);
+    }
+  }, [emblaApi]);
+  
+  // Set up handlers for buttons and dots
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return;
+    
+    setPrevBtnEnabled(emblaApi.canScrollPrev());
+    setNextBtnEnabled(emblaApi.canScrollNext());
+    setSelectedIndex(emblaApi.selectedScrollSnap());
+  }, [emblaApi]);
+  
+  // Update progress bar
+  const updateProgressBar = useCallback(() => {
+    if (!emblaApi) return;
+    
+    const autoplay = emblaApi.plugins().autoplay;
+    if (!autoplay || !autoplay.isPlaying()) return;
+    
+    // Calculate progress percentage
+    const timeRemaining = autoplay.timeUntilNext();
+    if (timeRemaining === null) return;
+    
+    const progress = 1 - timeRemaining / autoplayOptions.delay;
+    setProgress(progress * 100);
+  }, [emblaApi]);
+  
+  // Set up event listeners
+  useEffect(() => {
+    if (!emblaApi) return;
+    
+    // Update snap points when carousel initialized
+    setScrollSnaps(emblaApi.scrollSnapList());
+    onSelect();
+    
+    // Set up timer for progress bar
+    const progressInterval = setInterval(updateProgressBar, 16);
+    
+    // Set up event listeners
+    emblaApi.on('select', onSelect);
+    emblaApi.on('reInit', onSelect);
+    
+    // Custom events for autoplay
+    const handleAutoplayStateChange = () => {
+      if (emblaApi.plugins().autoplay) {
+        setIsPlaying(emblaApi.plugins().autoplay.isPlaying());
+      }
+    };
+    
+    emblaApi.on('autoplay:play', handleAutoplayStateChange);
+    emblaApi.on('autoplay:stop', handleAutoplayStateChange);
+    
+    // Clean up
+    return () => {
+      clearInterval(progressInterval);
+      if (emblaApi) {
+        emblaApi.off('select', onSelect);
+        emblaApi.off('reInit', onSelect);
+        emblaApi.off('autoplay:play', handleAutoplayStateChange);
+        emblaApi.off('autoplay:stop', handleAutoplayStateChange);
+      }
+    };
+  }, [emblaApi, onSelect, updateProgressBar]);
+  
+  // Filter to only show featured agents
+  const getFeaturedAgents = () => {
+    if (!agents || agents.length === 0) return [];
+    
+    const featured = agents.filter(agent => 
+      agent.isFeatured || 
+      agent.featured || 
+      agent.isBestseller || 
+      // If none are specifically featured, try to find ones with good ratings
+      (agent.rating && agent.rating.average && agent.rating.average >= 4.5)
+    );
+    
+    // If we don't have enough featured agents, use some of the top agents
+    if (featured.length < 4 && agents.length >= 4) {
+      // Sort agents by rating and add the top ones
+      const topRated = [...agents]
+        .sort((a, b) => {
+          const aRating = a.rating?.average || 0;
+          const bRating = b.rating?.average || 0;
+          return bRating - aRating;
+        })
+        .slice(0, 8);
+      
+      // Combine featured with top rated, avoiding duplicates
+      const combinedAgents = [...featured];
+      
+      topRated.forEach(agent => {
+        if (!combinedAgents.some(a => a.id === agent.id)) {
+          combinedAgents.push(agent);
+        }
+      });
+      
+      return combinedAgents.slice(0, 8);
+    }
+    
+    return featured.length > 0 ? featured : agents.slice(0, 8);
+  };
+  
+  // Loading state
   if (isLoading) {
     return (
-      <div className="featured-section">
-        <div className="loading-container">
-          <div className="loading-spinner"></div>
-        </div>
+      <div className="featured-loading">
+        <div className="featured-spinner"></div>
+        <div className="featured-loading__text">Loading featured agents...</div>
       </div>
     );
   }
-
+  
+  // No agents state
   if (!agents || agents.length === 0) {
     return null;
   }
-
-  // Calculate how many items to display per row based on viewport size
-  const getItemsPerRow = () => {
-    if (window.innerWidth >= 1024) return 4;
-    if (window.innerWidth >= 768) return 3;
-    if (window.innerWidth >= 640) return 2;
-    return 1;
-  };
-
-  const [currentIndex, setCurrentIndex] = React.useState(0);
-  const [itemsPerRow, setItemsPerRow] = React.useState(getItemsPerRow());
-
-  // Update items per row on window resize
-  React.useEffect(() => {
-    const handleResize = () => {
-      setItemsPerRow(getItemsPerRow());
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  const totalSlides = Math.ceil(agents.length / itemsPerRow);
   
-  const handlePrev = () => {
-    setCurrentIndex(current => (current > 0 ? current - 1 : 0));
-  };
-  
-  const handleNext = () => {
-    setCurrentIndex(current => (current < totalSlides - 1 ? current + 1 : current));
-  };
-
-  const canNavigatePrev = currentIndex > 0;
-  const canNavigateNext = currentIndex < totalSlides - 1;
+  // Get the agents to display
+  const displayAgents = getFeaturedAgents();
 
   return (
-    <div className="featured-carousel-container">
-      <div className="featured-carousel">
-        <div className="featured-carousel-track" style={{ transform: `translateX(-${currentIndex * 100}%)` }}>
-          {agents.map((agent, index) => (
-            <div key={agent.id} className="featured-item">
-              <AgentCard agent={agent} />
-            </div>
-          ))}
+    <div className="featured-section">
+      <div className="embla">
+        <div className="embla__viewport" ref={emblaRef}>
+          <div className="embla__container">
+            {displayAgents.map((agent) => (
+              <div className="embla__slide" key={agent.id}>
+                <FeaturedAgentCard agent={agent} />
+              </div>
+            ))}
+          </div>
         </div>
         
-        {canNavigatePrev && <PrevArrow onClick={handlePrev} />}
-        {canNavigateNext && <NextArrow onClick={handleNext} />}
+        {/* Progress bar */}
+        <div className="embla__progress">
+          <div 
+            className="embla__progress__bar" 
+            ref={progressBarRef}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        
+        {/* Navigation buttons */}
+        <button 
+          className="embla__button embla__button--prev" 
+          onClick={scrollPrev} 
+          disabled={!prevBtnEnabled}
+          aria-label="Previous slide"
+        >
+          <FaChevronLeft />
+        </button>
+        
+        <button 
+          className="embla__button embla__button--next" 
+          onClick={scrollNext} 
+          disabled={!nextBtnEnabled}
+          aria-label="Next slide"
+        >
+          <FaChevronRight />
+        </button>
+        
+        {/* Play/Pause control */}
+        <div className="embla__controls">
+          <button 
+            className="embla__control-button" 
+            onClick={toggleAutoplay}
+            aria-label={isPlaying ? "Pause autoplay" : "Play autoplay"}
+          >
+            {isPlaying ? <FaPause /> : <FaPlay />}
+          </button>
+        </div>
       </div>
       
-      {totalSlides > 1 && (
-        <div className="carousel-indicators">
-          {Array.from({ length: totalSlides }).map((_, idx) => (
-            <button
-              key={idx}
-              className={`carousel-indicator ${idx === currentIndex ? 'active' : ''}`}
-              onClick={() => setCurrentIndex(idx)}
-              aria-label={`Go to slide ${idx + 1}`}
-            />
-          ))}
-        </div>
-      )}
+      {/* Dots navigation */}
+      <div className="embla__dots">
+        {scrollSnaps.map((_, index) => (
+          <button 
+            key={index}
+            className={`embla__dot ${index === selectedIndex ? 'embla__dot--selected' : ''}`}
+            onClick={() => scrollTo(index)}
+            aria-label={`Go to slide ${index + 1}`}
+          />
+        ))}
+      </div>
     </div>
   );
 };
