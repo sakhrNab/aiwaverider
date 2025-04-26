@@ -169,15 +169,20 @@ const FeaturedAgentCard = ({ agent }) => {
 };
 
 const FeaturedAgents = ({ agents, isLoading }) => {
-  // Create a ref for the autoplay plugin
-  const autoplayRef = useRef(null);
+  // Fixed number of dots/slides we want to show
+  const MAX_DOTS = 6;
   
-  // Initialize autoplay options
+  // Create autoplay options with improved settings
   const autoplayOptions = {
     delay: 5000,
-    stopOnInteraction: false,
-    stopOnMouseEnter: true
+    stopOnInteraction: false, 
+    stopOnMouseEnter: false, // Turn off automatic stopping on mouse enter
+    rootNode: (emblaRoot) => emblaRoot // Only use the root node
   };
+
+  // Use a ref to access the Autoplay plugin instance
+  const autoplayPluginRef = useRef(null);
+  autoplayPluginRef.current = Autoplay(autoplayOptions);
 
   // Initialize carousel with autoplay plugin
   const [emblaRef, emblaApi] = useEmblaCarousel(
@@ -186,7 +191,7 @@ const FeaturedAgents = ({ agents, isLoading }) => {
       align: 'start',
       skipSnaps: false
     }, 
-    [Autoplay(autoplayOptions)]
+    [autoplayPluginRef.current]
   );
   
   // Create a ref for the progress bar
@@ -205,7 +210,20 @@ const FeaturedAgents = ({ agents, isLoading }) => {
   const scrollNext = useCallback(() => emblaApi && emblaApi.scrollNext(), [emblaApi]);
   const scrollTo = useCallback((index) => emblaApi && emblaApi.scrollTo(index), [emblaApi]);
   
-  // Toggle play/pause
+  // Check autoplay state to avoid UI getting out of sync
+  const checkAutoplayState = useCallback(() => {
+    if (!emblaApi) return;
+    
+    const autoplay = emblaApi.plugins().autoplay;
+    if (!autoplay) return;
+    
+    const currentlyPlaying = autoplay.isPlaying();
+    if (currentlyPlaying !== isPlaying) {
+      setIsPlaying(currentlyPlaying);
+    }
+  }, [emblaApi, isPlaying]);
+  
+  // Toggle play/pause with improved handling
   const toggleAutoplay = useCallback(() => {
     if (!emblaApi) return;
     
@@ -228,14 +246,23 @@ const FeaturedAgents = ({ agents, isLoading }) => {
     setPrevBtnEnabled(emblaApi.canScrollPrev());
     setNextBtnEnabled(emblaApi.canScrollNext());
     setSelectedIndex(emblaApi.selectedScrollSnap());
-  }, [emblaApi]);
+    
+    // Check autoplay state when selection changes
+    checkAutoplayState();
+  }, [emblaApi, checkAutoplayState]);
   
   // Update progress bar
   const updateProgressBar = useCallback(() => {
     if (!emblaApi) return;
     
     const autoplay = emblaApi.plugins().autoplay;
-    if (!autoplay || !autoplay.isPlaying()) return;
+    if (!autoplay) return;
+    
+    // Check if playing
+    if (!autoplay.isPlaying()) {
+      setProgress(0);
+      return;
+    }
     
     // Calculate progress percentage
     const timeRemaining = autoplay.timeUntilNext();
@@ -243,7 +270,12 @@ const FeaturedAgents = ({ agents, isLoading }) => {
     
     const progress = 1 - timeRemaining / autoplayOptions.delay;
     setProgress(progress * 100);
-  }, [emblaApi]);
+    
+    // Keep UI in sync
+    if (!isPlaying && autoplay.isPlaying()) {
+      setIsPlaying(true);
+    }
+  }, [emblaApi, isPlaying]);
   
   // Set up event listeners
   useEffect(() => {
@@ -256,19 +288,9 @@ const FeaturedAgents = ({ agents, isLoading }) => {
     // Set up timer for progress bar
     const progressInterval = setInterval(updateProgressBar, 16);
     
-    // Set up event listeners
+    // Set up event listeners for embla carousel
     emblaApi.on('select', onSelect);
     emblaApi.on('reInit', onSelect);
-    
-    // Custom events for autoplay
-    const handleAutoplayStateChange = () => {
-      if (emblaApi.plugins().autoplay) {
-        setIsPlaying(emblaApi.plugins().autoplay.isPlaying());
-      }
-    };
-    
-    emblaApi.on('autoplay:play', handleAutoplayStateChange);
-    emblaApi.on('autoplay:stop', handleAutoplayStateChange);
     
     // Clean up
     return () => {
@@ -276,13 +298,11 @@ const FeaturedAgents = ({ agents, isLoading }) => {
       if (emblaApi) {
         emblaApi.off('select', onSelect);
         emblaApi.off('reInit', onSelect);
-        emblaApi.off('autoplay:play', handleAutoplayStateChange);
-        emblaApi.off('autoplay:stop', handleAutoplayStateChange);
       }
     };
   }, [emblaApi, onSelect, updateProgressBar]);
   
-  // Filter to only show featured agents
+  // Get featured agents limited to MAX_DOTS
   const getFeaturedAgents = () => {
     if (!agents || agents.length === 0) return [];
     
@@ -295,7 +315,7 @@ const FeaturedAgents = ({ agents, isLoading }) => {
     );
     
     // If we don't have enough featured agents, use some of the top agents
-    if (featured.length < 4 && agents.length >= 4) {
+    if (featured.length < MAX_DOTS && agents.length >= MAX_DOTS) {
       // Sort agents by rating and add the top ones
       const topRated = [...agents]
         .sort((a, b) => {
@@ -303,7 +323,7 @@ const FeaturedAgents = ({ agents, isLoading }) => {
           const bRating = b.rating?.average || 0;
           return bRating - aRating;
         })
-        .slice(0, 8);
+        .slice(0, MAX_DOTS);
       
       // Combine featured with top rated, avoiding duplicates
       const combinedAgents = [...featured];
@@ -314,10 +334,10 @@ const FeaturedAgents = ({ agents, isLoading }) => {
         }
       });
       
-      return combinedAgents.slice(0, 8);
+      return combinedAgents.slice(0, MAX_DOTS);
     }
     
-    return featured.length > 0 ? featured : agents.slice(0, 8);
+    return featured.length > 0 ? featured.slice(0, MAX_DOTS) : agents.slice(0, MAX_DOTS);
   };
   
   // Loading state
@@ -335,8 +355,11 @@ const FeaturedAgents = ({ agents, isLoading }) => {
     return null;
   }
   
-  // Get the agents to display
+  // Get the agents to display, limited to MAX_DOTS
   const displayAgents = getFeaturedAgents();
+
+  // Generate exactly MAX_DOTS dots for navigation
+  const fixedDots = Array.from({ length: Math.min(MAX_DOTS, displayAgents.length) }, (_, i) => i);
 
   return (
     <div className="featured-section">
@@ -360,10 +383,13 @@ const FeaturedAgents = ({ agents, isLoading }) => {
           />
         </div>
         
-        {/* Navigation buttons */}
+        {/* Navigation buttons with event stopPropagation to prevent hover issues */}
         <button 
           className="embla__button embla__button--prev" 
-          onClick={scrollPrev} 
+          onClick={(e) => {
+            e.stopPropagation();
+            scrollPrev();
+          }}
           disabled={!prevBtnEnabled}
           aria-label="Previous slide"
         >
@@ -372,28 +398,31 @@ const FeaturedAgents = ({ agents, isLoading }) => {
         
         <button 
           className="embla__button embla__button--next" 
-          onClick={scrollNext} 
+          onClick={(e) => {
+            e.stopPropagation();
+            scrollNext();
+          }}
           disabled={!nextBtnEnabled}
           aria-label="Next slide"
         >
           <FaChevronRight />
         </button>
-        
-        {/* Play/Pause control */}
-        <div className="embla__controls">
-          <button 
-            className="embla__control-button" 
-            onClick={toggleAutoplay}
-            aria-label={isPlaying ? "Pause autoplay" : "Play autoplay"}
-          >
-            {isPlaying ? <FaPause /> : <FaPlay />}
-          </button>
-        </div>
       </div>
       
-      {/* Dots navigation */}
+      {/* Play/Pause control - MOVED OUTSIDE CAROUSEL */}
+      <div className="embla__controls">
+        <button 
+          className="embla__control-button" 
+          onClick={toggleAutoplay}
+          aria-label={isPlaying ? "Pause autoplay" : "Play autoplay"}
+        >
+          {isPlaying ? <FaPause /> : <FaPlay />}
+        </button>
+      </div>
+      
+      {/* Dots navigation - Fixed to exactly MAX_DOTS dots */}
       <div className="embla__dots">
-        {scrollSnaps.map((_, index) => (
+        {fixedDots.map((index) => (
           <button 
             key={index}
             className={`embla__dot ${index === selectedIndex ? 'embla__dot--selected' : ''}`}

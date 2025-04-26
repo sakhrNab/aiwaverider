@@ -357,35 +357,39 @@
   }
 }
 
-/* Controls for play/pause */
+/* Controls for play/pause - MOVED OUTSIDE CAROUSEL */
 .embla__controls {
-  position: absolute;
-  bottom: 10px;
-  right: 15px;
-  z-index: 10;
   display: flex;
-  gap: 0.5rem;
+  justify-content: center;
+  align-items: center;
+  margin-top: 0.5rem;
 }
 
 .embla__control-button {
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(139, 92, 246, 0.4);
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s ease;
   color: white;
+  margin: 0 0.5rem;
 }
 
 .embla__control-button:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(139, 92, 246, 0.6);
+  transform: scale(1.1);
 }
 
-/* Responsive adjustments */
+.embla__control-button svg {
+  font-size: 1rem;
+}
+
+/* Responsive adjustments - UPDATED TO SHOW 3 AGENTS INSTEAD OF 4 */
 @media (min-width: 640px) {
   .embla__slide {
     flex: 0 0 50%;
@@ -400,7 +404,7 @@
 
 @media (min-width: 1024px) {
   .embla__slide {
-    flex: 0 0 25%;
+    flex: 0 0 33.333%; /* Changed from 25% to 33.333% to show 3 cards */
   }
 }
 
