@@ -226,37 +226,86 @@ const getAgents = async (req, res) => {
 const getFeaturedAgents = async (req, res) => {
   try {
     const { limit = 8 } = req.query;
+    let agents = [];
 
-    // Get featured agents (bestsellers or manually selected)
-    let query = db.collection('agents')
+    // Get bestseller agents
+    let bestsellerQuery = db.collection('agents')
       .where('isBestseller', '==', true)
       .limit(parseInt(limit));
     
-    const agentsSnapshot = await query.get();
-    let agents = [];
+    const bestsellerSnapshot = await bestsellerQuery.get();
 
-    agentsSnapshot.forEach(doc => {
+    bestsellerSnapshot.forEach(doc => {
       agents.push({
         id: doc.id,
         ...doc.data()
       });
     });
 
-    // If we don't have enough bestsellers, add some recent agents
+    // If we don't have enough agents yet, check for agents with top-level isFeatured property
+    if (agents.length < parseInt(limit)) {
+      const topLevelFeaturedQuery = db.collection('agents')
+        .where('isFeatured', '==', true)
+        .limit(parseInt(limit) - agents.length);
+      
+      const topLevelFeaturedSnapshot = await topLevelFeaturedQuery.get();
+      
+      topLevelFeaturedSnapshot.forEach(doc => {
+        // Check if agent is already in list
+        if (!agents.some(agent => agent.id === doc.id)) {
+          agents.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        }
+      });
+    }
+
+    // If we still don't have enough, we need to check for agents with data.isFeatured property
+    // Since Firestore doesn't support querying nested fields directly in where() clauses,
+    // we'll get a larger batch and filter manually
+    if (agents.length < parseInt(limit)) {
+      const remainingNeeded = parseInt(limit) - agents.length;
+      const allAgentsQuery = db.collection('agents')
+        .limit(50);  // Get a reasonable batch to filter from
+      
+      const allAgentsSnapshot = await allAgentsQuery.get();
+      const nestedFeaturedAgents = [];
+      
+      allAgentsSnapshot.forEach(doc => {
+        const agentData = doc.data();
+        if (agentData.data && agentData.data.isFeatured === true) {
+          // Check if agent is already in list
+          if (!agents.some(agent => agent.id === doc.id)) {
+            nestedFeaturedAgents.push({
+              id: doc.id,
+              ...agentData
+            });
+          }
+        }
+      });
+      
+      // Add the nested featured agents up to the limit
+      agents = [...agents, ...nestedFeaturedAgents.slice(0, remainingNeeded)];
+    }
+
+    // If we still don't have enough, add some recent/new agents
     if (agents.length < parseInt(limit)) {
       const remainingLimit = parseInt(limit) - agents.length;
       const newAgentsQuery = db.collection('agents')
-        .where('isBestseller', '==', false)
         .where('isNew', '==', true)
         .limit(remainingLimit);
       
       const newAgentsSnapshot = await newAgentsQuery.get();
       
       newAgentsSnapshot.forEach(doc => {
-        agents.push({
-          id: doc.id,
-          ...doc.data()
-        });
+        // Check if agent is already in list
+        if (!agents.some(agent => agent.id === doc.id)) {
+          agents.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        }
       });
     }
 

@@ -306,18 +306,31 @@ const FeaturedAgents = ({ agents, isLoading }) => {
   const getFeaturedAgents = () => {
     if (!agents || agents.length === 0) return [];
     
-    const featured = agents.filter(agent => 
+    // Filter out any mock agents with IDs like "agent-xx"
+    const nonMockAgents = agents.filter(agent => 
+      agent && agent.id && !agent.id.toString().match(/^agent-\d+$/)
+    );
+    
+    // If we filtered out all agents (meaning they were all mocks), return empty array
+    if (nonMockAgents.length === 0) {
+      console.warn("All featured agents appear to be mock data with 'agent-xx' IDs - not displaying any");
+      return [];
+    }
+    
+    // Continue with normal filtering logic but only using valid agents
+    const featured = nonMockAgents.filter(agent => 
       agent.isFeatured || 
       agent.featured || 
       agent.isBestseller || 
+      (agent.data && agent.data.isFeatured) || // Check inside data object
       // If none are specifically featured, try to find ones with good ratings
       (agent.rating && agent.rating.average && agent.rating.average >= 4.5)
     );
     
     // If we don't have enough featured agents, use some of the top agents
-    if (featured.length < MAX_DOTS && agents.length >= MAX_DOTS) {
+    if (featured.length < MAX_DOTS && nonMockAgents.length >= MAX_DOTS) {
       // Sort agents by rating and add the top ones
-      const topRated = [...agents]
+      const topRated = [...nonMockAgents]
         .sort((a, b) => {
           const aRating = a.rating?.average || 0;
           const bRating = b.rating?.average || 0;
@@ -337,7 +350,7 @@ const FeaturedAgents = ({ agents, isLoading }) => {
       return combinedAgents.slice(0, MAX_DOTS);
     }
     
-    return featured.length > 0 ? featured.slice(0, MAX_DOTS) : agents.slice(0, MAX_DOTS);
+    return featured.length > 0 ? featured.slice(0, MAX_DOTS) : nonMockAgents.slice(0, MAX_DOTS);
   };
   
   // Loading state
