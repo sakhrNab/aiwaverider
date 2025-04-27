@@ -53,26 +53,45 @@ const StarRating = ({ rating, onRatingChange, size = "large", interactive = fals
 const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
   const { user } = useContext(AuthContext);
   const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(initialLikes);
+  const [likeCount, setLikeCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   
   useEffect(() => {
-    // Update like count when initialLikes changes
-    setLikeCount(initialLikes);
+    // Initialize like count properly - handle array or number
+    if (Array.isArray(initialLikes)) {
+      setLikeCount(initialLikes.length);
+    } else if (typeof initialLikes === 'number') {
+      setLikeCount(initialLikes);
+    }
     
     // Check if the current user has liked this agent
     if (user && agentId) {
       const userLikesRef = doc(db, 'user_likes', `${user.uid}_${agentId}`);
+      const agentRef = doc(db, 'agents', agentId);
       
-      const unsubscribe = onSnapshot(userLikesRef, (doc) => {
+      // Listen for changes to the user's like status
+      const userLikeUnsubscribe = onSnapshot(userLikesRef, (doc) => {
+        setLiked(doc.exists());
+      });
+      
+      // Listen for changes to the agent's like count
+      const agentUnsubscribe = onSnapshot(agentRef, (doc) => {
         if (doc.exists()) {
-          setLiked(true);
-        } else {
-          setLiked(false);
+          const data = doc.data();
+          if (data.likes) {
+            if (Array.isArray(data.likes)) {
+              setLikeCount(data.likes.length);
+            } else if (typeof data.likes === 'number') {
+              setLikeCount(data.likes);
+            }
+          }
         }
       });
       
-      return () => unsubscribe();
+      return () => {
+        userLikeUnsubscribe();
+        agentUnsubscribe();
+      };
     }
   }, [user, agentId, initialLikes]);
   
@@ -84,18 +103,30 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
     
     if (isLoading) return;
     
+    // If user has already liked and is trying to like again, ask for confirmation
+    if (liked) {
+      const confirmUnlike = window.confirm("You've already liked this agent. Do you want to unlike it?");
+      if (!confirmUnlike) {
+        return; // User canceled the unlike operation
+      }
+    }
+    
     setIsLoading(true);
     
     try {
       const response = await toggleAgentLike(agentId);
       
       if (response.success) {
-        const newLikeCount = liked ? likeCount - 1 : likeCount + 1;
+        // Don't update the counts manually - let the Firebase listeners handle it
+        // This ensures consistency with the database
         setLiked(!liked);
-        setLikeCount(newLikeCount);
         
-        if (onLikeUpdate) {
-          onLikeUpdate(newLikeCount);
+        // If the API returns the updated like count, use it
+        if (response.updatedLikeCount !== undefined) {
+          setLikeCount(response.updatedLikeCount);
+          if (onLikeUpdate) {
+            onLikeUpdate(response.updatedLikeCount);
+          }
         }
       } else {
         toast.error(response.error || 'Failed to update like');
@@ -114,7 +145,7 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
       onClick={handleLikeToggle}
       disabled={isLoading}
     >
-      {liked ? <FaHeart /> : <FaRegHeart />}
+      {liked ? <FaHeart className="heart-icon" /> : <FaRegHeart className="heart-icon" />}
       <span className="like-count">{likeCount}</span>
     </button>
   );
@@ -129,6 +160,7 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isLoadingComments, setIsLoadingComments] = useState(true);
+  const [hasUserReviewed, setHasUserReviewed] = useState(false);
   
   useEffect(() => {
     // Load comments when component mounts or agentId changes
@@ -140,6 +172,12 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
         console.log('Received reviews:', response);
         if (response && Array.isArray(response)) {
           setComments(response);
+          
+          // Check if current user has already reviewed
+          if (user) {
+            const userReview = response.find(review => review.userId === user.uid);
+            setHasUserReviewed(!!userReview);
+          }
         }
       } catch (err) {
         console.error('Error loading comments:', err);
@@ -169,19 +207,30 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
       
       if (updatedComments.length) {
         setComments(updatedComments);
+        
+        // Check if current user has already reviewed
+        if (user) {
+          const userReview = updatedComments.find(review => review.userId === user.uid);
+          setHasUserReviewed(!!userReview);
+        }
       }
     }, (error) => {
       console.error('Error in reviews listener:', error);
     });
     
     return () => unsubscribe();
-  }, [agentId]);
+  }, [agentId, user]);
   
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
     
     if (!user) {
       toast.info('Please sign in to leave a review');
+      return;
+    }
+    
+    if (hasUserReviewed) {
+      toast.info('You have already reviewed this agent');
       return;
     }
     
@@ -217,6 +266,7 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
         // We don't need to manually update the state as the realtime listener will catch it
         setNewComment('');
         setRating(5);
+        setHasUserReviewed(true);
         toast.success('Your review has been added');
       } else {
         setError(response.error || 'Failed to add comment');
@@ -247,7 +297,7 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
     <div className="comments-section">
       <h3 className="section-heading">Reviews & Ratings</h3>
       
-      {user && (
+      {user && !hasUserReviewed ? (
         <form onSubmit={handleCommentSubmit} className="comment-form">
           <div className="rating-input">
             <label>Your Rating:</label>
@@ -272,7 +322,11 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
             {isLoading ? 'Submitting...' : 'Submit Review'}
           </button>
         </form>
-      )}
+      ) : user && hasUserReviewed ? (
+        <div className="already-reviewed-message">
+          <p>You have already submitted a review for this agent. Thank you for your feedback!</p>
+        </div>
+      ) : null}
       
       <div className="comments-list">
         {isLoadingComments ? (
@@ -315,7 +369,7 @@ const AgentDetail = () => {
   const [downloadCount, setDownloadCount] = useState(0);
   const [viewTracked, setViewTracked] = useState(false);
   const [imageAspectRatio, setImageAspectRatio] = useState(null);
-  const [likes, setLikes] = useState([]);
+  const [likesCount, setLikesCount] = useState(0);
   
   // Firebase listener for real-time updates
   const firebaseListener = useRef(null);
@@ -377,7 +431,15 @@ const AgentDetail = () => {
         }
         
         setAgent(data);
-        setLikes(data.likes || []);
+        
+        // Set likes count
+        if (data.likes) {
+          if (Array.isArray(data.likes)) {
+            setLikesCount(data.likes.length);
+          } else if (typeof data.likes === 'number') {
+            setLikesCount(data.likes);
+          }
+        }
         
         // Fetch the download count
         const downloads = await getAgentDownloadCount(agentId);
@@ -462,8 +524,14 @@ const AgentDetail = () => {
           };
         });
         
-        // Update likes separately for the like button
-        setLikes(docData.likes || []);
+        // Update likes count properly
+        if (docData.likes) {
+          if (Array.isArray(docData.likes)) {
+            setLikesCount(docData.likes.length);
+          } else if (typeof docData.likes === 'number') {
+            setLikesCount(docData.likes);
+          }
+        }
         
         // Update download count if changed
         if (docData.downloadCount && docData.downloadCount !== downloadCount) {
@@ -712,13 +780,19 @@ const AgentDetail = () => {
   };
   
   // Handle like update from LikeButton
-  const handleLikeUpdate = (newLikes) => {
-    if (agent) {
-      setAgent({
-        ...agent,
-        likes: newLikes
-      });
-    }
+  const handleLikeUpdate = (newLikesCount) => {
+    setLikesCount(newLikesCount);
+    
+    // Also update the agent object to keep it in sync
+    setAgent(prev => {
+      if (!prev) return prev;
+      
+      return {
+        ...prev,
+        likes: typeof prev.likes === 'number' ? newLikesCount : 
+               Array.isArray(prev.likes) ? [...Array(newLikesCount)].map(() => ({})) : newLikesCount
+      };
+    });
   };
 
   if (loading) {
@@ -747,7 +821,7 @@ const AgentDetail = () => {
   const imageUrls = getImageUrls();
   const minPrice = getMinimumPrice();
   const fileDetails = getFileDetails();
-  const agentRating = agent.rating?.average || 0;
+  const agentRating = agent.rating?.average || agent.rating || 0;
 
   return (
     <div className="agent-detail-container">
@@ -833,10 +907,10 @@ const AgentDetail = () => {
               <div className="stars">
                 <StarRating rating={agentRating} />
               </div>
-              <span className="rating-count">({agent.rating?.count || 0})</span>
+              <span className="rating-count">({agent.reviews?.length || agent.rating?.count || 0})</span>
               <LikeButton 
                 agentId={agentId} 
-                initialLikes={likes} 
+                initialLikes={likesCount} 
                 onLikeUpdate={handleLikeUpdate} 
               />
             </div>
