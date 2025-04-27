@@ -335,7 +335,7 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
 };
 
 // Comments/Reviews Section Component
-const CommentSection = ({ agentId, existingReviews = [] }) => {
+const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
   const { user } = useContext(AuthContext);
   const [comments, setComments] = useState(existingReviews);
   const [newComment, setNewComment] = useState('');
@@ -390,6 +390,11 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
         console.log('Received reviews:', response);
         if (response && Array.isArray(response)) {
           setComments(response);
+          
+          // Notify parent component about review count
+          if (onReviewsLoaded) {
+            onReviewsLoaded(response.length);
+          }
           
           // Check if current user has already reviewed (only if authenticated)
           if (user) {
@@ -513,6 +518,15 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
         };
         
         // We don't need to manually update the state as the realtime listener will catch it
+        // But we should update the review count
+        setComments(prevComments => {
+          const updatedComments = [...prevComments, newCommentObj];
+          if (onReviewsLoaded) {
+            onReviewsLoaded(updatedComments.length);
+          }
+          return updatedComments;
+        });
+        
         setNewComment('');
         setRating(5);
         setHasUserReviewed(true);
@@ -675,6 +689,7 @@ const AgentDetail = () => {
   const [viewTracked, setViewTracked] = useState(false);
   const [imageAspectRatio, setImageAspectRatio] = useState(null);
   const [likesCount, setLikesCount] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
   
   // Toast configuration for consistent, appealing notifications
   const showToast = (type, message, options = {}) => {
@@ -769,6 +784,21 @@ const AgentDetail = () => {
         }
         
         setAgent(data);
+        
+        // Set initial review count if available
+        if (data.reviews && Array.isArray(data.reviews)) {
+          setReviewCount(data.reviews.length);
+        } else {
+          // If reviews aren't in agent data, fetch them
+          try {
+            const reviews = await getAgentReviews(agentId);
+            if (reviews && Array.isArray(reviews)) {
+              setReviewCount(reviews.length);
+            }
+          } catch (err) {
+            console.warn('Could not fetch initial review count:', err);
+          }
+        }
         
         // Set likes count
         if (data.likes) {
@@ -922,6 +952,11 @@ const AgentDetail = () => {
             } else if (typeof docData.likes === 'number') {
               setLikesCount(docData.likes);
             }
+          }
+          
+          // Update review count if available
+          if (docData.reviews && Array.isArray(docData.reviews)) {
+            setReviewCount(docData.reviews.length);
           }
           
           // Update download count if changed
@@ -1449,7 +1484,7 @@ const AgentDetail = () => {
           className={`tab-button ${activeTab === 'reviews' ? 'active' : ''}`}
           onClick={() => setActiveTab('reviews')}
         >
-          Reviews ({agent.reviews?.length || 0})
+          Reviews ({reviewCount})
         </button>
         <button 
           className={`tab-button ${activeTab === 'related' ? 'active' : ''}`}
@@ -1482,7 +1517,11 @@ const AgentDetail = () => {
         
         {activeTab === 'reviews' && (
           <div className="reviews-tab">
-            <CommentSection agentId={agentId} existingReviews={agent.reviews || []} />
+            <CommentSection 
+              agentId={agentId} 
+              existingReviews={agent.reviews || []} 
+              onReviewsLoaded={(count) => setReviewCount(count)}
+            />
           </div>
         )}
         
