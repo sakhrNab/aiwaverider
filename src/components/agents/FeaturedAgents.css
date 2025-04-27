@@ -162,9 +162,9 @@
 
 .featured-card__image-container {
   position: relative;
-  height: 180px;
-  background-color: #4a4de7;
   overflow: hidden;
+  border-radius: 8px 8px 0 0;
+  height: 160px;
 }
 
 .featured-card__image {
@@ -180,37 +180,37 @@
 
 .featured-card__badges {
   position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
-  z-index: 1;
+  gap: 5px;
 }
 
 .featured-card__badge {
-  padding: 0.25rem 0.625rem;
-  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
   font-weight: 600;
-  border-radius: 0.25rem;
   color: white;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-}
-
-.featured-card__badge--bestseller {
-  background: linear-gradient(45deg, #ff9800, #ff5722);
-}
-
-.featured-card__badge--new {
-  background: linear-gradient(45deg, #4caf50, #2e7d32);
-}
-
-.featured-card__badge--trending {
-  background: linear-gradient(45deg, #2196f3, #1565c0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .featured-card__badge--featured {
-  background: linear-gradient(45deg, #9c27b0, #673ab7);
+  background-color: #4a4de7;
+}
+
+.featured-card__badge--bestseller {
+  background-color: #f6b93b;
+}
+
+.featured-card__badge--new {
+  background-color: #38b2ac;
+}
+
+.featured-card__badge--trending {
+  background-color: #e53e3e;
 }
 
 .featured-card__content {

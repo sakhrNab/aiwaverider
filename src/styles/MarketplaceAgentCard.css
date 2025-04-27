@@ -1,6 +1,6 @@
 :root {
   --original-price-color: rgba(255, 255, 255, 0.8);
-  --discounted-price-color: #ff5353;
+  --discounted-price-color: rgb(29, 210, 35);;
   --free-agent-color: #4ade80;
   --free-agent-bg: rgba(74, 222, 128, 0.15);
   --agent-card-bg: rgba(255, 255, 255, 0.05);
@@ -14,7 +14,7 @@
 /* Light mode overrides */
 [data-theme='light'] {
   --original-price-color: rgba(0, 0, 0, 0.6);
-  --discounted-price-color: #e53e3e;
+  --discounted-price-color: rgb(29, 210, 35);;
   --free-agent-color: #16a34a;
   --free-agent-bg: rgba(22, 163, 74, 0.1);
   --agent-card-bg: rgba(255, 255, 255, 0.95);

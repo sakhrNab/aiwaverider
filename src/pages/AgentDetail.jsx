@@ -448,7 +448,7 @@ const AgentDetail = () => {
                       <div className="original-price-detail text-lg text-gray-500 line-through">
                         ${agent.priceDetails.basePrice.toFixed(2)}
                       </div>
-                      <div className="discounted-price-detail text-3xl font-bold text-red-600">
+                      <div className="discounted-price-detail text-3xl font-bold ">
                         ${agent.priceDetails.discountedPrice.toFixed(2)}
                         <span className="discount-badge ml-2">
                           {Math.round((1 - agent.priceDetails.discountedPrice / agent.priceDetails.basePrice) * 100)}% OFF
