@@ -1095,3 +1095,62 @@
     flex-wrap: wrap;
   }
 }
+
+/* Custom Toast Styles */
+.confirm-toast-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.confirm-toast-message {
+  font-size: 14px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.confirm-toast-message span[role="img"] {
+  font-size: 18px;
+}
+
+.confirm-toast-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.confirm-toast-button {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.confirm-toast-button.confirm {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.confirm-toast-button.confirm:hover {
+  background-color: var(--primary-color-dark, #3a3eb5);
+}
+
+.confirm-toast-button.cancel {
+  background-color: #e0e0e0;
+  color: #333;
+}
+
+.confirm-toast-button.cancel:hover {
+  background-color: #d0d0d0;
+}
+
+.confirm-unlike-toast {
+  width: 340px !important;
+  max-width: 95vw;
+  min-height: 90px;
+}

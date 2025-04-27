@@ -55,6 +55,84 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [confirmUnlikeVisible, setConfirmUnlikeVisible] = useState(false);
+  
+  // Toast configuration for consistent, appealing notifications
+  const showToast = (type, message, options = {}) => {
+    const defaultOptions = {
+      position: "bottom-right",
+      autoClose: 3000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      progress: undefined,
+      icon: true
+    };
+    
+    const mergedOptions = { ...defaultOptions, ...options };
+    
+    switch (type) {
+      case 'success':
+        toast.success(message, mergedOptions);
+        break;
+      case 'error':
+        toast.error(message, mergedOptions);
+        break;
+      case 'info':
+        toast.info(message, mergedOptions);
+        break;
+      case 'warning':
+        toast.warning(message, mergedOptions);
+        break;
+      default:
+        toast(message, mergedOptions);
+    }
+  };
+  
+  // Custom confirm toast with action buttons
+  const showConfirmToast = () => {
+    // Clear any existing toasts to prevent stacking
+    toast.dismiss();
+    
+    // Create a custom toast with action buttons
+    toast(
+      ({ closeToast }) => (
+        <div className="confirm-toast-container">
+          <div className="confirm-toast-message">
+            <span role="img" aria-label="question">❓</span> Remove your like from this agent?
+          </div>
+          <div className="confirm-toast-actions">
+            <button 
+              onClick={() => {
+                closeToast();
+                handleUnlikeConfirmed();
+              }}
+              className="confirm-toast-button confirm"
+            >
+              Yes, remove like
+            </button>
+            <button 
+              onClick={() => {
+                closeToast();
+              }}
+              className="confirm-toast-button cancel"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ),
+      {
+        position: "bottom-right",
+        autoClose: false,
+        closeOnClick: false,
+        draggable: true,
+        closeButton: true,
+        className: 'confirm-unlike-toast'
+      }
+    );
+  };
   
   useEffect(() => {
     // Initialize like count properly - handle array or number
@@ -70,14 +148,18 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
       const agentRef = doc(db, 'agents', agentId);
       
       // Listen for changes to the user's like status
-      const userLikeUnsubscribe = onSnapshot(userLikesRef, (doc) => {
-        setLiked(doc.exists());
+      const userLikeUnsubscribe = onSnapshot(userLikesRef, (docSnapshot) => {
+        console.log(`User like status updated: ${docSnapshot.exists()}`);
+        setLiked(docSnapshot.exists());
+      }, (error) => {
+        console.error("Error in user like listener:", error);
       });
       
       // Listen for changes to the agent's like count
-      const agentUnsubscribe = onSnapshot(agentRef, (doc) => {
-        if (doc.exists()) {
-          const data = doc.data();
+      const agentUnsubscribe = onSnapshot(agentRef, (docSnapshot) => {
+        if (docSnapshot.exists()) {
+          const data = docSnapshot.data();
+          console.log("Agent data updated:", data.likes);
           if (data.likes) {
             if (Array.isArray(data.likes)) {
               setLikeCount(data.likes.length);
@@ -86,40 +168,31 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
             }
           }
         }
+      }, (error) => {
+        console.error("Error in agent listener:", error);
       });
       
       return () => {
+        console.log("Cleaning up like listeners");
         userLikeUnsubscribe();
         agentUnsubscribe();
       };
     }
   }, [user, agentId, initialLikes]);
   
-  const handleLikeToggle = async () => {
-    if (!user) {
-      toast.info('Please sign in to like this agent');
-      return;
-    }
-    
+  const handleUnlikeConfirmed = async () => {
     if (isLoading) return;
-    
-    // If user has already liked and is trying to like again, ask for confirmation
-    if (liked) {
-      const confirmUnlike = window.confirm("You've already liked this agent. Do you want to unlike it?");
-      if (!confirmUnlike) {
-        return; // User canceled the unlike operation
-      }
-    }
     
     setIsLoading(true);
     
     try {
+      // We know we're unliking here, so we can explicitly set liked to false after success
       const response = await toggleAgentLike(agentId);
       
       if (response.success) {
-        // Don't update the counts manually - let the Firebase listeners handle it
-        // This ensures consistency with the database
-        setLiked(!liked);
+        // We can safely set the state here to ensure UI feels responsive
+        // Firebase listeners will eventually catch up and sync state
+        setLiked(false);
         
         // If the API returns the updated like count, use it
         if (response.updatedLikeCount !== undefined) {
@@ -127,13 +200,91 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
           if (onLikeUpdate) {
             onLikeUpdate(response.updatedLikeCount);
           }
+        } else {
+          // If no updated count, decrement the current count
+          const newCount = Math.max(0, likeCount - 1);
+          setLikeCount(newCount);
+          if (onLikeUpdate) {
+            onLikeUpdate(newCount);
+          }
         }
+        
+        showToast('success', '💔 Removed your like', {
+          icon: "💔",
+          autoClose: 2000
+        });
       } else {
-        toast.error(response.error || 'Failed to update like');
+        showToast('error', response.error || 'Failed to update like', {
+          icon: "❌"
+        });
       }
     } catch (err) {
-      console.error('Error toggling like:', err);
-      toast.error('Failed to update like');
+      console.error('Error unliking agent:', err);
+      showToast('error', 'Failed to remove like', {
+        icon: "❌"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleLikeToggle = async () => {
+    if (!user) {
+      showToast('info', '👋 Please sign in to like this agent', {
+        icon: "👋"
+      });
+      return;
+    }
+    
+    if (isLoading) return;
+    
+    // If user has already liked and is trying to like again, show confirm toast
+    if (liked) {
+      showConfirmToast();
+      return;
+    }
+    
+    // Otherwise proceed with adding the like
+    setIsLoading(true);
+    
+    try {
+      // We know we're liking here, so we can explicitly set liked to true after success
+      const response = await toggleAgentLike(agentId);
+      
+      if (response.success) {
+        // We can safely set the state here to ensure UI feels responsive
+        // Firebase listeners will eventually catch up and sync state
+        setLiked(true);
+        
+        // If the API returns the updated like count, use it
+        if (response.updatedLikeCount !== undefined) {
+          setLikeCount(response.updatedLikeCount);
+          if (onLikeUpdate) {
+            onLikeUpdate(response.updatedLikeCount);
+          }
+        } else {
+          // If no updated count, increment the current count
+          const newCount = likeCount + 1;
+          setLikeCount(newCount);
+          if (onLikeUpdate) {
+            onLikeUpdate(newCount);
+          }
+        }
+        
+        showToast('success', '❤️ Added your like!', {
+          icon: "❤️",
+          autoClose: 2000
+        });
+      } else {
+        showToast('error', response.error || 'Failed to update like', {
+          icon: "❌"
+        });
+      }
+    } catch (err) {
+      console.error('Error liking agent:', err);
+      showToast('error', 'Failed to add like', {
+        icon: "❌"
+      });
     } finally {
       setIsLoading(false);
     }
@@ -161,6 +312,39 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
   const [error, setError] = useState('');
   const [isLoadingComments, setIsLoadingComments] = useState(true);
   const [hasUserReviewed, setHasUserReviewed] = useState(false);
+  
+  // Toast configuration for consistent, appealing notifications
+  const showToast = (type, message, options = {}) => {
+    const defaultOptions = {
+      position: "bottom-right",
+      autoClose: 3000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      progress: undefined,
+      icon: true
+    };
+    
+    const mergedOptions = { ...defaultOptions, ...options };
+    
+    switch (type) {
+      case 'success':
+        toast.success(message, mergedOptions);
+        break;
+      case 'error':
+        toast.error(message, mergedOptions);
+        break;
+      case 'info':
+        toast.info(message, mergedOptions);
+        break;
+      case 'warning':
+        toast.warning(message, mergedOptions);
+        break;
+      default:
+        toast(message, mergedOptions);
+    }
+  };
   
   useEffect(() => {
     // Load comments when component mounts or agentId changes
@@ -225,12 +409,16 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
     e.preventDefault();
     
     if (!user) {
-      toast.info('Please sign in to leave a review');
+      showToast('info', '👋 Please sign in to leave a review', {
+        icon: "👋"
+      });
       return;
     }
     
     if (hasUserReviewed) {
-      toast.info('You have already reviewed this agent');
+      showToast('warning', '⚠️ You have already reviewed this agent', {
+        icon: "⚠️"
+      });
       return;
     }
     
@@ -267,13 +455,22 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
         setNewComment('');
         setRating(5);
         setHasUserReviewed(true);
-        toast.success('Your review has been added');
+        showToast('success', '✅ Your review has been added. Thank you for your feedback!', {
+          icon: "✅",
+          autoClose: 4000
+        });
       } else {
         setError(response.error || 'Failed to add comment');
+        showToast('error', response.error || '❌ Failed to add your review', {
+          icon: "❌"
+        });
       }
     } catch (err) {
       console.error('Error adding comment:', err);
       setError('An error occurred while adding your review');
+      showToast('error', '❌ An error occurred while adding your review', {
+        icon: "❌"
+      });
     } finally {
       setIsLoading(false);
     }
@@ -370,6 +567,39 @@ const AgentDetail = () => {
   const [viewTracked, setViewTracked] = useState(false);
   const [imageAspectRatio, setImageAspectRatio] = useState(null);
   const [likesCount, setLikesCount] = useState(0);
+  
+  // Toast configuration for consistent, appealing notifications
+  const showToast = (type, message, options = {}) => {
+    const defaultOptions = {
+      position: "bottom-right",
+      autoClose: 3000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      progress: undefined,
+      icon: true
+    };
+    
+    const mergedOptions = { ...defaultOptions, ...options };
+    
+    switch (type) {
+      case 'success':
+        toast.success(message, mergedOptions);
+        break;
+      case 'error':
+        toast.error(message, mergedOptions);
+        break;
+      case 'info':
+        toast.info(message, mergedOptions);
+        break;
+      case 'warning':
+        toast.warning(message, mergedOptions);
+        break;
+      default:
+        toast(message, mergedOptions);
+    }
+  };
   
   // Firebase listener for real-time updates
   const firebaseListener = useRef(null);
@@ -547,7 +777,9 @@ const AgentDetail = () => {
     if (wishlistLoading) return;
     
     if (!user) {
-      toast.info('Please sign in to add items to your wishlist');
+      showToast('info', '👋 Please sign in to add items to your wishlist', {
+        icon: "👋"
+      });
       return;
     }
     
@@ -556,13 +788,21 @@ const AgentDetail = () => {
       await toggleWishlist(agentId);
       setIsWishlisted(!isWishlisted);
       
-      toast.success(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist', {
-        position: "bottom-right",
-        autoClose: 1500
-      });
+      showToast(
+        'success', 
+        isWishlisted 
+          ? '🗑️ Removed from wishlist' 
+          : '🌟 Added to wishlist!', 
+        {
+          icon: isWishlisted ? "🗑️" : "🌟",
+          autoClose: 2000
+        }
+      );
     } catch (err) {
       console.error('Error toggling wishlist:', err);
-      toast.error('Failed to update wishlist');
+      showToast('error', '❌ Failed to update wishlist', {
+        icon: "❌"
+      });
     } finally {
       setWishlistLoading(false);
     }
@@ -573,10 +813,17 @@ const AgentDetail = () => {
     navigator.clipboard.writeText(url)
       .then(() => {
         setCopySuccess('Link copied!');
+        showToast('success', '🔗 Link copied to clipboard!', {
+          icon: "🔗",
+          autoClose: 2000
+        });
         setTimeout(() => setCopySuccess(''), 2000);
       })
       .catch(err => {
         console.error('Could not copy link:', err);
+        showToast('error', '❌ Could not copy link', {
+          icon: "❌"
+        });
       });
   };
 
@@ -739,7 +986,12 @@ const AgentDetail = () => {
 
   // Handle add to cart click
   const handleAddToCart = () => {
-    if (!isPriceValid()) return;
+    if (!isPriceValid()) {
+      showToast('warning', '⚠️ Please enter a valid price', {
+        icon: "⚠️"
+      });
+      return;
+    }
     
     try {
       // Create a product object from the agent data
@@ -754,9 +1006,9 @@ const AgentDetail = () => {
       // Add to cart using the context function
       addToCart(product);
       
-      toast.success('Added to cart!', {
-        position: "bottom-right",
-        autoClose: 1500
+      showToast('success', '🛒 Added to cart! Continue shopping or proceed to checkout.', {
+        icon: "🛒",
+        autoClose: 3000
       });
       
       // Update download count in the background
@@ -765,7 +1017,9 @@ const AgentDetail = () => {
       });
     } catch (err) {
       console.error('Error adding to cart:', err);
-      toast.error('Could not add item to cart. Please try again.');
+      showToast('error', '❌ Could not add item to cart. Please try again.', {
+        icon: "❌"
+      });
     }
   };
 
