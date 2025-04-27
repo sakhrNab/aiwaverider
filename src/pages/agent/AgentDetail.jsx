@@ -393,6 +393,7 @@ const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
           
           // Notify parent component about review count
           if (onReviewsLoaded) {
+            console.log('Setting initial review count to:', response.length);
             onReviewsLoaded(response.length);
           }
           
@@ -437,6 +438,12 @@ const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
           
           if (updatedComments.length) {
             setComments(updatedComments);
+            
+            // Always update the review count when snapshot changes
+            if (onReviewsLoaded) {
+              console.log('Firebase real-time update of review count to:', updatedComments.length);
+              onReviewsLoaded(updatedComments.length);
+            }
             
             // Check if current user has already reviewed
             const userReview = updatedComments.find(review => review.userId === user.uid);
@@ -517,15 +524,16 @@ const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
           userName: user.displayName || user.email.split('@')[0]
         };
         
-        // We don't need to manually update the state as the realtime listener will catch it
-        // But we should update the review count
-        setComments(prevComments => {
-          const updatedComments = [...prevComments, newCommentObj];
-          if (onReviewsLoaded) {
-            onReviewsLoaded(updatedComments.length);
-          }
-          return updatedComments;
-        });
+        // Immediately increment the review count through the callback
+        // This ensures the UI updates right away without waiting for Firebase
+        if (onReviewsLoaded) {
+          const newCount = comments.length + 1;
+          console.log('Immediately updating review count to:', newCount);
+          onReviewsLoaded(newCount);
+        }
+        
+        // Update the local comments state
+        setComments(prevComments => [...prevComments, newCommentObj]);
         
         setNewComment('');
         setRating(5);
@@ -956,7 +964,21 @@ const AgentDetail = () => {
           
           // Update review count if available
           if (docData.reviews && Array.isArray(docData.reviews)) {
+            console.log('Firebase agent update - setting review count to:', docData.reviews.length);
             setReviewCount(docData.reviews.length);
+          }
+          
+          // Also check if we need to synchronize with agent_reviews collection
+          // Useful for databases that store reviews in a separate collection
+          if (reviewCount === 0) {
+            console.log('Review count is 0, checking agent_reviews collection');
+            // This will trigger the separate useEffect that fetches reviews
+            getAgentReviews(id).then(reviews => {
+              if (reviews && Array.isArray(reviews) && reviews.length > 0) {
+                console.log('Found reviews in collection, updating count to:', reviews.length);
+                setReviewCount(reviews.length);
+              }
+            }).catch(err => console.error('Error fetching reviews in realtime update:', err));
           }
           
           // Update download count if changed
@@ -976,6 +998,37 @@ const AgentDetail = () => {
       console.error('Error setting up Firebase listener:', error);
     }
   };
+
+  // Add a separate useEffect specifically for loading reviews that runs on page load
+  useEffect(() => {
+    // Skip if we don't have an agent ID or if already loading
+    if (!agentId || loading) return;
+    
+    // Fetch reviews directly on page load
+    const fetchReviews = async () => {
+      try {
+        console.log('Proactively fetching reviews on page load');
+        const reviews = await getAgentReviews(agentId);
+        if (reviews && Array.isArray(reviews)) {
+          // Update the review count immediately
+          setReviewCount(reviews.length);
+          
+          // Update the agent object with the reviews
+          setAgent(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              reviews: reviews
+            };
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching reviews on page load:', err);
+      }
+    };
+    
+    fetchReviews();
+  }, [agentId, loading]); // Run when agentId is available and after initial loading
 
   const handleWishlistToggle = async () => {
     if (!user) {
