@@ -15,7 +15,7 @@ import { AuthContext } from '../../contexts/AuthContext';
 import { trackProductView } from '../../services/recommendationService';
 import DOMPurify from 'dompurify';
 import { toast } from 'react-toastify';
-import { onSnapshot, doc, collection, query, where, orderBy } from 'firebase/firestore';
+import { onSnapshot, doc, collection, query, where, orderBy, getDoc } from 'firebase/firestore';
 import { db } from '../../utils/firebase';
 import './AgentDetail.css';
 
@@ -55,8 +55,8 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [confirmUnlikeVisible, setConfirmUnlikeVisible] = useState(false);
-  
+  const [initialStateLoaded, setInitialStateLoaded] = useState(false);
+
   // Toast configuration for consistent, appealing notifications
   const showToast = (type, message, options = {}) => {
     const defaultOptions = {
@@ -94,6 +94,7 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
   const showConfirmToast = () => {
     // Clear any existing toasts to prevent stacking
     toast.dismiss();
+    console.log("Showing unlike confirmation dialog");
     
     // Create a custom toast with action buttons
     toast(
@@ -106,7 +107,8 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
             <button 
               onClick={() => {
                 closeToast();
-                handleUnlikeConfirmed();
+                console.log("Unlike confirmed, calling processLikeToggle()");
+                processLikeToggle();
               }}
               className="confirm-toast-button confirm"
             >
@@ -115,6 +117,7 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
             <button 
               onClick={() => {
                 closeToast();
+                console.log("Unlike cancelled");
               }}
               className="confirm-toast-button cancel"
             >
@@ -129,7 +132,8 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
         closeOnClick: false,
         draggable: true,
         closeButton: true,
-        className: 'confirm-unlike-toast'
+        className: 'confirm-unlike-toast',
+        toastId: 'unlike-confirmation' // Ensure unique ID
       }
     );
   };
@@ -144,13 +148,37 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
     
     // Check if the current user has liked this agent
     if (user && agentId) {
+      console.log(`Setting up Firebase listeners for like status. User ID: ${user.uid}, Agent ID: ${agentId}`);
+      
       const userLikesRef = doc(db, 'user_likes', `${user.uid}_${agentId}`);
       const agentRef = doc(db, 'agents', agentId);
       
+      // Also check directly if user is in likes array
+      const checkUserLiked = async () => {
+        try {
+          const agentDoc = await getDoc(agentRef);
+          if (agentDoc.exists()) {
+            const data = agentDoc.data();
+            if (data.likes && Array.isArray(data.likes)) {
+              const isUserInLikesArray = data.likes.includes(user.uid);
+              console.log(`Initial check: User in likes array: ${isUserInLikesArray}`);
+              setLiked(isUserInLikesArray);
+            }
+          }
+        } catch (error) {
+          console.error("Error checking likes array:", error);
+        }
+        
+        setInitialStateLoaded(true);
+      };
+      
+      checkUserLiked();
+      
       // Listen for changes to the user's like status
       const userLikeUnsubscribe = onSnapshot(userLikesRef, (docSnapshot) => {
-        console.log(`User like status updated: ${docSnapshot.exists()}`);
-        setLiked(docSnapshot.exists());
+        const userHasLiked = docSnapshot.exists();
+        console.log(`Firebase like status updated: User has liked: ${userHasLiked}`);
+        setLiked(userHasLiked);
       }, (error) => {
         console.error("Error in user like listener:", error);
       });
@@ -163,6 +191,10 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
           if (data.likes) {
             if (Array.isArray(data.likes)) {
               setLikeCount(data.likes.length);
+              // Also check if user is in the likes array
+              const userInLikesArray = data.likes.includes(user.uid);
+              console.log(`Agent update: User in likes array: ${userInLikesArray}`);
+              setLiked(userInLikesArray);
             } else if (typeof data.likes === 'number') {
               setLikeCount(data.likes);
             }
@@ -177,51 +209,90 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
         userLikeUnsubscribe();
         agentUnsubscribe();
       };
+    } else {
+      console.log("No user or agent ID, setting initialStateLoaded = true");
+      setInitialStateLoaded(true);
     }
   }, [user, agentId, initialLikes]);
   
-  const handleUnlikeConfirmed = async () => {
+  // Process like/unlike by letting the server determine the action
+  const processLikeToggle = async () => {
     if (isLoading) return;
     
     setIsLoading(true);
     
     try {
-      // We know we're unliking here, so we can explicitly set liked to false after success
+      console.log('Sending toggle like request to server');
       const response = await toggleAgentLike(agentId);
+      console.log('Server response:', response);
       
       if (response.success) {
-        // We can safely set the state here to ensure UI feels responsive
-        // Firebase listeners will eventually catch up and sync state
-        setLiked(false);
+        // Use the server's response to determine the new state
+        const didLike = response.liked;
+        
+        // Set liked state based on the server response
+        setLiked(didLike);
         
         // If the API returns the updated like count, use it
-        if (response.updatedLikeCount !== undefined) {
-          setLikeCount(response.updatedLikeCount);
+        if (response.likesCount !== undefined) {
+          setLikeCount(response.likesCount);
           if (onLikeUpdate) {
-            onLikeUpdate(response.updatedLikeCount);
-          }
-        } else {
-          // If no updated count, decrement the current count
-          const newCount = Math.max(0, likeCount - 1);
-          setLikeCount(newCount);
-          if (onLikeUpdate) {
-            onLikeUpdate(newCount);
+            onLikeUpdate(response.likesCount);
           }
         }
         
-        showToast('success', '💔 Removed your like', {
-          icon: "💔",
-          autoClose: 2000
-        });
+        // Show appropriate notification based on server response
+        // Use toast directly to ensure notification is shown
+        if (didLike) {
+          toast.success('❤️ Added your like!', {
+            position: "bottom-right",
+            autoClose: 2000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            progress: undefined,
+            icon: "❤️",
+            toastId: 'like-added' // Ensure uniqueness
+          });
+        } else {
+          toast.success('💔 Removed your like', {
+            position: "bottom-right",
+            autoClose: 2000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            progress: undefined,
+            icon: "💔",
+            toastId: 'like-removed' // Ensure uniqueness
+          });
+        }
       } else {
-        showToast('error', response.error || 'Failed to update like', {
-          icon: "❌"
+        toast.error(response.error || 'Failed to update like', {
+          position: "bottom-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+          icon: "❌",
+          toastId: 'like-error' // Ensure uniqueness
         });
       }
     } catch (err) {
-      console.error('Error unliking agent:', err);
-      showToast('error', 'Failed to remove like', {
-        icon: "❌"
+      console.error(`Error toggling like for agent:`, err);
+      toast.error(`Failed to update like`, {
+        position: "bottom-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        icon: "❌",
+        toastId: 'like-error' // Ensure uniqueness
       });
     } finally {
       setIsLoading(false);
@@ -236,65 +307,26 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
       return;
     }
     
-    if (isLoading) return;
+    if (isLoading || !initialStateLoaded) return;
     
     // If user has already liked and is trying to like again, show confirm toast
     if (liked) {
+      console.log("Agent is liked, showing confirmation dialog");
       showConfirmToast();
       return;
+    } else {
+      console.log("Agent is not liked, directly toggling like");
     }
     
-    // Otherwise proceed with adding the like
-    setIsLoading(true);
-    
-    try {
-      // We know we're liking here, so we can explicitly set liked to true after success
-      const response = await toggleAgentLike(agentId);
-      
-      if (response.success) {
-        // We can safely set the state here to ensure UI feels responsive
-        // Firebase listeners will eventually catch up and sync state
-        setLiked(true);
-        
-        // If the API returns the updated like count, use it
-        if (response.updatedLikeCount !== undefined) {
-          setLikeCount(response.updatedLikeCount);
-          if (onLikeUpdate) {
-            onLikeUpdate(response.updatedLikeCount);
-          }
-        } else {
-          // If no updated count, increment the current count
-          const newCount = likeCount + 1;
-          setLikeCount(newCount);
-          if (onLikeUpdate) {
-            onLikeUpdate(newCount);
-          }
-        }
-        
-        showToast('success', '❤️ Added your like!', {
-          icon: "❤️",
-          autoClose: 2000
-        });
-      } else {
-        showToast('error', response.error || 'Failed to update like', {
-          icon: "❌"
-        });
-      }
-    } catch (err) {
-      console.error('Error liking agent:', err);
-      showToast('error', 'Failed to add like', {
-        icon: "❌"
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    // Otherwise proceed with toggling the like
+    processLikeToggle();
   };
   
   return (
     <button 
       className={`like-button ${liked ? 'liked' : ''} ${isLoading ? 'loading' : ''}`}
       onClick={handleLikeToggle}
-      disabled={isLoading}
+      disabled={isLoading || !initialStateLoaded}
     >
       {liked ? <FaHeart className="heart-icon" /> : <FaRegHeart className="heart-icon" />}
       <span className="like-count">{likeCount}</span>
