@@ -15,7 +15,7 @@ import { AuthContext } from '../../contexts/AuthContext';
 import { trackProductView } from '../../services/recommendationService';
 import DOMPurify from 'dompurify';
 import { toast } from 'react-toastify';
-import { onSnapshot, doc, collection, query, where, orderBy, getDoc } from 'firebase/firestore';
+import { onSnapshot, doc, collection, query, where, orderBy, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../utils/firebase';
 import './AgentDetail.css';
 
@@ -344,6 +344,8 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
   const [error, setError] = useState('');
   const [isLoadingComments, setIsLoadingComments] = useState(true);
   const [hasUserReviewed, setHasUserReviewed] = useState(false);
+  const [showSignInPopup, setShowSignInPopup] = useState(false);
+  const [showSignUpPopup, setShowSignUpPopup] = useState(false);
   
   // Toast configuration for consistent, appealing notifications
   const showToast = (type, message, options = {}) => {
@@ -379,7 +381,7 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
   };
   
   useEffect(() => {
-    // Load comments when component mounts or agentId changes
+    // Load comments without Firebase listeners for unauthenticated users
     const loadComments = async () => {
       setIsLoadingComments(true);
       try {
@@ -389,7 +391,7 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
         if (response && Array.isArray(response)) {
           setComments(response);
           
-          // Check if current user has already reviewed
+          // Check if current user has already reviewed (only if authenticated)
           if (user) {
             const userReview = response.find(review => review.userId === user.uid);
             setHasUserReviewed(!!userReview);
@@ -403,39 +405,66 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
       }
     };
     
+    // Always load comments via REST API (works for both authenticated and unauthenticated users)
     loadComments();
     
-    // Set up realtime listener for new reviews
-    const reviewsQuery = query(
-      collection(db, 'agent_reviews'),
-      where('agentId', '==', agentId),
-      orderBy('createdAt', 'desc')
-    );
+    // Only set up Firebase realtime listener if user is authenticated
+    let unsubscribe = null;
     
-    const unsubscribe = onSnapshot(reviewsQuery, (snapshot) => {
-      const updatedComments = [];
-      snapshot.forEach(doc => {
-        updatedComments.push({
-          id: doc.id,
-          ...doc.data()
-        });
-      });
-      
-      if (updatedComments.length) {
-        setComments(updatedComments);
+    if (user && agentId) {
+      try {
+        console.log("Setting up Firebase listener for reviews (authenticated user)");
+        // Set up realtime listener for new reviews
+        const reviewsQuery = query(
+          collection(db, 'agent_reviews'),
+          where('agentId', '==', agentId),
+          orderBy('createdAt', 'desc')
+        );
         
-        // Check if current user has already reviewed
-        if (user) {
-          const userReview = updatedComments.find(review => review.userId === user.uid);
-          setHasUserReviewed(!!userReview);
-        }
+        unsubscribe = onSnapshot(reviewsQuery, (snapshot) => {
+          const updatedComments = [];
+          snapshot.forEach(doc => {
+            updatedComments.push({
+              id: doc.id,
+              ...doc.data()
+            });
+          });
+          
+          if (updatedComments.length) {
+            setComments(updatedComments);
+            
+            // Check if current user has already reviewed
+            const userReview = updatedComments.find(review => review.userId === user.uid);
+            setHasUserReviewed(!!userReview);
+          }
+        }, (error) => {
+          console.error('Error in reviews listener:', error);
+        });
+      } catch (err) {
+        console.error("Error setting up Firebase listener:", err);
       }
-    }, (error) => {
-      console.error('Error in reviews listener:', error);
-    });
+    }
     
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribe) {
+        console.log("Cleaning up Firebase listener for reviews");
+        unsubscribe();
+      }
+    };
   }, [agentId, user]);
+  
+  const handleOpenSignInPopup = () => {
+    setShowSignInPopup(true);
+  };
+  
+  const handleOpenSignUpPopup = () => {
+    setShowSignUpPopup(true);
+  };
+  
+  const handleClosePopups = () => {
+    setShowSignInPopup(false);
+    setShowSignUpPopup(false);
+  };
   
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
@@ -522,6 +551,47 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
     }
   };
   
+  // Nice authentication prompt for users who aren't signed in
+  const AuthPrompt = () => (
+    <div className="auth-prompt">
+      <div className="auth-prompt-content">
+        <div className="auth-prompt-icon">
+          <FaComment className="comment-icon" />
+        </div>
+        <h3>Join the conversation!</h3>
+        <p>Sign in to leave a review and share your experience with this product.</p>
+        <div className="auth-prompt-buttons">
+          <button 
+            className="auth-button signin-button" 
+            onClick={handleOpenSignInPopup}
+          >
+            Sign In
+          </button>
+          <button 
+            className="auth-button signup-button" 
+            onClick={handleOpenSignUpPopup}
+          >
+            Sign Up
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+  
+  // Auth Popup Component
+  const AuthPopup = ({ isSignIn, onClose }) => (
+    <div className="auth-popup-overlay" onClick={onClose}>
+      <div className="auth-popup" onClick={e => e.stopPropagation()}>
+        <button className="auth-popup-close" onClick={onClose}>×</button>
+        <iframe 
+          src={isSignIn ? "/sign-in" : "/sign-up"} 
+          title={isSignIn ? "Sign In" : "Sign Up"}
+          className="auth-popup-iframe"
+        />
+      </div>
+    </div>
+  );
+  
   return (
     <div className="comments-section">
       <h3 className="section-heading">Reviews & Ratings</h3>
@@ -555,7 +625,9 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
         <div className="already-reviewed-message">
           <p>You have already submitted a review for this agent. Thank you for your feedback!</p>
         </div>
-      ) : null}
+      ) : (
+        <AuthPrompt />
+      )}
       
       <div className="comments-list">
         {isLoadingComments ? (
@@ -574,9 +646,13 @@ const CommentSection = ({ agentId, existingReviews = [] }) => {
             </div>
           ))
         ) : (
-          <div className="no-comments">No reviews yet. Be the first to review!</div>
+          <div className="no-comments">No reviews yet. {user ? 'Be the first to review!' : 'Sign in to be the first to review!'}</div>
         )}
       </div>
+      
+      {/* Authentication Popups */}
+      {showSignInPopup && <AuthPopup isSignIn={true} onClose={handleClosePopups} />}
+      {showSignUpPopup && <AuthPopup isSignIn={false} onClose={handleClosePopups} />}
     </div>
   );
 };
@@ -768,75 +844,158 @@ const AgentDetail = () => {
       firebaseListener.current();
     }
     
-    // Set up new listener
-    firebaseListener.current = onSnapshot(doc(db, 'agents', id), (docSnapshot) => {
-      if (docSnapshot.exists()) {
-        const docData = docSnapshot.data();
-        
-        // Update only specific fields that might change
-        setAgent(prev => {
-          if (!prev) return { id, ...docData };
+    // For unauthenticated users, use REST API instead of Firestore listener
+    if (!user) {
+      console.log('User not authenticated, using REST API for updates');
+      // Fetch initial data via REST API and schedule periodic updates
+      const fetchData = async () => {
+        try {
+          // Get stats from REST API
+          const statsResponse = await fetch(`/api/agents/${id}/stats`);
+          if (statsResponse.ok) {
+            const statsData = await statsResponse.json();
+            
+            // Update agent with the stats data
+            setAgent(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                likes: statsData.likes || [],
+                rating: statsData.rating || prev.rating,
+                reviews: statsData.reviews || prev.reviews,
+                downloadCount: statsData.downloadCount || prev.downloadCount
+              };
+            });
+            
+            // Update likes count
+            if (statsData.likes) {
+              if (Array.isArray(statsData.likes)) {
+                setLikesCount(statsData.likes.length);
+              } else if (typeof statsData.likes === 'number') {
+                setLikesCount(statsData.likes);
+              }
+            }
+            
+            // Update download count
+            if (statsData.downloadCount) {
+              setDownloadCount(statsData.downloadCount);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching agent stats:', error);
+        }
+      };
+      
+      // Fetch initial data
+      fetchData();
+      
+      // Set interval for polling updates (every 30 seconds)
+      const intervalId = setInterval(fetchData, 30000);
+      
+      // Return cleanup function
+      return () => clearInterval(intervalId);
+    }
+    
+    // For authenticated users, use Firebase listener
+    try {
+      firebaseListener.current = onSnapshot(doc(db, 'agents', id), (docSnapshot) => {
+        if (docSnapshot.exists()) {
+          const docData = docSnapshot.data();
           
-          return {
-            ...prev,
-            likes: docData.likes || [],
-            rating: docData.rating || prev.rating,
-            reviews: docData.reviews || prev.reviews,
-            downloadCount: docData.downloadCount || prev.downloadCount
-          };
-        });
-        
-        // Update likes count properly
-        if (docData.likes) {
-          if (Array.isArray(docData.likes)) {
-            setLikesCount(docData.likes.length);
-          } else if (typeof docData.likes === 'number') {
-            setLikesCount(docData.likes);
+          // Update only specific fields that might change
+          setAgent(prev => {
+            if (!prev) return { id, ...docData };
+            
+            return {
+              ...prev,
+              likes: docData.likes || [],
+              rating: docData.rating || prev.rating,
+              reviews: docData.reviews || prev.reviews,
+              downloadCount: docData.downloadCount || prev.downloadCount
+            };
+          });
+          
+          // Update likes count properly
+          if (docData.likes) {
+            if (Array.isArray(docData.likes)) {
+              setLikesCount(docData.likes.length);
+            } else if (typeof docData.likes === 'number') {
+              setLikesCount(docData.likes);
+            }
+          }
+          
+          // Update download count if changed
+          if (docData.downloadCount && docData.downloadCount !== downloadCount) {
+            setDownloadCount(docData.downloadCount);
           }
         }
-        
-        // Update download count if changed
-        if (docData.downloadCount && docData.downloadCount !== downloadCount) {
-          setDownloadCount(docData.downloadCount);
+      }, (error) => {
+        console.error('Firebase listener error:', error);
+        // If we get a permission error, fall back to REST API
+        if (error.code === 'permission-denied') {
+          console.log('Firebase permission denied, falling back to REST API');
+          setupRealtimeUpdates(id);
         }
-      }
-    }, (error) => {
-      console.error('Firebase listener error:', error);
-    });
+      });
+    } catch (error) {
+      console.error('Error setting up Firebase listener:', error);
+    }
   };
 
   const handleWishlistToggle = async () => {
-    if (wishlistLoading) return;
-    
     if (!user) {
-      showToast('info', '👋 Please sign in to add items to your wishlist', {
-        icon: "👋"
-      });
+      toast.error('Please sign in to add items to your wishlist');
       return;
     }
     
     try {
-      setWishlistLoading(true);
-      await toggleWishlist(agentId);
-      setIsWishlisted(!isWishlisted);
+      // Get current agent info
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
       
-      showToast(
-        'success', 
-        isWishlisted 
-          ? '🗑️ Removed from wishlist' 
-          : '🌟 Added to wishlist!', 
-        {
-          icon: isWishlisted ? "🗑️" : "🌟",
-          autoClose: 2000
-        }
-      );
-    } catch (err) {
-      console.error('Error toggling wishlist:', err);
-      showToast('error', '❌ Failed to update wishlist', {
-        icon: "❌"
+      if (!userSnap.exists()) {
+        console.error("User document not found");
+        toast.error("Error updating wishlist. Please try again later.");
+        return;
+      }
+      
+      const userData = userSnap.data();
+      const wishlist = userData.wishlist || [];
+      
+      // Check if agent is already in wishlist
+      const isInWishlist = wishlist.some(item => item.id === agent.id);
+      
+      let updatedWishlist;
+      
+      if (isInWishlist) {
+        // Remove from wishlist
+        updatedWishlist = wishlist.filter(item => item.id !== agent.id);
+        toast.success("Removed from your wishlist");
+      } else {
+        // Add to wishlist
+        const wishlistItem = {
+          id: agent.id,
+          name: agent.name,
+          imageUrl: agent.images && agent.images.length > 0 ? agent.images[0] : '',
+          category: agent.category || '',
+          price: agent.price || {},
+          createdAt: serverTimestamp()
+        };
+        
+        updatedWishlist = [...wishlist, wishlistItem];
+        toast.success("Added to your wishlist");
+      }
+      
+      // Update wishlist in Firestore
+      await updateDoc(userRef, {
+        wishlist: updatedWishlist
       });
-    } finally {
-      setWishlistLoading(false);
+      
+      // Update local state
+      setIsWishlisted(!isInWishlist);
+    } catch (error) {
+      console.error("Error updating wishlist:", error);
+      toast.error("Error updating wishlist. Please try again later.");
     }
   };
   

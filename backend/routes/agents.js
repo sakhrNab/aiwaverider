@@ -263,4 +263,63 @@ if (process.env.NODE_ENV === 'development') {
   router.post('/seed', agentsController.seedAgents);
 }
 
+// Get agent stats (download count, etc.) - public endpoint
+router.get('/:agentId/stats', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    
+    // Check if agent exists
+    const agentRef = db.collection('agents').doc(agentId);
+    const agentDoc = await agentRef.get();
+    
+    if (!agentDoc.exists) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    
+    const agentData = agentDoc.data();
+    
+    // Return relevant public stats
+    res.json({
+      downloadCount: agentData.downloadCount || 0,
+      viewCount: agentData.viewCount || 0,
+      rating: agentData.rating || { average: 0, count: 0 },
+      reviewCount: agentData.reviews?.length || 0,
+      likesCount: Array.isArray(agentData.likes) ? agentData.likes.length : (agentData.likes || 0)
+    });
+    
+  } catch (error) {
+    console.error('Error fetching agent stats:', error);
+    res.status(500).json({ error: 'Failed to fetch agent stats' });
+  }
+});
+
+// Increment download count - works for both authenticated and unauthenticated users
+router.post('/:agentId/increment-downloads', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    
+    // Check if agent exists
+    const agentRef = db.collection('agents').doc(agentId);
+    const agentDoc = await agentRef.get();
+    
+    if (!agentDoc.exists) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    
+    // Increment download count
+    await agentRef.update({
+      downloadCount: admin.firestore.FieldValue.increment(1)
+    });
+    
+    res.json({ 
+      success: true,
+      message: 'Download count incremented successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error incrementing download count:', error);
+    res.status(500).json({ error: 'Failed to increment download count' });
+  }
+});
+
 module.exports = router; 

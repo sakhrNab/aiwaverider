@@ -2671,17 +2671,42 @@ export const addAgentReview = async (agentId, reviewData) => {
  */
 export const getAgentDownloadCount = async (agentId) => {
   try {
-    const agentRef = doc(db, 'agents', agentId);
-    const agentSnap = await getDoc(agentRef);
-    
-    if (!agentSnap.exists()) {
-      return 0;
+    // First try to get the download count from the REST API
+    // This works for both authenticated and unauthenticated users
+    try {
+      console.log(`Fetching download count for agent ${agentId} via REST API`);
+      const response = await fetch(`${API_URL}/api/agents/${agentId}/stats`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`Download count from API: ${data.downloadCount}`);
+        return data.downloadCount || 0;
+      }
+    } catch (apiError) {
+      console.warn(`Error fetching download count from API: ${apiError.message}`);
+      // Fall back to Firebase if API call fails
     }
     
-    return agentSnap.data().downloadCount || 0;
+    // Only attempt Firebase if user is authenticated
+    const user = auth.currentUser;
+    if (user) {
+      console.log(`Falling back to Firebase for download count (authenticated user)`);
+      const agentRef = doc(db, 'agents', agentId);
+      const agentSnap = await getDoc(agentRef);
+      
+      if (!agentSnap.exists()) {
+        return 0;
+      }
+      
+      return agentSnap.data().downloadCount || 0;
+    }
+    
+    // If no user and API failed, return a default value
+    console.log(`No authenticated user and API failed, returning default download count`);
+    return 0;
   } catch (error) {
     console.error('Error getting download count:', error);
-    return 0;
+    return 0; // Return 0 as a fallback
   }
 };
 
@@ -2692,14 +2717,50 @@ export const getAgentDownloadCount = async (agentId) => {
  */
 export const incrementAgentDownloadCount = async (agentId) => {
   try {
-    const agentRef = doc(db, 'agents', agentId);
-    await updateDoc(agentRef, {
-      downloadCount: increment(1)
-    });
+    // Try to increment through the REST API first
+    try {
+      console.log(`Incrementing download count for agent ${agentId} via REST API`);
+      
+      // Use authentication if available
+      let headers = { 'Content-Type': 'application/json' };
+      const user = auth.currentUser;
+      
+      if (user) {
+        const idToken = await user.getIdToken();
+        headers['Authorization'] = `Bearer ${idToken}`;
+      }
+      
+      const response = await fetch(`${API_URL}/api/agents/${agentId}/increment-downloads`, {
+        method: 'POST',
+        headers
+      });
+      
+      if (response.ok) {
+        console.log(`Download count incremented successfully via API`);
+        return { success: true };
+      }
+    } catch (apiError) {
+      console.warn(`Error incrementing download count via API: ${apiError.message}`);
+      // Fall back to Firebase if API call fails
+    }
     
+    // Only try Firebase if user is authenticated
+    const user = auth.currentUser;
+    if (user) {
+      console.log(`Falling back to Firebase for incrementing download count`);
+      const agentRef = doc(db, 'agents', agentId);
+      await updateDoc(agentRef, {
+        downloadCount: increment(1)
+      });
+      
+      return { success: true };
+    }
+    
+    // If no user and API failed, still return success
+    // This prevents errors in the UI but doesn't actually increment
     return { success: true };
   } catch (error) {
     console.error('Error incrementing download count:', error);
-    return { success: false };
+    return { success: false, error: error.message };
   }
 };
