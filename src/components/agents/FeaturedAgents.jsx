@@ -7,7 +7,7 @@ import './FeaturedAgents.css';
 
 // Utility functions for image fallbacks
 const getPlaceholderImage = () => 
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3C/svg%3E";
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='24' text-anchor='middle' dominant-baseline='middle' fill='%23ffffff'%3EAgent Image%3C/text%3E%3C/svg%3E";
 
 const getAvatarPlaceholder = () => 
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23e0e0e0'/%3E%3Ctext x='20' y='25' font-family='Arial' font-size='20' text-anchor='middle' fill='%23999'%3E?%3C/text%3E%3C/svg%3E";
@@ -18,6 +18,33 @@ const FeaturedAgentCard = ({ agent }) => {
   const handleImageError = (e) => {
     e.target.src = getPlaceholderImage();
     e.target.onerror = null;
+  };
+
+  // Get image URL with robust fallback logic
+  const getImageUrl = () => {
+    // Check for different possible image URL locations in the agent object
+    if (agent.imageUrl) {
+      return agent.imageUrl;
+    }
+    
+    // Check if image info exists in a nested structure
+    if (agent.image && agent.image.url) {
+      return agent.image.url;
+    }
+    
+    // Try to parse the data field if it's a string
+    if (agent.data && typeof agent.data === 'string') {
+      try {
+        const parsedData = JSON.parse(agent.data);
+        if (parsedData.imageUrl) {
+          return parsedData.imageUrl;
+        }
+      } catch (e) {
+        console.error("Error parsing agent.data:", e);
+      }
+    }
+    
+    return getPlaceholderImage();
   };
 
   // Format rating to one decimal place
@@ -122,7 +149,7 @@ const FeaturedAgentCard = ({ agent }) => {
       <div className="featured-card">
         <div className="featured-card__image-container">
           <img 
-            src={agent.imageUrl || getPlaceholderImage()} 
+            src={getImageUrl()} 
             alt={agent.title || agent.name || 'AI Agent'} 
             className="featured-card__image"
             onError={handleImageError}
@@ -309,51 +336,41 @@ const FeaturedAgents = ({ agents, isLoading }) => {
   const getFeaturedAgents = () => {
     if (!agents || agents.length === 0) return [];
     
-    // Filter out any mock agents with IDs like "agent-xx"
-    const nonMockAgents = agents.filter(agent => 
-      agent && agent.id && !agent.id.toString().match(/^agent-\d+$/)
+    // For debugging
+    console.log("All agents received in carousel:", agents);
+    
+    // Check if agents is an array. If it's a single object, convert to array
+    const agentsArray = Array.isArray(agents) ? agents : [agents];
+    
+    // Filter out any undefined or null agents
+    const validAgents = agentsArray.filter(agent => 
+      agent && agent.id
     );
     
-    // If we filtered out all agents (meaning they were all mocks), return empty array
-    if (nonMockAgents.length === 0) {
-      console.warn("All featured agents appear to be mock data with 'agent-xx' IDs - not displaying any");
+    // If no valid agents, return empty array
+    if (validAgents.length === 0) {
+      console.warn("No valid agents found");
       return [];
     }
     
-    // Continue with normal filtering logic but only using valid agents
-    const featured = nonMockAgents.filter(agent => 
-      agent.isFeatured || 
-      agent.featured || 
-      agent.isBestseller || 
-      (agent.data && agent.data.isFeatured) || // Check inside data object
+    // Continue with filtering logic
+    const featured = validAgents.filter(agent => 
+      agent.isFeatured === true || 
+      agent.featured === true || 
+      agent.isBestseller === true || 
+      agent.isTrending === true ||
+      (agent.data && agent.data.isFeatured === true) || // Check inside data object
       // If none are specifically featured, try to find ones with good ratings
       (agent.rating && agent.rating.average && agent.rating.average >= 4.5)
     );
     
-    // If we don't have enough featured agents, use some of the top agents
-    if (featured.length < MAX_DOTS && nonMockAgents.length >= MAX_DOTS) {
-      // Sort agents by rating and add the top ones
-      const topRated = [...nonMockAgents]
-        .sort((a, b) => {
-          const aRating = a.rating?.average || 0;
-          const bRating = b.rating?.average || 0;
-          return bRating - aRating;
-        })
-        .slice(0, MAX_DOTS);
-      
-      // Combine featured with top rated, avoiding duplicates
-      const combinedAgents = [...featured];
-      
-      topRated.forEach(agent => {
-        if (!combinedAgents.some(a => a.id === agent.id)) {
-          combinedAgents.push(agent);
-        }
-      });
-      
-      return combinedAgents.slice(0, MAX_DOTS);
+    // If we don't have enough featured agents, just use the available ones
+    if (featured.length < MAX_DOTS) {
+      console.log("Not enough featured agents, using all available agents");
+      return validAgents.slice(0, MAX_DOTS);
     }
     
-    return featured.length > 0 ? featured.slice(0, MAX_DOTS) : nonMockAgents.slice(0, MAX_DOTS);
+    return featured.slice(0, MAX_DOTS);
   };
   
   // Loading state

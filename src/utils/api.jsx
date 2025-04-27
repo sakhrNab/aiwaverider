@@ -1364,22 +1364,53 @@ export const fetchFeaturedAgents = async (limit = 8, options = {}) => {
   try {
     const { timestamp = Date.now() } = options;
     
-    console.log(`Fetching featured agents from API with limit: ${limit}`);
-    const response = await api.get(`/api/agents/featured?limit=${limit}&_t=${timestamp}`);
-    console.log('Successfully fetched featured agents from API:', response.data.agents.length);
+    console.log(`Fetching agents for featured display with limit: ${limit}`);
+    
+    // Use the main agents endpoint instead of the featured endpoint
+    const response = await api.get(`/api/agents?limit=${limit * 3}&_t=${timestamp}`);
+    console.log('Successfully fetched agents:', response.data.agents.length);
+    
+    // Log a sample agent to see its structure
+    if (response.data.agents.length > 0) {
+      console.log('Sample agent structure:', JSON.stringify(response.data.agents[0]));
+    }
     
     // Validate agents to ensure they exist and have valid IDs
     const validAgents = response.data.agents.filter(agent => {
       return agent && agent.id && typeof agent.id === 'string';
     });
     
-    if (validAgents.length !== response.data.agents.length) {
-      console.warn(`Filtered out ${response.data.agents.length - validAgents.length} invalid featured agents`);
+    // Filter for featured agents using data.isFeatured property
+    const featuredAgents = validAgents.filter(agent => {
+      return (
+        agent.isFeatured === true || 
+        agent.featured === true || 
+        agent.isBestseller === true ||
+        agent.isTrending === true ||
+        (agent.data && agent.data.isFeatured === true)
+      );
+    });
+    
+    console.log(`Found ${featuredAgents.length} featured agents after filtering`);
+    
+    // If not enough featured agents, include some non-featured ones
+    if (featuredAgents.length < limit) {
+      console.log('Not enough featured agents, adding regular agents');
+      
+      // Get regular agents that aren't already in the featured list
+      const regularAgents = validAgents.filter(agent => 
+        !featuredAgents.some(featured => featured.id === agent.id)
+      );
+      
+      // Combine and limit to requested number
+      const combinedAgents = [...featuredAgents, ...regularAgents].slice(0, limit);
+      return combinedAgents;
     }
     
-    return validAgents;
+    // Return limited number of featured agents
+    return featuredAgents.slice(0, limit);
   } catch (error) {
-    console.error('Error fetching featured agents from API:', error);
+    console.error('Error fetching featured agents:', error);
     // Return empty array on error
     return [];
   }
