@@ -48,6 +48,9 @@ const FeaturedAgentCard = ({ agent }) => {
           <div className="featured-card__price-display">
             <span className="featured-card__price-original">{currencySymbol}{basePrice.toFixed(2)}</span>
             <span className="featured-card__price-discounted">{currencySymbol}{discountedPrice.toFixed(2)}</span>
+            <span className="featured-card__discount-badge">
+              {Math.round((1 - discountedPrice / basePrice) * 100)}% OFF
+            </span>
           </div>
         );
       }
