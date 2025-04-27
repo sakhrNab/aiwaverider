@@ -4,6 +4,8 @@ import axios from 'axios';
 import firebase from 'firebase/compat/app';
 import { auth } from '../utils/firebase';
 import { toast as hotToast } from 'react-hot-toast'; // Import react-hot-toast
+import { db } from '../utils/firebase';
+import { doc, getDoc, updateDoc, increment, collection, query, where, getDocs } from 'firebase/firestore';
 
 // Set API base URL from environment variable or default to localhost:4000
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -2002,27 +2004,14 @@ export const deleteUser = async (userId) => {
  * Get download count for an agent
  */
 export const getDownloadCount = async (agentId) => {
-  try {
-    const response = await api.get(`/api/agents/${agentId}/downloads`);
-    return response.data.downloads;
-  } catch (error) {
-    console.error('Error getting download count:', error);
-    // Fallback to a default to prevent UI breaking
-    return 0;
-  }
+  return getAgentDownloadCount(agentId);
 };
 
 /**
  * Increment download count for an agent
  */
 export const incrementDownloadCount = async (agentId) => {
-  try {
-    const response = await api.post(`/api/agents/${agentId}/downloads`);
-    return response.data;
-  } catch (error) {
-    console.error('Error incrementing download count:', error);
-    throw error;
-  }
+  return incrementAgentDownloadCount(agentId);
 };
 
 // AI Tools API Functions
@@ -2517,5 +2506,200 @@ export const testFileUpload = async (file) => {
   } catch (error) {
     console.error('Test file upload error:', error);
     throw error;
+  }
+};
+
+// =================================================================
+// Agent API Functions 
+// =================================================================
+
+/**
+ * Fetch agent by ID from the database
+ * @param {string} agentId - The ID of the agent to fetch
+ * @returns {Promise<Object>} The agent data
+ */
+export const fetchAgentByIdWithFirebase = async (agentId) => {
+  try {
+    console.log(`Fetching agent with ID: ${agentId}`);
+    
+    // Check if the ID exists
+    if (!agentId) {
+      throw new Error('Agent ID is required');
+    }
+    
+    const agentRef = doc(db, 'agents', agentId);
+    const agentSnap = await getDoc(agentRef);
+    
+    if (!agentSnap.exists()) {
+      throw new Error(`Agent with ID ${agentId} not found`);
+    }
+    
+    const agentData = { id: agentSnap.id, ...agentSnap.data() };
+    
+    // Check if the user has wishlisted this agent
+    const user = auth.currentUser;
+    if (user) {
+      const wishlistQuery = query(
+        collection(db, 'wishlists'),
+        where('userId', '==', user.uid),
+        where('agentId', '==', agentId)
+      );
+      
+      const wishlistSnapshot = await getDocs(wishlistQuery);
+      agentData.isWishlisted = !wishlistSnapshot.empty;
+    }
+    
+    return agentData;
+  } catch (error) {
+    console.error('Error fetching agent:', error);
+    throw error;
+  }
+};
+
+/**
+ * Toggle like for an agent
+ * @param {string} agentId - The ID of the agent to toggle like for
+ * @returns {Promise<Object>} Response object
+ */
+export const toggleAgentLike = async (agentId) => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('User must be logged in to like an agent');
+    }
+    
+    const idToken = await user.getIdToken();
+    console.log(`Toggling like for agent ${agentId}`);
+    
+    const response = await fetch(`${API_URL}/api/agents/${agentId}/toggle-like`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      }
+    });
+    
+    console.log('Like toggle response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('API Error Response:', errorText);
+      throw new Error(`Failed to toggle like: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error toggling like:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Get comments/reviews for an agent
+ * @param {string} agentId - The ID of the agent to get comments for
+ * @returns {Promise<Array>} Array of comments
+ */
+export const getAgentReviews = async (agentId) => {
+  try {
+    console.log(`Fetching reviews for agent: ${agentId}`);
+    
+    const response = await fetch(`${API_URL}/api/agents/${agentId}/reviews`);
+    console.log('Reviews API response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('API Error Response:', errorText);
+      throw new Error(`Failed to fetch reviews: ${response.status} ${response.statusText}`);
+    }
+    
+    const reviews = await response.json();
+    console.log(`Received ${reviews.length} reviews`);
+    return reviews;
+  } catch (error) {
+    console.error('Error getting agent reviews:', error);
+    // Return empty array rather than throwing
+    return [];
+  }
+};
+
+/**
+ * Add a review/comment to an agent
+ * @param {string} agentId - The ID of the agent to add comment to
+ * @param {Object} commentData - The comment data object
+ * @returns {Promise<Object>} Response object
+ */
+export const addAgentReview = async (agentId, reviewData) => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('User must be logged in to add a review');
+    }
+    
+    const idToken = await user.getIdToken();
+    console.log(`Submitting review for agent ${agentId}`);
+    
+    const response = await fetch(`${API_URL}/api/agents/${agentId}/reviews`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`
+      },
+      body: JSON.stringify(reviewData)
+    });
+    
+    console.log('Review submission response status:', response.status);
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('API Error Response:', errorData);
+      throw new Error(`Failed to add review: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error adding agent review:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Get download count for an agent
+ * @param {string} agentId - The ID of the agent
+ * @returns {Promise<number>} The download count
+ */
+export const getAgentDownloadCount = async (agentId) => {
+  try {
+    const agentRef = doc(db, 'agents', agentId);
+    const agentSnap = await getDoc(agentRef);
+    
+    if (!agentSnap.exists()) {
+      return 0;
+    }
+    
+    return agentSnap.data().downloadCount || 0;
+  } catch (error) {
+    console.error('Error getting download count:', error);
+    return 0;
+  }
+};
+
+/**
+ * Increment download count for an agent
+ * @param {string} agentId - The ID of the agent
+ * @returns {Promise<Object>} Response object
+ */
+export const incrementAgentDownloadCount = async (agentId) => {
+  try {
+    const agentRef = doc(db, 'agents', agentId);
+    await updateDoc(agentRef, {
+      downloadCount: increment(1)
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error incrementing download count:', error);
+    return { success: false };
   }
 };

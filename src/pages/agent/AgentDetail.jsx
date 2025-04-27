@@ -1,15 +1,307 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { FaStar, FaRegStar, FaCheck, FaDownload, FaHeart, FaRegHeart, FaLink, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
-import { fetchAgentById, toggleWishlist, getDownloadCount, incrementDownloadCount } from '../../utils/api';
+import { FaStar, FaRegStar, FaCheck, FaDownload, FaHeart, FaRegHeart, FaLink, FaArrowLeft, FaArrowRight, FaThumbsUp, FaComment, FaShare } from 'react-icons/fa';
+import { 
+  fetchAgentById, 
+  toggleWishlist, 
+  getAgentDownloadCount, 
+  incrementAgentDownloadCount,
+  toggleAgentLike,
+  getAgentReviews,
+  addAgentReview 
+} from '../../utils/api';
 import { useCart } from '../../contexts/CartContext.jsx';
+import { AuthContext } from '../../contexts/AuthContext';
 import { trackProductView } from '../../services/recommendationService';
+import DOMPurify from 'dompurify';
 import { toast } from 'react-toastify';
+import { onSnapshot, doc, collection, query, where, orderBy } from 'firebase/firestore';
+import { db } from '../../utils/firebase';
 import './AgentDetail.css';
+
+// Star Rating Component
+const StarRating = ({ rating, onRatingChange, size = "large", interactive = false }) => {
+  const ratingValue = Number(rating) || 0;
+  const sizeClass = size === "small" ? "star-small" : "star-large";
+  
+  const handleStarClick = (selectedRating) => {
+    if (interactive && onRatingChange) {
+      onRatingChange(selectedRating);
+    }
+  };
+  
+  return (
+    <div className={`star-rating ${interactive ? 'interactive' : ''}`}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <span 
+          key={star} 
+          onClick={() => handleStarClick(star)}
+          className={interactive ? 'star-clickable' : ''}
+        >
+          {star <= ratingValue ? (
+            <FaStar className={`star-filled ${sizeClass}`} />
+          ) : (
+            <FaRegStar className={`star-empty ${sizeClass}`} />
+          )}
+        </span>
+      ))}
+    </div>
+  );
+};
+
+// Like Button Component
+const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
+  const { user } = useContext(AuthContext);
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(initialLikes);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  useEffect(() => {
+    // Update like count when initialLikes changes
+    setLikeCount(initialLikes);
+    
+    // Check if the current user has liked this agent
+    if (user && agentId) {
+      const userLikesRef = doc(db, 'user_likes', `${user.uid}_${agentId}`);
+      
+      const unsubscribe = onSnapshot(userLikesRef, (doc) => {
+        if (doc.exists()) {
+          setLiked(true);
+        } else {
+          setLiked(false);
+        }
+      });
+      
+      return () => unsubscribe();
+    }
+  }, [user, agentId, initialLikes]);
+  
+  const handleLikeToggle = async () => {
+    if (!user) {
+      toast.info('Please sign in to like this agent');
+      return;
+    }
+    
+    if (isLoading) return;
+    
+    setIsLoading(true);
+    
+    try {
+      const response = await toggleAgentLike(agentId);
+      
+      if (response.success) {
+        const newLikeCount = liked ? likeCount - 1 : likeCount + 1;
+        setLiked(!liked);
+        setLikeCount(newLikeCount);
+        
+        if (onLikeUpdate) {
+          onLikeUpdate(newLikeCount);
+        }
+      } else {
+        toast.error(response.error || 'Failed to update like');
+      }
+    } catch (err) {
+      console.error('Error toggling like:', err);
+      toast.error('Failed to update like');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  return (
+    <button 
+      className={`like-button ${liked ? 'liked' : ''} ${isLoading ? 'loading' : ''}`}
+      onClick={handleLikeToggle}
+      disabled={isLoading}
+    >
+      {liked ? <FaHeart /> : <FaRegHeart />}
+      <span className="like-count">{likeCount}</span>
+    </button>
+  );
+};
+
+// Comments/Reviews Section Component
+const CommentSection = ({ agentId, existingReviews = [] }) => {
+  const { user } = useContext(AuthContext);
+  const [comments, setComments] = useState(existingReviews);
+  const [newComment, setNewComment] = useState('');
+  const [rating, setRating] = useState(5);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [isLoadingComments, setIsLoadingComments] = useState(true);
+  
+  useEffect(() => {
+    // Load comments when component mounts or agentId changes
+    const loadComments = async () => {
+      setIsLoadingComments(true);
+      try {
+        console.log(`Loading reviews for agent ${agentId}`);
+        const response = await getAgentReviews(agentId);
+        console.log('Received reviews:', response);
+        if (response && Array.isArray(response)) {
+          setComments(response);
+        }
+      } catch (err) {
+        console.error('Error loading comments:', err);
+        setError('Failed to load comments');
+      } finally {
+        setIsLoadingComments(false);
+      }
+    };
+    
+    loadComments();
+    
+    // Set up realtime listener for new reviews
+    const reviewsQuery = query(
+      collection(db, 'agent_reviews'),
+      where('agentId', '==', agentId),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const unsubscribe = onSnapshot(reviewsQuery, (snapshot) => {
+      const updatedComments = [];
+      snapshot.forEach(doc => {
+        updatedComments.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      
+      if (updatedComments.length) {
+        setComments(updatedComments);
+      }
+    }, (error) => {
+      console.error('Error in reviews listener:', error);
+    });
+    
+    return () => unsubscribe();
+  }, [agentId]);
+  
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!user) {
+      toast.info('Please sign in to leave a review');
+      return;
+    }
+    
+    if (!newComment.trim()) {
+      setError('Please enter a comment');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      const commentData = {
+        content: newComment,
+        rating: rating
+      };
+      
+      console.log('Submitting review with data:', commentData);
+      const response = await addAgentReview(agentId, commentData);
+      console.log('Review submission response:', response);
+      
+      if (response.success) {
+        // Add the new comment to the list
+        const newCommentObj = {
+          id: response.reviewId || `temp-${Date.now()}`,
+          content: newComment,
+          rating: rating,
+          createdAt: new Date().toISOString(),
+          userId: user.uid,
+          userName: user.displayName || user.email.split('@')[0]
+        };
+        
+        // We don't need to manually update the state as the realtime listener will catch it
+        setNewComment('');
+        setRating(5);
+        toast.success('Your review has been added');
+      } else {
+        setError(response.error || 'Failed to add comment');
+      }
+    } catch (err) {
+      console.error('Error adding comment:', err);
+      setError('An error occurred while adding your review');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const formatDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (e) {
+      console.error('Error formatting date:', e);
+      return 'Invalid date';
+    }
+  };
+  
+  return (
+    <div className="comments-section">
+      <h3 className="section-heading">Reviews & Ratings</h3>
+      
+      {user && (
+        <form onSubmit={handleCommentSubmit} className="comment-form">
+          <div className="rating-input">
+            <label>Your Rating:</label>
+            <StarRating rating={rating} onRatingChange={setRating} interactive={true} />
+          </div>
+          
+          <textarea
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            placeholder="Share your thoughts about this agent..."
+            className="comment-textarea"
+            rows={4}
+          />
+          
+          {error && <div className="comment-error">{error}</div>}
+          
+          <button 
+            type="submit" 
+            className="submit-comment-btn"
+            disabled={isLoading}
+          >
+            {isLoading ? 'Submitting...' : 'Submit Review'}
+          </button>
+        </form>
+      )}
+      
+      <div className="comments-list">
+        {isLoadingComments ? (
+          <div className="loading-comments">Loading reviews...</div>
+        ) : comments.length > 0 ? (
+          comments.map(comment => (
+            <div key={comment.id} className="comment-item">
+              <div className="comment-header">
+                <div className="comment-user">
+                  <span className="user-name">{comment.userName || 'Anonymous'}</span>
+                  <span className="comment-date">{formatDate(comment.createdAt)}</span>
+                </div>
+                <StarRating rating={comment.rating} size="small" />
+              </div>
+              <div className="comment-content">{comment.content}</div>
+            </div>
+          ))
+        ) : (
+          <div className="no-comments">No reviews yet. Be the first to review!</div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const AgentDetail = () => {
   const { agentId } = useParams();
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
   const { addToCart } = useCart();
   const [agent, setAgent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -23,6 +315,10 @@ const AgentDetail = () => {
   const [downloadCount, setDownloadCount] = useState(0);
   const [viewTracked, setViewTracked] = useState(false);
   const [imageAspectRatio, setImageAspectRatio] = useState(null);
+  const [likes, setLikes] = useState([]);
+  
+  // Firebase listener for real-time updates
+  const firebaseListener = useRef(null);
   
   // Image slider refs
   const sliderRef = useRef(null);
@@ -81,19 +377,23 @@ const AgentDetail = () => {
         }
         
         setAgent(data);
+        setLikes(data.likes || []);
         
         // Fetch the download count
-        const downloads = await getDownloadCount(agentId);
+        const downloads = await getAgentDownloadCount(agentId);
         setDownloadCount(downloads);
         
         // Set initial price value if agent data is available
         if (data && data.price) {
           const basePrice = typeof data.price === 'number' ? data.price : 
-                            typeof data.price === 'string' ? parseFloat(data.price.replace(/[^0-9.]/g, '')) || 0 : 0;
+                           typeof data.price === 'string' ? parseFloat(data.price.replace(/[^0-9.]/g, '')) || 0 : 0;
           setCustomPrice(basePrice.toString());
         }
         
         setIsWishlisted(data.isWishlisted || false);
+        
+        // Set up real-time updates with Firebase
+        setupRealtimeUpdates(agentId);
       } catch (err) {
         console.error('Error loading agent:', err);
         if (err.response && err.response.status === 400) {
@@ -128,17 +428,73 @@ const AgentDetail = () => {
       console.log(`Redirecting to correct agent path: ${correctPath}`);
       navigate(correctPath, { replace: true });
     }
-  }, [agentId, viewTracked]);
+    
+    // Clean up Firebase listener on unmount
+    return () => {
+      if (firebaseListener.current) {
+        firebaseListener.current();
+      }
+    };
+  }, [agentId, viewTracked, navigate]);
+  
+  // Set up real-time updates using Firebase
+  const setupRealtimeUpdates = (id) => {
+    // Clean up previous listener
+    if (firebaseListener.current) {
+      firebaseListener.current();
+    }
+    
+    // Set up new listener
+    firebaseListener.current = onSnapshot(doc(db, 'agents', id), (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        const docData = docSnapshot.data();
+        
+        // Update only specific fields that might change
+        setAgent(prev => {
+          if (!prev) return { id, ...docData };
+          
+          return {
+            ...prev,
+            likes: docData.likes || [],
+            rating: docData.rating || prev.rating,
+            reviews: docData.reviews || prev.reviews,
+            downloadCount: docData.downloadCount || prev.downloadCount
+          };
+        });
+        
+        // Update likes separately for the like button
+        setLikes(docData.likes || []);
+        
+        // Update download count if changed
+        if (docData.downloadCount && docData.downloadCount !== downloadCount) {
+          setDownloadCount(docData.downloadCount);
+        }
+      }
+    }, (error) => {
+      console.error('Firebase listener error:', error);
+    });
+  };
 
   const handleWishlistToggle = async () => {
     if (wishlistLoading) return;
+    
+    if (!user) {
+      toast.info('Please sign in to add items to your wishlist');
+      return;
+    }
     
     try {
       setWishlistLoading(true);
       await toggleWishlist(agentId);
       setIsWishlisted(!isWishlisted);
+      
+      toast.success(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist', {
+        position: "bottom-right",
+        autoClose: 1500
+      });
     } catch (err) {
       console.error('Error toggling wishlist:', err);
+      toast.error('Failed to update wishlist');
     } finally {
       setWishlistLoading(false);
     }
@@ -222,26 +578,6 @@ const AgentDetail = () => {
     if (typeof rating === 'string') return rating;
     if (typeof rating === 'number') return rating.toFixed(1);
     return '0.0';
-  };
-
-  // Render stars for ratings
-  const renderStars = (rating) => {
-    const stars = [];
-    const ratingValue = parseFloat(rating) || 0;
-    const fullStars = Math.floor(ratingValue);
-    const hasHalfStar = ratingValue - fullStars >= 0.5;
-    
-    for (let i = 1; i <= 5; i++) {
-      if (i <= fullStars) {
-        stars.push(<FaStar key={i} className="star-filled" />);
-      } else if (i === fullStars + 1 && hasHalfStar) {
-        stars.push(<FaStar key={i} className="star-half" />);
-      } else {
-        stars.push(<FaRegStar key={i} className="star-empty" />);
-      }
-    }
-    
-    return stars;
   };
   
   // Get file type data display
@@ -350,8 +686,13 @@ const AgentDetail = () => {
       // Add to cart using the context function
       addToCart(product);
       
+      toast.success('Added to cart!', {
+        position: "bottom-right",
+        autoClose: 1500
+      });
+      
       // Update download count in the background
-      incrementDownloadCount(agentId).then(() => {
+      incrementAgentDownloadCount(agentId).then(() => {
         setDownloadCount(prev => prev + 1);
       });
     } catch (err) {
@@ -367,6 +708,16 @@ const AgentDetail = () => {
       const ratio = naturalWidth / naturalHeight;
       // Consider images with ratio less than 1 as portrait
       setImageAspectRatio(ratio < 1 ? 'portrait' : 'landscape');
+    }
+  };
+  
+  // Handle like update from LikeButton
+  const handleLikeUpdate = (newLikes) => {
+    if (agent) {
+      setAgent({
+        ...agent,
+        likes: newLikes
+      });
     }
   };
 
@@ -396,6 +747,7 @@ const AgentDetail = () => {
   const imageUrls = getImageUrls();
   const minPrice = getMinimumPrice();
   const fileDetails = getFileDetails();
+  const agentRating = agent.rating?.average || 0;
 
   return (
     <div className="agent-detail-container">
@@ -479,9 +831,14 @@ const AgentDetail = () => {
             
             <div className="rating-display">
               <div className="stars">
-                {renderStars(agent.rating?.average || 0)}
+                <StarRating rating={agentRating} />
               </div>
               <span className="rating-count">({agent.rating?.count || 0})</span>
+              <LikeButton 
+                agentId={agentId} 
+                initialLikes={likes} 
+                onLikeUpdate={handleLikeUpdate} 
+              />
             </div>
           </div>
           
@@ -541,12 +898,17 @@ const AgentDetail = () => {
               disabled={wishlistLoading}
             >
               {isWishlisted ? <FaHeart /> : <FaRegHeart />}
-              <span>Add to wishlist</span>
+              <span>{isWishlisted ? 'Added to wishlist' : 'Add to wishlist'}</span>
             </button>
             
             <button className="copy-link-btn" onClick={handleCopyLink}>
               <FaLink />
               <span>{copySuccess || 'Copy link'}</span>
+            </button>
+            
+            <button className="share-btn">
+              <FaShare />
+              <span>Share</span>
             </button>
           </div>
           
@@ -556,82 +918,92 @@ const AgentDetail = () => {
         </div>
       </div>
 
-      {/* Reviews Section */}
-      <div className="reviews-section">
-        <h2 className="section-heading">Customer Reviews</h2>
-        
-        <div className="ratings-summary">
-          <div className="rating-box">
-            <span className="big-rating">{formatRating(agent.rating?.average || 0)}</span>
-            <div className="rating-stars">{renderStars(agent.rating?.average || 0)}</div>
-            <span className="rating-total">({agent.rating?.count || 0} ratings)</span>
-          </div>
-          
-          <div className="rating-breakdown">
-            <div className="breakdown-row">
-              <span>5 stars</span>
-              <div className="progress-bar">
-                <div className="progress" style={{ width: `${agent.rating?.distribution?.['5'] || 100}%` }}></div>
-              </div>
-              <span className="percentage">{agent.rating?.distribution?.['5'] || 100}%</span>
-            </div>
-            <div className="breakdown-row">
-              <span>4 stars</span>
-              <div className="progress-bar">
-                <div className="progress" style={{ width: `${agent.rating?.distribution?.['4'] || 0}%` }}></div>
-              </div>
-              <span className="percentage">{agent.rating?.distribution?.['4'] || 0}%</span>
-            </div>
-            <div className="breakdown-row">
-              <span>3 stars</span>
-              <div className="progress-bar">
-                <div className="progress" style={{ width: `${agent.rating?.distribution?.['3'] || 0}%` }}></div>
-              </div>
-              <span className="percentage">{agent.rating?.distribution?.['3'] || 0}%</span>
-            </div>
-            <div className="breakdown-row">
-              <span>2 stars</span>
-              <div className="progress-bar">
-                <div className="progress" style={{ width: `${agent.rating?.distribution?.['2'] || 0}%` }}></div>
-              </div>
-              <span className="percentage">{agent.rating?.distribution?.['2'] || 0}%</span>
-            </div>
-            <div className="breakdown-row">
-              <span>1 star</span>
-              <div className="progress-bar">
-                <div className="progress" style={{ width: `${agent.rating?.distribution?.['1'] || 0}%` }}></div>
-              </div>
-              <span className="percentage">{agent.rating?.distribution?.['1'] || 0}%</span>
+      {/* Tabs for different sections */}
+      <div className="agent-detail-tabs">
+        <button 
+          className={`tab-button ${activeTab === 'overview' ? 'active' : ''}`}
+          onClick={() => setActiveTab('overview')}
+        >
+          Overview
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'reviews' ? 'active' : ''}`}
+          onClick={() => setActiveTab('reviews')}
+        >
+          Reviews ({agent.reviews?.length || 0})
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'related' ? 'active' : ''}`}
+          onClick={() => setActiveTab('related')}
+        >
+          Related Items
+        </button>
+      </div>
+
+      {/* Tab content */}
+      <div className="tab-content">
+        {activeTab === 'overview' && (
+          <div className="overview-tab">
+            <div className="overview-content">
+              {agent.longDescription ? (
+                <div 
+                  dangerouslySetInnerHTML={{ 
+                    __html: DOMPurify.sanitize(agent.longDescription) 
+                  }} 
+                />
+              ) : (
+                <div className="default-overview">
+                  <h3>About this agent</h3>
+                  <p>{agent.description || 'No detailed description available for this agent.'}</p>
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        )}
         
-        <div className="reviews-list">
-          {agent.reviews && agent.reviews.length > 0 ? (
-            agent.reviews.map((review) => (
-              <div key={review.id} className="review-item">
-                <div className="review-header">
-                  <div className="reviewer-info">
-                    <span className="reviewer-name">{review.userName || 'Anonymous'}</span>
-                    <span className="review-date">
-                      {review.createdAt ? new Date(review.createdAt).toLocaleDateString() : 'Unknown date'}
-                    </span>
-                  </div>
-                  <div className="review-rating">
-                    {renderStars(review.rating || 0)}
-                  </div>
-                </div>
-                <div className="review-content">
-                  <p>{review.content || 'No comments provided.'}</p>
-                </div>
+        {activeTab === 'reviews' && (
+          <div className="reviews-tab">
+            <CommentSection agentId={agentId} existingReviews={agent.reviews || []} />
+          </div>
+        )}
+        
+        {activeTab === 'related' && (
+          <div className="related-tab">
+            <h3 className="section-heading">Related Products</h3>
+            {agent.relatedAgents && agent.relatedAgents.length > 0 ? (
+              <div className="related-agents-grid">
+                {agent.relatedAgents.map(relatedAgent => (
+                  <Link 
+                    key={relatedAgent.id} 
+                    to={`/agents/${relatedAgent.id}`} 
+                    className="related-agent-card"
+                  >
+                    <div className="related-image-container">
+                      <img 
+                        src={relatedAgent.imageUrl || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"%3E%3Crect width="300" height="200" fill="%234a4de7"/%3E%3Ctext x="150" y="100" font-family="Arial" font-size="24" text-anchor="middle" fill="white"%3EAgent%3C/text%3E%3C/svg%3E'} 
+                        alt={relatedAgent.title || 'Related Agent'} 
+                      />
+                    </div>
+                    <div className="related-info">
+                      <h4>{relatedAgent.title}</h4>
+                      <div className="related-meta">
+                        <div className="related-price">
+                          {formatPrice(relatedAgent.price)}
+                        </div>
+                        <div className="related-rating">
+                          <FaStar className="star-icon" />
+                          <span>{formatRating(relatedAgent.rating?.average || 0)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
               </div>
-            ))
-          ) : (
-            <div className="no-reviews-message">
-              <p>No reviews yet. Be the first to review this product!</p>
-            </div>
-          )}
-        </div>
+            ) : (
+              <p className="no-related">No related products found.</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
