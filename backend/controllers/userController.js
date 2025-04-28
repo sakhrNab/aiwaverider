@@ -1,6 +1,7 @@
 const { db } = require('../config/firebase');
 const bcrypt = require('bcrypt');
 const { sanitizeUser } = require('../utils/sanitize');
+const admin = require('firebase-admin');
 
 // Collection reference
 const usersCollection = db.collection('users');
@@ -10,91 +11,65 @@ const usersCollection = db.collection('users');
  */
 exports.getUsers = async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      search = '', 
-      sortBy = 'createdAt', 
-      sortDirection = 'desc' 
+    const {
+      page = 1,
+      limit = 10,
+      search = '',
+      sortBy = 'createdAt', // Not supported in Auth, but kept for compatibility
+      sortDirection = 'desc' // Not supported in Auth, but kept for compatibility
     } = req.query;
 
-    // Convert to numbers
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
-    
-    // Calculate offset
     const offset = (pageNum - 1) * limitNum;
-    
-    // Start with base query
-    let query = usersCollection;
-    
-    // Add search if provided
+
+    // Fetch all users from Firebase Auth (max 1000 per call)
+    let allUsers = [];
+    let nextPageToken;
+    do {
+      const result = await admin.auth().listUsers(1000, nextPageToken);
+      allUsers = allUsers.concat(result.users);
+      nextPageToken = result.pageToken;
+    } while (nextPageToken);
+
+    // Filter by search if provided (search by email or displayName)
+    let filteredUsers = allUsers;
     if (search) {
-      // Firebase doesn't support full text search, so we have to do multiple queries
-      // This is a simple implementation - for production, consider using Algolia or ElasticSearch
       const searchLower = search.toLowerCase();
-      
-      // Get users where username, email, firstName, or lastName contains the search term
-      query = query.where('searchField', '>=', searchLower)
-                   .where('searchField', '<=', searchLower + '\uf8ff');
+      filteredUsers = allUsers.filter(user =>
+        (user.email && user.email.toLowerCase().includes(searchLower)) ||
+        (user.displayName && user.displayName.toLowerCase().includes(searchLower))
+      );
     }
-    
-    // Get total count for pagination
-    const countSnapshot = await query.count().get();
-    const totalUsers = countSnapshot.data().count;
-    
-    // Add sorting
-    if (sortBy && sortDirection) {
-      query = query.orderBy(sortBy, sortDirection);
-    }
-    
-    // Add pagination
-    query = query.limit(limitNum).offset(offset);
-    
-    // Execute query
-    const usersSnapshot = await query.get();
-    
-    // Format data
-    const users = [];
-    usersSnapshot.forEach((doc) => {
-      const userData = doc.data();
-      
-      // Helper function to safely format timestamps
-      const formatTimestamp = (timestamp) => {
-        if (!timestamp) return null;
-        // Check if it's a Firestore timestamp with toDate function
-        if (timestamp && typeof timestamp.toDate === 'function') {
-          return timestamp.toDate().toISOString();
-        }
-        // If it's already a Date object
-        if (timestamp instanceof Date) {
-          return timestamp.toISOString();
-        }
-        // If it's a string that might be ISO format already
-        if (typeof timestamp === 'string') {
-          return timestamp;
-        }
-        // Fallback
-        return null;
-      };
-      
-      users.push({
-        id: doc.id,
-        username: userData.username || userData.displayName,
-        email: userData.email,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        photoURL: userData.photoURL,
-        role: userData.role,
-        status: userData.status || 'active',
-        createdAt: formatTimestamp(userData.createdAt),
-        updatedAt: formatTimestamp(userData.updatedAt)
-      });
-    });
-    
-    // Calculate total pages
+
+    // Pagination
+    const totalUsers = filteredUsers.length;
+    const paginatedUsers = filteredUsers.slice(offset, offset + limitNum);
+
+    // Optionally join with Firestore for extra profile data (uncomment if needed)
+    // const { db } = require('../config/firebase');
+    // const usersCollection = db.collection('users');
+    // for (let i = 0; i < paginatedUsers.length; i++) {
+    //   const doc = await usersCollection.doc(paginatedUsers[i].uid).get();
+    //   if (doc.exists) {
+    //     paginatedUsers[i].profile = doc.data();
+    //   }
+    // }
+
+    // Format data for frontend
+    const users = paginatedUsers.map(user => ({
+      id: user.uid,
+      username: user.displayName || '',
+      email: user.email || '',
+      photoURL: user.photoURL || '',
+      role: user.customClaims && user.customClaims.role ? user.customClaims.role : 'user',
+      status: user.disabled ? 'disabled' : 'active',
+      createdAt: user.metadata && user.metadata.creationTime ? user.metadata.creationTime : null,
+      updatedAt: user.metadata && user.metadata.lastSignInTime ? user.metadata.lastSignInTime : null
+    }));
+
     const totalPages = Math.ceil(totalUsers / limitNum);
-    
+
     return res.json({
       users,
       currentPage: pageNum,

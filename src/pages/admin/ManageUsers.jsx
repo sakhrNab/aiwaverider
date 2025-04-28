@@ -265,7 +265,7 @@ const ManageUsers = () => {
   
   // Handle page size change
   const handleLimitChange = (e) => {
-    const newLimit = parseInt(e.target.value, 10);
+    const newLimit = parseInt(e.target.value, 100);
     
     setPagination({
       ...pagination,
@@ -388,6 +388,16 @@ const ManageUsers = () => {
       setSendingNotification(false);
     }
   };
+
+  // After the loadUsers function and before the return statement, add this useEffect:
+  useEffect(() => {
+    if (!loading && users.length === 0 && pagination.currentPage > 1) {
+      setPagination(prev => ({
+        ...prev,
+        currentPage: prev.currentPage - 1
+      }));
+    }
+  }, [users, loading, pagination.currentPage]);
 
   return (
     <AdminLayout>
@@ -573,7 +583,9 @@ const ManageUsers = () => {
                 {/* Pagination controls */}
                 <div className="pagination-controls">
                   <div className="pagination-info">
-                    Showing {(pagination.currentPage - 1) * pagination.limit + 1} to {Math.min(pagination.currentPage * pagination.limit, pagination.totalUsers)} of {pagination.totalUsers} users
+                    {users.length > 0
+                      ? `Showing ${(pagination.currentPage - 1) * pagination.limit + 1} to ${Math.min(pagination.currentPage * pagination.limit, pagination.totalUsers)} of ${pagination.totalUsers} users`
+                      : 'No users to display on this page.'}
                   </div>
                   <div className="pagination-buttons">
                     <button
