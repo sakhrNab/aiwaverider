@@ -2114,18 +2114,26 @@ export const createAgent = async (agentData) => {
       (agentData._iconFile instanceof File || 
        (typeof agentData._iconFile === 'object' && Object.keys(agentData._iconFile).length > 0));
     
+    // Add check for JSON file
+    const hasJsonFile = agentData.jsonFile && 
+      (agentData.jsonFile instanceof File || 
+       (typeof agentData.jsonFile === 'object' && Object.keys(agentData.jsonFile).length > 0));
+    
     // Check for blob URLs in imageUrl and iconUrl, which indicate files were uploaded
     const hasBlobImageUrl = agentData.imageUrl && typeof agentData.imageUrl === 'string' && agentData.imageUrl.startsWith('blob:');
     const hasBlobIconUrl = agentData.iconUrl && typeof agentData.iconUrl === 'string' && agentData.iconUrl.startsWith('blob:');
+    const hasBlobJsonFileUrl = agentData.jsonFileUrl && typeof agentData.jsonFileUrl === 'string' && agentData.jsonFileUrl.startsWith('blob:');
     
     // If we have files or blob URLs, use FormData
-    if (hasImageFile || hasIconFile || hasBlobImageUrl || hasBlobIconUrl) {
+    if (hasImageFile || hasIconFile || hasJsonFile || hasBlobImageUrl || hasBlobIconUrl || hasBlobJsonFileUrl) {
       // Use FormData to send files
       const formData = new FormData();
       console.log('does has hasImageFile', hasImageFile);
       console.log('does has hasIconFile', hasIconFile);
+      console.log('does has hasJsonFile', hasJsonFile);
       console.log('does has hasBlobImageUrl', hasBlobImageUrl);
       console.log('does has hasBlobIconUrl', hasBlobIconUrl);
+      console.log('does has hasBlobJsonFileUrl', hasBlobJsonFileUrl);
       
       // Add required fields explicitly
       console.log('angentData_imageFile instance of File', agentData._imageFile instanceof File);
@@ -2138,6 +2146,7 @@ export const createAgent = async (agentData) => {
       // Remove file fields from the JSON data to avoid duplication
       delete dataWithoutFiles._imageFile;
       delete dataWithoutFiles._iconFile;
+      delete dataWithoutFiles.jsonFile;
       
       // Check for blob URLs without corresponding files - this is an error condition
       // A blob URL without a file means the user selected a file but the file data was lost
@@ -2152,6 +2161,9 @@ export const createAgent = async (agentData) => {
       }
       if (hasBlobIconUrl) {
         dataWithoutFiles._hasBlobIconUrl = true;
+      }
+      if (hasBlobJsonFileUrl) {
+        dataWithoutFiles._hasBlobJsonFileUrl = true;
       }
       
       // Add agent data as JSON - the backend will parse this
@@ -2183,6 +2195,24 @@ export const createAgent = async (agentData) => {
         // If it's not a File instance but still has data, log warning
         console.warn('Icon file is not a File instance but contains data:', agentData._iconFile);
         formData.append('iconData', JSON.stringify(agentData._iconFile));
+      }
+      
+      // Add JSON file if present
+      if (hasJsonFile && agentData.jsonFile instanceof File) {
+        formData.append('jsonFile', agentData.jsonFile);
+        console.log('Appending JSON file:', agentData.jsonFile.name);
+        
+        // Log file details for debugging
+        console.log('JSON file details:', {
+          name: agentData.jsonFile.name,
+          type: agentData.jsonFile.type,
+          size: agentData.jsonFile.size,
+          lastModified: new Date(agentData.jsonFile.lastModified).toISOString()
+        });
+      } else if (hasJsonFile) {
+        // If it's not a File instance but still has data, log warning
+        console.warn('JSON file is not a File instance but contains data:', agentData.jsonFile);
+        formData.append('jsonFileData', JSON.stringify(agentData.jsonFile));
       }
       
       // Log all FormData entries before sending
@@ -2323,12 +2353,18 @@ export const updateAgent = async (id, agentData) => {
       (agentData._iconFile instanceof File || 
        (typeof agentData._iconFile === 'object' && Object.keys(agentData._iconFile).length > 0));
     
+    // Add check for JSON file
+    const hasJsonFile = agentData.jsonFile && 
+      (agentData.jsonFile instanceof File || 
+       (typeof agentData.jsonFile === 'object' && Object.keys(agentData.jsonFile).length > 0));
+    
     // Check for blob URLs in imageUrl and iconUrl, which indicate files were uploaded
     const hasBlobImageUrl = agentData.imageUrl && typeof agentData.imageUrl === 'string' && agentData.imageUrl.startsWith('blob:');
     const hasBlobIconUrl = agentData.iconUrl && typeof agentData.iconUrl === 'string' && agentData.iconUrl.startsWith('blob:');
+    const hasBlobJsonFileUrl = agentData.jsonFileUrl && typeof agentData.jsonFileUrl === 'string' && agentData.jsonFileUrl.startsWith('blob:');
     
     // If we have files or blob URLs, use FormData
-    if (hasImageFile || hasIconFile || hasBlobImageUrl || hasBlobIconUrl) {
+    if (hasImageFile || hasIconFile || hasJsonFile || hasBlobImageUrl || hasBlobIconUrl || hasBlobJsonFileUrl) {
       // Use FormData to send files
       const formData = new FormData();
       
@@ -2342,6 +2378,7 @@ export const updateAgent = async (id, agentData) => {
       // Remove file fields from the JSON data to avoid duplication
       delete dataWithoutFiles._imageFile;
       delete dataWithoutFiles._iconFile;
+      delete dataWithoutFiles.jsonFile;
       
       // Check for blob URLs without corresponding files - this is an error condition
       // A blob URL without a file means the user selected a file but the file data was lost
@@ -2356,6 +2393,9 @@ export const updateAgent = async (id, agentData) => {
       }
       if (hasBlobIconUrl) {
         dataWithoutFiles._hasBlobIconUrl = true;
+      }
+      if (hasBlobJsonFileUrl) {
+        dataWithoutFiles._hasBlobJsonFileUrl = true;
       }
       
       // Add agent data as JSON - the backend will parse this
@@ -2387,6 +2427,24 @@ export const updateAgent = async (id, agentData) => {
         // If it's not a File instance but still has data, log warning
         console.warn('Icon file is not a File instance but contains data:', agentData._iconFile);
         formData.append('iconData', JSON.stringify(agentData._iconFile));
+      }
+      
+      // Add JSON file if present
+      if (hasJsonFile && agentData.jsonFile instanceof File) {
+        formData.append('jsonFile', agentData.jsonFile);
+        console.log('Appending JSON file:', agentData.jsonFile.name);
+        
+        // Log file details for debugging
+        console.log('JSON file details:', {
+          name: agentData.jsonFile.name,
+          type: agentData.jsonFile.type,
+          size: agentData.jsonFile.size,
+          lastModified: new Date(agentData.jsonFile.lastModified).toISOString()
+        });
+      } else if (hasJsonFile) {
+        // If it's not a File instance but still has data, log warning
+        console.warn('JSON file is not a File instance but contains data:', agentData.jsonFile);
+        formData.append('jsonFileData', JSON.stringify(agentData.jsonFile));
       }
       
       // Log all FormData entries before sending
@@ -2764,3 +2822,75 @@ export const incrementAgentDownloadCount = async (agentId) => {
     return { success: false, error: error.message };
   }
 };
+
+/**
+ * Record that user has downloaded an agent
+ * @param {string} agentId - The ID of the agent
+ * @returns {Promise<Object>} - The response from the server
+ */
+export const recordAgentDownload = async (agentId) => {
+  try {
+    // First increment the count
+    await incrementAgentDownloadCount(agentId);
+    
+    // Then record the download in user's history
+    if (auth.currentUser) {
+      const response = await api.post(`/api/agents/${agentId}/download`);
+      return response.data;
+    }
+    
+    return { success: true, message: 'Download count updated (anonymous)' };
+  } catch (error) {
+    console.error('Error recording agent download:', error);
+    // Still return success because we don't want to block downloads
+    // if the recording fails
+    return { success: true, message: 'Download processed but not recorded' };
+  }
+};
+
+/**
+ * Check if a user can review an agent
+ * @param {string} agentId - The ID of the agent
+ * @returns {Promise<Object>} - Object with canReview and reason properties
+ */
+export const checkCanReviewAgent = async (agentId) => {
+  try {
+    if (!auth.currentUser) {
+      return { canReview: false, reason: 'Please sign in to leave a review' };
+    }
+    
+    const response = await api.get(`/api/agents/${agentId}/can-review`);
+    return response.data;
+  } catch (error) {
+    console.error('Error checking if user can review agent:', error);
+    return { 
+      canReview: false, 
+      reason: 'Error checking eligibility. Please try again later.' 
+    };
+  }
+};
+
+export async function downloadFreeAgent(agentId) {
+  try {
+    // Ensure user is authenticated
+    if (!auth.currentUser) {
+      throw new Error('You must be signed in to download agents');
+    }
+
+    const token = await auth.currentUser.getIdToken();
+    const response = await axios.post(
+      `/api/agents/${agentId}/free-download`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error('Error downloading free agent:', error);
+    throw error;
+  }
+}

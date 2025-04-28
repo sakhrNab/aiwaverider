@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { FaStar, FaRegStar, FaCheck, FaDownload, FaHeart, FaRegHeart, FaLink, FaArrowLeft, FaArrowRight, FaThumbsUp, FaComment, FaShare } from 'react-icons/fa';
+import { FaStar, FaRegStar, FaCheck, FaDownload, FaHeart, FaRegHeart, FaLink, FaArrowLeft, FaArrowRight, FaThumbsUp, FaComment, FaShare, FaCheckCircle } from 'react-icons/fa';
 import { 
   fetchAgentById, 
   toggleWishlist, 
@@ -8,14 +8,17 @@ import {
   incrementAgentDownloadCount,
   toggleAgentLike,
   getAgentReviews,
-  addAgentReview 
+  addAgentReview,
+  recordAgentDownload,
+  checkCanReviewAgent,
+  downloadFreeAgent
 } from '../../utils/api';
 import { useCart } from '../../contexts/CartContext.jsx';
 import { AuthContext } from '../../contexts/AuthContext';
 import { trackProductView } from '../../services/recommendationService';
 import DOMPurify from 'dompurify';
 import { toast } from 'react-toastify';
-import { onSnapshot, doc, collection, query, where, orderBy, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { onSnapshot, doc, collection, query, where, orderBy, getDoc, updateDoc, serverTimestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '../../utils/firebase';
 import './AgentDetail.css';
 
@@ -346,6 +349,9 @@ const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
   const [hasUserReviewed, setHasUserReviewed] = useState(false);
   const [showSignInPopup, setShowSignInPopup] = useState(false);
   const [showSignUpPopup, setShowSignUpPopup] = useState(false);
+  const [canReview, setCanReview] = useState(false);
+  const [reviewEligibilityChecked, setReviewEligibilityChecked] = useState(false);
+  const [reviewEligibilityReason, setReviewEligibilityReason] = useState('');
   
   // Toast configuration for consistent, appealing notifications
   const showToast = (type, message, options = {}) => {
@@ -463,7 +469,7 @@ const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
         unsubscribe();
       }
     };
-  }, [agentId, user]);
+  }, [agentId, user, onReviewsLoaded]);
   
   const handleOpenSignInPopup = () => {
     setShowSignInPopup(true);
@@ -478,6 +484,37 @@ const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
     setShowSignUpPopup(false);
   };
   
+  // Add useEffect to check if user can review
+  useEffect(() => {
+    if (!user) {
+      setCanReview(false);
+      setReviewEligibilityChecked(true);
+      setReviewEligibilityReason('Please sign in to leave a review');
+      return;
+    }
+    
+    const checkEligibility = async () => {
+      try {
+        // Use the new API to check if user can review
+        const eligibilityResult = await checkCanReviewAgent(agentId);
+        
+        setCanReview(eligibilityResult.canReview);
+        setReviewEligibilityReason(eligibilityResult.reason);
+        setReviewEligibilityChecked(true);
+        
+        console.log('Review eligibility result:', eligibilityResult);
+      } catch (err) {
+        console.error('Error checking review eligibility:', err);
+        setCanReview(false);
+        setReviewEligibilityReason('Error checking eligibility');
+        setReviewEligibilityChecked(true);
+      }
+    };
+    
+    checkEligibility();
+  }, [user, agentId]);
+  
+  // Update the handleCommentSubmit function to check eligibility
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
     
@@ -495,6 +532,13 @@ const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
       return;
     }
     
+    if (!canReview) {
+      showToast('warning', `⚠️ ${reviewEligibilityReason}`, {
+        icon: "⚠️"
+      });
+      return;
+    }
+    
     if (!newComment.trim()) {
       setError('Please enter a comment');
       return;
@@ -506,7 +550,10 @@ const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
     try {
       const commentData = {
         content: newComment,
-        rating: rating
+        rating: rating,
+        verificationStatus: reviewEligibilityReason === 'Verified purchase' ? 'verified_purchase' : 
+                            reviewEligibilityReason === 'Downloaded agent' ? 'verified_download' : 
+                            reviewEligibilityReason === 'Admin user' ? 'admin' : 'unverified'
       };
       
       console.log('Submitting review with data:', commentData);
@@ -573,7 +620,7 @@ const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
     }
   };
   
-  // Nice authentication prompt for users who aren't signed in
+  // Update the AuthPrompt component to show different message based on eligibility
   const AuthPrompt = () => (
     <div className="auth-prompt">
       <div className="auth-prompt-content">
@@ -600,6 +647,20 @@ const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
     </div>
   );
   
+  // Create a component for users who are signed in but not eligible to review
+  const EligibilityPrompt = () => (
+    <div className="eligibility-prompt">
+      <div className="eligibility-prompt-content">
+        <div className="eligibility-prompt-icon">
+          <FaComment className="comment-icon" />
+        </div>
+        <h3>Want to share your experience?</h3>
+        <p>{reviewEligibilityReason}</p>
+        <p>You can only review agents that you've purchased or downloaded.</p>
+      </div>
+    </div>
+  );
+  
   // Auth Popup Component
   const AuthPopup = ({ isSignIn, onClose }) => (
     <div className="auth-popup-overlay" onClick={onClose}>
@@ -618,7 +679,7 @@ const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
     <div className="comments-section">
       <h3 className="section-heading">Reviews & Ratings</h3>
       
-      {user && !hasUserReviewed ? (
+      {user && !hasUserReviewed && canReview ? (
         <form onSubmit={handleCommentSubmit} className="comment-form">
           <div className="rating-input">
             <label>Your Rating:</label>
@@ -647,6 +708,8 @@ const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
         <div className="already-reviewed-message">
           <p>You have already submitted a review for this agent. Thank you for your feedback!</p>
         </div>
+      ) : user && reviewEligibilityChecked && !canReview ? (
+        <EligibilityPrompt />
       ) : (
         <AuthPrompt />
       )}
@@ -824,7 +887,7 @@ const AgentDetail = () => {
         // Set initial price value if agent data is available
         if (data && data.price) {
           const basePrice = typeof data.price === 'number' ? data.price : 
-                           typeof data.price === 'string' ? parseFloat(data.price.replace(/[^0-9.]/g, '')) || 0 : 0;
+                            typeof data.price === 'string' ? parseFloat(data.price.replace(/[^0-9.]/g, '')) || 0 : 0;
           setCustomPrice(basePrice.toString());
         }
         
@@ -1022,7 +1085,7 @@ const AgentDetail = () => {
             };
           });
         }
-      } catch (err) {
+    } catch (err) {
         console.error('Error fetching reviews on page load:', err);
       }
     };
@@ -1290,8 +1353,14 @@ const AgentDetail = () => {
         autoClose: 3000
       });
       
-      // Update download count in the background
-      incrementAgentDownloadCount(agentId).then(() => {
+      // Record the download with the new API
+      recordAgentDownload(agentId).then(result => {
+        if (result.success) {
+          setDownloadCount(prev => prev + 1);
+        }
+      }).catch(err => {
+        console.error('Error recording download:', err);
+        // Still increment the display count since the user won't see this error
         setDownloadCount(prev => prev + 1);
       });
     } catch (err) {
@@ -1326,6 +1395,135 @@ const AgentDetail = () => {
                Array.isArray(prev.likes) ? [...Array(newLikesCount)].map(() => ({})) : newLikesCount
       };
     });
+  };
+
+  // Add a function to check if the agent is free
+  const isFreeAgent = (agent) => {
+    if (!agent) return false;
+    
+    if (agent.price === 0 || agent.price === '0' || agent.price === 'Free' || agent.price === 'free') {
+      return true;
+    }
+    
+    if (typeof agent.price === 'object' && agent.price.basePrice === 0) {
+      return true;
+    }
+    
+    if (agent.priceDetails && agent.priceDetails.basePrice === 0) {
+      return true;
+    }
+    
+    return false;
+  };
+
+  // Add a function to handle direct download for free agents
+  const handleDirectDownload = async () => {
+    if (!user) {
+      showToast('info', '👋 Please sign in to download this agent', {
+        icon: "👋",
+        autoClose: 4000
+      });
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const downloadResult = await downloadFreeAgent(agentId);
+      
+      if (downloadResult.success) {
+        // Increment download count in UI
+        setDownloadCount(prev => prev + 1);
+        
+        // Show success message
+        showToast('success', '✅ Download successful!', {
+          icon: "✅",
+          autoClose: 3000
+        });
+        
+        // If we have a download URL, download it
+        if (downloadResult.downloadUrl) {
+          try {
+            // Create a more robust download function with fallbacks
+            const downloadFile = async () => {
+              try {
+                // First try the proxy approach
+                const proxyUrl = `/api/agents/${agentId}/download-file?url=${encodeURIComponent(downloadResult.downloadUrl)}`;
+                console.log('Attempting to download via proxy:', proxyUrl);
+                
+                // Create a hidden iframe to trigger the download
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                document.body.appendChild(iframe);
+                
+                // Set up a timeout to detect if download fails
+                let downloadStarted = false;
+                const timeoutId = setTimeout(() => {
+                  if (!downloadStarted) {
+                    console.log('Proxy download timed out, trying fallback method');
+                    // Try direct link as fallback
+                    window.open(downloadResult.downloadUrl, '_blank');
+                    showToast('info', 'Using fallback download method...', {
+                      autoClose: 3000
+                    });
+                  }
+                }, 5000);
+                
+                // Set the iframe source to the proxy URL
+                iframe.src = proxyUrl;
+                downloadStarted = true;
+                
+                // Clean up the iframe after a delay
+                setTimeout(() => {
+                  clearTimeout(timeoutId);
+                  if (iframe.parentNode) {
+                    document.body.removeChild(iframe);
+                  }
+                }, 10000);
+                
+                showToast('success', '📥 File download initiated', {
+                  autoClose: 3000
+                });
+              } catch (error) {
+                console.error('Download via proxy failed:', error);
+                
+                // Fallback: Try direct download
+                console.log('Trying direct download as fallback');
+                window.open(downloadResult.downloadUrl, '_blank');
+                
+                showToast('info', 'Using alternative download method...', {
+                  autoClose: 3000
+                });
+              }
+            };
+            
+            // Start the download process
+            await downloadFile();
+            
+          } catch (error) {
+            console.error('All download methods failed:', error);
+            showToast('error', `Download failed. Please try again later.`, {
+              icon: "❌",
+              autoClose: 5000
+            });
+          }
+        } else {
+          // Show a message if no direct URL is available
+          showToast('info', 'Download processed. If download doesn\'t start automatically, check your email.', {
+            autoClose: 5000
+          });
+        }
+      } else {
+        throw new Error(downloadResult.message || 'Download failed');
+      }
+    } catch (error) {
+      console.error('Error downloading free agent:', error);
+      showToast('error', `❌ Download failed: ${error.message || 'Unknown error'}`, {
+        icon: "❌",
+        autoClose: 5000
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (loading) {
@@ -1425,7 +1623,16 @@ const AgentDetail = () => {
                   </span>
                 </>
               ) : (
-                <span className="price-value">{formatPrice(agent.price)}</span>
+                <div className={`price-value-container ${isFreeAgent(agent) ? 'free' : 'paid'}`}> 
+                  {isFreeAgent(agent) ? (
+                    <>
+                      <FaCheckCircle className="price-check" />
+                      <span className="price-value free">Free</span>
+                    </>
+                  ) : (
+                    <span className="price-value">{formatPrice(agent.price)}</span>
+                  )}
+                </div>
               )}
             </div>
             
@@ -1454,37 +1661,57 @@ const AgentDetail = () => {
           </div>
           
           <div className="price-purchase-container">
-            <div className="name-your-price">
-              <label htmlFor="custom-price">Name a fair price:</label>
-              <div className="price-input-container">
-                <span className="currency-symbol">$</span>
-                <input 
-                  type="number" 
-                  id="custom-price" 
-                  className="custom-price-input" 
-                  value={customPrice}
-                  onChange={handlePriceChange}
-                  min={minPrice}
-                  step="0.01"
-                />
+            {isFreeAgent(agent) ? (
+              // Free agent - show direct download button
+              <div className="free-download-container">
+                <div className="free-agent-notice">
+                  <span className="free-label">Free</span>
+                  <p className="free-description">This agent is available for free</p>
+                </div>
+                <button 
+                  className="download-now-btn"
+                  onClick={handleDirectDownload}
+                  disabled={loading}
+                >
+                  {loading ? 'Processing...' : 'Download Now'}
+                </button>
               </div>
-              <p className="minimum-price-note">
-                {agent.priceDetails && agent.priceDetails.basePrice > 0 && 
-                 agent.priceDetails.discountedPrice < agent.priceDetails.basePrice ? (
-                  <>The minimum price is ${minPrice.toFixed(2)} <span className="pricing-note">(Discounted from ${agent.priceDetails.basePrice.toFixed(2)})</span></>
-                ) : (
-                  <>The minimum price is {formatPrice(minPrice)}</>
-                )}
-              </p>
-            </div>
-            
-            <button 
-              className={`add-to-cart-btn ${!isPriceValid() ? 'disabled' : ''}`}
-              disabled={!isPriceValid()}
-              onClick={handleAddToCart}
-            >
-              Add to cart
-            </button>
+            ) : (
+              // Paid agent - show the normal price input and cart button
+              <>
+                <div className="name-your-price">
+                  <label htmlFor="custom-price">Name a fair price:</label>
+                  <div className="price-input-container">
+                    <span className="currency-symbol">$</span>
+                    <input 
+                      type="number" 
+                      id="custom-price" 
+                      className="custom-price-input" 
+                      value={customPrice}
+                      onChange={handlePriceChange}
+                      min={minPrice}
+                      step="0.01"
+                    />
+                  </div>
+                  <p className="minimum-price-note">
+                    {agent.priceDetails && agent.priceDetails.basePrice > 0 && 
+                     agent.priceDetails.discountedPrice < agent.priceDetails.basePrice ? (
+                      <>The minimum price is ${minPrice.toFixed(2)} <span className="pricing-note">(Discounted from ${agent.priceDetails.basePrice.toFixed(2)})</span></>
+                    ) : (
+                      <>The minimum price is {formatPrice(minPrice)}</>
+                    )}
+                  </p>
+                </div>
+                
+                <button 
+                  className={`add-to-cart-btn ${!isPriceValid() ? 'disabled' : ''}`}
+                  disabled={!isPriceValid()}
+                  onClick={handleAddToCart}
+                >
+                  Add to cart
+                </button>
+              </>
+            )}
             
             <div className="downloads-info">
               <FaDownload className="download-icon" />
@@ -1546,7 +1773,7 @@ const AgentDetail = () => {
           Related Items
         </button>
       </div>
-
+      
       {/* Tab content */}
       <div className="tab-content">
         {activeTab === 'overview' && (

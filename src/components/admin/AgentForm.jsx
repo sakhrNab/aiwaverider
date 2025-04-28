@@ -9,16 +9,22 @@ import {
   FaFeatherAlt,
   FaTools,
   FaArrowUp,
-  FaChevronRight
+  FaChevronRight,
+  FaFileUpload,
+  FaFileAlt
 } from 'react-icons/fa';
 import { getAgentPrice, updateAgentPrice } from '../../services/priceService';
 import { AuthContext } from '../../contexts/AuthContext';
 import './AgentForm.css';
+import { toast } from 'react-hot-toast';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/storage';
+import { createAgent, updateAgent } from '../../utils/api';
 
 /**
  * Form component for creating and editing agents
  */
-const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
+const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange, hideOnSubmit = false, onClose = () => {} }) => {
   // Get current user from AuthContext
   const { user } = useContext(AuthContext);
   
@@ -28,6 +34,7 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
   const pricingRef = useRef(null);
   const featuresRef = useRef(null);
   const statusRef = useRef(null);
+  const fileUploadsRef = useRef(null);  // New ref for file uploads section
   const formRef = useRef(null);
   
   // State for showing/hiding back to top button
@@ -64,30 +71,39 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
     return url && typeof url === 'string' && url.startsWith('blob:');
   };
 
-  // Safe image URL validator
+  // Validate image URL
   const isValidImageUrl = (url) => {
-    if (!url) return false;
-    if (typeof url !== 'string') return false;
+    // If URL is empty, it's not valid
+    if (!url || url.trim() === '') return false;
     
-    // Handle blob URLs separately
-    if (isBlobUrl(url)) {
-      // We can't really validate blob URLs, so we'll just return true
-      // and handle errors with the onError handler on the image
-      return true;
-    }
+    // Handle Firebase Storage URLs (they're always valid for our app)
+    if (url.includes('firebasestorage.googleapis.com')) return true;
     
-    // Detect example.com URLs which we know will fail
-    if (url.includes('example.com')) {
-      console.log('Detected example.com URL which is likely to fail:', url);
-      return false;
-    }
-    
-    // For regular URLs, do basic validation
+    // Check for valid URL format for external URLs
     try {
-      const parsedUrl = new URL(url);
-      return ['http:', 'https:', 'data:'].includes(parsedUrl.protocol);
-    } catch (error) {
+      // Try to create a URL object to validate
+      new URL(url);
+      return true;
+    } catch (e) {
+      // Handle potential relative paths (which don't parse as full URLs)
+      if (url.startsWith('/')) return true;
+      
+      console.log('Invalid URL format:', e.message);
       return false;
+    }
+  };
+
+  // Handle image preview
+  const handleImagePreview = (url, type = 'image') => {
+    console.log(`Processing ${type} preview for URL:`, url);
+    
+    if (isValidImageUrl(url)) {
+      return url;
+    } else {
+      // Return appropriate placeholder based on image type
+      return type === 'icon' 
+        ? '/images/placeholder-icon.png' 
+        : '/images/placeholder-image.png';
     }
   };
   
@@ -125,7 +141,10 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
     isVerified: false,
     isPopular: false,
     isTrending: false,
-    status: 'active'
+    status: 'active',
+    templateUrl: '',  // Add default for template URL
+    downloadUrl: '',  // Add default for download URL
+    // Add other default fields as needed
   };
   
   // Default price data to prevent uncontrolled to controlled component warnings
@@ -138,19 +157,66 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
   
   // State for form data
   const [formData, setFormData] = useState(() => {
+    console.log("Initial useState for formData, agent:", agent);
+    
     if (!agent) {
       // For new agents, use current user info for creator
       return { ...defaultFormData };
     }
     
-    // For existing agents, use the agent's data
-    const safeAgent = agent || {};
+    // Start with the agent object itself
+    let combinedAgent = { ...agent };
+    console.log("Using agent data for initialization:", combinedAgent);
+    
+    // First, parse the data field if it's a JSON string
+    let parsedOuterData = {};
+    if (agent.data && typeof agent.data === 'string') {
+      try {
+        parsedOuterData = JSON.parse(agent.data);
+        console.log("Successfully parsed outer data field (init):", parsedOuterData);
+        // Merge the parsed data into our combined data
+        combinedAgent = { ...combinedAgent, ...parsedOuterData };
+      } catch (e) {
+        console.error("Error parsing agent.data (init):", e);
+      }
+    } else if (agent.data && typeof agent.data === 'object') {
+      // The data is already an object, merge it
+      combinedAgent = { ...combinedAgent, ...agent.data };
+    }
+    
+    // Next, check if there's a nested data property inside the parsed data
+    if (parsedOuterData.data && typeof parsedOuterData.data === 'string') {
+      try {
+        const parsedInnerData = JSON.parse(parsedOuterData.data);
+        console.log("Successfully parsed nested inner data field (init):", parsedInnerData);
+        // Merge the inner parsed data, giving it highest priority
+        combinedAgent = { ...combinedAgent, ...parsedInnerData };
+      } catch (e) {
+        console.error("Error parsing nested inner data (init):", e);
+      }
+    } else if (parsedOuterData.data && typeof parsedOuterData.data === 'object') {
+      // The nested data is already an object, merge it
+      combinedAgent = { ...combinedAgent, ...parsedOuterData.data };
+    }
+    
+    // Get image URLs from various possible locations
+    const imageUrl = 
+      combinedAgent.imageUrl || 
+      (agent.image && agent.image.url) || 
+      (parsedOuterData.image && parsedOuterData.image.url) || 
+      '';
+      
+    const iconUrl = 
+      combinedAgent.iconUrl || 
+      (agent.icon && agent.icon.url) || 
+      (parsedOuterData.icon && parsedOuterData.icon.url) || 
+      '';
     
     // Helper functions for safe image handling
     const safeImageUrl = (url) => {
       // If it's a blob URL, empty string, or not valid (including example.com), use a placeholder
       if (!url || isBlobUrl(url) || !isValidImageUrl(url)) {
-        return generatePlaceholderImage('image', safeAgent.name?.charAt(0) || 'A');
+        return generatePlaceholderImage('image', combinedAgent.name?.charAt(0) || 'A');
       }
       return url;
     };
@@ -158,38 +224,67 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
     const safeIconUrl = (url) => {
       // If it's a blob URL, empty string, or not valid (including example.com), use a placeholder
       if (!url || isBlobUrl(url) || !isValidImageUrl(url)) {
-        return generatePlaceholderImage('icon', safeAgent.name?.charAt(0) || 'A');
+        return generatePlaceholderImage('icon', combinedAgent.name?.charAt(0) || 'A');
       }
       return url;
     };
     
+    // Important: Log each field to debug what's happening
+    console.log("Agent fields being used for initialization (combined):");
+    console.log("- name:", combinedAgent.name);
+    console.log("- title:", combinedAgent.title);
+    console.log("- description:", combinedAgent.description);
+    console.log("- category:", combinedAgent.category);
+    console.log("- imageUrl:", imageUrl);
+    console.log("- iconUrl:", iconUrl);
+    console.log("- features:", combinedAgent.features);
+    
     return {
       ...defaultFormData,
-      ...safeAgent,
+      ...combinedAgent,
       // Ensure these fields are always defined
-      name: safeAgent.name || '',
-      title: safeAgent.title || '',
-      description: safeAgent.description || '',
-      category: safeAgent.category || '',
-      imageUrl: safeImageUrl(safeAgent.imageUrl),
-      iconUrl: safeIconUrl(safeAgent.iconUrl),
-      version: safeAgent.version || '',
+      id: combinedAgent.id || '',
+      name: combinedAgent.name || '',
+      title: combinedAgent.title || '',
+      description: combinedAgent.description || '',
+      category: combinedAgent.category || '',
+      // Use combined image URLs
+      imageUrl: safeImageUrl(imageUrl),
+      iconUrl: safeIconUrl(iconUrl),
+      version: combinedAgent.version || '',
+      templateUrl: combinedAgent.templateUrl || '',
+      downloadUrl: combinedAgent.downloadUrl || '',
+      fileUrl: combinedAgent.fileUrl || '',
       creator: {
         ...defaultFormData.creator,
-        ...(safeAgent.creator || {}),
-        name: safeAgent.creator?.name || defaultFormData.creator.name,
-        email: safeAgent.creator?.email || defaultFormData.creator.email,
-        username: safeAgent.creator?.username || defaultFormData.creator.username,
-        role: safeAgent.creator?.role || defaultFormData.creator.role,
-        id: safeAgent.creator?.id || defaultFormData.creator.id
+        ...(combinedAgent.creator || {}),
+        name: combinedAgent.creator?.name || defaultFormData.creator.name,
+        email: combinedAgent.creator?.email || defaultFormData.creator.email,
+        username: combinedAgent.creator?.username || defaultFormData.creator.username,
+        role: combinedAgent.creator?.role || defaultFormData.creator.role,
+        id: combinedAgent.creator?.id || defaultFormData.creator.id
       },
-      features: Array.isArray(safeAgent.features) && safeAgent.features.length > 0 ? safeAgent.features : [''],
-      tags: Array.isArray(safeAgent.tags) && safeAgent.tags.length > 0 ? safeAgent.tags : ['']
+      features: Array.isArray(combinedAgent.features) && combinedAgent.features.length > 0 ? combinedAgent.features : [''],
+      tags: Array.isArray(combinedAgent.tags) && combinedAgent.tags.length > 0 ? combinedAgent.tags : [''],
+      isFree: combinedAgent.isFree ?? false,
+      isSubscription: combinedAgent.isSubscription ?? false,
+      isFeatured: combinedAgent.isFeatured ?? false,
+      isVerified: combinedAgent.isVerified ?? false,
+      isPopular: combinedAgent.isPopular ?? false,
+      isTrending: combinedAgent.isTrending ?? false,
+      status: combinedAgent.status || 'active',
+      basePrice: combinedAgent.basePrice || combinedAgent.priceDetails?.basePrice || 0,
+      discountedPrice: combinedAgent.discountedPrice || combinedAgent.priceDetails?.discountedPrice || 0,
+      currency: combinedAgent.currency || combinedAgent.priceDetails?.currency || 'USD'
     };
   });
   
   // Track original values to detect actual changes
   const [originalData, setOriginalData] = useState({});
+  
+  // State for image and icon previews
+  const [imagePreview, setImagePreview] = useState('');
+  const [iconPreview, setIconPreview] = useState('');
   
   // Initialize priceData with default values to prevent uncontrolled inputs
   const [priceData, setPriceData] = useState(() => {
@@ -211,109 +306,202 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
   const [activeTab, setActiveTab] = useState('basic');
   const [formError, setFormError] = useState(null);
   
-  // Reset form data when agent prop changes
-  useEffect(() => {
-    if (agent) {
-      console.log('Agent form received new agent data:', agent);
+  // State for JSON file upload
+  const [jsonFile, setJsonFile] = useState(null);
+  const [jsonFileName, setJsonFileName] = useState('');
+  
+  // File upload handlers
+  const [selectedImageFile, setSelectedImageFile] = useState(null);
+  const [selectedIconFile, setSelectedIconFile] = useState(null);
+  
+  // Upload image to Firebase Storage
+  const uploadImage = async (file, agentName, type = 'image') => {
+    try {
+      console.log(`Starting ${type} upload for agent: ${agentName}`);
       
-      // Store original data for change detection
-      setOriginalData({
-        ...agent,
-        ...(agent.priceDetails ? {
-          basePrice: agent.priceDetails.basePrice,
-          discountedPrice: agent.priceDetails.discountedPrice || agent.priceDetails.finalPrice,
-          currency: agent.priceDetails.currency,
-          isFree: agent.isFree,
-          isSubscription: agent.isSubscription
-        } : {})
-      });
+      // Generate a unique filename
+      const sanitizedName = agentName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      const fileName = `agents/${type}s/${sanitizedName}_${Date.now()}.${file.name.split('.').pop()}`;
       
-      // Clean up potentially problematic image URLs
-      const safeImageUrl = (url) => {
-        // If it's a blob URL, empty string, or not valid (including example.com), use a placeholder
-        if (isBlobUrl(url) || !url || !isValidImageUrl(url)) {
-          return generatePlaceholderImage('image', agent.name?.charAt(0) || 'A');
-        }
-        return url;
-      };
+      // Get storage reference
+      const storageRef = firebase.storage().ref();
+      const fileRef = storageRef.child(fileName);
       
-      const safeIconUrl = (url) => {
-        // If it's a blob URL, empty string, or not valid (including example.com), use a placeholder
-        if (isBlobUrl(url) || !url || !isValidImageUrl(url)) {
-          return generatePlaceholderImage('icon', agent.name?.charAt(0) || 'A');
-        }
-        return url;
-      };
+      // Upload the file
+      const snapshot = await fileRef.put(file);
+      console.log(`${type} upload completed:`, snapshot);
       
-      setFormData({
-        ...defaultFormData, // Start with default values for all fields
-        ...agent,           // Override with agent values
-        // Ensure these fields are always defined with empty strings as fallbacks
-        name: agent.name || '',
-        title: agent.title || '',
-        description: agent.description || '',
-        category: agent.category || '',
-        version: agent.version || '',
-        imageUrl: safeImageUrl(agent.imageUrl),
-        iconUrl: safeIconUrl(agent.iconUrl),
-        creator: {
-          ...defaultFormData.creator,
-          ...(agent.creator || {}),
-          name: agent.creator?.name || '',
-          email: agent.creator?.email || ''
-        },
-        features: Array.isArray(agent.features) && agent.features.length > 0 ? agent.features : [''],
-        tags: Array.isArray(agent.tags) && agent.tags.length > 0 ? agent.tags : ['']
-      });
+      // Get the download URL
+      const downloadUrl = await snapshot.ref.getDownloadURL();
+      console.log(`${type} download URL:`, downloadUrl);
       
-      // If agent has priceDetails, use them to initialize price data
-      if (agent.priceDetails) {
-        const initialPriceData = {
-          basePrice: agent.priceDetails.basePrice || 0,
-          discountedPrice: agent.priceDetails.discountedPrice || agent.priceDetails.finalPrice || agent.priceDetails.basePrice || 0, 
-          currency: agent.priceDetails.currency || 'USD',
-          isFree: agent.isFree || false,
-          isSubscription: agent.isSubscription || false
-        };
-        console.log('Setting initial price data from agent:', initialPriceData);
-        setPriceData(initialPriceData);
-      }
-    } else {
-      // Reset to defaults for new agent
-      setFormData({...defaultFormData});
-      setPriceData(defaultPriceData);
-      setOriginalData({});
+      return downloadUrl;
+    } catch (error) {
+      console.error(`Error uploading ${type}:`, error);
+      toast.error(`Failed to upload ${type}: ${error.message}`);
+      throw error;
     }
-  }, [agent]); // Only re-run if agent changes
+  };
+  
+  // Upload JSON file to Firebase Storage
+  const uploadJsonFile = async (file, fileName) => {
+    try {
+      console.log('Starting JSON file upload:', fileName);
+      
+      // Generate a unique filename if not provided
+      const safeFileName = fileName || `agent_${Date.now()}.json`;
+      const storagePath = `agent_templates/${safeFileName.replace(/[^a-zA-Z0-9_.]/g, '_')}`;
+      
+      // Get storage reference
+      const storageRef = firebase.storage().ref();
+      const fileRef = storageRef.child(storagePath);
+      
+      // Upload the file
+      const snapshot = await fileRef.put(file);
+      console.log('JSON file upload completed:', snapshot);
+      
+      // Get the download URL
+      const downloadUrl = await snapshot.ref.getDownloadURL();
+      console.log('JSON file download URL:', downloadUrl);
+      
+      return downloadUrl;
+    } catch (error) {
+      console.error('Error uploading JSON file:', error);
+      toast.error(`Failed to upload JSON file: ${error.message}`);
+      throw error;
+    }
+  };
+  
+  // Use effect to synchronize form data when agent prop changes
+  useEffect(() => {
+    // Only run if agent exists and has changed
+    if (agent) {
+      console.log('Agent prop changed, syncing form data:', agent);
+      
+      // Start with the agent object itself
+      let combinedData = { ...agent };
+      
+      // First, check if there's a data property that needs parsing
+      let parsedOuterData = {};
+      if (agent.data && typeof agent.data === 'string') {
+        try {
+          parsedOuterData = JSON.parse(agent.data);
+          console.log("Successfully parsed outer data field:", parsedOuterData);
+          // Merge the parsed data into our combined data
+          combinedData = { ...combinedData, ...parsedOuterData };
+        } catch (e) {
+          console.error("Error parsing agent.data:", e);
+        }
+      } else if (agent.data && typeof agent.data === 'object') {
+        // The data is already an object, merge it
+        combinedData = { ...combinedData, ...agent.data };
+      }
+      
+      // Next, check if there's a nested data property inside the parsed data
+      if (parsedOuterData.data && typeof parsedOuterData.data === 'string') {
+        try {
+          const parsedInnerData = JSON.parse(parsedOuterData.data);
+          console.log("Successfully parsed nested inner data field:", parsedInnerData);
+          // Merge the inner parsed data, giving it highest priority
+          combinedData = { ...combinedData, ...parsedInnerData };
+        } catch (e) {
+          console.error("Error parsing nested inner data:", e);
+        }
+      } else if (parsedOuterData.data && typeof parsedOuterData.data === 'object') {
+        // The nested data is already an object, merge it
+        combinedData = { ...combinedData, ...parsedOuterData.data };
+      }
+      
+      // Look for image URLs in various locations
+      const imageUrl = 
+        combinedData.imageUrl || 
+        (agent.image && agent.image.url) || 
+        (parsedOuterData.image && parsedOuterData.image.url) || 
+        '';
+        
+      const iconUrl = 
+        combinedData.iconUrl || 
+        (agent.icon && agent.icon.url) || 
+        (parsedOuterData.icon && parsedOuterData.icon.url) || 
+        '';
+      
+      // Log what we found after all parsing
+      console.log("Final combined data for form:", combinedData);
+      console.log("- title:", combinedData.title);
+      console.log("- description:", combinedData.description);
+      
+      // Update form data directly with the combined data
+      setFormData(prevData => {
+        const updatedData = {
+          ...prevData, // Keep default structure
+          // Apply the combined data
+          ...combinedData,
+          // Ensure required fields are defined
+          id: combinedData.id || prevData.id || '',
+          name: combinedData.name || prevData.name || '',
+          title: combinedData.title || prevData.title || '',
+          description: combinedData.description || prevData.description || '',
+          category: combinedData.category || prevData.category || '',
+          // Use combined image URLs
+          imageUrl: imageUrl || prevData.imageUrl,
+          iconUrl: iconUrl || prevData.iconUrl,
+          // Handle arrays
+          features: Array.isArray(combinedData.features) && combinedData.features.length > 0 
+            ? combinedData.features 
+            : prevData.features || [''],
+          tags: Array.isArray(combinedData.tags) && combinedData.tags.length > 0 
+            ? combinedData.tags 
+            : prevData.tags || [''],
+          // Price data
+          basePrice: combinedData.basePrice || combinedData.priceDetails?.basePrice || prevData.basePrice || 0,
+          discountedPrice: combinedData.discountedPrice || combinedData.priceDetails?.discountedPrice || prevData.discountedPrice || 0,
+          currency: combinedData.currency || combinedData.priceDetails?.currency || prevData.currency || 'USD',
+          isFree: combinedData.isFree ?? (combinedData.priceDetails?.isFree) ?? prevData.isFree ?? false,
+        };
+        
+        console.log('Form data updated:', updatedData);
+        return updatedData;
+      });
+      
+      // Also update price data directly from combined data
+      const priceData = {
+        basePrice: combinedData.basePrice || combinedData.priceDetails?.basePrice || 0,
+        discountedPrice: combinedData.discountedPrice || combinedData.priceDetails?.discountedPrice || 0,
+        currency: combinedData.currency || combinedData.priceDetails?.currency || 'USD',
+        isFree: combinedData.isFree ?? combinedData.priceDetails?.isFree ?? false,
+        isSubscription: combinedData.isSubscription ?? combinedData.priceDetails?.isSubscription ?? false
+      };
+      
+      setPriceData(priceData);
+      console.log('Price data updated:', priceData);
+    }
+  }, [agent]); // Only depend on agent
+  
+  // Clean up blob URLs when component unmounts
+  useEffect(() => {
+    return () => {
+      // Revoke any blob URLs to avoid memory leaks
+      if (formData.imageUrl && isBlobUrl(formData.imageUrl)) {
+        URL.revokeObjectURL(formData.imageUrl);
+      }
+      if (formData.iconUrl && isBlobUrl(formData.iconUrl)) {
+        URL.revokeObjectURL(formData.iconUrl);
+      }
+    };
+  }, [formData.imageUrl, formData.iconUrl]);
+  
+  // Debug: Log form data whenever it changes
+  useEffect(() => {
+    console.log("Current form data:", formData);
+  }, [formData]);
   
   // Skip separate price data fetch if we already have it in the agent object
   useEffect(() => {
-    if (agent && agent.id) {
-      if (agent.priceDetails) {
-        console.log('Using price data from agent object, skipping API call');
-        // We already have price data from the agent object - ensure all values are defined
-        setPriceData({
-          basePrice: agent.priceDetails?.basePrice ?? 0,
-          discountedPrice: agent.priceDetails?.discountedPrice ?? 
-                           agent.priceDetails?.finalPrice ?? 
-                           agent.priceDetails?.basePrice ?? 0,
-          currency: agent.priceDetails?.currency || 'USD',
-          isFree: agent.isFree ?? false,
-          isSubscription: agent.isSubscription ?? false
-        });
-      } else {
-        // Only fetch price if we don't have it already
-        fetchAgentPrice(agent.id);
-      }
-    } else {
-      // For new agents, set default price data
-      setPriceData({
-        basePrice: 0,
-        discountedPrice: 0, 
-        currency: 'USD',
-        isFree: true,
-        isSubscription: false
-      });
+    // We've already handled direct price data in the main useEffect
+    // This one will only handle API fetching for missing data
+    if (agent && agent.id && !agent.priceDetails && !agent.basePrice) {
+      console.log('No direct price data found, attempting API fetch for price');
+      fetchAgentPrice(agent.id);
     }
   }, [agent]);
   
@@ -527,6 +715,50 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
     }
   };
   
+  // Handle JSON file upload
+  const handleJsonFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Check if file is valid JSON
+      if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
+        setErrors(prev => ({
+          ...prev,
+          jsonFile: 'File must be a valid JSON file'
+        }));
+        return;
+      }
+      
+      // Clear error if previously set
+      if (errors.jsonFile) {
+        setErrors(prev => {
+          const newErrors = {...prev};
+          delete newErrors.jsonFile;
+          return newErrors;
+        });
+      }
+      
+      setJsonFile(file);
+      setJsonFileName(file.name);
+      
+      // Notify parent about field change
+      if (onFieldChange) {
+        onFieldChange('jsonFile', file, null);
+      }
+    }
+  };
+  
+  // Clear JSON file selection
+  const clearJsonFile = () => {
+    setJsonFile(null);
+    setJsonFileName('');
+    
+    // Notify parent about field change
+    if (onFieldChange) {
+      onFieldChange('jsonFile', null, jsonFile);
+    }
+  };
+  
   // Form validation
   const validateForm = () => {
     const newErrors = {};
@@ -555,102 +787,122 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!validateForm()) {
+    // Add console logging to help diagnose issues
+    console.log('Form submission starting with agent:', agent);
+    console.log('Current form data:', formData);
+    console.log('Current price data:', priceData);
+    
+    if (!formData.name) {
+      toast.error('Agent name is required');
       return;
     }
     
     setIsSaving(true);
     
     try {
-      // Ensure all form fields have defined values by using nullish coalescing
-      const safeFormData = {
-        ...formData,
-        name: formData.name ?? '',
-        title: formData.title ?? '',
-        description: formData.description ?? '',
-        category: formData.category ?? '',
-        version: formData.version ?? '',
-        imageUrl: formData.imageUrl ?? '',
-        // Always use the placeholder image for icon
-        iconUrl: formData.iconUrl ?? generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A'),
-        features: formData.features ?? [''],
-        tags: formData.tags ?? [''],
-        isFree: formData.isFree ?? false,
-        isSubscription: formData.isSubscription ?? false,
-        creator: {
-          ...(formData.creator || {}),
-          name: formData.creator?.name ?? user?.displayName ?? 'Admin',
-          email: formData.creator?.email ?? user?.email ?? '',
-          id: formData.creator?.id ?? user?.uid ?? '',
-          username: formData.creator?.username ?? 
-                   user?.username ?? 
-                   (formData.creator?.name?.replace(/\s+/g, '') || user?.displayName?.replace(/\s+/g, '')) ?? 
-                   user?.email?.split('@')[0] ?? 
-                   'AIWaverider',
-          role: formData.creator?.role ?? user?.role ?? 'Admin'
+      console.log('Starting form submission with data:', formData);
+      
+      // Create a clean clone without runtime-only properties
+      const finalFormData = { ...formData };
+      
+      // Define which properties should be removed before submission
+      const runtimeProperties = ['isSubmitting', 'errors', 'originalAgentData'];
+      
+      // Remove runtime-only properties
+      runtimeProperties.forEach(prop => {
+        if (finalFormData[prop] !== undefined) {
+          delete finalFormData[prop];
         }
+      });
+      
+      // Ensure all required arrays are properly initialized
+      finalFormData.features = finalFormData.features || [''];
+      finalFormData.tags = finalFormData.tags || [''];
+      
+      // Filter out empty feature and tag entries
+      finalFormData.features = finalFormData.features.filter(feature => feature.trim() !== '');
+      finalFormData.tags = finalFormData.tags.filter(tag => tag.trim() !== '');
+      
+      // Ensure we have the creator info
+      finalFormData.creator = {
+        name: finalFormData.creator?.name || 'Unknown',
+        id: finalFormData.creator?.id || user?.uid || 'unknown',
+        imageUrl: finalFormData.creator?.imageUrl || '',
+        ...finalFormData.creator
       };
       
-      // Prepare agent data with safe values
-      const agentData = {
-        ...safeFormData,
-        // Ensure dates are ISO strings
-        createdAt: safeFormData.createdAt || new Date().toISOString(),
-        dateCreated: safeFormData.dateCreated || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        // Include price details for better data consistency
-        priceDetails: {
-          basePrice: priceData?.basePrice ?? 0,
-          discountedPrice: priceData?.discountedPrice ?? priceData?.basePrice ?? 0,
-          currency: priceData?.currency || 'USD'
-        },
-        // Pass pricing flags to agent data
-        basePrice: priceData?.basePrice ?? 0,
-        discountedPrice: priceData?.discountedPrice ?? priceData?.basePrice ?? 0
-      };
+      // Add pricing details
+      finalFormData.basePrice = priceData.basePrice;
+      finalFormData.discountedPrice = priceData.discountedPrice;
+      finalFormData.currency = priceData.currency;
+      finalFormData.isFree = priceData.isFree;
+      finalFormData.isSubscription = priceData.isSubscription;
       
-      // Submit the form data
-      const savedAgent = await onSubmit(agentData);
+      // If we have image files, upload them
+      if (selectedImageFile) {
+        console.log('Uploading image file');
+        const imageUrl = await uploadImage(selectedImageFile, finalFormData.name, 'image');
+        finalFormData.imageUrl = imageUrl;
+      }
       
-      // If we got a valid agent back and it has an ID
-      if (savedAgent && savedAgent.id) {
-        try {
-          // Update agent price if needed
-          if (priceData) {
-            // Make sure we're updating with the most current price data
-            // IMPORTANT: Ensure discountedPrice is explicitly included
-            const updatedPriceData = {
-              ...priceData,
-              basePrice: priceData.basePrice,
-              discountedPrice: priceData.discountedPrice, // Explicitly include this
-              isFree: formData.isFree,
-              isSubscription: formData.isSubscription
-            };
-            
-            console.log('Submitting price data to backend:', updatedPriceData);
-            await updateAgentPrice(savedAgent.id, updatedPriceData);
+      if (selectedIconFile) {
+        console.log('Uploading icon file');
+        const iconUrl = await uploadImage(selectedIconFile, finalFormData.name, 'icon');
+        finalFormData.iconUrl = iconUrl;
+      }
+      
+      // Add jsonFile to finalFormData directly for the API to handle
+      if (jsonFile) {
+        console.log('Adding JSON file to form data');
+        finalFormData.jsonFile = jsonFile;
+        finalFormData.jsonFileName = jsonFileName || jsonFile.name;
+        
+        // No need to upload here - will be handled by the API
+        /* 
+        console.log('Uploading JSON file');
+        const jsonUrl = await uploadJsonFile(jsonFile, jsonFileName || `${finalFormData.name.toLowerCase().replace(/\s+/g, '-')}.json`);
+        finalFormData.jsonFileUrl = jsonUrl;
+        */
+      }
+      
+      console.log('Submitting final form data:', finalFormData);
+      
+      // Handle create or update
+      if (formData.id) {
+        // Update existing agent
+        await updateAgent(formData.id, finalFormData);
+        toast.success('Agent updated successfully');
+      } else {
+        // Create new agent
+        await createAgent(finalFormData);
+        toast.success('Agent created successfully');
+        
+        // Reset form for new entry if not in modal mode
+        if (!hideOnSubmit) {
+          // Revoke any blob URLs to avoid memory leaks
+          if (formData.imageUrl && isBlobUrl(formData.imageUrl)) {
+            URL.revokeObjectURL(formData.imageUrl);
           }
-        } catch (priceError) {
-          // Log the error but don't fail the whole submission
-          console.error('Error updating price:', priceError);
-        }
-        
-        // Show success message
-        setFormError(null);
-        
-        // Reset form for a new submission or close form
-        if (!agent) {
-          setFormData(defaultFormData);
+          if (formData.iconUrl && isBlobUrl(formData.iconUrl)) {
+            URL.revokeObjectURL(formData.iconUrl);
+          }
+          
+          setFormData({ ...defaultFormData });
+          setPriceData({ ...defaultPriceData });
+          setSelectedImageFile(null);
+          setSelectedIconFile(null);
+          setJsonFile(null);
+          setJsonFileName('');
         }
       }
       
-      // Call onCancel to close the form
-      if (onCancel) {
-        onCancel();
+      // Close modal if needed
+      if (hideOnSubmit) {
+        onClose();
       }
-    } catch (err) {
-      console.error('Error saving agent:', err);
-      setFormError('Failed to save agent. Please try again.');
+    } catch (error) {
+      console.error('Error submitting agent form:', error);
+      toast.error(`Error: ${error.message || 'Failed to save agent'}`);
     } finally {
       setIsSaving(false);
     }
@@ -685,6 +937,20 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
     }
   };
   
+  // Update image previews whenever formData changes
+  useEffect(() => {
+    // Set image previews based on current formData
+    if (formData.imageUrl) {
+      console.log('Setting image preview from formData:', formData.imageUrl);
+      setImagePreview(handleImagePreview(formData.imageUrl, 'image'));
+    }
+    
+    if (formData.iconUrl) {
+      console.log('Setting icon preview from formData:', formData.iconUrl);
+      setIconPreview(handleImagePreview(formData.iconUrl, 'icon'));
+    }
+  }, [formData.imageUrl, formData.iconUrl]);
+  
   // Render the agent form as a single page with sections
   return (
     <form className="agent-form" onSubmit={handleSubmit} ref={formRef}>
@@ -701,6 +967,9 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
         </div>
         <div className="section-link" onClick={() => scrollToSection(featuresRef)}>
           <FaTools /> Features
+        </div>
+        <div className="section-link" onClick={() => scrollToSection(fileUploadsRef)}>
+          <FaFileUpload /> File Uploads
         </div>
         <div className="section-link" onClick={() => scrollToSection(statusRef)}>
           <FaRegCheckCircle /> Status
@@ -859,6 +1128,7 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
                       // For preview only - actual upload happens when form is submitted
                       const imageUrl = URL.createObjectURL(e.target.files[0]);
                       console.log('Image file selected:', e.target.files[0]);
+                      setSelectedImageFile(e.target.files[0]); // Store file for upload
                       setFormData({
                         ...formData,
                         imageUrl: imageUrl,
@@ -867,6 +1137,7 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
                     } catch (error) {
                       console.error('Error creating object URL:', error);
                       // Fallback to placeholder if createObjectURL fails
+                      setSelectedImageFile(null);
                       setFormData({
                         ...formData,
                         imageUrl: generatePlaceholderImage('image', formData.name?.charAt(0) || 'A'),
@@ -953,6 +1224,44 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
                   <span>AI</span>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+        
+        <div className="form-group">
+          <label htmlFor="iconSection">Agent Icon (Optional)</label>
+          <div className="media-options">
+            <div className="media-option">
+              <input
+                type="file"
+                id="iconUpload"
+                accept="image/*"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    try {
+                      // For preview only - actual upload happens when form is submitted
+                      const iconUrl = URL.createObjectURL(e.target.files[0]);
+                      console.log('Icon file selected:', e.target.files[0]);
+                      setSelectedIconFile(e.target.files[0]); // Store file for upload
+                      setFormData({
+                        ...formData,
+                        iconUrl: iconUrl,
+                        _iconFile: e.target.files[0] // Store the file for later upload
+                      });
+                    } catch (error) {
+                      console.error('Error creating object URL:', error);
+                      // Fallback to placeholder if createObjectURL fails
+                      setSelectedIconFile(null);
+                      setFormData({
+                        ...formData,
+                        iconUrl: generatePlaceholderImage('icon', formData.name?.charAt(0) || 'A'),
+                        _iconFile: null
+                      });
+                    }
+                  }
+                }}
+              />
+              <span className="field-help">Upload Icon from Computer<br />Supported formats: JPG, PNG, GIF. Max size: 5MB</span>
             </div>
           </div>
         </div>
@@ -1074,6 +1383,85 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange }) => {
             placeholder="Education, Assistant, AI, Creative"
             rows="3"
           />
+        </div>
+      </div>
+      
+      {/* File Uploads Section - New Section */}
+      <div className="form-section" ref={fileUploadsRef} id="file-uploads">
+        <h3 className="form-section-heading"><FaFileUpload /> File Uploads</h3>
+        
+        <div className="form-group">
+          <label htmlFor="jsonFileUpload">
+            Agent JSON File
+            <span className="field-help">Upload a JSON file with agent configuration or template</span>
+          </label>
+          <div className="file-upload-container">
+            <input
+              type="file"
+              id="jsonFileUpload"
+              accept=".json,application/json"
+              onChange={handleJsonFileChange}
+              className={errors.jsonFile ? 'error' : ''}
+              style={{ display: jsonFileName ? 'none' : 'block' }}
+            />
+            
+            {jsonFileName && (
+              <div className="file-selected">
+                <FaFileAlt className="file-icon" />
+                <span className="file-name">{jsonFileName}</span>
+                <button 
+                  type="button" 
+                  className="clear-file-btn"
+                  onClick={clearJsonFile}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            
+            {errors.jsonFile && <div className="error-message">{errors.jsonFile}</div>}
+          </div>
+          <p className="file-upload-help">
+            Supported format: JSON files only. This file will be downloadable by users who purchase or access this agent.
+          </p>
+          
+          {/* Show existing file URL if available */}
+          {formData.downloadUrl && !jsonFile && (
+            <div className="existing-file">
+              <p><strong>Current file:</strong> <a href={formData.downloadUrl} target="_blank" rel="noopener noreferrer">{formData.downloadUrl.split('/').pop() || 'View file'}</a></p>
+              <p className="field-help">Upload a new file to replace the current one, or leave empty to keep it.</p>
+            </div>
+          )}
+        </div>
+        
+        <div className="form-group">
+          <label htmlFor="templateUrl">Template URL (Optional)</label>
+          <input
+            type="text"
+            id="templateUrl"
+            name="templateUrl"
+            value={formData.templateUrl}
+            onChange={handleChange}
+            placeholder="https://example.com/template.json"
+          />
+          <p className="field-help">
+            External URL to a template file. Use this if you're not uploading a file directly.
+          </p>
+        </div>
+        
+        <div className="form-group">
+          <label htmlFor="downloadUrl">Download URL (Optional)</label>
+          <input
+            type="text"
+            id="downloadUrl"
+            name="downloadUrl"
+            value={formData.downloadUrl}
+            onChange={handleChange}
+            placeholder="https://example.com/download.json"
+          />
+          <p className="field-help">
+            External URL for downloads. This will be used if no file is uploaded.
+          </p>
         </div>
       </div>
       

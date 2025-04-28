@@ -839,6 +839,8 @@ const ManageAgents = () => {
         ...agent,
         id: sanitizedAgentId,
       };
+      
+      console.log("Sanitized agent being sent to form:", sanitizedAgent);
 
       // Check if we have a recent cache entry for this agent
       const cachedAgent = agentCache[sanitizedAgentId];
@@ -847,7 +849,7 @@ const ManageAgents = () => {
 
       if (isRecentCache) {
         // If we have recent cache data, use it immediately and open the form
-        console.log("Using recently cached data for edit form");
+        console.log("Using recently cached data for edit form:", cachedAgent.data);
         setSelectedAgent(cachedAgent.data);
         setShowAgentForm(true);
 

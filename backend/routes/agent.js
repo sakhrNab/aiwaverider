@@ -92,16 +92,19 @@ router.put('/:id/combined-update', (req, res, next) => {
 // === Single agent CRUD operations ===
 router.post('/', validateFirebaseToken, upload.fields([
   { name: 'image', maxCount: 1 },
-  { name: 'icon', maxCount: 1 }
+  { name: 'icon', maxCount: 1 },
+  { name: 'jsonFile', maxCount: 1 }
 ]), safeHandler(agentsController.createAgent, 'createAgent'));
 router.get('/:id', publicCacheMiddleware({ maxAge: 600 }), safeHandler(agentsController.getAgentById, 'getAgentById'));
 router.put('/:id', validateFirebaseToken, upload.fields([
   { name: 'image', maxCount: 1 },
-  { name: 'icon', maxCount: 1 }
+  { name: 'icon', maxCount: 1 },
+  { name: 'jsonFile', maxCount: 1 }
 ]), safeHandler(agentsController.updateAgent, 'updateAgent'));
 router.patch('/:id', validateFirebaseToken, upload.fields([
   { name: 'image', maxCount: 1 },
-  { name: 'icon', maxCount: 1 }
+  { name: 'icon', maxCount: 1 },
+  { name: 'jsonFile', maxCount: 1 }
 ]), safeHandler(agentsController.updateAgent, 'updateAgent'));
 router.delete('/:id', validateFirebaseToken, safeHandler(agentsController.deleteAgent, 'deleteAgent'));
 router.post('/:id', validateFirebaseToken, safeHandler(agentsController.updateAgent, 'updateAgent'));

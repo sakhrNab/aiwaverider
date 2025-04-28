@@ -12,15 +12,34 @@ const upload = multer({
     fileSize: 5 * 1024 * 1024, // 5MB limit
   },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif/;
-    const ext = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    
-    if (ext && mimetype) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed (jpg, jpeg, png, gif)'));
+    // Check for image file types (for image and icon)
+    if (file.fieldname === 'image' || file.fieldname === 'icon') {
+      const allowedTypes = /jpeg|jpg|png|gif/;
+      const ext = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+      const mimetype = allowedTypes.test(file.mimetype);
+      
+      if (ext && mimetype) {
+        return cb(null, true);
+      } else {
+        return cb(new Error('Only image files are allowed (jpg, jpeg, png, gif)'));
+      }
     }
+    
+    // Check for JSON file types
+    if (file.fieldname === 'jsonFile') {
+      const isJson = 
+        file.originalname.toLowerCase().endsWith('.json') || 
+        file.mimetype === 'application/json';
+        
+      if (isJson) {
+        return cb(null, true);
+      } else {
+        return cb(new Error('Only JSON files are allowed for jsonFile field'));
+      }
+    }
+    
+    // Allow other file types by default
+    return cb(null, true);
   }
 });
 

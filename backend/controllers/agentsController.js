@@ -904,6 +904,7 @@ const createAgent = async (req, res) => {
     let agentData = req.body;
     let imageInfo = null;
     let iconInfo = null;
+    let jsonFileInfo = null;
     
     // Check if request contains files (multipart/form-data)
     if (req.files || req.file) {
@@ -920,12 +921,18 @@ const createAgent = async (req, res) => {
             ...parsedData,
             // Ensure name and category from form data take precedence
             name: req.body.name || parsedData.name,
-            category: req.body.category || parsedData.category
+            category: req.body.category || parsedData.category,
+            // Make sure price information is properly extracted
+            basePrice: parsedData.basePrice || req.body.basePrice || 0,
+            discountedPrice: parsedData.discountedPrice || req.body.discountedPrice,
+            currency: parsedData.currency || req.body.currency || 'USD',
+            isFree: parsedData.isFree || req.body.isFree || false
           };
           
-          // Remove _imageFile and _iconFile properties if they exist
+          // Remove _imageFile, _iconFile, and _jsonFile properties if they exist
           delete agentData._imageFile;
           delete agentData._iconFile;
+          delete agentData._jsonFile;
           
           console.log('Merged agent data:', agentData);
         } catch (parseError) {
@@ -1038,6 +1045,55 @@ const createAgent = async (req, res) => {
           }
         }
       }
+      
+      // Handle uploaded JSON file
+      if (req.files?.jsonFile || req.file?.fieldname === 'jsonFile') {
+        const jsonFile = req.files?.jsonFile?.[0] || (req.file?.fieldname === 'jsonFile' ? req.file : null);
+        
+        if (jsonFile) {
+          console.log('Uploading agent JSON file:', jsonFile.originalname);
+          
+          try {
+            // Upload to Firebase Storage
+            const storage = admin.storage();
+            const bucket = storage.bucket();
+            
+            // Generate a unique file name
+            const fileName = `agent_templates/${Date.now()}_${jsonFile.originalname.replace(/[^a-zA-Z0-9_.]/g, '_')}`;
+            const fileRef = bucket.file(fileName);
+            
+            // Upload the file
+            await fileRef.save(jsonFile.buffer, {
+              metadata: {
+                contentType: 'application/json'
+              }
+            });
+            
+            // Make file publicly accessible
+            await fileRef.makePublic();
+            
+            // Get the public URL
+            const fileUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+            console.log('JSON file uploaded successfully. URL:', fileUrl);
+            
+            // Store file info
+            jsonFileInfo = {
+              url: fileUrl,
+              fileName: fileName,
+              originalName: jsonFile.originalname,
+              contentType: 'application/json',
+              size: jsonFile.size
+            };
+            
+            // Update agent data with the new file URL
+            agentData.downloadUrl = fileUrl;
+            agentData.fileUrl = fileUrl;
+          } catch (uploadError) {
+            console.error('Error uploading JSON file to Firebase Storage:', uploadError);
+            // Continue with agent creation, but log the error
+          }
+        }
+      }
     }
     
     // Validate required fields
@@ -1101,9 +1157,58 @@ const createAgent = async (req, res) => {
       data: JSON.stringify(agentData), // Store the complete data as JSON string
       image: imageInfo || {}, // Add the image field with the file info
       icon: iconInfo || {}, // Add the icon field with the file info
+      jsonFile: jsonFileInfo || {}, // Add the JSON file info
+      downloadUrl: agentData.downloadUrl || null, // Store the download URL at top level
+      fileUrl: agentData.fileUrl || null, // Store the file URL at top level
+      templateUrl: agentData.templateUrl || null, // Store the template URL at top level
       createdAt: now,
       updatedAt: now,
-      creator: agentData.creator // Keep creator at top level for easier access
+      creator: agentData.creator, // Keep creator at top level for easier access
+      
+      // Add price data in the expected format
+      price: typeof agentData.basePrice === 'number' || typeof agentData.basePrice === 'string' 
+        ? parseFloat(agentData.basePrice) || 0 
+        : 0,
+      
+      // Add priceDetails object that UI components expect
+      priceDetails: {
+        basePrice: typeof agentData.basePrice === 'number' || typeof agentData.basePrice === 'string'
+          ? parseFloat(agentData.basePrice) || 0
+          : 0,
+        discountedPrice: typeof agentData.discountedPrice === 'number' || typeof agentData.discountedPrice === 'string'
+          ? parseFloat(agentData.discountedPrice) || 0
+          : (parseFloat(agentData.basePrice) || 0),
+        currency: agentData.currency || 'USD'
+      },
+      
+      // Add isFree flag based on price
+      isFree: (typeof agentData.basePrice === 'number' || typeof agentData.basePrice === 'string')
+        ? (parseFloat(agentData.basePrice) || 0) === 0
+        : false
+    };
+    
+    // After building finalAgentData in createAgent, add the following:
+    const basePrice = parseFloat(agentData.basePrice) || 0;
+    const discountedPrice = parseFloat(agentData.discountedPrice) || basePrice;
+    const currency = agentData.currency || 'USD';
+    const isFree = basePrice === 0 || agentData.isFree === true;
+    const isSubscription = agentData.isSubscription === true;
+    const discountPercentage = basePrice > 0 ? Math.round(((basePrice - discountedPrice) / basePrice) * 100) : 0;
+
+    finalAgentData.basePrice = basePrice;
+    finalAgentData.discountedPrice = discountedPrice;
+    finalAgentData.currency = currency;
+    finalAgentData.isFree = isFree;
+    finalAgentData.isSubscription = isSubscription;
+    finalAgentData.discountPercentage = discountPercentage;
+    finalAgentData.price = discountedPrice;
+    finalAgentData.priceDetails = {
+      basePrice,
+      discountedPrice,
+      currency,
+      isFree,
+      isSubscription,
+      discountPercentage
     };
     
     console.log('Creating agent with final data structure:', {
@@ -1111,6 +1216,8 @@ const createAgent = async (req, res) => {
       category: finalAgentData.category,
       image: imageInfo ? 'Present' : 'Not provided',
       icon: iconInfo ? 'Present' : 'Not provided',
+      jsonFile: jsonFileInfo ? 'Present' : 'Not provided',
+      downloadUrl: finalAgentData.downloadUrl || 'Not provided',
       creator: finalAgentData.creator.name
     });
     
@@ -1141,71 +1248,75 @@ const updateAgent = async (req, res) => {
       return res.status(403).json({ error: 'Only administrators can update agents' });
     }
 
-    const { agentId } = req.params;
-    console.log(`Updating agent ${agentId}`);
-    console.log('Request body received:', req.body);
-    console.log('Files received:', req.files || req.file || 'No files');
-
-    // Get the existing agent
-    const agentDoc = await db.collection('agents').doc(agentId).get();
+    // Support for both 'id' and 'agentId' parameters to avoid conflicts
+    const agentId = req.params.id || req.params.agentId;
+    
+    // Log the parameter for debugging
+    console.log('Updating agent with ID:', agentId);
+    
+    if (!agentId) {
+      return res.status(400).json({ error: 'Agent ID is required' });
+    }
+    
+    // Verify agent exists
+    console.log('Looking up agent in Firestore with ID:', agentId);
+    const agentRef = db.collection('agents').doc(agentId);
+    const agentDoc = await agentRef.get();
+    
     if (!agentDoc.exists) {
       return res.status(404).json({ error: `Agent with ID ${agentId} not found` });
     }
-
-    const existingAgent = agentDoc.data();
-    let agentData = req.body;
-    let imageInfo = existingAgent.image || null;
-    let iconInfo = existingAgent.icon || null;
     
-    // If there is existing data stored as a string, parse it
-    let existingData = {};
-    if (existingAgent.data && typeof existingAgent.data === 'string') {
-      try {
-        existingData = JSON.parse(existingAgent.data);
-      } catch (error) {
-        console.error('Error parsing existing agent data:', error);
-      }
-    }
+    // Get current agent data
+    const currentAgent = agentDoc.data();
+    
+    console.log('Request body for update:', req.body);
+    console.log('Files received for update:', req.files || req.file || 'No files');
+    
+    // Get agent data from request
+    let agentData = req.body;
+    let imageInfo = null;
+    let iconInfo = null;
+    let jsonFileInfo = null;
     
     // Check if request contains files (multipart/form-data)
     if (req.files || req.file) {
-      console.log('Files detected in request:', req.files || req.file);
+      console.log('Files detected in update request:', req.files || req.file);
       
       // If data was sent as string (from formData), parse it
       if (req.body.data && typeof req.body.data === 'string') {
         try {
           const parsedData = JSON.parse(req.body.data);
-          console.log('Parsed agent data from form data for update');
+          console.log('Parsed agent data from form data for update:', parsedData);
           
-          // Merge with existing data, then with top-level fields
+          // Merge with top-level fields from the form (they take precedence)
           agentData = {
-            ...existingData,
             ...parsedData,
-            // Ensure name and category from form data take precedence
-            name: req.body.name || parsedData.name || existingAgent.name,
-            category: req.body.category || parsedData.category || existingAgent.category
+            // Ensure fields from form data take precedence
+            name: req.body.name || parsedData.name,
+            category: req.body.category || parsedData.category,
+            description: req.body.description || parsedData.description
           };
           
-          // Remove file properties
+          // Remove file references
           delete agentData._imageFile;
           delete agentData._iconFile;
+          delete agentData._jsonFile;
           
+          console.log('Merged agent data for update:', agentData);
         } catch (parseError) {
-          console.error('Error parsing JSON from form data:', parseError);
+          console.error('Error parsing JSON from form data for update:', parseError);
           // Continue with what we have in req.body
-          agentData = { ...existingData, ...req.body };
+          agentData = req.body;
         }
-      } else {
-        // Merge with existing data
-        agentData = { ...existingData, ...agentData };
       }
       
-      // Handle uploaded image
+      // Handle uploaded image if provided
       if (req.files?.image || req.file?.fieldname === 'image') {
         const imageFile = req.files?.image?.[0] || (req.file?.fieldname === 'image' ? req.file : null);
         
         if (imageFile) {
-          console.log('Uploading updated agent image file:', imageFile.originalname);
+          console.log('Uploading new agent image file:', imageFile.originalname);
           
           try {
             // Upload to Firebase Storage
@@ -1228,9 +1339,9 @@ const updateAgent = async (req, res) => {
             
             // Get the public URL
             const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-            console.log('Image uploaded successfully. URL:', imageUrl);
+            console.log('New image uploaded successfully. URL:', imageUrl);
             
-            // Store image info separately for the image field
+            // Store image info
             imageInfo = {
               url: imageUrl,
               fileName: fileName,
@@ -1242,25 +1353,18 @@ const updateAgent = async (req, res) => {
             // Update agent data with the new image URL
             agentData.imageUrl = imageUrl;
           } catch (uploadError) {
-            console.error('Error uploading image to Firebase Storage:', uploadError);
+            console.error('Error uploading new image to Firebase Storage:', uploadError);
+            // Continue with agent update, but log the error
           }
         }
-      } else if (agentData._hasBlobImageUrl && agentData.imageUrl) {
-        // There's a blob URL in the data but no actual file was sent
-        console.log('Blob image URL detected but no file sent. This may indicate a frontend issue.');
-        
-        // Return clear error message to the frontend about the missing image file
-        return res.status(400).json({ 
-          error: 'Image file is required but was not received. Please ensure the file is properly selected and uploaded.' 
-        });
       }
       
-      // Handle uploaded icon
+      // Handle uploaded icon if provided
       if (req.files?.icon || req.file?.fieldname === 'icon') {
         const iconFile = req.files?.icon?.[0] || (req.file?.fieldname === 'icon' ? req.file : null);
         
         if (iconFile) {
-          console.log('Uploading updated agent icon file:', iconFile.originalname);
+          console.log('Uploading new agent icon file:', iconFile.originalname);
           
           try {
             // Upload to Firebase Storage
@@ -1283,7 +1387,7 @@ const updateAgent = async (req, res) => {
             
             // Get the public URL
             const iconUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-            console.log('Icon uploaded successfully. URL:', iconUrl);
+            console.log('New icon uploaded successfully. URL:', iconUrl);
             
             // Store icon info
             iconInfo = {
@@ -1297,44 +1401,178 @@ const updateAgent = async (req, res) => {
             // Update agent data with the new icon URL
             agentData.iconUrl = iconUrl;
           } catch (uploadError) {
-            console.error('Error uploading icon to Firebase Storage:', uploadError);
+            console.error('Error uploading new icon to Firebase Storage:', uploadError);
+            // Continue with agent update, but log the error
           }
         }
       }
-    } else {
-      // No files, just merge with existing data
-      agentData = { ...existingData, ...agentData };
+      
+      // Handle uploaded JSON file if provided
+      if (req.files?.jsonFile || req.file?.fieldname === 'jsonFile') {
+        const jsonFile = req.files?.jsonFile?.[0] || (req.file?.fieldname === 'jsonFile' ? req.file : null);
+        
+        if (jsonFile) {
+          console.log('Uploading new agent JSON file:', jsonFile.originalname);
+          
+          try {
+            // Upload to Firebase Storage
+            const storage = admin.storage();
+            const bucket = storage.bucket();
+            
+            // Generate a unique file name
+            const fileName = `agent_templates/${Date.now()}_${jsonFile.originalname.replace(/[^a-zA-Z0-9_.]/g, '_')}`;
+            const fileRef = bucket.file(fileName);
+            
+            // Upload the file
+            await fileRef.save(jsonFile.buffer, {
+              metadata: {
+                contentType: 'application/json'
+              }
+            });
+            
+            // Make file publicly accessible
+            await fileRef.makePublic();
+            
+            // Get the public URL
+            const fileUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+            console.log('New JSON file uploaded successfully. URL:', fileUrl);
+            
+            // Store file info
+            jsonFileInfo = {
+              url: fileUrl,
+              fileName: fileName,
+              originalName: jsonFile.originalname,
+              contentType: 'application/json',
+              size: jsonFile.size
+            };
+            
+            // Update agent data with the new file URL
+            agentData.downloadUrl = fileUrl;
+            agentData.fileUrl = fileUrl;
+          } catch (uploadError) {
+            console.error('Error uploading new JSON file to Firebase Storage:', uploadError);
+            // Continue with agent update, but log the error
+          }
+        }
+      }
     }
     
-    // Update timestamps
+    // Validate required fields
+    if (!agentData.name || !agentData.category) {
+      return res.status(400).json({ error: 'Name and category are required' });
+    }
+    
+    // Update timestamp
     const now = new Date().toISOString();
     agentData.updatedAt = now;
     
-    // Create the final agent document structure
-    const finalAgentData = {
+    // Keep creator information from existing agent if not provided
+    if (!agentData.creator && currentAgent.creator) {
+      agentData.creator = currentAgent.creator;
+    }
+    
+    // Keep existing URLs if not updated
+    if (!agentData.imageUrl && currentAgent.imageUrl) {
+      agentData.imageUrl = currentAgent.imageUrl;
+    }
+    
+    if (!agentData.iconUrl && currentAgent.iconUrl) {
+      agentData.iconUrl = currentAgent.iconUrl;
+    }
+    
+    // Keep existing download URLs if not uploaded
+    if (!agentData.downloadUrl && currentAgent.downloadUrl) {
+      agentData.downloadUrl = currentAgent.downloadUrl;
+    }
+    
+    if (!agentData.fileUrl && currentAgent.fileUrl) {
+      agentData.fileUrl = currentAgent.fileUrl;
+    }
+    
+    // Create the update data
+    const updateData = {
       name: agentData.name,
       category: agentData.category,
-      data: JSON.stringify(agentData), // Store the complete data as JSON string
-      image: imageInfo || {}, // Add the image field with the file info
-      icon: iconInfo || {}, // Add the icon field with the file info
+      data: JSON.stringify(agentData),
       updatedAt: now,
-      creator: agentData.creator || existingAgent.creator // Keep creator at top level for easier access
+      
+      // Add price data in expected format
+      price: typeof agentData.basePrice === 'number' || typeof agentData.basePrice === 'string' 
+        ? parseFloat(agentData.basePrice) || 0 
+        : (currentAgent.price || 0),
+      
+      // Add priceDetails object
+      priceDetails: {
+        basePrice: typeof agentData.basePrice === 'number' || typeof agentData.basePrice === 'string'
+          ? parseFloat(agentData.basePrice) || 0
+          : (currentAgent.priceDetails?.basePrice || 0),
+        discountedPrice: typeof agentData.discountedPrice === 'number' || typeof agentData.discountedPrice === 'string'
+          ? parseFloat(agentData.discountedPrice) || 0
+          : (typeof agentData.basePrice === 'number' || typeof agentData.basePrice === 'string'
+              ? parseFloat(agentData.basePrice) || 0
+              : (currentAgent.priceDetails?.discountedPrice || currentAgent.priceDetails?.basePrice || 0)),
+        currency: agentData.currency || currentAgent.priceDetails?.currency || 'USD'
+      },
+      
+      // Add isFree flag based on price
+      isFree: (typeof agentData.basePrice === 'number' || typeof agentData.basePrice === 'string')
+        ? (parseFloat(agentData.basePrice) || 0) === 0
+        : currentAgent.isFree || false
     };
     
-    console.log('Updating agent with final data structure:', {
-      name: finalAgentData.name,
-      category: finalAgentData.category,
-      image: imageInfo ? 'Updated' : 'Unchanged',
-      icon: iconInfo ? 'Updated' : 'Unchanged'
+    // Add new file info if available
+    if (imageInfo) {
+      updateData.image = imageInfo;
+    }
+    
+    if (iconInfo) {
+      updateData.icon = iconInfo;
+    }
+    
+    if (jsonFileInfo) {
+      updateData.jsonFile = jsonFileInfo;
+      updateData.downloadUrl = jsonFileInfo.url;
+      updateData.fileUrl = jsonFileInfo.url;
+    }
+    
+    // Update URLs even if files weren't uploaded (could be external URLs)
+    if (agentData.imageUrl) {
+      updateData.imageUrl = agentData.imageUrl;
+    }
+    
+    if (agentData.iconUrl) {
+      updateData.iconUrl = agentData.iconUrl;
+    }
+    
+    if (agentData.downloadUrl) {
+      updateData.downloadUrl = agentData.downloadUrl;
+    }
+    
+    if (agentData.fileUrl) {
+      updateData.fileUrl = agentData.fileUrl;
+    }
+    
+    if (agentData.templateUrl) {
+      updateData.templateUrl = agentData.templateUrl;
+    }
+    
+    console.log('Updating agent with data:', {
+      id: agentId,
+      name: updateData.name,
+      category: updateData.category,
+      imageUpdated: !!imageInfo,
+      iconUpdated: !!iconInfo,
+      jsonFileUpdated: !!jsonFileInfo
     });
     
     // Update the agent in Firestore
-    await db.collection('agents').doc(agentId).update(finalAgentData);
+    await agentRef.update(updateData);
     
-    // Return the updated agent with its ID
+    // Get the updated agent
+    const updatedAgentDoc = await agentRef.get();
     const updatedAgent = {
       id: agentId,
-      ...finalAgentData
+      ...updatedAgentDoc.data()
     };
     
     return res.status(200).json(updatedAgent);

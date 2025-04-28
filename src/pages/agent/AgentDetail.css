@@ -12,6 +12,67 @@
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
 }
 
+[data-theme="dark"] {
+  --primary-color: #ff5a8a;
+  --primary-dark: #c2185b;
+  --text-primary: #fff;
+  --text-secondary: #ccc;
+  --text-light: #aaa;
+  --border-color: #333;
+  --background-light: #181a1b;
+  --success-color: #28d17c;
+  --error-color: #ff6b6b;
+}
+
+[data-theme="dark"] .price-value-container,
+[data-theme="dark"] .price-value-container.free,
+[data-theme="dark"] .price-value-container.paid {
+  color: #fff;
+}
+
+[data-theme="dark"] .price-value,
+[data-theme="dark"] .price-value.free {
+  color: #fff;
+}
+
+[data-theme="dark"] .price-check {
+  color: #a2e6c7;
+}
+
+[data-theme="dark"] .original-price {
+  color: #cccccc;
+}
+
+[data-theme="dark"] .discount-badge {
+  color: #fff;
+  background-color: #e53e3e;
+}
+
+[data-theme="dark"] .agent-description p {
+  color: #fff;
+}
+
+[data-theme="dark"] .agent-detail-breadcrumb a {
+  color: #fff;
+}
+
+[data-theme="dark"] .file-info .file-detail {
+  color: #fff;
+}
+
+[data-theme="dark"] .tab-button {
+  color: #fff;
+}
+
+[data-theme="dark"] .guarantee-info p {
+  color: #fff;
+}
+
+[data-theme="dark"] .default-overview h3,
+[data-theme="dark"] .default-overview p {
+  color: #fff;
+}
+
 .agent-detail-container {
   width: 100%;
   max-width: 1140px;
@@ -184,6 +245,42 @@
   flex-direction: column;
   align-items: flex-start;
   position: relative;
+}
+
+.price-value-container {
+  display: flex;
+  align-items: center;
+  background: #e6f9f0;
+  border-radius: 1.2rem;
+  padding: 0.3rem 1.2rem;
+  min-width: 80px;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 2px 8px rgba(60, 180, 120, 0.08);
+  justify-content: center;
+}
+
+.price-value-container.free {
+  background: #d0f5e8;
+  border: 2px solid #a2e6c7;
+}
+
+.price-value.free {
+  color: #1aaf5d;
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-left: 0.2rem;
+}
+
+.price-check {
+  color: #1aaf5d;
+  margin-right: 0.4rem;
+  font-size: 1.2rem;
+}
+
+.price-value-container.paid {
+  background: #f0f4fa;
+  border: 2px solid #c7d2e6;
+  color: #2d3a4a;
 }
 
 .price-value {
@@ -1318,5 +1415,74 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+/* Free download specific styles */
+.free-download-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.free-agent-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.75rem;
+  background-color: #f0f7ff;
+  border-radius: 8px;
+  border: 1px solid #d0e8ff;
+  margin-bottom: 0.5rem;
+}
+
+.free-label {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0066cc;
+  margin-bottom: 0.5rem;
+}
+
+.free-description {
+  font-size: 0.9rem;
+  color: #555;
+  margin: 0;
+}
+
+.download-now-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 1.5rem;
+  background-color: #28a745;
+  color: white;
+  font-weight: 600;
+  font-size: 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  width: 100%;
+}
+
+.download-now-btn:hover {
+  background-color: #218838;
+}
+
+.download-now-btn:disabled {
+  background-color: #8bc7a1;
+  cursor: not-allowed;
+}
+
+@media screen and (max-width: 768px) {
+  .free-download-container {
+    margin-bottom: 0.5rem;
+  }
+  
+  .download-now-btn {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
   }
 }

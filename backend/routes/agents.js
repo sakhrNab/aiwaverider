@@ -7,7 +7,21 @@ const publicCacheMiddleware = require('../middleware/publicCacheMiddleware');
 const upload = require('../middleware/upload');
 const { db } = require('../config/firebase');
 const admin = require('firebase-admin');
-const { authenticate } = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
+
+// Helper function to increment agent download count
+async function incrementAgentDownloadCount(agentId) {
+  try {
+    const agentRef = db.collection('agents').doc(agentId);
+    await agentRef.update({
+      downloadCount: admin.firestore.FieldValue.increment(1)
+    });
+    return true;
+  } catch (error) {
+    console.error(`Error incrementing download count for agent ${agentId}:`, error);
+    return false;
+  }
+}
 
 // Cache durations based on environment
 const getDefaultCacheDuration = () => {
@@ -244,16 +258,18 @@ router.post('/wishlists/:agentId', validateFirebaseToken, agentsController.toggl
 router.get('/wishlists/:wishlistId', validateFirebaseToken, agentsController.getWishlistById);
 
 // Admin endpoints for agent management (require admin role)
-// Use upload middleware to handle file uploads - set up fields for both image and icon
+// Use upload middleware to handle file uploads - set up fields for image, icon, and JSON file
 router.post('/', validateFirebaseToken, upload.fields([
   { name: 'image', maxCount: 1 },
-  { name: 'icon', maxCount: 1 }
+  { name: 'icon', maxCount: 1 },
+  { name: 'jsonFile', maxCount: 1 }
 ]), agentsController.createAgent);
 
 // Also update the patch route to handle file uploads
 router.patch('/:agentId', validateFirebaseToken, upload.fields([
   { name: 'image', maxCount: 1 },
-  { name: 'icon', maxCount: 1 }
+  { name: 'icon', maxCount: 1 },
+  { name: 'jsonFile', maxCount: 1 }
 ]), agentsController.updateAgent);
 
 router.delete('/:agentId', validateFirebaseToken, agentsController.deleteAgent);
@@ -264,9 +280,13 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // Get agent stats (download count, etc.) - public endpoint
-router.get('/:agentId/stats', async (req, res) => {
+router.get('/:agentId/stats', publicCacheMiddleware({ duration: 30 }), async (req, res) => {
   try {
     const { agentId } = req.params;
+    
+    if (!agentId) {
+      return res.status(400).json({ error: 'Agent ID is required' });
+    }
     
     // Check if agent exists
     const agentRef = db.collection('agents').doc(agentId);
@@ -279,7 +299,7 @@ router.get('/:agentId/stats', async (req, res) => {
     const agentData = agentDoc.data();
     
     // Return relevant public stats
-    res.json({
+    return res.json({
       downloadCount: agentData.downloadCount || 0,
       viewCount: agentData.viewCount || 0,
       rating: agentData.rating || { average: 0, count: 0 },
@@ -289,7 +309,10 @@ router.get('/:agentId/stats', async (req, res) => {
     
   } catch (error) {
     console.error('Error fetching agent stats:', error);
-    res.status(500).json({ error: 'Failed to fetch agent stats' });
+    return res.status(500).json({ 
+      error: 'Failed to fetch agent stats',
+      message: error.message
+    });
   }
 });
 
@@ -319,6 +342,302 @@ router.post('/:agentId/increment-downloads', async (req, res) => {
   } catch (error) {
     console.error('Error incrementing download count:', error);
     res.status(500).json({ error: 'Failed to increment download count' });
+  }
+});
+
+// ===== Adding endpoints from api.js below =====
+
+// Agent Downloads
+router.post('/:id/download', validateFirebaseToken, async (req, res) => {
+  const agentId = req.params.id;
+  const userId = req.user.uid;
+  
+  try {
+    // Create a JavaScript Date object for the download timestamp
+    const jsDate = new Date();
+    
+    // Get agent data
+    const agentDoc = await db.collection('agents').doc(agentId).get();
+    
+    if (!agentDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Agent not found' });
+    }
+    
+    const agentData = agentDoc.data();
+    
+    // Get price - for purchasing tracking
+    const price = typeof agentData.price === 'object' ? 
+      (agentData.price.basePrice || 0) : 
+      (agentData.price || 0);
+    
+    // Update user's downloads array
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      const downloads = userData.downloads || [];
+      
+      // Check if user already has this download recorded
+      const existingDownload = downloads.find(d => d.agentId === agentId);
+      
+      if (!existingDownload) {
+        // Add to downloads array - using regular Date instead of serverTimestamp
+        await userRef.update({
+          downloads: admin.firestore.FieldValue.arrayUnion({
+            agentId,
+            id: agentId,
+            title: agentData.title || 'Unknown Agent',
+            imageUrl: agentData.imageUrl || null,
+            downloadDate: jsDate, // Use JavaScript Date instead of serverTimestamp
+            price: price,
+            isFree: price === 0
+          })
+        });
+      }
+    }
+    
+    // Increment agent download count
+    await incrementAgentDownloadCount(agentId);
+    
+    // Return success with download URL
+    res.json({
+      success: true,
+      message: 'Download processed successfully',
+      downloadUrl: agentData.jsonFileUrl,
+      agent: {
+        id: agentId,
+        ...agentData,
+        downloadDate: new Date() // Also use a regular Date here
+      }
+    });
+  } catch (error) {
+    console.error('Error processing download:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error processing download',
+      error: error.message
+    });
+  }
+});
+
+// Check if user can review an agent
+router.get('/:id/can-review', validateFirebaseToken, async (req, res) => {
+  try {
+    const agentId = req.params.id;
+    const userId = req.user.uid;
+    
+    // Get user data
+    const userDoc = await db.collection('users').doc(userId).get();
+    
+    if (!userDoc.exists) {
+      return res.status(404).json({ 
+        canReview: false, 
+        reason: 'User not found' 
+      });
+    }
+    
+    const userData = userDoc.data();
+    
+    // Check if user is admin
+    if (userData.role === 'admin') {
+      return res.json({ 
+        canReview: true, 
+        reason: 'Admin user' 
+      });
+    }
+    
+    // Check if user has purchased the agent
+    if (userData.purchases && Array.isArray(userData.purchases)) {
+      const hasPurchased = userData.purchases.some(
+        purchase => purchase.agentId === agentId || purchase.productId === agentId
+      );
+      
+      if (hasPurchased) {
+        return res.json({ 
+          canReview: true, 
+          reason: 'Verified purchase' 
+        });
+      }
+    }
+    
+    // Check if user has downloaded the agent
+    if (userData.downloads && Array.isArray(userData.downloads)) {
+      const hasDownloaded = userData.downloads.some(
+        download => download.agentId === agentId || download.id === agentId
+      );
+      
+      if (hasDownloaded) {
+        return res.json({ 
+          canReview: true, 
+          reason: 'Downloaded agent' 
+        });
+      }
+    }
+    
+    // Check downloads collection as backup
+    const downloadsQuery = await db.collection('agent_downloads')
+      .where('agentId', '==', agentId)
+      .where('userId', '==', userId)
+      .limit(1)
+      .get();
+    
+    if (!downloadsQuery.empty) {
+      return res.json({ 
+        canReview: true, 
+        reason: 'Downloaded agent' 
+      });
+    }
+    
+    // User hasn't purchased or downloaded
+    return res.json({ 
+      canReview: false, 
+      reason: 'You must purchase or download this agent before reviewing' 
+    });
+    
+  } catch (error) {
+    console.error('Error checking review eligibility:', error);
+    res.status(500).json({ 
+      canReview: false, 
+      reason: 'Error checking eligibility' 
+    });
+  }
+});
+
+// Free Agent Download
+router.post('/:id/free-download', validateFirebaseToken, async (req, res) => {
+  const agentId = req.params.id;
+  const userId = req.user.uid;
+  
+  try {
+    // Create a JavaScript Date object for the download timestamp
+    const jsDate = new Date();
+    
+    // Get agent data
+    const agentDoc = await db.collection('agents').doc(agentId).get();
+    
+    if (!agentDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Agent not found' });
+    }
+    
+    const agentData = agentDoc.data();
+    
+    // Verify agent is free
+    if (agentData.price !== 0) {
+      return res.status(403).json({ success: false, message: 'This agent is not free' });
+    }
+    
+    // Update user's downloads array
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      const downloads = userData.downloads || [];
+      
+      // Check if user already has this download recorded
+      const existingDownload = downloads.find(d => d.agentId === agentId);
+      
+      if (!existingDownload) {
+        // Add to downloads array - using regular Date instead of serverTimestamp
+        await userRef.update({
+          downloads: admin.firestore.FieldValue.arrayUnion({
+            agentId,
+            id: agentId,
+            title: agentData.title || 'Unknown Agent',
+            imageUrl: agentData.imageUrl || null,
+            downloadDate: jsDate, // Use JavaScript Date instead of serverTimestamp
+            price: 0,
+            isFree: true
+          })
+        });
+      }
+    }
+    
+    // Increment agent download count
+    await incrementAgentDownloadCount(agentId);
+    
+    // Return success with download info
+    res.json({
+      success: true,
+      message: 'Free agent download processed successfully',
+      downloadUrl: agentData.jsonFileUrl || agentData.downloadUrl || agentData.fileUrl,
+      agent: {
+        id: agentId,
+        ...agentData,
+        downloadDate: new Date() // Also use a regular Date here
+      }
+    });
+  } catch (error) {
+    console.error('Error processing free download:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error processing free download',
+      error: error.message
+    });
+  }
+});
+
+// Download file proxy endpoint
+router.get('/:id/download-file', async (req, res) => {
+  try {
+    const fileUrl = req.query.url;
+    const agentId = req.params.id;
+    
+    console.log(`[DOWNLOAD PROXY] Request received for agent ${agentId}, URL: ${fileUrl}`);
+    
+    if (!fileUrl) {
+      console.log('[DOWNLOAD PROXY] Missing URL parameter');
+      return res.status(400).json({ success: false, message: 'File URL is required' });
+    }
+    
+    // Log the request details to help debug
+    console.log(`[DOWNLOAD PROXY] Proxying download for agent ${agentId}, file: ${fileUrl}`);
+    
+    // Use axios to download the file
+    const axios = require('axios');
+    const response = await axios({
+      method: 'GET',
+      url: fileUrl,
+      responseType: 'stream'
+    });
+    
+    console.log(`[DOWNLOAD PROXY] File fetched successfully, status: ${response.status}`);
+    console.log(`[DOWNLOAD PROXY] Response headers:`, response.headers);
+    
+    // Get the filename from the URL
+    const urlParts = fileUrl.split('/');
+    const filename = urlParts[urlParts.length - 1];
+    
+    // Set headers to force download
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    // If content type is in the response, use it
+    if (response.headers['content-type']) {
+      res.setHeader('Content-Type', response.headers['content-type']);
+    } else {
+      // Default to application/json for JSON files
+      if (filename.endsWith('.json')) {
+        res.setHeader('Content-Type', 'application/json');
+      } else {
+        res.setHeader('Content-Type', 'application/octet-stream');
+      }
+    }
+    
+    console.log(`[DOWNLOAD PROXY] Sending file to client: ${filename}`);
+    
+    // Pipe the file stream to the response
+    response.data.pipe(res);
+  } catch (error) {
+    console.error('[DOWNLOAD PROXY] Error proxying file download:', error);
+    
+    // Return a more helpful error response
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error downloading file',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
