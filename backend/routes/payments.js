@@ -1001,4 +1001,257 @@ const fetchCartItemsFromDatabase = async (cartId) => {
   }
 };
 
+/**
+ * Get payment status for a payment intent or checkout session
+ * @route GET /api/payments/payment-status/:id
+ */
+router.get('/payment-status/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type = 'payment_intent' } = req.query;
+    
+    if (!id) {
+      return res.status(400).json({ error: 'Payment ID is required' });
+    }
+    
+    console.log(`Checking payment status for ${type} ${id}`);
+    if (logger) logger.info(`Checking payment status for ${type} ${id}`);
+    
+    let result;
+    
+    // Handle different payment types
+    switch(type) {
+      case 'payment_intent':
+        // Get the payment intent from Stripe
+        result = await stripe.paymentIntents.retrieve(id);
+        break;
+        
+      case 'checkout_session':
+        // Get the checkout session from Stripe
+        result = await stripe.checkout.sessions.retrieve(id);
+        break;
+        
+      case 'paypal_order':
+        // Get PayPal order status
+        const accessToken = await generateAccessToken();
+        const response = await axios({
+          method: 'get',
+          url: `${PAYPAL_BASE_URL}/v2/checkout/orders/${id}`,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+        result = response.data;
+        break;
+        
+      default:
+        return res.status(400).json({ error: `Unsupported payment type: ${type}` });
+    }
+    
+    return res.status(200).json({
+      success: true,
+      id,
+      type,
+      status: result.status,
+      data: result
+    });
+  } catch (error) {
+    console.error(`Error getting payment status: ${error.message}`, error);
+    if (logger) logger.error(`Error getting payment status: ${error.message}`);
+    
+    // Handle specific error types
+    if (error.type === 'StripeInvalidRequestError') {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Payment not found or invalid ID',
+        details: error.message
+      });
+    }
+    
+    return res.status(500).json({ 
+      success: false,
+      error: 'Failed to get payment status',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * Create a crypto payment (BitPay)
+ * @route POST /api/payments/create-crypto-payment
+ */
+router.post('/create-crypto-payment', async (req, res) => {
+  try {
+    const { cartTotal, items, currency = 'USD', successUrl, cancelUrl, metadata = {} } = req.body;
+    
+    if (!cartTotal || !items) {
+      return res.status(400).json({ error: 'Invalid request body. cartTotal and items are required.' });
+    }
+    
+    // Check if BitPay is configured
+    const BITPAY_TOKEN = process.env.BITPAY_TOKEN;
+    const BITPAY_ENVIRONMENT = process.env.NODE_ENV === 'production' ? 'prod' : 'test';
+    
+    if (!BITPAY_TOKEN) {
+      console.warn('BitPay token not configured. Using mock response for development.');
+      // Return a mock response for development
+      const mockInvoiceId = `MOCK-BITPAY-${uuidv4()}`;
+      
+      return res.status(200).json({
+        success: true,
+        id: mockInvoiceId,
+        paymentUrl: `https://test.bitpay.com/invoice?id=${mockInvoiceId}`,
+        status: 'created',
+        message: 'Mock crypto payment created. BitPay is not configured.'
+      });
+    }
+    
+    // In a real implementation, you would:
+    // 1. Initialize BitPay client using their SDK
+    // 2. Create a new invoice
+    // 3. Return the payment URL and ID
+    
+    // For now, we'll log the attempt and return a mock response
+    console.log('Crypto payment requested:', {
+      amount: cartTotal,
+      currency,
+      itemCount: items.length
+    });
+    if (logger) logger.info(`Crypto payment requested: ${cartTotal} ${currency}`);
+    
+    // Create order ID that will be used to track this payment
+    const orderId = metadata.order_id || uuidv4();
+    
+    // Return a simulated response
+    return res.status(200).json({
+      success: true,
+      id: `BITPAY-${orderId}`,
+      paymentUrl: `https://test.bitpay.com/invoice?id=${orderId}`,
+      status: 'created',
+      orderId,
+      message: 'This is a simulated crypto payment endpoint. Integrate with BitPay SDK in production.'
+    });
+  } catch (error) {
+    console.error(`Error creating crypto payment: ${error.message}`, error);
+    if (logger) logger.error(`Error creating crypto payment: ${error.message}`);
+    
+    return res.status(500).json({ 
+      success: false,
+      error: 'Failed to create crypto payment',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * Check crypto payment status
+ * @route GET /api/payments/crypto-payment-status/:id
+ */
+router.get('/crypto-payment-status/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ error: 'Payment ID is required' });
+    }
+    
+    console.log(`Checking crypto payment status for ${id}`);
+    if (logger) logger.info(`Checking crypto payment status for ${id}`);
+    
+    // Check if BitPay is configured
+    const BITPAY_TOKEN = process.env.BITPAY_TOKEN;
+    
+    if (!BITPAY_TOKEN) {
+      console.warn('BitPay token not configured. Using mock response for development.');
+      
+      // For development/testing, return a mock status
+      return res.status(200).json({
+        success: true,
+        id,
+        status: 'confirmed',
+        message: 'This is a mock status. BitPay is not configured.'
+      });
+    }
+    
+    // In a real implementation, you would:
+    // 1. Initialize BitPay client
+    // 2. Fetch the invoice status
+    // 3. Return the current status
+    
+    // For now, simulate a random status for demonstration
+    const possibleStatuses = ['new', 'paid', 'confirmed', 'complete', 'expired', 'invalid'];
+    const randomStatus = possibleStatuses[Math.floor(Math.random() * possibleStatuses.length)];
+    
+    return res.status(200).json({
+      success: true,
+      id,
+      status: randomStatus,
+      message: 'This is a simulated crypto payment status. Integrate with BitPay SDK in production.'
+    });
+  } catch (error) {
+    console.error(`Error checking crypto payment status: ${error.message}`, error);
+    if (logger) logger.error(`Error checking crypto payment status: ${error.message}`);
+    
+    return res.status(500).json({ 
+      success: false,
+      error: 'Failed to check crypto payment status',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * Create a Stripe checkout session
+ * Alternative endpoint name for create-checkout-session
+ * @route POST /api/payments/create-stripe-checkout
+ */
+router.post('/create-stripe-checkout', async (req, res) => {
+  try {
+    const { items, successUrl, cancelUrl, customerId, metadata = {} } = req.body;
+    
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Invalid or empty items array' });
+    }
+    
+    // Log the request
+    console.log('Creating Stripe checkout with items:', items.length);
+    if (logger) logger.info(`Creating Stripe checkout with ${items.length} items`);
+    
+    // Create line items for the checkout session
+    const lineItems = items.map(item => ({
+      price_data: {
+        currency: 'usd',
+        product_data: {
+          name: item.name,
+          description: item.description || '',
+          images: item.image ? [item.image] : [],
+        },
+        unit_amount: formatAmountForStripe(item.price, 'usd'),
+      },
+      quantity: item.quantity || 1,
+    }));
+    
+    // Create checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: lineItems,
+      mode: 'payment',
+      customer: customerId || undefined,
+      success_url: successUrl || `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout/success?payment_id={CHECKOUT_SESSION_ID}&status=success&type=checkout_session`,
+      cancel_url: cancelUrl || `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout?canceled=true`,
+      metadata: {
+        ...metadata,
+        order_id: metadata.order_id || uuidv4()
+      },
+    });
+    
+    logPayment('STRIPE', 'CHECKOUT_SESSION_CREATED', { id: session.id });
+    return res.json({ id: session.id, url: session.url });
+  } catch (error) {
+    logPayment('STRIPE', 'CHECKOUT_SESSION_FAILED', null, error);
+    return res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
 module.exports = router; 
