@@ -436,4 +436,187 @@ export const detectUserCountry = async () => {
     console.error('Error detecting user country:', error);
     return 'US'; // Default to US if detection fails
   }
+};
+
+/**
+ * Validate Apple Pay merchant
+ * @param {string} validationURL - The validation URL provided by Apple Pay
+ * @returns {Promise<Object>} - Merchant session object from Apple
+ */
+export const validateApplePayMerchant = async (validationURL) => {
+  try {
+    console.log('Validating Apple Pay merchant with URL:', validationURL);
+    
+    if (!validationURL) {
+      throw new Error('Missing validation URL');
+    }
+    
+    const response = await fetch(`${API_URL}/api/payments/validate-apple-pay-merchant`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ validationURL }),
+    });
+    
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+        console.error('Apple Pay validation error response:', errorData);
+      } catch (parseError) {
+        const textError = await response.text();
+        console.error('Response text:', textError);
+        throw new Error(`Server returned ${response.status}: ${textError || 'No response body'}`);
+      }
+      throw new Error(errorData.error || `Failed to validate Apple Pay merchant: ${response.status}`);
+    }
+    
+    const responseData = await response.json();
+    console.log('Apple Pay merchant validation successful:', responseData);
+    return responseData;
+  } catch (error) {
+    console.error('Error validating Apple Pay merchant:', error);
+    throw error;
+  }
+};
+
+/**
+ * Process Google Pay payment
+ * @param {Object} data - Payment data including paymentToken, amount, currency, items, and email
+ * @returns {Promise<Object>} - Payment processing result
+ */
+export const processGooglePay = async (data) => {
+  try {
+    console.log('Processing Google Pay payment');
+    
+    if (!data.paymentToken) {
+      throw new Error('Missing payment token');
+    }
+    
+    const response = await fetch(`${API_URL}/api/payments/process-google-pay`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+        console.error('Google Pay processing error response:', errorData);
+      } catch (parseError) {
+        const textError = await response.text();
+        console.error('Response text:', textError);
+        throw new Error(`Server returned ${response.status}: ${textError || 'No response body'}`);
+      }
+      throw new Error(errorData.error || `Failed to process Google Pay payment: ${response.status}`);
+    }
+    
+    const responseData = await response.json();
+    console.log('Google Pay payment processed successfully:', responseData);
+    return responseData;
+  } catch (error) {
+    console.error('Error processing Google Pay payment:', error);
+    throw error;
+  }
+};
+
+/**
+ * Process Apple Pay payment
+ * @param {Object} data - Payment data including payment object, amount, currency, items, and email
+ * @returns {Promise<Object>} - Payment processing result
+ */
+export const processApplePay = async (data) => {
+  try {
+    console.log('Processing Apple Pay payment');
+    
+    if (!data.payment || !data.payment.token) {
+      throw new Error('Missing payment token');
+    }
+    
+    const response = await fetch(`${API_URL}/api/payments/process-apple-pay`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+        console.error('Apple Pay processing error response:', errorData);
+      } catch (parseError) {
+        const textError = await response.text();
+        console.error('Response text:', textError);
+        throw new Error(`Server returned ${response.status}: ${textError || 'No response body'}`);
+      }
+      throw new Error(errorData.error || `Failed to process Apple Pay payment: ${response.status}`);
+    }
+    
+    const responseData = await response.json();
+    console.log('Apple Pay payment processed successfully:', responseData);
+    return responseData;
+  } catch (error) {
+    console.error('Error processing Apple Pay payment:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get thank you page redirect URL for a specific session
+ * @param {string} sessionId - The payment session ID
+ * @returns {string} - The URL to redirect to
+ */
+export const getThankYouRedirectUrl = (sessionId) => {
+  if (!sessionId) {
+    console.error('Missing session ID for thank you redirect');
+    return `${window.location.origin}/checkout/success`;
+  }
+  
+  return `${API_URL}/api/payments/thankyou?session_id=${sessionId}`;
+};
+
+/**
+ * Create a Stripe checkout session (direct endpoint call)
+ * This is an alternative to createStripeCheckout that calls the endpoint directly
+ * @param {Object} data - Cart data including items, successUrl, cancelUrl, etc.
+ * @returns {Promise<Object>} - Checkout session with URL
+ */
+export const createCheckoutSession = async (data) => {
+  try {
+    console.log('Creating checkout session with data:', JSON.stringify(data, null, 2));
+    
+    const response = await fetch(`${API_URL}/api/payments/create-checkout-session`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+        console.error('Checkout session error response:', errorData);
+      } catch (parseError) {
+        const textError = await response.text();
+        console.error('Response text:', textError);
+        throw new Error(`Server returned ${response.status}: ${textError || 'No response body'}`);
+      }
+      throw new Error(errorData.error || `Failed to create checkout session: ${response.status}`);
+    }
+    
+    const responseData = await response.json();
+    console.log('Checkout session created successfully:', responseData);
+    return responseData;
+  } catch (error) {
+    console.error('Error creating checkout session:', error);
+    throw error;
+  }
 }; 
