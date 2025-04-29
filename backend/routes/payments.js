@@ -50,6 +50,9 @@ const { v4: uuidv4 } = require('uuid');
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_51R2ydLCWt3snxVwEJxJQNsGNifhLhfQrJEBJgPPr9W4dRDfbjh11FvYLrxQ');
 const logger = require('../utils/logger');
+const orderController = require('../controllers/orderController');
+const notificationService = require('../utils/notificationService');
+const { db } = require('../config/firebase');
 
 // Diagnostic endpoint - always responds with 200 OK to verify route is working
 router.get('/test', (req, res) => {
@@ -770,5 +773,232 @@ router.post('/process-apple-pay', async (req, res) => {
     });
   }
 });
+
+// Stripe webhook handler
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+router.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+  
+  try {
+    // Verify webhook signature
+    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+  } catch (err) {
+    logPayment('STRIPE', 'WEBHOOK_SIGNATURE_FAILED', null, err);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+  
+  // Handle the event
+  switch (event.type) {
+    case 'payment_intent.succeeded':
+      const paymentIntent = event.data.object;
+      // Log the successful payment
+      logPayment('STRIPE', 'PAYMENT_SUCCEEDED', { id: paymentIntent.id });
+      
+      try {
+        // Get cart items from metadata or fetch them based on the order ID
+        const metadata = paymentIntent.metadata || {};
+        const orderId = metadata.order_id || uuidv4();
+        logger.info(`Processing payment intent with order ID: ${orderId}`);
+        
+        // Try to retrieve items from metadata
+        let items = [];
+        try {
+          if (metadata.items) {
+            items = JSON.parse(metadata.items);
+          } else if (metadata.cart_id) {
+            // Fetch cart items from database using cart_id
+            items = await fetchCartItemsFromDatabase(metadata.cart_id);
+          }
+        } catch (parseError) {
+          logger.error(`Error parsing items metadata: ${parseError.message}`, parseError);
+        }
+        
+        // Process the payment and deliver agent templates
+        const result = await orderController.processPaymentSuccess({
+          id: paymentIntent.id,
+          amount: paymentIntent.amount,
+          currency: paymentIntent.currency,
+          payment_method_types: paymentIntent.payment_method_types,
+          metadata: {
+            ...metadata,
+            order_id: orderId // Ensure the orderId is passed to the controller
+          },
+          customer: paymentIntent.customer ? {
+            id: paymentIntent.customer,
+            email: metadata.email // Use email from metadata if available
+          } : null,
+          items: items
+        });
+        
+        // Log success with the order ID from the result
+        logger.info(`Order processed successfully: ${result.orderId}`, {
+          orderId: result.orderId, // Include orderId in the log data
+          deliveryStatus: result.deliveryStatus,
+          successCount: result.deliveryResults?.filter(r => r.success).length || 0,
+          failureCount: result.deliveryResults?.filter(r => !r.success).length || 0
+        });
+        
+        // If we have a notification service, send a success notification
+        try {
+          if (process.env.ENABLE_NOTIFICATIONS !== 'false' && metadata.email) {
+            logger.info(`Sending order success notification for order: ${result.orderId}`);
+            
+            // Send order success notification
+            await notificationService.sendOrderSuccessNotification({
+              orderId: result.orderId,
+              email: metadata.email,
+              userId: metadata.userId,
+              items: items,
+              orderTotal: paymentIntent.amount / 100, // Convert cents to dollars
+              agent: items.length === 1 ? items[0] : null
+            });
+          }
+        } catch (notificationError) {
+          logger.error(`Failed to send notification for order ${result.orderId}: ${notificationError.message}`);
+          // Non-critical error, don't throw
+        }
+      } catch (error) {
+        logger.error(`Error processing order after payment: ${error.message}`, error);
+      }
+      break;
+    case 'payment_intent.payment_failed':
+      const failedPayment = event.data.object;
+      // Handle failed payment
+      logPayment('STRIPE', 'PAYMENT_FAILED', { id: failedPayment.id });
+      break;
+    case 'checkout.session.completed':
+      const session = event.data.object;
+      // Fulfill the purchase
+      logPayment('STRIPE', 'CHECKOUT_COMPLETED', { id: session.id });
+      
+      try {
+        // Extract orderId from metadata
+        const metadata = session.metadata || {};
+        const orderId = metadata.order_id || uuidv4();
+        logger.info(`Processing checkout session with order ID: ${orderId}`);
+        
+        // Get line items from the checkout session
+        const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
+        const items = lineItems.data.map(item => ({
+          id: item.price?.product || item.price?.id || uuidv4(),
+          name: item.description,
+          price: item.price?.unit_amount / 100,
+          quantity: item.quantity || 1
+        }));
+        
+        // Process the payment and deliver agent templates
+        const result = await orderController.processPaymentSuccess({
+          id: session.id,
+          amount: session.amount_total,
+          currency: session.currency,
+          payment_method_types: [session.payment_method_types?.[0] || 'card'],
+          metadata: {
+            ...metadata,
+            order_id: orderId // Ensure the orderId is passed to the controller
+          },
+          customer: session.customer ? {
+            id: session.customer,
+            email: session.customer_email || session.customer_details?.email
+          } : null,
+          items: items
+        });
+        
+        // Log success with the order ID from the result
+        logger.info(`Checkout order processed successfully: ${result.orderId}`, {
+          orderId: result.orderId, // Include orderId in the log data
+          deliveryStatus: result.deliveryStatus,
+          successCount: result.deliveryResults?.filter(r => r.success).length || 0,
+          failureCount: result.deliveryResults?.filter(r => !r.success).length || 0
+        });
+        
+        // If we have a notification service, send a success notification
+        try {
+          // This could be an internal notification service or a third-party service
+          if (process.env.ENABLE_NOTIFICATIONS !== 'false' && (metadata.email || session.customer_email || session.customer_details?.email)) {
+            // Get the customer email from various possible sources
+            const customerEmail = metadata.email || session.customer_email || session.customer_details?.email;
+            logger.info(`Sending order success notification for order: ${result.orderId} to ${customerEmail}`);
+            
+            // Send order success notification
+            await notificationService.sendOrderSuccessNotification({
+              orderId: result.orderId,
+              email: customerEmail,
+              userId: metadata.userId,
+              items: items,
+              orderTotal: session.amount_total / 100, // Convert cents to dollars
+              agent: items.length === 1 ? items[0] : null
+            });
+          }
+        } catch (notificationError) {
+          logger.error(`Failed to send notification for order ${result.orderId}: ${notificationError.message}`);
+          // Non-critical error, don't throw
+        }
+      } catch (error) {
+        logger.error(`Error processing order after checkout: ${error.message}`, error);
+      }
+      break;
+    default:
+      // Unexpected event type
+      logPayment('STRIPE', `UNHANDLED_EVENT_${event.type}`, { id: event.id });
+  }
+  
+  // Return a 200 response to acknowledge receipt of the event
+  res.status(200).send({ received: true });
+});
+
+/**
+ * Fetch cart items from database
+ * @param {string} cartId - Cart ID
+ * @returns {Promise<Array>} - Cart items
+ */
+const fetchCartItemsFromDatabase = async (cartId) => {
+  try {
+    if (!cartId) {
+      logger.warn('No cart ID provided to fetchCartItemsFromDatabase');
+      return [];
+    }
+    
+    logger.info(`Fetching cart items for cart_id: ${cartId}`);
+    
+    // Try to find cart in Firestore - first check the carts collection
+    const cartDoc = await db.collection('carts').doc(cartId).get();
+    
+    if (cartDoc.exists) {
+      const cartData = cartDoc.data();
+      logger.info(`Found cart in 'carts' collection: ${cartId}, items: ${cartData.items?.length || 0}`);
+      return Array.isArray(cartData.items) ? cartData.items : [];
+    }
+    
+    // If not found in carts collection, check if it's stored in userCarts subcollection
+    // Some implementations store carts under user documents
+    const userCartsQuery = await db.collectionGroup('userCarts')
+      .where('id', '==', cartId)
+      .limit(1)
+      .get();
+    
+    if (!userCartsQuery.empty) {
+      const cartData = userCartsQuery.docs[0].data();
+      logger.info(`Found cart in 'userCarts' subcollection: ${cartId}, items: ${cartData.items?.length || 0}`);
+      return Array.isArray(cartData.items) ? cartData.items : [];
+    }
+    
+    // As a last resort, check if it's a userId instead of cartId (some implementations store the cart directly on the user)
+    const userDoc = await db.collection('users').doc(cartId).get();
+    
+    if (userDoc.exists && userDoc.data().cart) {
+      const userData = userDoc.data();
+      logger.info(`Found cart in 'users' collection: ${cartId}, items: ${userData.cart.items?.length || 0}`);
+      return Array.isArray(userData.cart.items) ? userData.cart.items : [];
+    }
+    
+    logger.warn(`Cart not found for cart_id: ${cartId}`);
+    return [];
+  } catch (error) {
+    logger.error(`Error fetching cart items from database: ${error.message}`, error);
+    return [];
+  }
+};
 
 module.exports = router; 
