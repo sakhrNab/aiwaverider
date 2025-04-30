@@ -2,6 +2,7 @@ import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 
+// Firebase configuration from environment variables
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -11,13 +12,21 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase if not already initialized
+// Initialize Firebase
 if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
+  try {
+    firebase.initializeApp(firebaseConfig);
+    
+    // Set persistence to LOCAL - this will maintain the auth state across page refreshes
+    try {
+      firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    } catch (error) {
+      console.error('Error setting Firebase auth persistence:', error);
+    }
+  } catch (error) {
+    console.error('Firebase initialization error:', error);
+  }
 }
-
-// Set persistence to LOCAL - this will maintain the auth state across page refreshes
-firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
 export const auth = firebase.auth();
 export const db = firebase.firestore();

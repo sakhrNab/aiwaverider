@@ -1,195 +1,189 @@
 import React, { useState, useEffect } from 'react';
-import { toast } from 'react-toastify';
-import axios from 'axios';
+import PropTypes from 'prop-types';
+import { Box, CircularProgress } from '@mui/material';
+import { processWalletPayment, handlePaymentSuccess, handlePaymentError } from '../services/paymentUtils';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-
-const ApplePayButton = ({ 
-  cartTotal, 
-  items, 
-  currency = 'usd', 
-  countryCode = 'US',
+const ApplePayButton = ({
+  amount,
+  currency = 'USD',
+  items = [],
   email,
   onSuccess,
   onError,
-  className = ''
+  buttonType = 'plain',
+  buttonColor = 'black',
+  width = '100%',
+  height = '40px',
+  borderRadius = '4px',
+  disabled = false
 }) => {
-  const [isLoading, setIsLoading] = useState(false);
   const [applePayAvailable, setApplePayAvailable] = useState(false);
-  const merchantIdentifier = import.meta.env.VITE_APPLE_MERCHANT_ID || 'merchant.com.yourcompany.app';
+  const [isLoading, setIsLoading] = useState(true);
+  const [applePaySession, setApplePaySession] = useState(null);
+
+  // Apple Pay merchant identifier from environment variables
+  const merchantIdentifier = import.meta.env.VITE_APPLE_PAY_MERCHANT_ID || 'merchant.com.yourcompany.domain';
 
   useEffect(() => {
-    checkApplePayAvailability();
-  }, []);
-
-  const checkApplePayAvailability = () => {
-    // Check if Apple Pay is available in the browser
-    if (!window.ApplePaySession) {
-      console.log('Apple Pay is not available in this browser');
-      setApplePayAvailable(false);
-      return;
-    }
-
-    // Check if the device/browser supports Apple Pay
-    if (!ApplePaySession.canMakePayments()) {
-      console.log('This device does not support Apple Pay');
-      setApplePayAvailable(false);
-      return;
-    }
-
-    // Check if the user has an active card in Wallet
-    ApplePaySession.canMakePaymentsWithActiveCard(merchantIdentifier)
-      .then(canMakePayments => {
-        if (canMakePayments) {
-          console.log('Apple Pay is available with active cards');
-          setApplePayAvailable(true);
-        } else {
-          console.log('Apple Pay is available but no active cards');
+    // Check if Apple Pay is available in this browser
+    if (window.ApplePaySession && ApplePaySession.canMakePayments()) {
+      ApplePaySession.canMakePaymentsWithActiveCard(merchantIdentifier)
+        .then((canMakePayments) => {
+          setApplePayAvailable(canMakePayments);
+          setIsLoading(false);
+        })
+        .catch((error) => {
+          console.error("Error checking Apple Pay availability:", error);
           setApplePayAvailable(false);
-        }
-      })
-      .catch(error => {
-        console.error('Error checking Apple Pay availability:', error);
-        setApplePayAvailable(false);
-      });
+          setIsLoading(false);
+        });
+    } else {
+      setApplePayAvailable(false);
+      setIsLoading(false);
+    }
+  }, [merchantIdentifier]);
+
+  const createPaymentRequest = () => {
+    return {
+      countryCode: 'US',
+      currencyCode: currency,
+      supportedNetworks: ['visa', 'masterCard', 'amex', 'discover'],
+      merchantCapabilities: ['supports3DS'],
+      total: {
+        label: 'Your Purchase',
+        amount: amount.toFixed(2),
+        type: 'final'
+      },
+      lineItems: items.map(item => ({
+        label: item.name,
+        amount: (item.price * (item.quantity || 1)).toFixed(2)
+      }))
+    };
   };
 
-  const handleApplePayClick = async () => {
-    if (!applePayAvailable) return;
-    
-    setIsLoading(true);
-    
+  const handleButtonClick = () => {
+    if (!applePayAvailable || disabled) return;
+
     try {
-      // Apple Pay payment request configuration
-      const paymentRequest = {
-        countryCode: countryCode,
-        currencyCode: currency.toUpperCase(),
-        supportedNetworks: ['visa', 'masterCard', 'amex', 'discover'],
-        merchantCapabilities: ['supports3DS'],
-        total: {
-          label: 'Your Store Name',
-          amount: cartTotal.toString()
-        },
-        lineItems: items.map(item => ({
-          label: item.title || item.name,
-          amount: (item.price * item.quantity).toString()
-        }))
-      };
-      
-      // Create an Apple Pay session
-      const session = new ApplePaySession(3, paymentRequest);
-      
-      // Handle validation
+      const request = createPaymentRequest();
+      const session = new ApplePaySession(3, request);
+
+      // Set up event handlers for the Apple Pay session
       session.onvalidatemerchant = async (event) => {
         try {
-          // Get the validation from your server
-          const response = await axios.post(`${API_URL}/api/payments/validate-apple-pay-merchant`, {
-            validationURL: event.validationURL
+          // Validate the merchant with your backend
+          const response = await fetch('/api/payments/validate-apple-pay-merchant', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              validationURL: event.validationURL
+            })
           });
-          
-          if (response.data && response.data.merchantSession) {
-            // Complete merchant validation
-            session.completeMerchantValidation(response.data.merchantSession);
-          } else {
-            throw new Error('Invalid merchant validation response');
-          }
+
+          const merchantSession = await response.json();
+          session.completeMerchantValidation(merchantSession);
         } catch (error) {
-          console.error('Merchant validation failed:', error);
+          console.error('Error validating merchant:', error);
           session.abort();
-          setIsLoading(false);
-          toast.error('Apple Pay initialization failed');
+          handlePaymentError(error, 'Apple Pay', onError);
         }
       };
-      
-      // Handle payment authorization
+
       session.onpaymentauthorized = async (event) => {
         try {
-          // Process the payment with your server
-          const response = await axios.post(`${API_URL}/api/payments/process-apple-pay`, {
-            payment: event.payment,
-            amount: cartTotal,
-            currency: currency,
-            items: items,
-            email: email
-          });
+          setIsLoading(true);
           
-          if (response.data.success) {
-            toast.success('Payment successful!');
-            if (onSuccess) onSuccess(response.data);
-            
-            // Check if backend provided a redirect URL
-            if (response.data.redirectUrl) {
-              window.location.href = response.data.redirectUrl;
-            } else {
-              // Use checkout/success with payment info for redirection
-              window.location.href = `/checkout/success?payment_id=${response.data.orderId || 'unknown'}&status=success&type=payment_intent`;
-            }
-          } else {
-            throw new Error(response.data.error || 'Payment processing failed');
-          }
+          // Process the payment with your backend
+          const result = await processWalletPayment(
+            'apple',
+            event.payment,
+            { amount, currency, items },
+            email
+          );
+
+          session.completePayment(ApplePaySession.STATUS_SUCCESS);
+          handlePaymentSuccess(result, onSuccess);
         } catch (error) {
-          console.error('Payment processing failed:', error);
+          console.error('Payment authorization failed:', error);
           session.completePayment(ApplePaySession.STATUS_FAILURE);
-          toast.error(`Apple Pay payment failed: ${error.message || 'Unknown error'}`);
-          if (onError) onError(error);
+          handlePaymentError(error, 'Apple Pay', onError);
         } finally {
           setIsLoading(false);
         }
       };
-      
-      // Handle cancellation
-      session.oncancel = (event) => {
-        console.log('Apple Pay session canceled', event);
-        setIsLoading(false);
+
+      session.oncancel = () => {
+        console.log('Apple Pay payment cancelled by user');
       };
-      
-      // Begin the Apple Pay session
+
       session.begin();
-      
+      setApplePaySession(session);
     } catch (error) {
-      console.error('Apple Pay initialization error:', error);
-      setIsLoading(false);
-      toast.error(`Apple Pay initialization failed: ${error.message || 'Unknown error'}`);
-      if (onError) onError(error);
+      console.error('Error starting Apple Pay session:', error);
+      handlePaymentError(error, 'Apple Pay', onError);
     }
   };
 
-  // If Apple Pay is not available or loading, don't render the button
+  // Style the Apple Pay button based on props
+  const buttonStyle = {
+    width,
+    height,
+    borderRadius,
+    WebkitAppearance: '-apple-pay-button',
+    ApplePayButtonType: `-apple-pay-button-type-${buttonType}`,
+    ApplePayButtonStyle: `-apple-pay-button-style-${buttonColor}`,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.6 : 1,
+    pointerEvents: disabled || isLoading ? 'none' : 'auto'
+  };
+
+  if (isLoading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" width={width} height={height}>
+        <CircularProgress size={24} />
+      </Box>
+    );
+  }
+
   if (!applePayAvailable) {
-    return null;
+    return null; // Don't render anything if Apple Pay is not available
   }
 
   return (
-    <button
-      onClick={handleApplePayClick}
-      disabled={isLoading}
-      className={`apple-pay-button ${className} ${isLoading ? 'loading' : ''}`}
-      style={{
-        backgroundColor: '#000',
-        color: '#fff',
-        border: 'none',
-        borderRadius: '4px',
-        padding: '12px 24px',
-        fontWeight: 'bold',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: isLoading ? 'wait' : 'pointer',
-        opacity: isLoading ? 0.8 : 1,
+    <Box
+      component="button"
+      type="button"
+      onClick={handleButtonClick}
+      sx={{
+        ...buttonStyle,
+        '-apple-pay-button-type': buttonType,
+        '-apple-pay-button-style': buttonColor
       }}
-    >
-      {isLoading ? (
-        <span>Processing...</span>
-      ) : (
-        <>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style={{ marginRight: '8px' }}>
-            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
-          </svg>
-          <span>Pay with Apple Pay</span>
-        </>
-      )}
-    </button>
+      aria-label="Pay with Apple Pay"
+      disabled={disabled || isLoading}
+    />
   );
+};
+
+ApplePayButton.propTypes = {
+  amount: PropTypes.number.isRequired,
+  currency: PropTypes.string,
+  items: PropTypes.arrayOf(
+    PropTypes.shape({
+      name: PropTypes.string.isRequired,
+      price: PropTypes.number.isRequired,
+      quantity: PropTypes.number
+    })
+  ),
+  email: PropTypes.string.isRequired,
+  onSuccess: PropTypes.func,
+  onError: PropTypes.func,
+  buttonType: PropTypes.oneOf(['plain', 'buy', 'donate', 'checkout', 'book', 'subscribe']),
+  buttonColor: PropTypes.oneOf(['black', 'white', 'white-outline']),
+  width: PropTypes.string,
+  height: PropTypes.string,
+  borderRadius: PropTypes.string,
+  disabled: PropTypes.bool
 };
 
 export default ApplePayButton; 

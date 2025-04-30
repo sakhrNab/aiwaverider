@@ -31,189 +31,271 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { toast } from 'react-toastify';
-import axios from 'axios';
+import PropTypes from 'prop-types';
+import { Box, Typography, CircularProgress } from '@mui/material';
+import {
+  processWalletPayment,
+  handlePaymentSuccess,
+  handlePaymentError,
+  getCountryConfig
+} from '../services/paymentUtils';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-
-const GooglePayButton = ({ 
-  cartTotal, 
-  items, 
-  currency = 'usd', 
-  countryCode = 'US',
+const GooglePayButton = ({
+  amount,
+  cartTotal,
+  currency = 'USD',
+  items = [],
   email,
   onSuccess,
   onError,
-  className = ''
+  buttonStyle = {},
+  buttonType = 'standard',
+  buttonColor = 'black',
+  disabled = false
 }) => {
-  const [isLoading, setIsLoading] = useState(false);
+  const [isAvailable, setIsAvailable] = useState(false);
   const [googlePayClient, setGooglePayClient] = useState(null);
-  const [googlePayAvailable, setGooglePayAvailable] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Available payment networks
-  const allowedPaymentMethods = [
-    {
-      type: 'CARD',
-      parameters: {
-        allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
-        allowedCardNetworks: ['AMEX', 'DISCOVER', 'INTERAC', 'JCB', 'MASTERCARD', 'VISA']
-      },
-      tokenizationSpecification: {
-        type: 'PAYMENT_GATEWAY',
-        parameters: {
-          gateway: 'stripe',
-          'stripe:version': '2018-10-31',
-          'stripe:publishableKey': import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_yourStripeKey'
-        }
-      }
-    }
-  ];
+  // Use cartTotal if amount is not provided
+  const paymentAmount = amount !== undefined ? amount : cartTotal;
 
+  // Debug props
+  console.log('GooglePayButton props:', { amount, cartTotal, paymentAmount, currency, items, email });
+
+  // Google Pay styling
+  const defaultButtonStyle = {
+    width: '100%',
+    height: '48px',
+    borderRadius: '4px',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.6 : 1,
+    transition: 'opacity 0.2s ease',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: buttonColor === 'black' ? '#000' : '#fff',
+    color: buttonColor === 'black' ? '#fff' : '#000',
+    border: buttonColor === 'black' ? 'none' : '1px solid #000'
+  };
+
+  // Initialize Google Pay
   useEffect(() => {
-    // Load Google Pay API
-    const script = document.createElement('script');
-    script.src = 'https://pay.google.com/gp/p/js/pay.js';
-    script.async = true;
-    script.onload = initializeGooglePay;
-    document.body.appendChild(script);
-    
-    return () => {
-      // Clean up script if component unmounts
-      if (document.body.contains(script)) {
-        document.body.removeChild(script);
+    const initGooglePay = async () => {
+      try {
+        if (!window.google || !window.google.payments) {
+          const script = document.createElement('script');
+          script.src = 'https://pay.google.com/gp/p/js/pay.js';
+          script.async = true;
+          script.onload = () => checkGooglePayAvailability();
+          document.body.appendChild(script);
+        } else {
+          checkGooglePayAvailability();
+        }
+      } catch (error) {
+        console.error('Error initializing Google Pay:', error);
+        setIsAvailable(false);
+        setIsLoading(false);
       }
     };
-  }, []);
 
-  const initializeGooglePay = () => {
-    if (!window.google || !window.google.payments) {
-      console.error('Google Pay API not found');
+    const checkGooglePayAvailability = async () => {
+      try {
+        const countryConfig = getCountryConfig(currency === 'GBP' ? 'GB' : currency === 'CAD' ? 'CA' : 'US');
+        
+        // Get environment from env vars or fallback to TEST
+        const environment = import.meta.env.VITE_GOOGLE_PAY_ENVIRONMENT || 'TEST';
+        console.log(`Initializing Google Pay in ${environment} environment`);
+        
+        const googlePayClient = new window.google.payments.api.PaymentsClient({
+          environment: environment
+        });
+
+        const isReadyToPayRequest = {
+          apiVersion: 2,
+          apiVersionMinor: 0,
+          allowedPaymentMethods: [{
+            type: 'CARD',
+            parameters: {
+              allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
+              allowedCardNetworks: ['VISA', 'MASTERCARD']
+            }
+          }]
+        };
+
+        const result = await googlePayClient.isReadyToPay(isReadyToPayRequest);
+        setIsAvailable(result.result);
+        setGooglePayClient(googlePayClient);
+      } catch (error) {
+        console.error('Google Pay availability check failed:', error);
+        setIsAvailable(false);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initGooglePay();
+  }, [currency]);
+
+  const handlePaymentRequest = async () => {
+    if (disabled || !isAvailable || !googlePayClient) return;
+    
+    // Validate amount
+    if (paymentAmount === undefined || paymentAmount === null || isNaN(parseFloat(paymentAmount))) {
+      console.error('Google Pay error: Invalid amount provided', { amount, cartTotal, paymentAmount });
+      handlePaymentError(new Error('Invalid payment amount'), 'Google Pay', onError);
       return;
     }
-    
-    const client = new window.google.payments.api.PaymentsClient({
-      environment: process.env.NODE_ENV === 'production' ? 'PRODUCTION' : 'TEST'
-    });
-    
-    setGooglePayClient(client);
-    
-    // Check if Google Pay is available for the user
-    client.isReadyToPay({
-      apiVersion: 2,
-      apiVersionMinor: 0,
-      allowedPaymentMethods: allowedPaymentMethods
-    })
-    .then(response => {
-      setGooglePayAvailable(response.result);
-    })
-    .catch(error => {
-      console.error('Google Pay availability check failed:', error);
-      setGooglePayAvailable(false);
-    });
-  };
 
-  const handleGooglePayClick = async () => {
-    if (!googlePayClient) return;
-    
-    setIsLoading(true);
-    
-    // Create payment data request
-    const paymentDataRequest = {
-      apiVersion: 2,
-      apiVersionMinor: 0,
-      allowedPaymentMethods: allowedPaymentMethods,
-      merchantInfo: {
-        merchantId: import.meta.env.VITE_GOOGLE_MERCHANT_ID || '12345678901234567890',
-        merchantName: 'Your Store Name'
-      },
-      transactionInfo: {
-        totalPriceStatus: 'FINAL',
-        totalPrice: cartTotal.toString(),
-        currencyCode: currency.toUpperCase(),
-        countryCode: countryCode
-      }
-    };
-    
     try {
-      // Show Google Pay payment sheet
-      const paymentData = await googlePayClient.loadPaymentData(paymentDataRequest);
-      
-      // Process payment with backend
-      const response = await axios.post(`${API_URL}/api/payments/process-google-pay`, {
-        paymentToken: paymentData.paymentMethodData.tokenizationData.token,
-        amount: cartTotal,
-        currency: currency,
-        items: items,
-        email: email
+      console.log('Starting Google Pay payment flow', { 
+        amount: paymentAmount,
+        currency,
+        isTestMode: true
       });
       
-      if (response.data.success) {
-        toast.success('Payment successful!');
-        if (onSuccess) onSuccess(response.data);
-        
-        // Check if backend provided a redirect URL
-        if (response.data.redirectUrl) {
-          window.location.href = response.data.redirectUrl;
-        } else {
-          // Use checkout/success with payment info for redirection
-          window.location.href = `/checkout/success?payment_id=${response.data.orderId || 'unknown'}&status=success&type=payment_intent`;
-        }
-      } else {
-        throw new Error(response.data.error || 'Payment processing failed');
-      }
-    } catch (error) {
-      console.error('Google Pay error:', error);
+      const countryConfig = getCountryConfig(currency === 'GBP' ? 'GB' : currency === 'CAD' ? 'CA' : 'US');
       
-      // Don't show error for user cancellation
-      if (error.statusCode === 'CANCELED') {
-        console.log('User canceled Google Pay');
-      } else {
-        toast.error(`Google Pay payment failed: ${error.message || 'Unknown error'}`);
-        if (onError) onError(error);
+      // Use parseFloat to ensure amount is a number
+      const parsedAmount = parseFloat(paymentAmount).toFixed(2);
+      
+      // Create payment request
+      const paymentDataRequest = {
+        apiVersion: 2,
+        apiVersionMinor: 0,
+        allowedPaymentMethods: [{
+          type: 'CARD',
+          parameters: {
+            allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
+            allowedCardNetworks: ['VISA', 'MASTERCARD'],
+            billingAddressRequired: false
+          },
+          tokenizationSpecification: {
+            type: 'PAYMENT_GATEWAY',
+            parameters: {
+              gateway: import.meta.env.VITE_GOOGLE_PAY_GATEWAY || 'stripe',
+              'stripe:version': '2020-08-27',
+              'stripe:publishableKey': import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_placeholder'
+            }
+          }
+        }],
+        merchantInfo: {
+          merchantName: 'AI Wave Rider'
+        },
+        transactionInfo: {
+          totalPriceStatus: 'FINAL',
+          totalPrice: parsedAmount,
+          currencyCode: currency.toUpperCase()
+        }
+      };
+      
+      console.log('Google Pay request configuration:', JSON.stringify(paymentDataRequest, null, 2));
+
+      // Add line items if provided
+      if (items.length > 0) {
+        paymentDataRequest.transactionInfo.displayItems = items.map(item => ({
+          label: item.name || 'Product',
+          price: (parseFloat(item.price) || 0).toFixed(2),
+          type: 'LINE_ITEM'
+        }));
       }
-    } finally {
-      setIsLoading(false);
+      
+      // Load payment data
+      const paymentData = await googlePayClient.loadPaymentData(paymentDataRequest);
+      
+      // Process the payment
+      const orderDetails = {
+        amount,
+        currency,
+        items
+      };
+      
+      const result = await processWalletPayment(
+        'google',
+        paymentData,
+        orderDetails,
+        email
+      );
+      
+      // Handle success
+      handlePaymentSuccess(result, onSuccess);
+    } catch (error) {
+      if (error.statusCode === 'CANCELED') {
+        console.log('Google Pay payment cancelled by user');
+      } else {
+        console.error('Google Pay payment failed:', error);
+      }
+      
+      // Handle error
+      handlePaymentError(error, 'Google Pay', onError);
     }
   };
 
-  // If Google Pay is not available, don't render the button
-  if (!googlePayAvailable) {
+  if (isLoading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" height="48px">
+        <CircularProgress size={24} />
+      </Box>
+    );
+  }
+
+  if (!isAvailable) {
     return null;
   }
 
   return (
-    <button
-      onClick={handleGooglePayClick}
-      disabled={isLoading}
-      className={`google-pay-button ${className} ${isLoading ? 'loading' : ''}`}
-      style={{
-        backgroundColor: '#000',
-        color: '#fff',
-        border: 'none',
-        borderRadius: '4px',
-        padding: '12px 24px',
-        fontWeight: 'bold',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: isLoading ? 'wait' : 'pointer',
-        opacity: isLoading ? 0.8 : 1,
+    <Box
+      role="button"
+      onClick={handlePaymentRequest}
+      aria-label="Pay with Google Pay"
+      sx={{
+        ...defaultButtonStyle,
+        ...buttonStyle
       }}
     >
-      {isLoading ? (
-        <span>Processing...</span>
+      {buttonType === 'standard' ? (
+        <img 
+          src={buttonColor === 'black' 
+               ? 'https://www.gstatic.com/instantbuy/svg/dark_gpay.svg' 
+               : 'https://www.gstatic.com/instantbuy/svg/light_gpay.svg'} 
+          alt="Google Pay" 
+          height="24px"
+        />
       ) : (
-        <>
-          <img 
-            src="https://www.gstatic.com/instantbuy/svg/dark_gpay.svg" 
-            alt="Google Pay"
-            style={{ height: '18px', marginRight: '8px' }}
-          />
-          <span>Pay with Google Pay</span>
-        </>
+        <Typography variant="button">
+          Pay with Google Pay
+        </Typography>
       )}
-    </button>
+    </Box>
   );
+};
+
+GooglePayButton.propTypes = {
+  amount: PropTypes.number,
+  cartTotal: PropTypes.number,
+  currency: PropTypes.string,
+  items: PropTypes.arrayOf(
+    PropTypes.shape({
+      name: PropTypes.string.isRequired,
+      price: PropTypes.number.isRequired
+    })
+  ),
+  email: PropTypes.string.isRequired,
+  onSuccess: PropTypes.func,
+  onError: PropTypes.func,
+  buttonStyle: PropTypes.object,
+  buttonType: PropTypes.oneOf(['standard', 'text']),
+  buttonColor: PropTypes.oneOf(['black', 'white']),
+  disabled: PropTypes.bool
+};
+
+// Custom validation to ensure either amount or cartTotal is provided
+GooglePayButton.propTypes.amount = function(props, propName, componentName) {
+  if (props.amount === undefined && props.cartTotal === undefined) {
+    return new Error(
+      `One of 'amount' or 'cartTotal' is required in '${componentName}'.`
+    );
+  }
 };
 
 export default GooglePayButton; 
