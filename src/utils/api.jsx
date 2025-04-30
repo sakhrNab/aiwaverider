@@ -397,7 +397,7 @@ export const signInWithGoogle = async () => {
     // Send the token to your backend to verify and create/update the user
     try {
       // Use a direct fetch to avoid the axios interceptor for this initial verification
-      const verifyResponse = await fetch('http://localhost:4000/api/auth/verify-user', {
+      const verifyResponse = await fetch(`${API_URL}/api/auth/verify-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -600,7 +600,7 @@ export const signInWithMicrosoft = async () => {
     // Send the token to your backend to verify and create/update the user
     try {
       // Use a direct fetch to avoid the axios interceptor for this initial verification
-      const verifyResponse = await fetch('http://localhost:4000/api/auth/verify-user', {
+      const verifyResponse = await fetch(`${API_URL}/api/auth/verify-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

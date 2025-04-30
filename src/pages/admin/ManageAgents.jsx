@@ -225,7 +225,7 @@ const ManageAgents = () => {
       try {
         // Important: Use the prepared API ID for the request
         const agent = await apiRequest(
-          `http://localhost:4000/api/agent/${apiAgentId}`,
+          `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/agent/${apiAgentId}`,
           "GET",
           null,
           skipPriceRequest ? {} : { includePrice: "true" },
@@ -249,7 +249,7 @@ const ManageAgents = () => {
         try {
           // Use the prepared API ID for this request too
           const priceResponse = await apiRequest(
-            `http://localhost:4000/api/agent/${apiAgentId}/price`,
+            `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/agent/${apiAgentId}/price`,
             "GET",
           );
 
@@ -681,7 +681,7 @@ const ManageAgents = () => {
       
       // Use our apiRequest helper with fallback to mock data
       const data = await apiRequest(
-        "http://localhost:4000/api/agents",
+        `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/agents`,
         "GET",
         null,
         { timestamp } // Add timestamp as query parameter
@@ -1109,7 +1109,7 @@ const ManageAgents = () => {
 
       // Call the migration API endpoint
       const result = await apiRequest(
-        "http://localhost:4000/api/agent-prices/migrate",
+        `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/agent-prices/migrate`,
         "POST",
       );
 
