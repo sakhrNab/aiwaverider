@@ -659,6 +659,13 @@ const Checkout = () => {
   };
   
   const handlePaymentSuccess = (result) => {
+    // Save purchased items to localStorage for the success page to use
+    try {
+      localStorage.setItem('lastPurchasedItems', JSON.stringify(cart));
+    } catch (err) {
+      console.error('Error saving cart to localStorage:', err);
+    }
+    
     clearCart();
     
     // If we have a payment result with a redirect URL, use that
