@@ -698,6 +698,9 @@ const Checkout = () => {
     setIsSubmitting(true);
     
     try {
+      console.log('Starting SEPA payment process');
+      console.log('Cart items:', cart);
+      
       // SEPA requires EUR as the currency
       if (currency.toLowerCase() !== 'eur') {
         toast.error('SEPA payments require EUR as the currency. Please switch to EUR.');
@@ -718,10 +721,31 @@ const Checkout = () => {
       const randomSuffix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
       const endToEndId = `AIWR${timestamp.substring(0, 8)}${randomSuffix}`;
       
-      // Get ordered items summary
-      const itemsDescription = cart.map(item => 
-        `${item.quantity}x ${item.title.substring(0, 20)}`
-      ).join(', ').substring(0, 140);
+      // Safety check for cart items
+      if (!cart || !Array.isArray(cart) || cart.length === 0) {
+        toast.error('Your cart appears to be empty. Please add items before proceeding.');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Get ordered items summary with additional error handling
+      let itemsDescription;
+      try {
+        itemsDescription = cart.map(item => {
+          if (!item) return 'Unknown item';
+          const quantity = item.quantity || 1;
+          const title = (item.title || item.name || 'Product').substring(0, 20);
+          return `${quantity}x ${title}`;
+        }).join(', ');
+        
+        // Limit overall length
+        if (itemsDescription.length > 140) {
+          itemsDescription = itemsDescription.substring(0, 137) + '...';
+        }
+      } catch (descError) {
+        console.error('Error creating items description:', descError);
+        itemsDescription = 'Order items';  // Fallback
+      }
       
       // Create SEPA Credit Transfer payload
       const sepaPayload = {
@@ -746,12 +770,15 @@ const Checkout = () => {
         },
         metadata: {
           orderId: orderReference,
-          items: cart.map(item => ({
-            id: item.id,
-            title: item.title || item.name,
-            price: item.price,
-            quantity: item.quantity
-          })),
+          items: cart.map(item => {
+            if (!item) return { id: 'unknown', title: 'Unknown Product', price: 0, quantity: 1 };
+            return {
+              id: item.id || 'unknown',
+              title: item.title || item.name || 'Product',
+              price: typeof item.price === 'number' ? item.price : 0,
+              quantity: typeof item.quantity === 'number' ? item.quantity : 1
+            };
+          }),
           customerConsent: true,
           totalAmount: finalTotal,
           discountApplied: discountApplied ? 'welcome10' : ''
@@ -759,6 +786,27 @@ const Checkout = () => {
       };
       
       console.log('SEPA Credit Transfer payload:', sepaPayload);
+      
+      // Development testing flag - set to true to simulate successful payment without backend
+      const SIMULATE_PAYMENT_SUCCESS = true;
+      
+      // Simulation path for testing in development
+      if (SIMULATE_PAYMENT_SUCCESS && import.meta.env.DEV) {
+        console.log('SIMULATING successful SEPA payment in development mode');
+        
+        // Simulate processing delay
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Show success message and redirect
+        toast.success('SEPA Credit Transfer initiated successfully! (SIMULATION MODE)');
+        
+        // Clear the cart
+        clearCart();
+        
+        // Redirect to success page with the reference
+        navigate(`/checkout/success?payment_id=${endToEndId}&status=pending&type=sepa_credit_transfer&simulated=true`);
+        return;
+      }
       
       try {
         // First check our API connectivity
