@@ -4,7 +4,7 @@ import { FaArrowLeft, FaInfoCircle, FaMinus, FaPlus, FaTrashAlt, FaShoppingCart,
 import { SiStripe, SiApple, SiVisa, SiMastercard, SiAmericanexpress, SiPaypal } from 'react-icons/si';
 import { toast } from 'react-toastify';
 import { useCart } from '../contexts/CartContext.jsx';
-import { getRelatedProducts } from '../utils/productData';
+import { getRelatedProducts, getSimilarProductRecommendations } from '../utils/productData';
 import { PayPalButtons, usePayPalScriptReducer } from '@paypal/react-paypal-js';
 import { 
   createStripeCheckout, 
@@ -25,6 +25,7 @@ import {
 } from '@stripe/react-stripe-js';
 import GooglePayButton from '../components/GooglePayButton';
 import ApplePayButton from '../components/ApplePayButton';
+import PaymentSuccessRecommendations from '../components/PaymentSuccessRecommendations';
 import '../styles/Checkout.css';
 
 // Add some style fixes for the Stripe Elements and form fields
@@ -499,6 +500,8 @@ const Checkout = () => {
   const [sepaBicManualRequired, setSepaBicManualRequired] = useState(false);
   const [sepaConsent, setSepaConsent] = useState(false);
   const [orderReference, setOrderReference] = useState('');
+  const [showRecommendations, setShowRecommendations] = useState(false);
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
   
   // Calculate VAT (variable based on country)
   const vatRate = country === 'United States' ? 0 : 0.2; // 20% VAT for non-US
@@ -797,14 +800,38 @@ const Checkout = () => {
         // Simulate processing delay
         await new Promise(resolve => setTimeout(resolve, 1500));
         
-        // Show success message and redirect
+        // Show success message
         toast.success('SEPA Credit Transfer initiated successfully! (SIMULATION MODE)');
         
-        // Clear the cart
-        clearCart();
+        // Save purchased items to localStorage for the success page to use
+        try {
+          localStorage.setItem('lastPurchasedItems', JSON.stringify(cart));
+        } catch (err) {
+          console.error('Error saving cart to localStorage:', err);
+        }
         
-        // Redirect to success page with the reference
-        navigate(`/checkout/success?payment_id=${endToEndId}&status=pending&type=sepa_credit_transfer&simulated=true`);
+        // Flag that payment is completed to show recommendations
+        setPaymentCompleted(true);
+        setShowRecommendations(true);
+        
+        // Extra toast to inform user about recommendations
+        setTimeout(() => {
+          toast.info('Looking for similar products you might like...', {
+            autoClose: 4000,
+            position: 'bottom-right'
+          });
+        }, 1000);
+        
+        // Wait for a longer period to let user see the recommendations
+        // Then continue with redirect
+        setTimeout(() => {
+          // Clear the cart
+          clearCart();
+          
+          // Redirect to success page with the reference
+          navigate(`/checkout/success?payment_id=${endToEndId}&status=pending&type=sepa_credit_transfer&simulated=true`);
+        }, 8000); // Display recommendations for 8 seconds before redirecting
+        
         return;
       }
       
@@ -848,14 +875,36 @@ const Checkout = () => {
       
       // Handle the response
       if (result.success) {
-        // Show success message and redirect
+        // Show success message
         toast.success('SEPA Credit Transfer initiated successfully!');
         
-        // Clear the cart
-        clearCart();
+        // Save purchased items to localStorage for the success page to use
+        try {
+          localStorage.setItem('lastPurchasedItems', JSON.stringify(cart));
+        } catch (err) {
+          console.error('Error saving cart to localStorage:', err);
+        }
         
-        // Redirect to success page with the reference
-        navigate(`/checkout/success?payment_id=${endToEndId}&status=pending&type=sepa_credit_transfer`);
+        // Show payment recommendations before redirecting
+        setPaymentCompleted(true);
+        setShowRecommendations(true);
+        
+        // Extra toast to inform user about recommendations
+        setTimeout(() => {
+          toast.info('Looking for similar products you might like...', {
+            autoClose: 4000,
+            position: 'bottom-right'
+          });
+        }, 1000);
+        
+        // Wait for a longer period to let user see the recommendations
+        setTimeout(() => {
+          // Clear the cart
+          clearCart();
+          
+          // Redirect to success page with the reference
+          navigate(`/checkout/success?payment_id=${endToEndId}&status=pending&type=sepa_credit_transfer`);
+        }, 8000); // Display recommendations for 8 seconds before redirecting
       } else {
         throw new Error(result.message || 'Failed to initiate SEPA Credit Transfer');
       }
@@ -1945,7 +1994,16 @@ const Checkout = () => {
         </div>
       </div>
       
-      {relatedProducts.length > 0 && (
+      {/* Add the recommendations component at the end */}
+      {showRecommendations && paymentCompleted && (
+        <PaymentSuccessRecommendations 
+          purchasedItems={cart}
+          currency={currency}
+          limit={3}
+        />
+      )}
+      
+      {relatedProducts.length > 0 && !paymentCompleted && (
         <div className="related-products">
           <h2>You Might Also Like</h2>
           <div className="related-grid">

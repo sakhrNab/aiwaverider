@@ -153,7 +153,7 @@ export const products = [
 ];
 
 // Make sure each product has a compatible interface with agents
-products.forEach(product => {
+products.forEach((product, index) => {
   // Ensure each product has properties expected by the agent interface
   if (!product.rating.average && product.rating) {
     product.rating = {
@@ -165,6 +165,28 @@ products.forEach(product => {
   
   // Add detailUrl property
   product.detailUrl = `/agents/${product.id}`;
+  
+  // Add product attributes for recommendation system
+  // First two products are bestsellers
+  if (index < 2) {
+    product.isBestseller = true;
+  }
+  
+  // Products with high ratings are trending
+  if (product.rating?.average > 4.8 || (typeof product.rating === 'number' && product.rating > 4.8)) {
+    product.isTrending = true;
+  }
+  
+  // Last two products are new
+  if (index >= products.length - 2) {
+    product.isNew = true;
+  }
+  
+  // First product in each category is featured
+  const productsInCategory = products.filter(p => p.category === product.category);
+  if (productsInCategory.indexOf(product) === 0) {
+    product.isFeatured = true;
+  }
 });
 
 // Get a product by ID
@@ -269,3 +291,83 @@ if (debugRecommendations.length > 0) {
     }
   });
 } 
+
+/**
+ * Get products with similar attributes to the purchased products
+ * 
+ * @param {Array} purchasedItems - Array of products that were purchased
+ * @param {number} limit - Maximum number of recommendations to return
+ * @returns {Array} Array of recommended products
+ */
+export const getSimilarProductRecommendations = (purchasedItems = [], limit = 3) => {
+  if (!Array.isArray(purchasedItems) || purchasedItems.length === 0) {
+    return getFeaturedProducts(limit); // Fallback to featured products if no purchases
+  }
+
+  // Extract categories, and other product attributes from purchased items
+  const purchasedCategories = new Set();
+  const purchasedCreators = new Set();
+  const attributes = {
+    isBestseller: false,
+    isTrending: false,
+    isNew: false,
+    isFeatured: false
+  };
+  
+  // Collect information from purchased items
+  purchasedItems.forEach(item => {
+    if (!item) return;
+    
+    // Add category and creator
+    if (item.category) purchasedCategories.add(item.category);
+    if (item.creator?.id) purchasedCreators.add(item.creator.id);
+    
+    // Track attributes
+    if (item.isBestseller) attributes.isBestseller = true;
+    if (item.isTrending) attributes.isTrending = true;
+    if (item.isNew) attributes.isNew = true;
+    if (item.isFeatured) attributes.isFeatured = true;
+  });
+
+  // Find products that match either by category, creator, or attributes
+  const matchingProducts = products.filter(product => {
+    // Skip the products that were already purchased
+    if (purchasedItems.some(item => item && item.id === product.id)) return false;
+    
+    // Check if product matches any criteria
+    const matchesCategory = product.category && purchasedCategories.has(product.category);
+    const matchesCreator = product.creator?.id && purchasedCreators.has(product.creator.id);
+    
+    // Check if product matches any of the attributes we're looking for
+    const matchesAttributes = (
+      (attributes.isBestseller && product.isBestseller) ||
+      (attributes.isTrending && product.isTrending) ||
+      (attributes.isNew && product.isNew) ||
+      (attributes.isFeatured && product.isFeatured)
+    );
+    
+    return matchesCategory || matchesCreator || matchesAttributes;
+  });
+  
+  // If we don't have enough matches, get some by ratings
+  if (matchingProducts.length < limit) {
+    const highRatedProducts = products
+      .filter(product => 
+        !purchasedItems.some(item => item && item.id === product.id) && 
+        !matchingProducts.some(item => item.id === product.id)
+      )
+      .sort((a, b) => {
+        const ratingA = a.rating?.average || a.rating || 0;
+        const ratingB = b.rating?.average || b.rating || 0;
+        return ratingB - ratingA;
+      })
+      .slice(0, limit - matchingProducts.length);
+    
+    matchingProducts.push(...highRatedProducts);
+  }
+  
+  // Randomize and limit the results
+  return matchingProducts
+    .sort(() => 0.5 - Math.random())
+    .slice(0, limit);
+}; 

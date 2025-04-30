@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { getPaymentStatus } from '../../services/paymentApi';
 import { toast } from 'react-hot-toast';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCheckCircle, faEnvelope, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
+import { faCheckCircle, faEnvelope, faExclamationTriangle, faMoneyBillTransfer } from '@fortawesome/free-solid-svg-icons';
+import PaymentSuccessRecommendations from '../../components/PaymentSuccessRecommendations';
 import './CheckoutSuccess.css';
 
 /**
@@ -15,6 +16,9 @@ const CheckoutSuccess = () => {
   const [orderId, setOrderId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState('card');
+  const [isSimulated, setIsSimulated] = useState(false);
+  const [purchasedItems, setPurchasedItems] = useState([]);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -25,9 +29,45 @@ const CheckoutSuccess = () => {
     const paymentId = queryParams.get('payment_id');
     const paymentType = queryParams.get('type') || 'payment_intent';
     const status = queryParams.get('status');
+    const simulated = queryParams.get('simulated') === 'true';
     
-    if (status === 'success' && paymentId) {
-      checkPaymentStatus(paymentId, paymentType);
+    setIsSimulated(simulated);
+    setPaymentMethod(paymentType === 'sepa_credit_transfer' ? 'sepa' : 'card');
+    
+    // Try to get purchased items from localStorage
+    try {
+      const storedItems = localStorage.getItem('lastPurchasedItems');
+      if (storedItems) {
+        setPurchasedItems(JSON.parse(storedItems));
+      }
+    } catch (err) {
+      console.error('Error loading purchased items:', err);
+    }
+    
+    if (paymentId && (status === 'success' || status === 'pending' || simulated)) {
+      if (simulated) {
+        // Handle simulated payment (test mode)
+        console.log('Handling simulated payment');
+        setOrderStatus('succeeded');
+        setOrderId(paymentId);
+        setIsLoading(false);
+        
+        // Show email notification toast
+        toast.success(
+          <div>
+            <strong>SEPA Credit Transfer Initiated!</strong>
+            <p>Your order has been processed in simulation mode.</p>
+          </div>,
+          {
+            duration: 6000,
+            icon: <FontAwesomeIcon icon={faMoneyBillTransfer} />,
+            id: 'sepa-simulation-toast'
+          }
+        );
+      } else {
+        // Normal payment processing
+        checkPaymentStatus(paymentId, paymentType);
+      }
     } else {
       setIsLoading(false);
       setError('Invalid payment information');
@@ -42,26 +82,44 @@ const CheckoutSuccess = () => {
       // Get payment status from API
       const response = await getPaymentStatus(paymentId, type);
       
-      if (response?.status === 'succeeded' || response?.status === 'processing') {
-        setOrderStatus(response.status);
+      if (response?.status === 'succeeded' || response?.status === 'processing' || 
+          (type === 'sepa_credit_transfer' && response?.status === 'pending')) {
+        setOrderStatus(response.status || 'processing');
         
         // Get order ID from metadata if available
-        if (response.result?.metadata?.order_id) {
-          setOrderId(response.result.metadata.order_id);
+        if (response.result?.metadata?.order_id || response.result?.metadata?.orderId) {
+          setOrderId(response.result.metadata.order_id || response.result.metadata.orderId);
+        } else {
+          // Use payment ID as fallback order reference
+          setOrderId(paymentId);
         }
         
-        // Show email notification toast
-        toast.success(
-          <div>
-            <strong>Thank you for your purchase!</strong>
-            <p>Your agent template has been sent to your email.</p>
-          </div>,
-          {
-            duration: 6000,
-            icon: <FontAwesomeIcon icon={faEnvelope} />,
-            id: 'email-delivery-toast'
-          }
-        );
+        // Show appropriate notification toast
+        if (type === 'sepa_credit_transfer') {
+          toast.success(
+            <div>
+              <strong>SEPA Credit Transfer Initiated!</strong>
+              <p>Your payment is being processed by your bank.</p>
+            </div>,
+            {
+              duration: 6000,
+              icon: <FontAwesomeIcon icon={faMoneyBillTransfer} />,
+              id: 'sepa-payment-toast'
+            }
+          );
+        } else {
+          toast.success(
+            <div>
+              <strong>Thank you for your purchase!</strong>
+              <p>Your agent template has been sent to your email.</p>
+            </div>,
+            {
+              duration: 6000,
+              icon: <FontAwesomeIcon icon={faEnvelope} />,
+              id: 'email-delivery-toast'
+            }
+          );
+        }
       } else {
         setOrderStatus('failed');
         setError('Payment could not be confirmed. Please contact support.');
@@ -75,9 +133,9 @@ const CheckoutSuccess = () => {
     }
   };
   
-  // Return to home page
+  // Return to agents page
   const handleContinueShopping = () => {
-    navigate('/');
+    navigate('/agents');
   };
   
   // View order details
@@ -105,34 +163,85 @@ const CheckoutSuccess = () => {
         ) : (
           <div className="checkout-success-content">
             <FontAwesomeIcon icon={faCheckCircle} size="3x" className="success-icon" />
-            <h1>Thank you for your purchase!</h1>
-            <p>Your order has been {orderStatus === 'succeeded' ? 'completed' : 'is being processed'}.</p>
             
-            {orderId && (
-              <div className="order-info">
-                <p>Order ID: <strong>{orderId}</strong></p>
-              </div>
+            {paymentMethod === 'sepa' ? (
+              <>
+                <h1>SEPA Credit Transfer Initiated!</h1>
+                <p>
+                  {isSimulated 
+                    ? 'Your SEPA Credit Transfer has been simulated successfully.' 
+                    : 'Your payment request has been sent to your bank for processing.'}
+                </p>
+                
+                {orderId && (
+                  <div className="order-info">
+                    <p>Payment Reference: <strong>{orderId}</strong></p>
+                  </div>
+                )}
+                
+                <div className="sepa-notification">
+                  <FontAwesomeIcon icon={faMoneyBillTransfer} className="sepa-icon" />
+                  <div>
+                    <h3>SEPA Payment Information</h3>
+                    <p>
+                      {isSimulated
+                        ? 'This is a simulated payment for testing purposes. In a real transaction, your bank would process the payment within 1-2 business days.'
+                        : 'SEPA Credit Transfers typically take 1-2 business days to complete. You will receive confirmation when the payment is processed.'}
+                    </p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <h1>Thank you for your purchase!</h1>
+                <p>Your order {orderStatus === 'succeeded' ? 'has been completed' : 'is being processed'}.</p>
+                
+                {orderId && (
+                  <div className="order-info">
+                    <p>Order ID: <strong>{orderId}</strong></p>
+                  </div>
+                )}
+                
+                <div className="email-notification">
+                  <FontAwesomeIcon icon={faEnvelope} className="email-icon" />
+                  <div>
+                    <h3>Check Your Email</h3>
+                    <p>We've sent your AI agent template to your email address. If you don't see it, please check your spam folder.</p>
+                  </div>
+                </div>
+              </>
             )}
-            
-            <div className="email-notification">
-              <FontAwesomeIcon icon={faEnvelope} className="email-icon" />
-              <div>
-                <h3>Check Your Email</h3>
-                <p>We've sent your AI agent template to your email address. If you don't see it, please check your spam folder.</p>
-              </div>
-            </div>
             
             <div className="next-steps">
               <h3>What's Next?</h3>
               <ul>
-                <li>Download your agent template from your email</li>
-                <li>Follow the instructions to start using your new AI agent</li>
-                <li>If you need help, contact our support team</li>
+                {paymentMethod === 'sepa' ? (
+                  <>
+                    <li>Your order will be processed once payment is confirmed</li>
+                    <li>You'll receive an email with your purchase details</li>
+                    <li>If you have questions, please contact our support team</li>
+                  </>
+                ) : (
+                  <>
+                    <li>Download your agent template from your email</li>
+                    <li>Follow the instructions to start using your new AI agent</li>
+                    <li>If you need help, contact our support team</li>
+                  </>
+                )}
               </ul>
             </div>
             
+            {/* Recommendation section */}
+            <div className="success-recommendations-section">
+              <PaymentSuccessRecommendations 
+                purchasedItems={purchasedItems}
+                currency="EUR"
+                limit={3}
+              />
+            </div>
+            
             <div className="checkout-success-actions">
-              {orderId && (
+              {orderId && !isSimulated && (
                 <button className="secondary-button" onClick={handleViewOrder}>
                   View Order
                 </button>

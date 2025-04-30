@@ -186,4 +186,41 @@
   .checkout-success-content h1 {
     font-size: 1.5rem;
   }
+}
+
+.success-recommendations-section {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #eaeaea;
+  width: 100%;
+}
+
+/* Make recommendations fit well into the success page */
+.success-recommendations-section .payment-success-recommendations {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.success-recommendations-section .recommendation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.success-recommendations-section .recommendation-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.success-recommendations-section .recommendation-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 768px) {
+  .success-recommendations-section .recommendation-grid {
+    grid-template-columns: 1fr;
+  }
 } 
