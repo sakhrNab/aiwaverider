@@ -173,3 +173,49 @@ This will:
 - The rating system is fully integrated with the existing agent detail page
 - Real-time updates ensure that new ratings and likes are immediately visible to all users
 - The system includes appropriate validations and error handling
+
+## SEPA Credit Transfer Support
+
+The application supports SEPA (Single Euro Payment Area) Credit Transfers for European payments. Key features include:
+
+- IBAN validation with country-specific rules and MOD-97 checksum validation
+- BIC (Bank Identifier Code) auto-detection from IBAN
+- Proper handling of payment references and transaction information
+
+### BIC Code Lookup Service
+
+The BIC auto-detection feature uses the OpenIBAN service, which is free and doesn't require an API key:
+
+1. **Default Service**: [OpenIBAN](https://openiban.com/) - A free service that provides IBAN validation and BIC lookup
+   - No API key required
+   - Used as the primary BIC lookup service
+   - Simple REST API that returns bank information including BIC
+
+2. **Implementation Details**:
+   - When a user enters an IBAN, the system validates it and automatically looks up the corresponding BIC
+   - The OpenIBAN API is called directly from the frontend (https://openiban.com/validate/{IBAN}?getBIC=true)
+   - If the service is unavailable or doesn't return a BIC, the user is prompted to enter the BIC manually
+   - The system clearly indicates when manual BIC entry is required
+
+3. **Fallback Mechanisms**:
+   - If OpenIBAN is temporarily unavailable, a notification informs the user
+   - For certain banks/countries, a pattern-based BIC suggestion may be provided but marked as requiring verification
+   - The BIC field dynamically updates to show when it's required vs. optional
+   - Clear error handling with informative messages guides users through any lookup issues
+
+4. **Alternative Services**:
+   If you wish to use a paid service as a fallback (for higher reliability), you can configure one of these:
+   - [iban.com BIC Validation API](https://www.iban.com/bic-validation-api)
+   - [swiftcodesapi.com](https://swiftcodesapi.com)
+   - [bicsearch.com](https://bicsearch.com)
+
+   To configure a fallback service, update your environment variables in `.env.local`:
+   ```
+   VITE_BIC_API_URL=https://your-subscribed-api-endpoint
+   VITE_BIC_API_KEY=your-subscription-api-key
+   ```
+
+Using this approach provides:
+- Free BIC lookup with no API key required
+- Bank name and location information in addition to the BIC
+- Fallback mechanisms for reliability

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaInfoCircle, FaMinus, FaPlus, FaTrashAlt, FaShoppingCart, FaCreditCard, FaBitcoin, FaEuroSign, FaPaypal, FaApple, FaGooglePay } from 'react-icons/fa';
 import { SiStripe, SiApple, SiVisa, SiMastercard, SiAmericanexpress, SiPaypal } from 'react-icons/si';
@@ -14,6 +14,7 @@ import {
   createCryptoPayment, 
   detectUserCountry
 } from '../services/paymentApi';
+import { validateIban, getBicFromIban } from '../services/bankingServices';
 import { loadStripe } from '@stripe/stripe-js';
 import {
   Elements,
@@ -495,7 +496,9 @@ const Checkout = () => {
   const [sepaIbanValid, setSepaIbanValid] = useState(null);
   const [sepaBic, setSepaBic] = useState('');
   const [sepaBicValid, setSepaBicValid] = useState(null);
+  const [sepaBicManualRequired, setSepaBicManualRequired] = useState(false);
   const [sepaConsent, setSepaConsent] = useState(false);
+  const [orderReference, setOrderReference] = useState('');
   
   // Calculate VAT (variable based on country)
   const vatRate = country === 'United States' ? 0 : 0.2; // 20% VAT for non-US
@@ -503,6 +506,21 @@ const Checkout = () => {
   
   // Calculate final total
   const finalTotal = cartTotal - discountAmount + vatAmount;
+  
+  // Generate a stable order reference when component mounts
+  useEffect(() => {
+    // Format: ORDER-{YYMMDDhhmm}-{random4digits}
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    const hour = now.getHours().toString().padStart(2, '0');
+    const minute = now.getMinutes().toString().padStart(2, '0');
+    const randomDigits = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    
+    const reference = `ORDER-${year}${month}${day}${hour}${minute}-${randomDigits}`;
+    setOrderReference(reference);
+  }, []);
   
   // Get available payment methods based on user location
   useEffect(() => {
@@ -724,10 +742,10 @@ const Checkout = () => {
           amount: finalTotal.toFixed(2),
           currency: 'EUR',
           executionDate: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD
-          remittanceInfo: `Order ${endToEndId.substring(endToEndId.length - 8)} - ${itemsDescription}`
+          remittanceInfo: `${orderReference} - ${itemsDescription}`
         },
         metadata: {
-          orderId: `ORDER-${Date.now().toString().substring(6)}`,
+          orderId: orderReference,
           items: cart.map(item => ({
             id: item.id,
             title: item.title || item.name,
@@ -1581,6 +1599,61 @@ const Checkout = () => {
                             try {
                               const { isValid } = validateIban(formattedIban);
                               setSepaIbanValid(isValid);
+                              
+                              // Auto-fill BIC if IBAN is valid and BIC is empty
+                              if (isValid && (!sepaBic || sepaBic.trim() === '')) {
+                                // Use an immediately invoked async function
+                                (async () => {
+                                  try {
+                                    const result = await getBicFromIban(formattedIban);
+                                    
+                                    if (result.bic) {
+                                      setSepaBic(result.bic);
+                                      setSepaBicValid(true);
+                                      
+                                      // If BIC was automatically detected
+                                      if (!result.requiresManualEntry) {
+                                        toast.info(`BIC auto-detected: ${result.bic}${result.bankName ? ` (${result.bankName})` : ''}`, { 
+                                          autoClose: 3000,
+                                          hideProgressBar: true,
+                                          position: 'bottom-right'
+                                        });
+                                      } 
+                                      // If BIC was generated as a fallback
+                                      else if (result.isGenerated) {
+                                        toast.warning('BIC service unavailable. A possible BIC has been generated, but please verify it.', {
+                                          autoClose: 5000,
+                                          position: 'bottom-right'
+                                        });
+                                      }
+                                    } 
+                                    // If BIC could not be detected and manual entry is required
+                                    else if (result.requiresManualEntry) {
+                                      // Make BIC field required by showing a warning toast
+                                      toast.warning(result.error || 'Please enter BIC manually.', {
+                                        autoClose: 5000,
+                                        position: 'bottom-right'
+                                      });
+                                      
+                                      // Mark that manual BIC entry is required
+                                      setSepaBicManualRequired(true);
+                                      
+                                      // Clear any previous value and set to invalid
+                                      setSepaBic('');
+                                      setSepaBicValid(false);
+                                    }
+                                  } catch (bicError) {
+                                    console.error('Error auto-detecting BIC:', bicError);
+                                    toast.error('Could not detect BIC. Please enter it manually.', {
+                                      autoClose: 5000,
+                                      position: 'bottom-right'
+                                    });
+                                    
+                                    // Mark that manual BIC entry is required
+                                    setSepaBicManualRequired(true);
+                                  }
+                                })();
+                              }
                             } catch (error) {
                               setSepaIbanValid(false);
                             }
@@ -1598,7 +1671,10 @@ const Checkout = () => {
                     </div>
                     
                     <div className="form-group">
-                      <label htmlFor="bic">BIC (Optional for many EU countries)</label>
+                      <label htmlFor="bic">
+                        BIC {sepaBicManualRequired ? '(Required)' : '(Optional for many EU countries)'}
+                        {sepaBicManualRequired && <span className="required-indicator">*</span>}
+                      </label>
                       <input
                         type="text"
                         id="bic"
@@ -1615,11 +1691,15 @@ const Checkout = () => {
                             setSepaBicValid(null);
                           }
                         }}
-                        placeholder="e.g. DEUTDEDBBER (optional for most EU transfers)"
-                        className={sepaBicValid === false ? 'invalid' : sepaBicValid === true ? 'valid' : ''}
+                        required={sepaBicManualRequired}
+                        placeholder="e.g. DEUTDEDBBER"
+                        className={`${sepaBicValid === false ? 'invalid' : sepaBicValid === true ? 'valid' : ''} ${sepaBicManualRequired ? 'required-field' : ''}`}
                       />
                       {sepaBicValid === false && (
-                        <div className="field-error">Please enter a valid BIC or leave blank</div>
+                        <div className="field-error">Please enter a valid BIC</div>
+                      )}
+                      {sepaBicManualRequired && !sepaBic && sepaBicValid !== false && (
+                        <div className="field-info">BIC could not be auto-detected. Please enter it manually.</div>
                       )}
                     </div>
                     
@@ -1631,7 +1711,7 @@ const Checkout = () => {
                       </div>
                       <div className="reference-item">
                         <span className="reference-label">Reference:</span>
-                        <span className="reference-value">ORDER-{Date.now().toString().substring(6)}</span>
+                        <span className="reference-value">{orderReference}</span>
                       </div>
                       <div className="reference-item">
                         <span className="reference-label">Recipient:</span>
@@ -1658,7 +1738,12 @@ const Checkout = () => {
                   <button 
                     onClick={handleSepaPayment}
                     className="pay-button"
-                    disabled={isSubmitting || !cardName || !sepaIban || sepaIbanValid === false || sepaBicValid === false || !sepaConsent}
+                    disabled={isSubmitting || 
+                              !cardName || 
+                              !sepaIban || 
+                              sepaIbanValid === false || 
+                              (sepaBicManualRequired && (!sepaBic || sepaBicValid === false)) || 
+                              !sepaConsent}
                   >
                     {isSubmitting ? 'Processing...' : `Initiate SEPA Transfer`}
                   </button>
@@ -1835,64 +1920,6 @@ const Checkout = () => {
       )}
     </div>
   );
-};
-
-// Function to validate IBAN
-const validateIban = (iban) => {
-  // Remove spaces and convert to uppercase
-  iban = iban.replace(/\s+/g, '').toUpperCase();
-  
-  // Basic structure validation
-  if (!/^[A-Z]{2}[0-9A-Z]{2,}$/.test(iban)) {
-    return { isValid: false, reason: 'Invalid IBAN format' };
-  }
-  
-  // Check country-specific length (partial implementation)
-  const countryLengths = {
-    'AT': 20, 'BE': 16, 'BG': 22, 'CH': 21, 'CY': 28, 'CZ': 24, 
-    'DE': 22, 'DK': 18, 'EE': 20, 'ES': 24, 'FI': 18, 'FR': 27, 
-    'GB': 22, 'GI': 23, 'GR': 27, 'HR': 21, 'HU': 28, 'IE': 22, 
-    'IT': 27, 'LI': 21, 'LT': 20, 'LU': 20, 'LV': 21, 'MC': 27,
-    'MT': 31, 'NL': 18, 'PL': 28, 'PT': 25, 'RO': 24, 'SE': 24, 
-    'SI': 19, 'SK': 24
-  };
-  
-  const countryCode = iban.substring(0, 2);
-  const expectedLength = countryLengths[countryCode];
-  
-  if (expectedLength && iban.length !== expectedLength) {
-    return { 
-      isValid: false, 
-      reason: `IBAN for ${countryCode} should be ${expectedLength} characters` 
-    };
-  }
-  
-  // MOD-97 checksum validation (the mathematical IBAN validation)
-  // Move the first four characters to the end
-  const rearranged = iban.substring(4) + iban.substring(0, 4);
-  
-  // Convert letters to numbers (A=10, B=11, ..., Z=35)
-  let numeric = '';
-  for (let i = 0; i < rearranged.length; i++) {
-    const char = rearranged.charAt(i);
-    if (/[0-9]/.test(char)) {
-      numeric += char;
-    } else {
-      numeric += (char.charCodeAt(0) - 55); // A is ASCII 65, so A-55 = 10
-    }
-  }
-  
-  // Calculate mod 97
-  let remainder = 0;
-  for (let i = 0; i < numeric.length; i++) {
-    remainder = (remainder * 10 + parseInt(numeric.charAt(i), 10)) % 97;
-  }
-  
-  // IBAN is valid if remainder is 1
-  return { 
-    isValid: remainder === 1,
-    reason: remainder !== 1 ? 'IBAN checksum is invalid' : null
-  };
 };
 
 export default Checkout; 
