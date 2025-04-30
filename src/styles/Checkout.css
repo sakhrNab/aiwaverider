@@ -400,34 +400,45 @@
 
 /* Checkbox styles - With increased specificity to override Tailwind */
 .checkout-container .form-group.checkbox {
-  display: flex !important;
-  align-items: flex-start !important;
-  margin-bottom: 1rem !important;
-  position: relative !important;
+  position: relative;
+  padding-left: 0;
+  display: flex;
+  align-items: flex-start;
 }
 
 .checkout-container .form-group.checkbox input[type="checkbox"] {
-  width: auto !important;
-  margin-right: 0.8rem !important;
-  margin-top: 0.2rem !important;
-  /* Ensure checkbox isn't overridden */
-  opacity: 1 !important;
-  position: static !important;
-  appearance: auto !important;
-  -webkit-appearance: auto !important;
-  height: initial !important;
-  min-height: initial !important;
-  cursor: pointer !important;
-  z-index: 1 !important;
+  width: auto;
+  height: auto;
+  position: static;
+  opacity: 1;
+  margin-right: 10px;
+  margin-top: 3px;
+  appearance: auto;
+  -webkit-appearance: checkbox;
+  min-height: unset;
+  z-index: auto;
+  flex-shrink: 0;
 }
 
 .checkout-container .form-group.checkbox label {
-  margin-bottom: 0 !important;
-  font-weight: 400 !important;
-  font-size: 0.9rem !important;
-  line-height: 1.4 !important;
-  text-align: left !important;
+  display: inline;
+  margin-bottom: 0;
+  font-weight: normal;
+  white-space: normal;
+  text-align: left;
+  width: auto;
+  line-height: 1.4;
+  cursor: pointer;
+  color: #333;
+}
+
+/* Override any Tailwind or other CSS framework styles */
+.checkout-container input[type="checkbox"]:not(:checked),
+.checkout-container input[type="checkbox"]:checked {
+  position: static !important;
+  opacity: 1 !important;
   cursor: pointer !important;
+  pointer-events: auto !important;
 }
 
 .checkout-container .newsletter-checkbox {
@@ -609,6 +620,135 @@ iframe.StripeElement {
   border-radius: 8px;
   padding: 1.2rem;
   margin-bottom: 1rem;
+}
+
+/* SEPA specific styles */
+.sepa-form {
+  margin-top: 1rem;
+}
+
+.sepa-form .form-group input.valid {
+  border-color: #28a745;
+  background-color: #f8fff8;
+}
+
+.sepa-form .form-group input.invalid {
+  border-color: #dc3545;
+  background-color: #fff8f8;
+}
+
+.field-error {
+  color: #dc3545;
+  font-size: 0.85rem;
+  margin-top: 0.3rem;
+}
+
+.sepa-reference-container {
+  background-color: #f0f8ff;
+  border: 1px solid #d1e3fa;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 30px 0 20px;
+  clear: both;
+  width: 100%;
+}
+
+.reference-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+}
+
+.reference-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  font-size: 0.9rem;
+}
+
+.reference-label {
+  color: #666;
+  flex: 0 0 40%;
+}
+
+.reference-value {
+  font-weight: 500;
+  text-align: right;
+  flex: 0 0 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sepa-consent-container {
+  margin: 30px 0 20px;
+  padding: 15px;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+  width: 100%;
+  display: block;
+  clear: both;
+  overflow: hidden;
+}
+
+.sepa-consent-checkbox {
+  display: table !important;
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  table-layout: fixed !important;
+}
+
+.sepa-consent-checkbox input[type="checkbox"] {
+  display: table-cell !important;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  max-width: 18px !important;
+  margin: 3px 10px 0 0 !important;
+  padding: 0 !important;
+  vertical-align: top !important;
+  position: relative !important;
+  z-index: 2 !important;
+  opacity: 1 !important;
+  appearance: checkbox !important;
+  -webkit-appearance: checkbox !important;
+  -moz-appearance: checkbox !important;
+  float: none !important;
+  border: 1px solid #333 !important;
+}
+
+.sepa-consent-checkbox label {
+  display: table-cell !important;
+  width: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  vertical-align: top !important;
+  text-align: left !important;
+  font-size: 0.85rem !important;
+  line-height: 1.4 !important;
+  font-weight: normal !important;
+  color: #333 !important;
+  white-space: normal !important;
+}
+
+input[type="checkbox"]#sepaConsent {
+  position: static !important;
+  opacity: 1 !important;
+  margin: 3px 10px 0 0 !important;
+  padding: 0 !important;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  max-width: 18px !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+  display: inline-block !important;
+  float: left !important;
+  appearance: checkbox !important;
+  -webkit-appearance: checkbox !important;
+  -moz-appearance: checkbox !important;
+  z-index: 99 !important;
 }
 
 .payment-info-note {
@@ -871,4 +1011,94 @@ iframe.StripeElement {
   border-radius: 4px;
   color: #666;
   font-size: 0.85rem;
+}
+
+.sepa-consent-checkbox {
+  display: flex !important;
+  align-items: flex-start !important;
+  flex-direction: row !important;
+  width: 100% !important;
+  position: relative !important;
+}
+
+.sepa-consent-checkbox input[type="checkbox"] {
+  position: relative !important;
+  appearance: auto !important;
+  -webkit-appearance: checkbox !important;
+  opacity: 1 !important;
+  margin-right: 10px !important;
+  margin-top: 3px !important;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  flex-shrink: 0 !important;
+  cursor: pointer !important;
+  z-index: 2 !important;
+  display: block !important;
+  float: left !important;
+}
+
+.sepa-consent-checkbox label {
+  font-size: 0.85rem !important;
+  line-height: 1.4 !important;
+  white-space: normal !important;
+  max-width: calc(100% - 30px) !important;
+  text-align: left !important;
+  display: inline-block !important;
+  font-weight: normal !important;
+  margin-top: 0 !important;
+  cursor: pointer !important;
+  margin-left: 0 !important;
+  float: none !important;
+}
+
+.consent-wrapper {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.consent-wrapper input[type="checkbox"] {
+  margin: 3px 10px 0 0;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  appearance: checkbox;
+  -webkit-appearance: checkbox;
+  position: static;
+  opacity: 1;
+  z-index: 9;
+  float: left;
+  padding: 0;
+  border: 1px solid #999;
+}
+
+.consent-wrapper label {
+  font-size: 0.85rem;
+  line-height: 1.4;
+  flex: 1;
+  text-align: left;
+  margin: 0;
+  padding: 0;
+  font-weight: normal;
+  color: #333;
+}
+
+/* Override any framework-specific styles */
+#sepaConsent {
+  opacity: 1 !important;
+  position: static !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+  margin-right: 10px !important;
+  margin-top: 3px !important;
+}
+
+.form-group + .sepa-reference-container {
+  margin-top: 30px;
+}
+
+/* Add space after BIC field specifically */
+#bic {
+  margin-bottom: 20px;
 } 

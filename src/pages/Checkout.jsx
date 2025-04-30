@@ -491,6 +491,11 @@ const Checkout = () => {
   const [currency, setCurrency] = useState('USD');
   const [clientSecret, setClientSecret] = useState('');
   const [stripeLoading, setStripeLoading] = useState(false);
+  const [sepaIban, setSepaIban] = useState('');
+  const [sepaIbanValid, setSepaIbanValid] = useState(null);
+  const [sepaBic, setSepaBic] = useState('');
+  const [sepaBicValid, setSepaBicValid] = useState(null);
+  const [sepaConsent, setSepaConsent] = useState(false);
   
   // Calculate VAT (variable based on country)
   const vatRate = country === 'United States' ? 0 : 0.2; // 20% VAT for non-US
@@ -682,15 +687,63 @@ const Checkout = () => {
         return;
       }
       
-      console.log('SEPA payment initiated with details:', {
-        name: cardName,
-        email: email,
-        currency: currency,
-        countryCode: countryCode
-      });
+      // Validate IBAN one more time
+      const ibanValidation = validateIban(sepaIban);
+      if (!ibanValidation.isValid) {
+        toast.error(`Invalid IBAN: ${ibanValidation.reason}`);
+        setIsSubmitting(false);
+        return;
+      }
       
-      // Check API connectivity before proceeding
+      // Create a unique endToEndId
+      const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, '');
+      const randomSuffix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+      const endToEndId = `AIWR${timestamp.substring(0, 8)}${randomSuffix}`;
+      
+      // Get ordered items summary
+      const itemsDescription = cart.map(item => 
+        `${item.quantity}x ${item.title.substring(0, 20)}`
+      ).join(', ').substring(0, 140);
+      
+      // Create SEPA Credit Transfer payload
+      const sepaPayload = {
+        paymentType: 'sepa_credit_transfer',
+        debtorInfo: {
+          name: cardName,
+          iban: sepaIban.replace(/\s+/g, ''),
+          bic: sepaBic || undefined, // Optional, only include if provided
+          email: email || 'customer@example.com' // Provide a default email if not available
+        },
+        creditorInfo: {
+          name: 'AI Wave Rider Ltd',
+          iban: 'DE89370400440532013000', // Your company's IBAN
+          bic: 'DEUTDEDBXXX' // Your company's BIC
+        },
+        paymentInfo: {
+          endToEndId: endToEndId,
+          amount: finalTotal.toFixed(2),
+          currency: 'EUR',
+          executionDate: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD
+          remittanceInfo: `Order ${endToEndId.substring(endToEndId.length - 8)} - ${itemsDescription}`
+        },
+        metadata: {
+          orderId: `ORDER-${Date.now().toString().substring(6)}`,
+          items: cart.map(item => ({
+            id: item.id,
+            title: item.title || item.name,
+            price: item.price,
+            quantity: item.quantity
+          })),
+          customerConsent: true,
+          totalAmount: finalTotal,
+          discountApplied: discountApplied ? 'welcome10' : ''
+        }
+      };
+      
+      console.log('SEPA Credit Transfer payload:', sepaPayload);
+      
       try {
+        // First check our API connectivity
         const { checkApiConnectivity } = await import('../services/paymentApi');
         const connectivityCheck = await checkApiConnectivity();
         
@@ -709,55 +762,40 @@ const Checkout = () => {
       } catch (connectivityError) {
         console.error('Error checking API connectivity:', connectivityError);
         toast.error('Could not verify payment system availability. Trying to proceed anyway...');
-        // Continue despite connectivity check error - the actual payment might still work
       }
       
-      // Create a checkout session for SEPA
-      try {
-        const { url } = await createStripeCheckout({
-          cartTotal: finalTotal,
-          items: cart.map(item => ({
-            id: item.id,
-            title: item.title,
-            price: item.price,
-            quantity: item.quantity
-          })),
-          currency: 'eur', // Force EUR for SEPA
-          countryCode, 
-          email,
-          paymentMethodTypes: ['sepa_debit'],
-          billingDetails: {
-            name: cardName,
-            email: email,
-          }
-        });
+      // Send the SEPA Credit Transfer request to our backend
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/payments/sepa-credit-transfer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(sepaPayload)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Server returned ${response.status} ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      
+      // Handle the response
+      if (result.success) {
+        // Show success message and redirect
+        toast.success('SEPA Credit Transfer initiated successfully!');
         
-        console.log('SEPA checkout URL:', url);
+        // Clear the cart
+        clearCart();
         
-        if (!url) {
-          throw new Error('No checkout URL returned from the server');
-        }
-        
-        // Redirect to checkout
-        window.location.href = url;
-      } catch (checkoutError) {
-        console.error('SEPA checkout creation error:', checkoutError);
-        
-        // Handle specific error cases
-        if (checkoutError.message.includes('timed out')) {
-          toast.error('Payment system is taking too long to respond. Please try again in a few minutes.');
-        } else if (checkoutError.message.includes('Failed to fetch') || 
-                   checkoutError.message.includes('NetworkError')) {
-          toast.error('Cannot connect to payment system. Please check your internet connection and try again.');
-        } else {
-          toast.error(checkoutError.message || 'Failed to initialize SEPA payment. Please try another payment method.');
-        }
-        
-        setIsSubmitting(false);
+        // Redirect to success page with the reference
+        navigate(`/checkout/success?payment_id=${endToEndId}&status=pending&type=sepa_credit_transfer`);
+      } else {
+        throw new Error(result.message || 'Failed to initiate SEPA Credit Transfer');
       }
     } catch (error) {
       console.error('SEPA payment error:', error);
-      toast.error(error.message || 'SEPA payment failed. Please try another payment method.');
+      toast.error(error.message || 'SEPA Credit Transfer failed. Please try again or use another payment method.');
       setIsSubmitting(false);
     }
   };
@@ -1254,7 +1292,8 @@ const Checkout = () => {
           {/* Common customer information */}
           {paymentMethod !== PAYMENT_METHODS.GOOGLE_PAY && 
            paymentMethod !== PAYMENT_METHODS.APPLE_PAY && 
-           paymentMethod !== PAYMENT_METHODS.PAYPAL && (
+           paymentMethod !== PAYMENT_METHODS.PAYPAL && 
+           paymentMethod !== PAYMENT_METHODS.SEPA && (
             <>
               <div className="form-group">
                 <label htmlFor="email">Email Address</label>
@@ -1491,8 +1530,9 @@ const Checkout = () => {
           )}
           
           {paymentMethod === PAYMENT_METHODS.SEPA && (
-            <div className="sepa-container">
-              <p>Pay with SEPA Direct Debit (European bank accounts only)</p>
+            <div className="sepa-container payment-method-focus">
+              <h3>SEPA Credit Transfer</h3>
+              <p>Pay directly from your European bank account via SEPA</p>
               {/* 
                 PRODUCTION MIGRATION:
                 - Implement SEPA mandate management
@@ -1512,15 +1552,118 @@ const Checkout = () => {
                 </div>
               ) : (
                 <>
+                  <div className="sepa-form">
+                    <div className="form-group">
+                      <label htmlFor="accountHolder">Account Holder Name*</label>
+                      <input
+                        type="text"
+                        id="accountHolder"
+                        value={cardName}
+                        onChange={(e) => setCardName(e.target.value)}
+                        required
+                        placeholder="Full name of the account holder"
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label htmlFor="iban">IBAN (International Bank Account Number)*</label>
+                      <input
+                        type="text"
+                        id="iban"
+                        value={sepaIban || ''}
+                        onChange={(e) => {
+                          // Format and validate IBAN
+                          const formattedIban = e.target.value.replace(/\s+/g, '').toUpperCase();
+                          setSepaIban(formattedIban);
+                          
+                          // Basic IBAN validation
+                          if (formattedIban.length > 4) {
+                            try {
+                              const { isValid } = validateIban(formattedIban);
+                              setSepaIbanValid(isValid);
+                            } catch (error) {
+                              setSepaIbanValid(false);
+                            }
+                          } else {
+                            setSepaIbanValid(null);
+                          }
+                        }}
+                        required
+                        placeholder="e.g. DE89 3704 0044 0532 0130 00"
+                        className={sepaIbanValid === false ? 'invalid' : sepaIbanValid === true ? 'valid' : ''}
+                      />
+                      {sepaIbanValid === false && (
+                        <div className="field-error">Please enter a valid IBAN</div>
+                      )}
+                    </div>
+                    
+                    <div className="form-group">
+                      <label htmlFor="bic">BIC (Optional for many EU countries)</label>
+                      <input
+                        type="text"
+                        id="bic"
+                        value={sepaBic || ''}
+                        onChange={(e) => {
+                          // Format and validate BIC
+                          const formattedBic = e.target.value.replace(/\s+/g, '').toUpperCase();
+                          setSepaBic(formattedBic);
+                          
+                          // Basic BIC validation
+                          if (formattedBic.length > 0) {
+                            setSepaBicValid(/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(formattedBic));
+                          } else {
+                            setSepaBicValid(null);
+                          }
+                        }}
+                        placeholder="e.g. DEUTDEDBBER (optional for most EU transfers)"
+                        className={sepaBicValid === false ? 'invalid' : sepaBicValid === true ? 'valid' : ''}
+                      />
+                      {sepaBicValid === false && (
+                        <div className="field-error">Please enter a valid BIC or leave blank</div>
+                      )}
+                    </div>
+                    
+                    <div className="sepa-reference-container">
+                      <div className="reference-title">Payment Details:</div>
+                      <div className="reference-item">
+                        <span className="reference-label">Amount:</span>
+                        <span className="reference-value">{currency.toUpperCase()} {(finalTotal || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="reference-item">
+                        <span className="reference-label">Reference:</span>
+                        <span className="reference-value">ORDER-{Date.now().toString().substring(6)}</span>
+                      </div>
+                      <div className="reference-item">
+                        <span className="reference-label">Recipient:</span>
+                        <span className="reference-value">AI Wave Rider Ltd</span>
+                      </div>
+                    </div>
+                    
+                    <div className="sepa-consent-container">
+                      <div className="consent-wrapper">
+                        <input
+                          type="checkbox"
+                          id="sepaConsent"
+                          checked={sepaConsent || false}
+                          onChange={(e) => setSepaConsent(e.target.checked)}
+                          required
+                        />
+                        <label htmlFor="sepaConsent">
+                          I authorize the initiation of a SEPA Credit Transfer for the amount shown above and confirm that the IBAN and account holder details are correct.
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                  
                   <button 
                     onClick={handleSepaPayment}
                     className="pay-button"
-                    disabled={isSubmitting || !email || !cardName}
+                    disabled={isSubmitting || !cardName || !sepaIban || sepaIbanValid === false || sepaBicValid === false || !sepaConsent}
                   >
-                    {isSubmitting ? 'Processing...' : `Pay with SEPA Direct Debit`}
+                    {isSubmitting ? 'Processing...' : `Initiate SEPA Transfer`}
                   </button>
                   <p className="payment-info-note">
-                    You'll be redirected to a secure checkout page to complete your payment.
+                    SEPA Credit Transfers typically take 1-2 business days to complete. You'll receive confirmation by email once the payment is processed.
                   </p>
                 </>
               )}
@@ -1692,6 +1835,64 @@ const Checkout = () => {
       )}
     </div>
   );
+};
+
+// Function to validate IBAN
+const validateIban = (iban) => {
+  // Remove spaces and convert to uppercase
+  iban = iban.replace(/\s+/g, '').toUpperCase();
+  
+  // Basic structure validation
+  if (!/^[A-Z]{2}[0-9A-Z]{2,}$/.test(iban)) {
+    return { isValid: false, reason: 'Invalid IBAN format' };
+  }
+  
+  // Check country-specific length (partial implementation)
+  const countryLengths = {
+    'AT': 20, 'BE': 16, 'BG': 22, 'CH': 21, 'CY': 28, 'CZ': 24, 
+    'DE': 22, 'DK': 18, 'EE': 20, 'ES': 24, 'FI': 18, 'FR': 27, 
+    'GB': 22, 'GI': 23, 'GR': 27, 'HR': 21, 'HU': 28, 'IE': 22, 
+    'IT': 27, 'LI': 21, 'LT': 20, 'LU': 20, 'LV': 21, 'MC': 27,
+    'MT': 31, 'NL': 18, 'PL': 28, 'PT': 25, 'RO': 24, 'SE': 24, 
+    'SI': 19, 'SK': 24
+  };
+  
+  const countryCode = iban.substring(0, 2);
+  const expectedLength = countryLengths[countryCode];
+  
+  if (expectedLength && iban.length !== expectedLength) {
+    return { 
+      isValid: false, 
+      reason: `IBAN for ${countryCode} should be ${expectedLength} characters` 
+    };
+  }
+  
+  // MOD-97 checksum validation (the mathematical IBAN validation)
+  // Move the first four characters to the end
+  const rearranged = iban.substring(4) + iban.substring(0, 4);
+  
+  // Convert letters to numbers (A=10, B=11, ..., Z=35)
+  let numeric = '';
+  for (let i = 0; i < rearranged.length; i++) {
+    const char = rearranged.charAt(i);
+    if (/[0-9]/.test(char)) {
+      numeric += char;
+    } else {
+      numeric += (char.charCodeAt(0) - 55); // A is ASCII 65, so A-55 = 10
+    }
+  }
+  
+  // Calculate mod 97
+  let remainder = 0;
+  for (let i = 0; i < numeric.length; i++) {
+    remainder = (remainder * 10 + parseInt(numeric.charAt(i), 10)) % 97;
+  }
+  
+  // IBAN is valid if remainder is 1
+  return { 
+    isValid: remainder === 1,
+    reason: remainder !== 1 ? 'IBAN checksum is invalid' : null
+  };
 };
 
 export default Checkout; 
