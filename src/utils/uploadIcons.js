@@ -2,6 +2,7 @@
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/storage';
 import { db } from './firebase';
+import { FIREBASE } from '../config/config';
 
 // Import icons
 import adsIcon from '../assets/ai-tools/ads-icon.svg';
@@ -74,6 +75,16 @@ const uploadIcon = async (keyword, iconPath) => {
  * Upload all icons to Firebase Storage
  */
 export const uploadAllIcons = async () => {
+  // Check if we have valid Firebase config
+  if (!FIREBASE.API_KEY || !FIREBASE.STORAGE_BUCKET) {
+    console.error('[UploadIcons] Firebase not configured properly');
+    return {
+      success: false,
+      results: {},
+      error: 'Firebase configuration missing'
+    };
+  }
+
   console.log('[UploadIcons] Starting to upload AI tool icons to Firebase Storage...');
   
   const results = {};

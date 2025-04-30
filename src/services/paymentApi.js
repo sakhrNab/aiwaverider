@@ -334,13 +334,48 @@ export const createPaymentIntent = async (data) => {
 };
 
 /**
- * Check payment status
- * @param {string} id - Payment ID (payment intent or checkout session)
- * @param {string} type - Payment type ('payment_intent' or 'checkout_session')
+ * Get payment status
+ * @param {string} id - Payment ID
+ * @param {string} type - Payment type (payment_intent, checkout_session, paypal_order, sepa_credit_transfer)
  * @returns {Promise<Object>} - Payment status details
  */
 export const getPaymentStatus = async (id, type = 'payment_intent') => {
   try {
+    // Log what we're checking for diagnostic purposes
+    console.log(`Checking payment status for ${type} ${id}`);
+    
+    // Handle special payment types that use different endpoints
+    if (type === 'sepa_credit_transfer') {
+      const response = await fetch(`${API_URL}/api/payments/sepa-credit-transfer/${id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        // Gracefully handle errors for SEPA payments
+        console.warn(`SEPA payment check returned status ${response.status}`);
+        
+        // For SEPA, we'll return a pending status as a fallback
+        // This is because the payment might still be processing in the banking system
+        return {
+          success: true,
+          id,
+          type,
+          status: 'pending',
+          result: {
+            id,
+            status: 'pending',
+            metadata: { orderId: id }
+          }
+        };
+      }
+      
+      return await response.json();
+    }
+    
+    // Standard payment status endpoint for other payment types
     const response = await fetch(`${API_URL}/api/payments/payment-status/${id}?type=${type}`, {
       method: 'GET',
       headers: {
@@ -349,13 +384,29 @@ export const getPaymentStatus = async (id, type = 'payment_intent') => {
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
       throw new Error(errorData.error || 'Failed to get payment status');
     }
     
     return await response.json();
   } catch (error) {
     console.error('Error checking payment status:', error);
+    
+    // Return a minimal fallback object that the UI can handle
+    if (type === 'sepa_credit_transfer') {
+      return {
+        success: true,
+        id,
+        type,
+        status: 'pending',  // Default status for SEPA
+        result: {
+          id,
+          status: 'pending',
+          metadata: { orderId: id }
+        }
+      };
+    }
+    
     throw error;
   }
 };

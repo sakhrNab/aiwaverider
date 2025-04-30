@@ -27,6 +27,7 @@ import GooglePayButton from '../components/GooglePayButton';
 import ApplePayButton from '../components/ApplePayButton';
 import PaymentSuccessRecommendations from '../components/PaymentSuccessRecommendations';
 import '../styles/Checkout.css';
+import { API, ENV, PAYMENT } from '../config/config';
 
 // Add some style fixes for the Stripe Elements and form fields
 const styleFixesCSS = `
@@ -108,15 +109,11 @@ iframe.StripeElement {
 `;
 
 // Initialize Stripe with your publishable key
-// Use environment variable now that we've fixed the .env.local file
-const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_51R2112HlDxuwLTKvZuzoJTkH5l9gKERbMTvhYVVROWdmkzcN6WzLCMvZa8j71BSeOVDtrWAYGbCfDmb8AGjKr0YS00m8aH9BD8';
+// Use the config system for environment variables
+const stripeKey = PAYMENT.STRIPE.PUBLIC_KEY || 'pk_test_51R2112HlDxuwLTKvZuzoJTkH5l9gKERbMTvhYVVROWdmkzcN6WzLCMvZa8j71BSeOVDtrWAYGbCfDmb8AGjKr0YS00m8aH9BD8';
 console.log('Stripe key available:', !!stripeKey, 'Key length:', stripeKey ? stripeKey.length : 0);
 // Added extra logging to debug
-console.log('Environment variables:', {
-  VITE_STRIPE_PUBLISHABLE_KEY: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY,
-  VITE_API_URL: import.meta.env.VITE_API_URL,
-  NODE_ENV: import.meta.env.NODE_ENV
-});
+console.log('Environment:', ENV);
 
 /**
  * PAYMENT METHODS MIGRATION TO PRODUCTION
@@ -708,12 +705,15 @@ const Checkout = () => {
     setIsSubmitting(true);
     
     try {
-      console.log('Starting SEPA payment process');
-      console.log('Cart items:', cart);
+      // Import logging service
+      const { logInfo, logError, logTransaction } = await import('../services/logService');
+      
+      logInfo('Starting SEPA payment process', { currency, totalAmount: finalTotal }, 'handleSepaPayment');
       
       // SEPA requires EUR as the currency
       if (currency.toLowerCase() !== 'eur') {
         toast.error('SEPA payments require EUR as the currency. Please switch to EUR.');
+        logError('Currency not EUR for SEPA payment', { currency }, 'handleSepaPayment');
         setIsSubmitting(false);
         return;
       }
@@ -722,6 +722,7 @@ const Checkout = () => {
       const ibanValidation = validateIban(sepaIban);
       if (!ibanValidation.isValid) {
         toast.error(`Invalid IBAN: ${ibanValidation.reason}`);
+        logError('Invalid IBAN for SEPA payment', { reason: ibanValidation.reason }, 'handleSepaPayment');
         setIsSubmitting(false);
         return;
       }
@@ -734,6 +735,7 @@ const Checkout = () => {
       // Safety check for cart items
       if (!cart || !Array.isArray(cart) || cart.length === 0) {
         toast.error('Your cart appears to be empty. Please add items before proceeding.');
+        logError('Empty cart for SEPA payment', {}, 'handleSepaPayment');
         setIsSubmitting(false);
         return;
       }
@@ -753,7 +755,7 @@ const Checkout = () => {
           itemsDescription = itemsDescription.substring(0, 137) + '...';
         }
       } catch (descError) {
-        console.error('Error creating items description:', descError);
+        logError(descError, { cart }, 'handleSepaPayment');
         itemsDescription = 'Order items';  // Fallback
       }
       
@@ -795,14 +797,21 @@ const Checkout = () => {
         }
       };
       
-      console.log('SEPA Credit Transfer payload:', sepaPayload);
+      // Log the transaction start (with sensitive data redacted)
+      logTransaction(endToEndId, 'initiated', 'sepa_credit_transfer', { 
+        amount: finalTotal.toFixed(2),
+        currency: 'EUR',
+        items: cart.length
+      });
       
-      // Development testing flag - set to true to simulate successful payment without backend
-      const SIMULATE_PAYMENT_SUCCESS = true;
+      // Use centralized config for simulation mode
+      const enableSimulation = PAYMENT.ENABLE_SIMULATION;
       
       // Simulation path for testing in development
-      if (SIMULATE_PAYMENT_SUCCESS && import.meta.env.DEV) {
-        console.log('SIMULATING successful SEPA payment in development mode');
+      if (enableSimulation) {
+        logInfo('Simulating SEPA payment in non-production environment', 
+               { endToEndId, amount: finalTotal }, 
+               'handleSepaPayment');
         
         // Simulate processing delay
         await new Promise(resolve => setTimeout(resolve, 1500));
@@ -814,12 +823,18 @@ const Checkout = () => {
         try {
           localStorage.setItem('lastPurchasedItems', JSON.stringify(cart));
         } catch (err) {
-          console.error('Error saving cart to localStorage:', err);
+          logError(err, { cart: 'cart storage failed' }, 'handleSepaPayment');
         }
         
         // Flag that payment is completed to show recommendations
         setPaymentCompleted(true);
         setShowRecommendations(true);
+        
+        // Log the simulated transaction
+        logTransaction(endToEndId, 'simulated', 'sepa_credit_transfer', { 
+          amount: finalTotal.toFixed(2),
+          currency: 'EUR'
+        });
         
         // Extra toast to inform user about recommendations
         setTimeout(() => {
@@ -842,13 +857,16 @@ const Checkout = () => {
         return;
       }
       
+      // Production path - Check API connectivity before proceeding
       try {
-        // First check our API connectivity
+        logInfo('Checking API connectivity before SEPA payment', {}, 'handleSepaPayment');
         const { checkApiConnectivity } = await import('../services/paymentApi');
         const connectivityCheck = await checkApiConnectivity();
         
         if (!connectivityCheck.ok) {
-          console.error('API connectivity check failed:', connectivityCheck.error);
+          logError('API connectivity check failed before SEPA payment', 
+                  connectivityCheck, 
+                  'handleSepaPayment');
           
           if (connectivityCheck.fallbackOk) {
             toast.error(`Payment system issue: ${connectivityCheck.error}. Please try again in a few minutes.`);
@@ -860,12 +878,16 @@ const Checkout = () => {
           return;
         }
       } catch (connectivityError) {
-        console.error('Error checking API connectivity:', connectivityError);
+        logError(connectivityError, {}, 'handleSepaPayment-apiConnectivity');
         toast.error('Could not verify payment system availability. Trying to proceed anyway...');
       }
       
-      // Send the SEPA Credit Transfer request to our backend
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/payments/sepa-credit-transfer`, {
+      // Send the SEPA Credit Transfer request to our backend using config API URL
+      const apiUrl = API.URL;
+      console.log('API URL:', apiUrl);
+      logInfo('Sending SEPA payment to backend', { endpoint: `${apiUrl}/api/payments/sepa-credit-transfer` }, 'handleSepaPayment');
+      
+      const response = await fetch(`${apiUrl}/api/payments/sepa-credit-transfer`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -875,13 +897,27 @@ const Checkout = () => {
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Server returned ${response.status} ${response.statusText}`);
+        const errorMessage = errorData.message || `Server returned ${response.status} ${response.statusText}`;
+        
+        logError(errorMessage, { 
+          status: response.status, 
+          statusText: response.statusText,
+          errorData
+        }, 'handleSepaPayment-apiResponse');
+        
+        throw new Error(errorMessage);
       }
       
       const result = await response.json();
       
       // Handle the response
       if (result.success) {
+        // Log successful transaction
+        logTransaction(endToEndId, 'success', 'sepa_credit_transfer', { 
+          amount: finalTotal.toFixed(2),
+          orderId: orderReference
+        });
+        
         // Show success message
         toast.success('SEPA Credit Transfer initiated successfully!');
         
@@ -889,7 +925,7 @@ const Checkout = () => {
         try {
           localStorage.setItem('lastPurchasedItems', JSON.stringify(cart));
         } catch (err) {
-          console.error('Error saving cart to localStorage:', err);
+          logError(err, {}, 'handleSepaPayment-localStorage');
         }
         
         // Show payment recommendations before redirecting
@@ -913,9 +949,21 @@ const Checkout = () => {
           navigate(`/checkout/success?payment_id=${endToEndId}&status=pending&type=sepa_credit_transfer`);
         }, 8000); // Display recommendations for 8 seconds before redirecting
       } else {
+        logError('SEPA payment failed', result, 'handleSepaPayment-resultFailure');
         throw new Error(result.message || 'Failed to initiate SEPA Credit Transfer');
       }
     } catch (error) {
+      const { logError } = await import('../services/logService').catch(() => ({ 
+        logError: (err) => console.error('Error logging service unavailable:', err)
+      }));
+      
+      logError(error, { 
+        sepaIban: sepaIban ? '***REDACTED***' : undefined,
+        sepaBic: sepaBic ? '***REDACTED***' : undefined,
+        finalTotal,
+        currency
+      }, 'handleSepaPayment');
+      
       console.error('SEPA payment error:', error);
       toast.error(error.message || 'SEPA Credit Transfer failed. Please try again or use another payment method.');
       setIsSubmitting(false);

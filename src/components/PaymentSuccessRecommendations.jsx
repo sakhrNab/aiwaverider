@@ -18,19 +18,42 @@ const PaymentSuccessRecommendations = ({ purchasedItems, currency = 'USD', limit
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Standard placeholder image for agents
-  const getPlaceholderImage = () => 
-    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%234a4de7'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='24' text-anchor='middle' dominant-baseline='middle' fill='%23ffffff'%3EAgent Image%3C/text%3E%3C/svg%3E";
+  // Standard placeholder image for agents - using data URI instead of external service
+  const getPlaceholderImage = (text = 'Agent Image') => {
+    // Generate a random color from a palette of blues and purples
+    const colors = ['4a4de7', '3498db', '9b59b6', '2980b9', '8e44ad', '2c3e50'];
+    const bgColor = colors[Math.floor(Math.random() * colors.length)];
+    
+    // Create SVG with the product title embedded
+    const displayText = text.length > 15 ? text.substring(0, 15) + '...' : text;
+    return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%23${bgColor}'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='20' text-anchor='middle' dominant-baseline='middle' fill='%23ffffff'%3E${displayText}%3C/text%3E%3C/svg%3E`;
+  };
 
   // Handle image loading errors by providing standard placeholder
   const handleImageError = (e) => {
     console.log('Image loading error:', e.target.src);
-    e.target.src = getPlaceholderImage();
-    e.target.onerror = null;
+    // Get the product title from the alt text or use a default
+    const productTitle = e.target.alt || 'Agent Image';
+    e.target.src = getPlaceholderImage(productTitle);
+    e.target.onerror = null; // Prevent infinite error loops
   };
 
-  // Get image URL with the same robust fallback logic as FeaturedAgents
+  // Get image URL with robust fallback logic
   const getImageUrl = (agent) => {
+    // Create a product title for use in placeholder
+    const productTitle = agent.title || agent.name || 'AI Agent';
+    
+    // First try local images from the assets directory
+    if (agent.id) {
+      try {
+        // Try to use a local image based on the agent ID
+        // This will work for development with static assets
+        return `/assets/agents/${agent.id}.jpg`;
+      } catch (e) {
+        // Will fall through to next option
+      }
+    }
+    
     // Check for direct imageUrl property
     if (agent.imageUrl) {
       return agent.imageUrl;
@@ -62,7 +85,8 @@ const PaymentSuccessRecommendations = ({ purchasedItems, currency = 'USD', limit
       }
     }
     
-    return getPlaceholderImage();
+    // Return a data URI placeholder as last resort
+    return getPlaceholderImage(productTitle);
   };
 
   useEffect(() => {

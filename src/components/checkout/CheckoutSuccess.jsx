@@ -106,47 +106,81 @@ const CheckoutSuccess = () => {
     try {
       setIsLoading(true);
       
+      // Special handling for SEPA payments
+      if (type === 'sepa_credit_transfer') {
+        try {
+          // Get payment status from API
+          const response = await getPaymentStatus(paymentId, type);
+          
+          if (response?.status === 'pending' || 
+              response?.status === 'processing' || 
+              response?.status === 'completed' || 
+              response?.status === 'simulated') {
+            setOrderStatus(response.status);
+            
+            // Get order ID from metadata if available
+            if (response.result?.metadata?.orderId || response.result?.metadata?.order_id) {
+              setOrderId(response.result.metadata.orderId || response.result.metadata.order_id);
+            } else {
+              // Use payment ID as fallback order reference
+              setOrderId(paymentId);
+            }
+            
+            // Show appropriate notification toast
+            toast.success(
+              <div>
+                <strong>SEPA Credit Transfer Initiated!</strong>
+                <p>Your payment is being processed by your bank.</p>
+              </div>,
+              {
+                duration: 6000,
+                icon: <FontAwesomeIcon icon={faMoneyBillTransfer} />,
+                id: 'sepa-payment-toast'
+              }
+            );
+          } else {
+            setOrderStatus('failed');
+            setError('Payment could not be confirmed. Please contact support.');
+          }
+        } catch (sepaErr) {
+          console.error('Error checking SEPA payment status:', sepaErr);
+          // For SEPA, we'll still show a success page because the transfer has been initiated
+          console.log('Using fallback success for SEPA payment');
+          setOrderStatus('pending'); // SEPA payments start as pending
+          setOrderId(paymentId);
+        }
+        
+        setIsLoading(false);
+        return;
+      }
+      
+      // Standard payment processing for non-SEPA payments
       // Get payment status from API
       const response = await getPaymentStatus(paymentId, type);
       
-      if (response?.status === 'succeeded' || response?.status === 'processing' || 
-          (type === 'sepa_credit_transfer' && response?.status === 'pending')) {
+      if (response?.status === 'succeeded' || response?.status === 'processing') {
         setOrderStatus(response.status || 'processing');
         
         // Get order ID from metadata if available
-        if (response.result?.metadata?.order_id || response.result?.metadata?.orderId) {
-          setOrderId(response.result.metadata.order_id || response.result.metadata.orderId);
+        if (response.data?.metadata?.order_id || response.data?.metadata?.orderId) {
+          setOrderId(response.data.metadata.order_id || response.data.metadata.orderId);
         } else {
           // Use payment ID as fallback order reference
           setOrderId(paymentId);
         }
         
-        // Show appropriate notification toast
-        if (type === 'sepa_credit_transfer') {
-          toast.success(
-            <div>
-              <strong>SEPA Credit Transfer Initiated!</strong>
-              <p>Your payment is being processed by your bank.</p>
-            </div>,
-            {
-              duration: 6000,
-              icon: <FontAwesomeIcon icon={faMoneyBillTransfer} />,
-              id: 'sepa-payment-toast'
-            }
-          );
-        } else {
-          toast.success(
-            <div>
-              <strong>Thank you for your purchase!</strong>
-              <p>Your agent template has been sent to your email.</p>
-            </div>,
-            {
-              duration: 6000,
-              icon: <FontAwesomeIcon icon={faEnvelope} />,
-              id: 'email-delivery-toast'
-            }
-          );
-        }
+        // Show email delivery notification
+        toast.success(
+          <div>
+            <strong>Thank you for your purchase!</strong>
+            <p>Your agent template has been sent to your email.</p>
+          </div>,
+          {
+            duration: 6000,
+            icon: <FontAwesomeIcon icon={faEnvelope} />,
+            id: 'email-delivery-toast'
+          }
+        );
       } else {
         setOrderStatus('failed');
         setError('Payment could not be confirmed. Please contact support.');

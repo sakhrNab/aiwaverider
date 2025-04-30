@@ -1045,6 +1045,68 @@ router.get('/payment-status/:id', async (req, res) => {
         result = response.data;
         break;
         
+      case 'sepa_credit_transfer':
+        // Get SEPA Credit Transfer status from our own database
+        try {
+          const paymentDoc = await db.collection('payments').doc(id).get();
+          
+          if (!paymentDoc.exists) {
+            return res.status(404).json({ 
+              success: false,
+              error: 'SEPA payment not found'
+            });
+          }
+          
+          const payment = paymentDoc.data();
+          
+          // If in simulation mode, determine status based on time elapsed
+          if (payment.simulationMode) {
+            const createdAt = new Date(payment.createdAt);
+            const now = new Date();
+            const minutesElapsed = (now - createdAt) / (1000 * 60);
+            
+            // Simulate status progression
+            let updatedStatus = payment.status;
+            if (minutesElapsed > 30) {
+              updatedStatus = 'completed';
+            } else if (minutesElapsed > 5) {
+              updatedStatus = 'processing';
+            } else {
+              updatedStatus = 'pending';
+            }
+            
+            // Update status in database if it has changed
+            if (updatedStatus !== payment.status) {
+              await db.collection('payments').doc(id).update({
+                status: updatedStatus,
+                updatedAt: new Date().toISOString()
+              });
+              payment.status = updatedStatus;
+            }
+          }
+          
+          // Format response to match other payment types
+          result = {
+            id: payment.id,
+            status: payment.status,
+            amount: payment.amount,
+            currency: payment.currency,
+            bankDetails: payment.bankDetails,
+            debtorInfo: payment.debtorInfo,
+            metadata: payment.metadata || {},
+            created: payment.createdAt,
+            updated: payment.updatedAt || payment.createdAt
+          };
+        } catch (dbError) {
+          console.error(`Error retrieving SEPA payment from database: ${dbError.message}`);
+          return res.status(500).json({ 
+            success: false,
+            error: 'Error retrieving SEPA payment details',
+            details: dbError.message
+          });
+        }
+        break;
+        
       default:
         return res.status(400).json({ error: `Unsupported payment type: ${type}` });
     }
@@ -1054,7 +1116,8 @@ router.get('/payment-status/:id', async (req, res) => {
       id,
       type,
       status: result.status,
-      data: result
+      data: result,  // Keep data for backward compatibility
+      result         // Include result as an additional field
     });
   } catch (error) {
     console.error(`Error getting payment status: ${error.message}`, error);
@@ -1251,6 +1314,260 @@ router.post('/create-stripe-checkout', async (req, res) => {
   } catch (error) {
     logPayment('STRIPE', 'CHECKOUT_SESSION_FAILED', null, error);
     return res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+/**
+ * SEPA Credit Transfer payment endpoint
+ * @route POST /api/payments/sepa-credit-transfer
+ */
+router.post('/sepa-credit-transfer', async (req, res) => {
+  try {
+    const sepaPayload = req.body;
+    
+    // Log the received request (with sensitive data redacted)
+    console.log('Processing SEPA Credit Transfer payment request:', {
+      paymentType: sepaPayload.paymentType,
+      amount: sepaPayload.paymentInfo?.amount,
+      currency: sepaPayload.paymentInfo?.currency,
+      debtorName: sepaPayload.debtorInfo?.name || 'not provided',
+      hasIban: !!sepaPayload.debtorInfo?.iban,
+      hasBic: !!sepaPayload.debtorInfo?.bic,
+      email: sepaPayload.debtorInfo?.email || 'not provided',
+      endToEndId: sepaPayload.paymentInfo?.endToEndId,
+      metadata: sepaPayload.metadata ? 'provided' : 'not provided',
+      items: sepaPayload.metadata?.items ? sepaPayload.metadata.items.length : 0
+    });
+    
+    // Validate required fields
+    if (!sepaPayload.paymentInfo?.amount || !sepaPayload.metadata?.items) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required fields: amount and items are required' 
+      });
+    }
+    
+    if (!sepaPayload.debtorInfo?.iban) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: debtor IBAN is required'
+      });
+    }
+    
+    if (logger) {
+      logger.info(`Processing SEPA Credit Transfer payment: ${JSON.stringify({
+        amount: sepaPayload.paymentInfo.amount,
+        currency: sepaPayload.paymentInfo.currency,
+        email: sepaPayload.debtorInfo.email ? 'provided' : 'not provided',
+        endToEndId: sepaPayload.paymentInfo.endToEndId
+      })}`);
+    }
+    
+    // Use the provided endToEndId or generate a unique reference ID
+    const transferReference = sepaPayload.paymentInfo?.endToEndId || `SEPA-${uuidv4()}`;
+    
+    // Use the provided orderId or generate a new one
+    const orderId = sepaPayload.metadata?.orderId || uuidv4();
+    
+    // Determine if we're in simulation mode (default to true in non-production)
+    const isSimulation = process.env.SEPA_SIMULATION_MODE === 'true' || process.env.NODE_ENV !== 'production';
+    
+    // Create payment data for the response
+    const paymentData = {
+      id: transferReference,
+      amount: parseFloat(sepaPayload.paymentInfo.amount),
+      currency: sepaPayload.paymentInfo.currency.toLowerCase(),
+      type: 'sepa_credit_transfer',
+      reference: transferReference,
+      orderId,
+      status: isSimulation ? 'simulated' : 'pending',
+      bankDetails: {
+        beneficiary: process.env.SEPA_BENEFICIARY_NAME || sepaPayload.creditorInfo?.name || 'AI Wave Rider Ltd',
+        iban: process.env.SEPA_IBAN || sepaPayload.creditorInfo?.iban || 'DE89370400440532013000',
+        bic: process.env.SEPA_BIC || sepaPayload.creditorInfo?.bic || 'DEUTDEFFXXX',
+        bankName: process.env.SEPA_BANK_NAME || 'Example Bank',
+        reference: transferReference
+      },
+      debtorInfo: {
+        name: sepaPayload.debtorInfo.name,
+        iban: sepaPayload.debtorInfo.iban,
+        bic: sepaPayload.debtorInfo.bic
+      },
+      remittanceInfo: sepaPayload.paymentInfo.remittanceInfo,
+      instructions: 'Please transfer the exact amount using the provided reference number.',
+      simulationMode: isSimulation
+    };
+    
+    // Build the URL for the success page, including the payment ID and order ID
+    const redirectUrl = sepaPayload.successUrl || `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout/success?payment_id=${transferReference}&order_id=${orderId}&status=pending&type=sepa_credit_transfer`;
+    
+    // Store transfer in database for reference
+    try {
+      await db.collection('payments').doc(transferReference).set({
+        ...paymentData,
+        createdAt: new Date().toISOString(),
+        metadata: {
+          ...sepaPayload.metadata,
+          orderId,
+          items: Array.isArray(sepaPayload.metadata?.items) 
+            ? sepaPayload.metadata.items 
+            : []
+        },
+        customerEmail: sepaPayload.debtorInfo.email || null,
+        customerName: sepaPayload.debtorInfo.name || null
+      });
+      
+      // If we have simulation mode enabled and customer email, process the order now
+      if (isSimulation && sepaPayload.debtorInfo.email) {
+        try {
+          // Process the simulated payment
+          const orderResult = await orderController.processPaymentSuccess({
+            id: transferReference,
+            amount: parseFloat(sepaPayload.paymentInfo.amount) * 100, // Convert to cents for consistency
+            currency: sepaPayload.paymentInfo.currency.toLowerCase(),
+            payment_method_types: ['sepa_credit_transfer'],
+            metadata: {
+              ...sepaPayload.metadata,
+              order_id: orderId,
+              email: sepaPayload.debtorInfo.email
+            },
+            customer: {
+              id: null,
+              email: sepaPayload.debtorInfo.email
+            },
+            items: sepaPayload.metadata.items
+          });
+          
+          // Add the order result to the response
+          paymentData.orderProcessed = true;
+          paymentData.orderId = orderResult.orderId;
+        } catch (orderError) {
+          logger.error(`Error processing simulated SEPA order: ${orderError.message}`);
+          // Don't fail the response, just note the error
+          paymentData.orderProcessed = false;
+          paymentData.orderError = orderError.message;
+        }
+      }
+    } catch (dbError) {
+      logger.error(`Error storing SEPA payment in database: ${dbError.message}`);
+      // Continue anyway as this is not critical for the user flow
+    }
+    
+    logPayment('SEPA', 'CREDIT_TRANSFER_INITIATED', paymentData);
+    
+    return res.status(200).json({
+      success: true,
+      payment: paymentData,
+      redirectUrl
+    });
+  } catch (error) {
+    console.error('SEPA Credit Transfer processing error:', error);
+    if (logger) logger.error(`SEPA Credit Transfer error: ${error.message}`);
+    
+    // Return detailed error information
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Payment processing failed',
+      details: error.code ? {
+        code: error.code,
+        type: error.type
+      } : undefined
+    });
+  }
+});
+
+/**
+ * Check SEPA Credit Transfer status
+ * @route GET /api/payments/sepa-credit-transfer/:id
+ */
+router.get('/sepa-credit-transfer/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ error: 'Payment ID is required' });
+    }
+    
+    console.log(`Checking SEPA Credit Transfer status for ${id}`);
+    if (logger) logger.info(`Checking SEPA Credit Transfer status for ${id}`);
+    
+    // In a real implementation, you would check with your banking API
+    // For now, we'll check our database and simulate statuses
+    
+    let payment;
+    try {
+      const paymentDoc = await db.collection('payments').doc(id).get();
+      
+      if (!paymentDoc.exists) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Payment not found'
+        });
+      }
+      
+      payment = paymentDoc.data();
+    } catch (dbError) {
+      logger.error(`Error retrieving SEPA payment from database: ${dbError.message}`);
+      return res.status(500).json({ 
+        success: false,
+        error: 'Error retrieving payment details',
+        details: dbError.message
+      });
+    }
+    
+    // Determine payment status based on simulation or time elapsed
+    let status = payment.status;
+    
+    // If in simulation mode, we'll transition the status based on creation time
+    if (payment.simulationMode) {
+      const createdAt = new Date(payment.createdAt);
+      const now = new Date();
+      const minutesElapsed = (now - createdAt) / (1000 * 60);
+      
+      // Simulate status progression
+      if (minutesElapsed > 30) {
+        status = 'completed';
+      } else if (minutesElapsed > 5) {
+        status = 'processing';
+      } else {
+        status = 'pending';
+      }
+      
+      // Update status in database if it has changed
+      if (status !== payment.status) {
+        try {
+          await db.collection('payments').doc(id).update({
+            status,
+            updatedAt: new Date().toISOString()
+          });
+          payment.status = status;
+        } catch (updateError) {
+          logger.error(`Error updating SEPA payment status: ${updateError.message}`);
+          // Continue anyway
+        }
+      }
+    }
+    
+    return res.status(200).json({
+      success: true,
+      id,
+      status,
+      reference: payment.reference,
+      amount: payment.amount,
+      currency: payment.currency,
+      bankDetails: payment.bankDetails,
+      simulationMode: payment.simulationMode,
+      createdAt: payment.createdAt
+    });
+  } catch (error) {
+    console.error(`Error checking SEPA Credit Transfer status: ${error.message}`, error);
+    if (logger) logger.error(`Error checking SEPA Credit Transfer status: ${error.message}`);
+    
+    return res.status(500).json({ 
+      success: false,
+      error: 'Failed to check payment status',
+      details: error.message
+    });
   }
 });
 
