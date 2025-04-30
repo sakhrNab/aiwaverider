@@ -125,8 +125,16 @@ const processPaymentSuccess = async (paymentData) => {
     const metadata = paymentData.metadata || {};
     const items = Array.isArray(paymentData.items) ? paymentData.items : [];
     
-    // Get customer info
+    // Get customer info - prioritize customer email, then metadata email, never use hardcoded default
     const email = paymentData.customer?.email || metadata.email || null;
+    
+    // Log email being used for confirmation
+    if (email) {
+      logger.info(`Using email address for order confirmation: ${email}`);
+    } else {
+      logger.warn(`No email address available for order confirmation - unable to send template`);
+    }
+    
     const userId = paymentData.customer?.id || metadata.userId || null;
     
     // Extract order details

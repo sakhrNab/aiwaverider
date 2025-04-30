@@ -4,6 +4,7 @@ import { FaArrowLeft, FaInfoCircle, FaMinus, FaPlus, FaTrashAlt, FaShoppingCart,
 import { SiStripe, SiApple, SiVisa, SiMastercard, SiAmericanexpress, SiPaypal } from 'react-icons/si';
 import { toast } from 'react-toastify';
 import { useCart } from '../contexts/CartContext.jsx';
+import { useAuth } from '../contexts/AuthContext.jsx';
 import { getRelatedProducts, getSimilarProductRecommendations } from '../utils/productData';
 import { PayPalButtons, usePayPalScriptReducer } from '@paypal/react-paypal-js';
 import { 
@@ -27,7 +28,6 @@ import GooglePayButton from '../components/GooglePayButton';
 import ApplePayButton from '../components/ApplePayButton';
 import PaymentSuccessRecommendations from '../components/PaymentSuccessRecommendations';
 import '../styles/Checkout.css';
-import { API, ENV, PAYMENT } from '../config/config';
 
 // Add some style fixes for the Stripe Elements and form fields
 const styleFixesCSS = `
@@ -109,11 +109,15 @@ iframe.StripeElement {
 `;
 
 // Initialize Stripe with your publishable key
-// Use the config system for environment variables
-const stripeKey = PAYMENT.STRIPE.PUBLIC_KEY || 'pk_test_51R2112HlDxuwLTKvZuzoJTkH5l9gKERbMTvhYVVROWdmkzcN6WzLCMvZa8j71BSeOVDtrWAYGbCfDmb8AGjKr0YS00m8aH9BD8';
+// Use environment variable now that we've fixed the .env.local file
+const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_51R2112HlDxuwLTKvZuzoJTkH5l9gKERbMTvhYVVROWdmkzcN6WzLCMvZa8j71BSeOVDtrWAYGbCfDmb8AGjKr0YS00m8aH9BD8';
 console.log('Stripe key available:', !!stripeKey, 'Key length:', stripeKey ? stripeKey.length : 0);
 // Added extra logging to debug
-console.log('Environment:', ENV);
+console.log('Environment variables:', {
+  VITE_STRIPE_PUBLISHABLE_KEY: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY,
+  VITE_API_URL: import.meta.env.VITE_API_URL,
+  NODE_ENV: import.meta.env.NODE_ENV
+});
 
 /**
  * PAYMENT METHODS MIGRATION TO PRODUCTION
@@ -434,6 +438,8 @@ const Checkout = () => {
   const { cart, cartTotal, removeFromCart, updateQuantity, clearCart } = useCart();
   const navigate = useNavigate();
   const [{ isPending }] = usePayPalScriptReducer();
+  const { user } = useAuth();
+  const isAuthenticated = !!user; // User is authenticated if user object exists
   
   // Add ref for dynamic style element
   const styleRef = React.useRef(null);
@@ -593,6 +599,13 @@ const Checkout = () => {
     }
   }, [cart]);
   
+  // Set email from authenticated user when component mounts
+  useEffect(() => {
+    if (isAuthenticated && user && user.email) {
+      setEmail(user.email);
+    }
+  }, [isAuthenticated, user]);
+  
   const handleQuantityChange = (id, newQuantity) => {
     if (newQuantity >= 1) {
       updateQuantity(id, newQuantity);
@@ -727,6 +740,17 @@ const Checkout = () => {
         return;
       }
       
+      // Get email based on authentication status
+      const userEmail = isAuthenticated && user?.email ? user.email : email;
+      
+      // Only validate email if it's provided (but not empty) and not from an authenticated user
+      // This allows empty email (optional) but validates it if user entered something
+      if (!isAuthenticated && email && !email.includes('@')) {
+        toast.error('Please enter a valid email address for payment confirmation');
+        setIsSubmitting(false);
+        return;
+      }
+      
       // Create a unique endToEndId
       const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, '');
       const randomSuffix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
@@ -763,10 +787,10 @@ const Checkout = () => {
       const sepaPayload = {
         paymentType: 'sepa_credit_transfer',
         debtorInfo: {
-          name: cardName,
+        name: cardName,
           iban: sepaIban.replace(/\s+/g, ''),
           bic: sepaBic || undefined, // Optional, only include if provided
-          email: email || 'customer@example.com' // Provide a default email if not available
+          ...(userEmail && userEmail.includes('@') ? { email: userEmail } : {}) // Only include email if valid
         },
         creditorInfo: {
           name: 'AI Wave Rider Ltd',
@@ -793,7 +817,8 @@ const Checkout = () => {
           }),
           customerConsent: true,
           totalAmount: finalTotal,
-          discountApplied: discountApplied ? 'welcome10' : ''
+          discountApplied: discountApplied ? 'welcome10' : '',
+          ...(isAuthenticated && user?.uid ? { userId: user.uid } : {}) // Include user ID for authenticated users
         }
       };
       
@@ -801,11 +826,24 @@ const Checkout = () => {
       logTransaction(endToEndId, 'initiated', 'sepa_credit_transfer', { 
         amount: finalTotal.toFixed(2),
         currency: 'EUR',
-        items: cart.length
+        items: cart.length,
+        hasEmail: !!userEmail
       });
       
-      // Use centralized config for simulation mode
-      const enableSimulation = PAYMENT.ENABLE_SIMULATION;
+      // Log whether user provided email or not
+      if (userEmail) {
+        logInfo(`User provided email for order confirmation: ${userEmail}`, {}, 'handleSepaPayment');
+      } else {
+        logInfo('No email provided for order confirmation', {}, 'handleSepaPayment');
+      }
+      
+      // Check environment to determine whether to simulate payment
+      const isProduction = import.meta.env.VITE_NODE_ENV === 'production' || 
+                          import.meta.env.MODE === 'production';
+      
+      // Use explicit env var if available, otherwise base on environment
+      const enableSimulation = import.meta.env.VITE_ENABLE_PAYMENT_SIMULATION === 'true' || 
+                              (!isProduction && import.meta.env.DEV);
       
       // Simulation path for testing in development
       if (enableSimulation) {
@@ -882,9 +920,8 @@ const Checkout = () => {
         toast.error('Could not verify payment system availability. Trying to proceed anyway...');
       }
       
-      // Send the SEPA Credit Transfer request to our backend using config API URL
-      const apiUrl = API.URL;
-      console.log('API URL:', apiUrl);
+      // Send the SEPA Credit Transfer request to our backend
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
       logInfo('Sending SEPA payment to backend', { endpoint: `${apiUrl}/api/payments/sepa-credit-transfer` }, 'handleSepaPayment');
       
       const response = await fetch(`${apiUrl}/api/payments/sepa-credit-transfer`, {
@@ -948,7 +985,7 @@ const Checkout = () => {
           // Redirect to success page with the reference
           navigate(`/checkout/success?payment_id=${endToEndId}&status=pending&type=sepa_credit_transfer`);
         }, 8000); // Display recommendations for 8 seconds before redirecting
-      } else {
+        } else {
         logError('SEPA payment failed', result, 'handleSepaPayment-resultFailure');
         throw new Error(result.message || 'Failed to initiate SEPA Credit Transfer');
       }
@@ -1855,6 +1892,24 @@ const Checkout = () => {
                       )}
                     </div>
                     
+                    {/* Only show email field for non-authenticated users */}
+                    {!isAuthenticated && (
+                      <div className="form-group">
+                        <label htmlFor="sepaEmail">Email Address (For Payment Confirmation)</label>
+                        <input
+                          type="email"
+                          id="sepaEmail"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="Your email address for payment confirmation"
+                          className={email && !email.includes('@') ? 'invalid' : ''}
+                        />
+                        {email && !email.includes('@') && (
+                          <div className="field-error">Please enter a valid email address</div>
+                        )}
+                      </div>
+                    )}
+                    
                     <div className="sepa-reference-container">
                       <div className="reference-title">Payment Details:</div>
                       <div className="reference-item">
@@ -1895,7 +1950,8 @@ const Checkout = () => {
                               !sepaIban || 
                               sepaIbanValid === false || 
                               (sepaBicManualRequired && (!sepaBic || sepaBicValid === false)) || 
-                              !sepaConsent}
+                              !sepaConsent ||
+                              (!isAuthenticated && email && !email.includes('@'))} // Only validate email if it's provided
                   >
                     {isSubmitting ? 'Processing...' : `Initiate SEPA Transfer`}
                   </button>

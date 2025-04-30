@@ -1336,7 +1336,8 @@ router.post('/sepa-credit-transfer', async (req, res) => {
       email: sepaPayload.debtorInfo?.email || 'not provided',
       endToEndId: sepaPayload.paymentInfo?.endToEndId,
       metadata: sepaPayload.metadata ? 'provided' : 'not provided',
-      items: sepaPayload.metadata?.items ? sepaPayload.metadata.items.length : 0
+      items: sepaPayload.metadata?.items ? sepaPayload.metadata.items.length : 0,
+      userId: sepaPayload.metadata?.userId || 'not provided'
     });
     
     // Validate required fields
@@ -1354,12 +1355,34 @@ router.post('/sepa-credit-transfer', async (req, res) => {
       });
     }
     
+    // Extract user information for email
+    const userEmail = sepaPayload.metadata?.userId ? null : sepaPayload.debtorInfo?.email;
+    const isAuthenticated = !!sepaPayload.metadata?.userId;
+    
+    // For authenticated users, we'll get their email from their user record later
+    if (isAuthenticated) {
+      console.log(`Processing payment for authenticated user: ${sepaPayload.metadata.userId}`);
+    } else if (userEmail && userEmail.includes('@')) {
+      console.log(`Processing payment for non-authenticated user with email: ${userEmail}`);
+    } else {
+      console.log('Processing payment without a valid email address');
+    }
+    
+    // Check if email is provided but invalid (has @ symbol) for non-authenticated users
+    if (!isAuthenticated && userEmail && !userEmail.includes('@')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email format: If providing an email, it must include @ symbol'
+      });
+    }
+    
     if (logger) {
       logger.info(`Processing SEPA Credit Transfer payment: ${JSON.stringify({
         amount: sepaPayload.paymentInfo.amount,
         currency: sepaPayload.paymentInfo.currency,
         email: sepaPayload.debtorInfo.email ? 'provided' : 'not provided',
-        endToEndId: sepaPayload.paymentInfo.endToEndId
+        endToEndId: sepaPayload.paymentInfo.endToEndId,
+        userId: sepaPayload.metadata?.userId || 'not provided'
       })}`);
     }
     
@@ -1403,7 +1426,7 @@ router.post('/sepa-credit-transfer', async (req, res) => {
     
     // Store transfer in database for reference
     try {
-      await db.collection('payments').doc(transferReference).set({
+      const paymentDocData = {
         ...paymentData,
         createdAt: new Date().toISOString(),
         metadata: {
@@ -1413,13 +1436,70 @@ router.post('/sepa-credit-transfer', async (req, res) => {
             ? sepaPayload.metadata.items 
             : []
         },
-        customerEmail: sepaPayload.debtorInfo.email || null,
-        customerName: sepaPayload.debtorInfo.name || null
-      });
+        customerEmail: userEmail || null,
+        customerName: sepaPayload.debtorInfo.name || null,
+        userId: sepaPayload.metadata?.userId || null
+      };
       
-      // If we have simulation mode enabled and customer email, process the order now
-      if (isSimulation && sepaPayload.debtorInfo.email) {
+      await db.collection('payments').doc(transferReference).set(paymentDocData);
+      
+      // Send email confirmation for SEPA payment initialization
+      try {
+        // Only send email if either authenticated user or email is provided
+        if ((isAuthenticated && sepaPayload.metadata?.userId) || (userEmail && userEmail.includes('@'))) {
+          const emailService = require('../services/emailService');
+          
+          // For initial SEPA confirmation (not the purchase confirmation yet)
+          const recipientEmail = userEmail || await getUserEmailById(sepaPayload.metadata.userId);
+          
+          if (recipientEmail) {
+            console.log(`[email] Sending SEPA initialization confirmation to ${recipientEmail}`);
+            
+            await emailService.sendCustomEmail({
+              email: recipientEmail,
+              firstName: sepaPayload.debtorInfo.name,
+              title: 'Your SEPA Credit Transfer Confirmation',
+              headerTitle: 'SEPA Credit Transfer Initiated',
+              subject: 'Your SEPA Credit Transfer Confirmation',
+              content: `
+                <p>Thank you for your payment via SEPA Credit Transfer.</p>
+                <p><strong>Payment Reference:</strong> ${transferReference}</p>
+                <p><strong>Amount:</strong> ${sepaPayload.paymentInfo.currency.toUpperCase()} ${parseFloat(sepaPayload.paymentInfo.amount).toFixed(2)}</p>
+                <p><strong>Status:</strong> ${isSimulation ? 'Simulated (Test Mode)' : 'Pending'}</p>
+                <p>You will receive your order confirmation once the payment is processed.</p>
+              `,
+              actionUrl: redirectUrl,
+              actionText: 'View Order Status'
+            });
+          } else {
+            console.log('Could not determine email address for SEPA initialization confirmation');
+          }
+        } else {
+          console.log('No valid email available for SEPA initialization confirmation, skipping email');
+        }
+      } catch (emailError) {
+        console.error(`Error sending SEPA confirmation email: ${emailError.message}`);
+        if (logger) logger.error(`Error sending SEPA confirmation email: ${emailError.message}`);
+        // Don't fail the overall request if email fails
+      }
+      
+      // If we have simulation mode enabled, process the order now
+      if (isSimulation) {
         try {
+          // For order processing, get email for authenticated users from their profile
+          let customerEmail = userEmail;
+          
+          // If user is authenticated, get their email from database
+          if (isAuthenticated && sepaPayload.metadata?.userId) {
+            try {
+              customerEmail = await getUserEmailById(sepaPayload.metadata.userId);
+              console.log(`Retrieved email ${customerEmail} for authenticated user ${sepaPayload.metadata.userId}`);
+            } catch (userError) {
+              console.error(`Error retrieving user email: ${userError.message}`);
+              // Continue with no email if user lookup fails
+            }
+          }
+          
           // Process the simulated payment
           const orderResult = await orderController.processPaymentSuccess({
             id: transferReference,
@@ -1429,11 +1509,11 @@ router.post('/sepa-credit-transfer', async (req, res) => {
             metadata: {
               ...sepaPayload.metadata,
               order_id: orderId,
-              email: sepaPayload.debtorInfo.email
+              email: customerEmail || null
             },
             customer: {
-              id: null,
-              email: sepaPayload.debtorInfo.email
+              id: sepaPayload.metadata?.userId || null,
+              email: customerEmail || null
             },
             items: sepaPayload.metadata.items
           });
@@ -1441,6 +1521,12 @@ router.post('/sepa-credit-transfer', async (req, res) => {
           // Add the order result to the response
           paymentData.orderProcessed = true;
           paymentData.orderId = orderResult.orderId;
+          
+          if (orderResult.deliveryStatus === 'skipped') {
+            console.log('Agent purchase email was skipped due to missing email address');
+          } else {
+            console.log(`Agent purchase email delivery status: ${orderResult.deliveryStatus}`);
+          }
         } catch (orderError) {
           logger.error(`Error processing simulated SEPA order: ${orderError.message}`);
           // Don't fail the response, just note the error
@@ -1475,6 +1561,29 @@ router.post('/sepa-credit-transfer', async (req, res) => {
     });
   }
 });
+
+/**
+ * Helper function to get a user's email by their ID
+ * @param {string} userId - The user ID
+ * @returns {Promise<string|null>} - The user's email or null if not found
+ */
+async function getUserEmailById(userId) {
+  if (!userId) return null;
+  
+  try {
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      console.log(`User ${userId} not found`);
+      return null;
+    }
+    
+    const userData = userDoc.data();
+    return userData.email || null;
+  } catch (error) {
+    console.error(`Error getting user email: ${error.message}`);
+    return null;
+  }
+}
 
 /**
  * Check SEPA Credit Transfer status
