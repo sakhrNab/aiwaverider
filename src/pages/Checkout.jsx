@@ -815,6 +815,9 @@ const Checkout = () => {
         }
       };
       
+      // For debugging - log the payload
+      console.log('SEPA payload:', sepaPayload);
+      
       // Log the transaction start (with sensitive data redacted)
       logTransaction(endToEndId, 'initiated', 'sepa_credit_transfer', { 
         amount: finalTotal.toFixed(2),
@@ -837,6 +840,47 @@ const Checkout = () => {
       // Use explicit env var if available, otherwise base on environment
       const enableSimulation = import.meta.env.VITE_ENABLE_PAYMENT_SIMULATION === 'true' || 
                               (!isProduction && import.meta.env.DEV);
+      
+      // Create a Stripe tracking reference for webhook events
+      let stripeReference = null;
+      try {
+        // Create a Stripe PaymentIntent for tracking and webhook events
+        const stripeApi = `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/payments/stripe`;
+        console.log('Creating Stripe tracking reference at:', stripeApi);
+        
+        const stripePaymentResponse = await fetch(`${stripeApi}/create-sepa-intent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: finalTotal,
+            currency: 'eur',
+            description: `Order ${orderReference} - SEPA Transfer`,
+            metadata: {
+              orderReference,
+              paymentType: 'sepa_credit_transfer',
+              simulationMode: enableSimulation ? 'true' : 'false',
+              email: userEmail || email || '',
+              endToEndId
+            }
+          })
+        });
+        
+        if (stripePaymentResponse.ok) {
+          const stripeData = await stripePaymentResponse.json();
+          console.log('Created Stripe tracking reference:', stripeData.id);
+          stripeReference = stripeData.id;
+          
+          // Add the Stripe reference to the SEPA payload
+          sepaPayload.stripeReference = stripeData.id;
+          sepaPayload.metadata.stripeReference = stripeData.id;
+        } else {
+          const errorData = await stripePaymentResponse.json().catch(() => ({}));
+          console.warn('Failed to create Stripe tracking reference for webhooks:', errorData);
+        }
+      } catch (stripeErr) {
+        console.error('Error creating Stripe tracking reference:', stripeErr);
+        // Continue with payment even if Stripe reference fails
+      }
       
       // Simulation path for testing in development
       if (enableSimulation) {

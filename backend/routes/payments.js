@@ -102,6 +102,69 @@ router.get('/stripe-status', async (req, res) => {
   }
 });
 
+// Create a Stripe PaymentIntent for SEPA transfers
+router.post('/stripe/create-sepa-intent', async (req, res) => {
+  try {
+    const { amount, currency, description, metadata } = req.body;
+    
+    if (!amount || !currency) {
+      return res.status(400).json({ error: 'Amount and currency are required' });
+    }
+    
+    logger.info('Creating SEPA Stripe intent', { amount, currency, description });
+    console.log('Creating SEPA Stripe intent:', { amount, currency, description });
+    
+    let paymentIntent;
+    
+    try {
+      // First try with SEPA debit payment method
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(amount * 100), // Convert to cents
+        currency: currency.toLowerCase(),
+        description,
+        metadata,
+        payment_method_types: ['sepa_debit'],
+        capture_method: 'automatic', // Changed from 'manual' to 'automatic' as required by Stripe for 'sepa_debit'
+        confirm: false
+      });
+    } catch (paymentMethodError) {
+      // If SEPA debit is not available, try without specifying payment_method_types
+      if (paymentMethodError.message && paymentMethodError.message.includes('payment_method_types')) {
+        console.log('SEPA debit payment method not available, falling back to standard payment intent');
+        logger.warn('SEPA debit payment method not available, falling back to standard payment intent', { error: paymentMethodError.message });
+        
+        paymentIntent = await stripe.paymentIntents.create({
+          amount: Math.round(amount * 100),
+          currency: currency.toLowerCase(),
+          description,
+          metadata: {
+            ...metadata,
+            fallback_payment: 'true', // Mark this as a fallback payment
+            original_error: paymentMethodError.message.substring(0, 100) // Include partial error message
+          },
+          capture_method: 'automatic', // Changed to automatic for consistency
+          confirm: false
+        });
+      } else {
+        // If it's a different error, rethrow it
+        throw paymentMethodError;
+      }
+    }
+    
+    logger.info('Created SEPA Stripe intent', { id: paymentIntent.id });
+    console.log('Created SEPA Stripe intent:', paymentIntent.id);
+    
+    return res.json({
+      id: paymentIntent.id,
+      clientSecret: paymentIntent.client_secret
+    });
+  } catch (error) {
+    logger.error('Error creating SEPA Stripe intent:', error);
+    console.error('Error creating SEPA Stripe intent:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 // Log helper
 const logPayment = (type, action, data, error = null) => {
   const timestamp = new Date().toISOString();
@@ -812,6 +875,40 @@ router.post('/stripe-webhook', express.raw({ type: 'application/json' }), async 
   
     // Handle the event
     switch (event.type) {
+      case 'payment_intent.created':
+        const createdIntent = event.data.object;
+        logPayment('STRIPE', 'PAYMENT_INTENT_CREATED', { id: createdIntent.id });
+        
+        // Check if this is a SEPA Credit Transfer or a fallback payment for SEPA
+        if (createdIntent.metadata && (
+            createdIntent.metadata.paymentType === 'sepa_credit_transfer' || 
+            createdIntent.metadata.fallback_payment === 'true')
+        ) {
+          console.log(`Webhook: SEPA Payment Intent created for order ${createdIntent.metadata.orderReference}`);
+          logger.info(`SEPA Payment Intent created via webhook: ${createdIntent.id}`, {
+            orderReference: createdIntent.metadata.orderReference,
+            endToEndId: createdIntent.metadata.endToEndId,
+            simulationMode: createdIntent.metadata.simulationMode,
+            fallback: createdIntent.metadata.fallback_payment === 'true'
+          });
+          
+          try {
+            // Store the Stripe reference with the order if needed
+            // This could be a database update or other tracking mechanism
+            if (createdIntent.metadata.orderReference) {
+              // You might want to implement this
+              // await updateOrderWithStripeReference(
+              //   createdIntent.metadata.orderReference,
+              //   createdIntent.id
+              // );
+              
+              logger.info(`Associated Stripe reference ${createdIntent.id} with order ${createdIntent.metadata.orderReference}`);
+            }
+          } catch (error) {
+            logger.error(`Error processing SEPA payment intent created webhook: ${error.message}`, error);
+          }
+        }
+        break;
       case 'payment_intent.succeeded':
         const paymentIntent = event.data.object;
         // Log the successful payment
