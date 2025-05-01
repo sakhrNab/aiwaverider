@@ -382,12 +382,33 @@ exports.sendAgentPurchaseEmail = async (purchaseData) => {
     // Get the agent purchase template
     const template = await getCompiledTemplate('agent_purchase');
     
+    // Check if this is a SEPA payment
+    const isSepaPayment = purchaseData.paymentMethod === 'sepa_credit_transfer' ||
+                          purchaseData.paymentMethod === 'sepa_debit';
+    
+    // Determine the correct email title based on payment method
+    let emailTitle = `Your AI Agent Purchase: ${purchaseData.agentName}`;
+    let headerTitle = 'Your AI Agent Template is Ready!';
+    let headerSubtitle = 'Thank you for your purchase';
+    
+    if (isSepaPayment) {
+      if (purchaseData.paymentStatus === 'pending') {
+        emailTitle = 'Your SEPA Payment Has Been Initiated';
+        headerTitle = 'Your SEPA Transfer Has Been Initiated';
+        headerSubtitle = 'Your order will be processed upon payment completion';
+      } else {
+        emailTitle = 'Your SEPA Payment Has Been Received';
+        headerTitle = 'Your SEPA Payment Has Been Received';
+        headerSubtitle = 'Thank you for your purchase';
+      }
+    }
+    
     // Prepare the data
     const data = {
       name: purchaseData.firstName ? `${purchaseData.firstName}` : 'there',
       agentName: purchaseData.agentName,
       agentDescription: purchaseData.agentDescription,
-      purchaseDate: new Date().toLocaleDateString('en-US', {
+      purchaseDate: purchaseData.orderDate || new Date().toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
@@ -397,16 +418,28 @@ exports.sendAgentPurchaseEmail = async (purchaseData) => {
       receiptUrl: purchaseData.receiptUrl,
       websiteUrl: config.websiteUrl,
       supportEmail: config.supportEmail,
-      currentYear: new Date().getFullYear()
+      currentYear: new Date().getFullYear(),
+      orderId: purchaseData.orderId || 'N/A',
+      orderDate: purchaseData.orderDate || new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      }),
+      isSepaPayment: isSepaPayment,
+      paymentStatus: purchaseData.paymentStatus || 'completed',
+      isPending: purchaseData.paymentStatus === 'pending',
+      headerTitle: headerTitle,
+      headerSubtitle: headerSubtitle
     };
     
     // Render the HTML
     const html = template(data);
     
     // Send the email
+    logger.info(`Sending purchase confirmation email to: ${purchaseData.email}`);
     return await sendEmail({
       to: purchaseData.email,
-      subject: `Your AI Agent Purchase: ${purchaseData.agentName}`,
+      subject: emailTitle,
       html
     });
   } catch (error) {

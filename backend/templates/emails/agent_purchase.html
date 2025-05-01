@@ -131,6 +131,44 @@
       margin-top: 15px;
     }
     
+    /* SEPA info */
+    .sepa-info {
+      background-color: #f0f7ff;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+      border-left: 4px solid #4a86e8;
+    }
+    
+    .sepa-info h3 {
+      color: #333333;
+      margin-bottom: 10px;
+      font-size: 20px;
+    }
+    
+    .sepa-info p {
+      margin-bottom: 12px;
+    }
+    
+    .payment-status {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-top: 5px;
+      background-color: #f8f8f8;
+    }
+    
+    .status-pending {
+      background-color: #fff8e1;
+      color: #f57c00;
+    }
+    
+    .status-completed {
+      background-color: #e8f5e9;
+      color: #388e3c;
+    }
+    
     /* Footer */
     .footer {
       background-color: #f5f5f5;
@@ -178,37 +216,82 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>Your AI Agent Template is Ready!</h1>
-      <p>Thank you for your purchase</p>
+      <h1>{{headerTitle}}</h1>
+      <p>{{headerSubtitle}}</p>
     </div>
     
     <div class="content">
       <h2>Hello {{name}},</h2>
       
-      <p>Thank you for purchasing an AI agent from AI Wave Rider. Your agent template has been prepared and is attached to this email.</p>
-      
-      <div class="order-details">
-        <p><strong>Order ID:</strong> {{orderId}}</p>
-        <p><strong>Order Date:</strong> {{orderDate}}</p>
-      </div>
-      
-      <div class="agent-info">
-        <h3>{{agentName}}</h3>
-        <p>{{agentDescription}}</p>
-      </div>
-      
-      <div class="instructions">
-        <h3>How to Use Your Agent Template</h3>
-        <p>Getting started with your new AI agent is simple:</p>
-        <ol>
-          <li>Open the attached template file</li>
-          <li>Copy the entire content of the template</li>
-          <li>Paste it into your preferred AI platform (like ChatGPT, Claude, or others)</li>
-          <li>Start interacting with your new agent!</li>
-        </ol>
+      {{#if isSepaPayment}}
+        {{#if isPending}}
+          <p>Thank you for initiating a SEPA Credit Transfer. Your payment is now being processed by the banking system.</p>
+          
+          <div class="sepa-info">
+            <h3>SEPA Payment Details</h3>
+            <p><strong>Order ID:</strong> {{orderId}}</p>
+            <p><strong>Date Initiated:</strong> {{orderDate}}</p>
+            <p><strong>Amount:</strong> {{currency}} {{price}}</p>
+            <p><strong>Status:</strong> <span class="payment-status status-pending">Pending</span></p>
+            <p>Your bank will process the payment within 1-2 business days.</p>
+          </div>
+          
+          <p>Once your payment is confirmed, we will prepare and deliver your AI agent template to your email.</p>
+        {{else}}
+          <p>Thank you for your SEPA Credit Transfer. Your payment has been confirmed and your AI agent template is ready.</p>
+          
+          <div class="sepa-info">
+            <h3>SEPA Payment Details</h3>
+            <p><strong>Order ID:</strong> {{orderId}}</p>
+            <p><strong>Date Processed:</strong> {{orderDate}}</p>
+            <p><strong>Amount:</strong> {{currency}} {{price}}</p>
+            <p><strong>Status:</strong> <span class="payment-status status-completed">Completed</span></p>
+          </div>
+          
+          <div class="agent-info">
+            <h3>{{agentName}}</h3>
+            <p>{{agentDescription}}</p>
+          </div>
+          
+          <div class="instructions">
+            <h3>How to Use Your Agent Template</h3>
+            <p>Getting started with your new AI agent is simple:</p>
+            <ol>
+              <li>Open the attached template file</li>
+              <li>Copy the entire content of the template</li>
+              <li>Paste it into your preferred AI platform (like ChatGPT, Claude, or others)</li>
+              <li>Start interacting with your new agent!</li>
+            </ol>
+            
+            <p>You can customize the agent template to better suit your specific needs by modifying the instructions within the template.</p>
+          </div>
+        {{/if}}
+      {{else}}
+        <p>Thank you for purchasing an AI agent from AI Wave Rider. Your agent template has been prepared and is attached to this email.</p>
         
-        <p>You can customize the agent template to better suit your specific needs by modifying the instructions within the template.</p>
-      </div>
+        <div class="order-details">
+          <p><strong>Order ID:</strong> {{orderId}}</p>
+          <p><strong>Order Date:</strong> {{orderDate}}</p>
+        </div>
+        
+        <div class="agent-info">
+          <h3>{{agentName}}</h3>
+          <p>{{agentDescription}}</p>
+        </div>
+        
+        <div class="instructions">
+          <h3>How to Use Your Agent Template</h3>
+          <p>Getting started with your new AI agent is simple:</p>
+          <ol>
+            <li>Open the attached template file</li>
+            <li>Copy the entire content of the template</li>
+            <li>Paste it into your preferred AI platform (like ChatGPT, Claude, or others)</li>
+            <li>Start interacting with your new agent!</li>
+          </ol>
+          
+          <p>You can customize the agent template to better suit your specific needs by modifying the instructions within the template.</p>
+        </div>
+      {{/if}}
       
       <p>If you have any questions or need assistance with your agent template, please don't hesitate to contact our support team.</p>
       
@@ -216,7 +299,7 @@
     </div>
     
     <div class="footer">
-      <p>&copy; 2023 AI Wave Rider. All rights reserved.</p>
+      <p>&copy; {{currentYear}} AI Wave Rider. All rights reserved.</p>
       <p>
         <a href="{{websiteUrl}}">Visit our website</a> | 
         <a href="{{websiteUrl}}/terms">Terms of Service</a> | 

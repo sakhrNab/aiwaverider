@@ -1496,8 +1496,14 @@ router.post('/sepa-credit-transfer', async (req, res) => {
               console.log(`Retrieved email ${customerEmail} for authenticated user ${sepaPayload.metadata.userId}`);
             } catch (userError) {
               console.error(`Error retrieving user email: ${userError.message}`);
-              // Continue with no email if user lookup fails
+              // Use email from payload as fallback if authenticated user lookup fails
+              customerEmail = userEmail || sepaPayload.metadata?.userEmail || null;
+              console.log(`Using fallback email from payload: ${customerEmail}`);
             }
+          } else if (!customerEmail) {
+            // For non-authenticated users, try to get email from metadata if not already set
+            customerEmail = sepaPayload.metadata?.userEmail || null;
+            console.log(`Using non-authenticated user email from metadata: ${customerEmail}`);
           }
           
           // Process the simulated payment
@@ -1509,7 +1515,7 @@ router.post('/sepa-credit-transfer', async (req, res) => {
             metadata: {
               ...sepaPayload.metadata,
               order_id: orderId,
-              email: customerEmail || null
+              email: customerEmail || null // Include email in metadata for order processing
             },
             customer: {
               id: sepaPayload.metadata?.userId || null,
@@ -1521,11 +1527,44 @@ router.post('/sepa-credit-transfer', async (req, res) => {
           // Add the order result to the response
           paymentData.orderProcessed = true;
           paymentData.orderId = orderResult.orderId;
+          paymentData.emailStatus = 'unknown';
           
+          // Detailed logging for email delivery status
           if (orderResult.deliveryStatus === 'skipped') {
             console.log('Agent purchase email was skipped due to missing email address');
+            logger.warn(`SEPA payment - Email sending skipped - no valid email address for order ${orderResult.orderId}`);
+            paymentData.emailStatus = 'skipped';
+            paymentData.emailMessage = 'No valid email address provided';
+          } else if (orderResult.deliveryStatus === 'completed') {
+            console.log(`Agent purchase email delivery completed successfully for order ${orderResult.orderId}`);
+            logger.info(`SEPA payment - Email sent successfully to ${customerEmail} for order ${orderResult.orderId}`);
+            paymentData.emailStatus = 'sent';
+            paymentData.emailMessage = `Confirmation email sent to ${customerEmail}`;
+          } else if (orderResult.deliveryStatus === 'partial') {
+            console.log(`Agent purchase email delivery partially completed for order ${orderResult.orderId}`);
+            logger.warn(`SEPA payment - Email partially sent for order ${orderResult.orderId} - some items failed`);
+            paymentData.emailStatus = 'partial';
+            paymentData.emailMessage = 'Email delivery partially completed';
+          } else if (orderResult.deliveryStatus === 'failed') {
+            // This is a serious issue that should be logged with high visibility
+            console.error(`Agent purchase email delivery failed for order ${orderResult.orderId}`);
+            logger.error(`SEPA payment - Email sending FAILED for order ${orderResult.orderId} to ${customerEmail}`);
+            
+            // Add detailed failure information
+            const failureReasons = orderResult.deliveryResults
+              ?.filter(r => !r.success)
+              ?.map(r => r.error || 'Unknown error')
+              ?.join('; ');
+            
+            logger.error(`Email failure reasons: ${failureReasons || 'No specific reason provided'}`);
+            
+            paymentData.emailStatus = 'failed';
+            paymentData.emailMessage = 'Failed to send confirmation email';
+            paymentData.emailError = failureReasons || 'Email delivery failed';
           } else {
             console.log(`Agent purchase email delivery status: ${orderResult.deliveryStatus}`);
+            logger.info(`SEPA payment - Email status: ${orderResult.deliveryStatus} for order ${orderResult.orderId}`);
+            paymentData.emailStatus = orderResult.deliveryStatus;
           }
         } catch (orderError) {
           logger.error(`Error processing simulated SEPA order: ${orderError.message}`);

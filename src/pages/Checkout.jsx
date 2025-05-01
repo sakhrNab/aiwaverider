@@ -743,6 +743,15 @@ const Checkout = () => {
       // Get email based on authentication status
       const userEmail = isAuthenticated && user?.email ? user.email : email;
       
+      // Log the email source for debugging
+      if (isAuthenticated && user?.email) {
+        logInfo(`Using authenticated user email: ${user.email}`, {}, 'handleSepaPayment');
+      } else if (email) {
+        logInfo(`Using manually entered email: ${email}`, {}, 'handleSepaPayment');
+      } else {
+        logInfo('No email provided for order confirmation', {}, 'handleSepaPayment');
+      }
+      
       // Only validate email if it's provided (but not empty) and not from an authenticated user
       // This allows empty email (optional) but validates it if user entered something
       if (!isAuthenticated && email && !email.includes('@')) {
@@ -787,7 +796,7 @@ const Checkout = () => {
       const sepaPayload = {
         paymentType: 'sepa_credit_transfer',
         debtorInfo: {
-        name: cardName,
+          name: cardName,
           iban: sepaIban.replace(/\s+/g, ''),
           bic: sepaBic || undefined, // Optional, only include if provided
           ...(userEmail && userEmail.includes('@') ? { email: userEmail } : {}) // Only include email if valid
@@ -818,6 +827,7 @@ const Checkout = () => {
           customerConsent: true,
           totalAmount: finalTotal,
           discountApplied: discountApplied ? 'welcome10' : '',
+          userEmail: userEmail || null, // Always include email in metadata even if not provided
           ...(isAuthenticated && user?.uid ? { userId: user.uid } : {}) // Include user ID for authenticated users
         }
       };
@@ -853,6 +863,100 @@ const Checkout = () => {
         
         // Simulate processing delay
         await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Define API URL - this was missing before
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+        
+        // Instead of just simulating locally, we still need to call the backend API
+        // even in simulation mode to ensure email sending works properly
+        try {
+          logInfo('Sending simulated SEPA payment to backend', 
+                  { endpoint: `${apiUrl}/api/payments/sepa-credit-transfer`, simulation: true }, 
+                  'handleSepaPayment');
+          
+          // Add a simulation flag to the payload
+          const simulationPayload = {
+            ...sepaPayload,
+            simulationMode: true, // Tell backend this is a simulation
+          };
+          
+          // Call the backend API with the simulation payload
+          const response = await fetch(`${apiUrl}/api/payments/sepa-credit-transfer`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(simulationPayload)
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            logError('Simulated API call failed', { 
+              status: response.status, 
+              statusText: response.statusText,
+              errorData
+            }, 'handleSepaPayment-simulationApi');
+            
+            // Continue with local simulation even if API call fails
+            logInfo('Continuing with local simulation after API call failure', {}, 'handleSepaPayment');
+          } else {
+            const result = await response.json();
+            logInfo('Simulated SEPA payment API response received', { 
+              success: result.success,
+              hasPayment: !!result.payment,
+              hasRedirect: !!result.redirectUrl
+            }, 'handleSepaPayment');
+            
+            // If the API call includes order processing results, log them
+            if (result.payment?.orderProcessed) {
+              logInfo('Order processed on backend during simulation', {
+                orderId: result.payment.orderId,
+                emailSent: result.payment.emailStatus
+              }, 'handleSepaPayment');
+              
+              // Handle email status information
+              const emailStatus = result.payment?.emailStatus || 'unknown';
+              
+              // Log email status
+              logInfo(`Email confirmation status: ${emailStatus}`, 
+                     { message: result.payment?.emailMessage }, 
+                     'handleSepaPayment-email');
+              
+              // Customize the email toast based on email status
+              setTimeout(() => {
+                if (emailStatus === 'sent' || emailStatus === 'completed') {
+                  toast.success(`Order confirmation email sent to ${userEmail || 'your email address'}`, {
+                    autoClose: 5000,
+                    position: 'bottom-right',
+                    icon: '📧'
+                  });
+                } else if (emailStatus === 'failed') {
+                  toast.error(`Could not send confirmation email: ${result.payment?.emailError || 'Unknown error'}`, {
+                    autoClose: 5000,
+                    position: 'bottom-right',
+                    icon: '❌'
+                  });
+                } else if (emailStatus === 'skipped') {
+                  toast.warning('No confirmation email sent - no email address provided', {
+                    autoClose: 5000,
+                    position: 'bottom-right',
+                    icon: '⚠️'
+                  });
+                } else {
+                  // Default fallback toast
+                  toast.info('Order registered. Check your email for confirmation.', {
+                    autoClose: 5000,
+                    position: 'bottom-right',
+                    icon: '📧'
+                  });
+                }
+              }, 3000);
+            }
+          }
+        } catch (apiError) {
+          logError('Error calling backend API in simulation mode', apiError, 'handleSepaPayment');
+          // Continue with local simulation even if API call fails
+        }
         
         // Show success message
         toast.success('SEPA Credit Transfer initiated successfully! (SIMULATION MODE)');
@@ -893,101 +997,149 @@ const Checkout = () => {
         }, 8000); // Display recommendations for 8 seconds before redirecting
         
         return;
-      }
-      
-      // Production path - Check API connectivity before proceeding
-      try {
-        logInfo('Checking API connectivity before SEPA payment', {}, 'handleSepaPayment');
-        const { checkApiConnectivity } = await import('../services/paymentApi');
-        const connectivityCheck = await checkApiConnectivity();
-        
-        if (!connectivityCheck.ok) {
-          logError('API connectivity check failed before SEPA payment', 
-                  connectivityCheck, 
-                  'handleSepaPayment');
+      } else {
+        // Production path - Check API connectivity before proceeding
+        try {
+          logInfo('Checking API connectivity before SEPA payment', {}, 'handleSepaPayment');
+          const { checkApiConnectivity } = await import('../services/paymentApi');
+          const connectivityCheck = await checkApiConnectivity();
           
-          if (connectivityCheck.fallbackOk) {
-            toast.error(`Payment system issue: ${connectivityCheck.error}. Please try again in a few minutes.`);
-          } else {
-            toast.error(`Could not connect to payment server: ${connectivityCheck.error}`);
+          if (!connectivityCheck.ok) {
+            logError('API connectivity check failed before SEPA payment', 
+                    connectivityCheck, 
+                    'handleSepaPayment');
+            
+            if (connectivityCheck.fallbackOk) {
+              toast.error(`Payment system issue: ${connectivityCheck.error}. Please try again in a few minutes.`);
+            } else {
+              toast.error(`Could not connect to payment server: ${connectivityCheck.error}`);
+            }
+            
+            setIsSubmitting(false);
+            return;
+          }
+        } catch (connectivityError) {
+          logError(connectivityError, {}, 'handleSepaPayment-apiConnectivity');
+          toast.error('Could not verify payment system availability. Trying to proceed anyway...');
+        }
+        
+        // Send the SEPA Credit Transfer request to our backend
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+        logInfo('Sending SEPA payment to backend', { endpoint: `${apiUrl}/api/payments/sepa-credit-transfer` }, 'handleSepaPayment');
+        
+        try {
+          const response = await fetch(`${apiUrl}/api/payments/sepa-credit-transfer`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(sepaPayload)
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMessage = errorData.message || `Server returned ${response.status} ${response.statusText}`;
+            
+            logError(errorMessage, { 
+              status: response.status, 
+              statusText: response.statusText,
+              errorData
+            }, 'handleSepaPayment-apiResponse');
+            
+            throw new Error(errorMessage);
           }
           
-          setIsSubmitting(false);
-          return;
-        }
-      } catch (connectivityError) {
-        logError(connectivityError, {}, 'handleSepaPayment-apiConnectivity');
-        toast.error('Could not verify payment system availability. Trying to proceed anyway...');
-      }
-      
-      // Send the SEPA Credit Transfer request to our backend
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-      logInfo('Sending SEPA payment to backend', { endpoint: `${apiUrl}/api/payments/sepa-credit-transfer` }, 'handleSepaPayment');
-      
-      const response = await fetch(`${apiUrl}/api/payments/sepa-credit-transfer`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(sepaPayload)
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.message || `Server returned ${response.status} ${response.statusText}`;
-        
-        logError(errorMessage, { 
-          status: response.status, 
-          statusText: response.statusText,
-          errorData
-        }, 'handleSepaPayment-apiResponse');
-        
-        throw new Error(errorMessage);
-      }
-      
-      const result = await response.json();
-      
-      // Handle the response
-      if (result.success) {
-        // Log successful transaction
-        logTransaction(endToEndId, 'success', 'sepa_credit_transfer', { 
-          amount: finalTotal.toFixed(2),
-          orderId: orderReference
-        });
-        
-        // Show success message
-        toast.success('SEPA Credit Transfer initiated successfully!');
-        
-        // Save purchased items to localStorage for the success page to use
-        try {
-          localStorage.setItem('lastPurchasedItems', JSON.stringify(cart));
-        } catch (err) {
-          logError(err, {}, 'handleSepaPayment-localStorage');
-        }
-        
-        // Show payment recommendations before redirecting
-        setPaymentCompleted(true);
-        setShowRecommendations(true);
-        
-        // Extra toast to inform user about recommendations
-        setTimeout(() => {
-          toast.info('Looking for similar products you might like...', {
-            autoClose: 4000,
-            position: 'bottom-right'
-          });
-        }, 1000);
-        
-        // Wait for a longer period to let user see the recommendations
-        setTimeout(() => {
-          // Clear the cart
-          clearCart();
+          const result = await response.json();
           
-          // Redirect to success page with the reference
-          navigate(`/checkout/success?payment_id=${endToEndId}&status=pending&type=sepa_credit_transfer`);
-        }, 8000); // Display recommendations for 8 seconds before redirecting
-        } else {
-        logError('SEPA payment failed', result, 'handleSepaPayment-resultFailure');
-        throw new Error(result.message || 'Failed to initiate SEPA Credit Transfer');
+          // Handle the response
+          if (result.success) {
+            // Log successful transaction
+            logTransaction(endToEndId, 'success', 'sepa_credit_transfer', { 
+              amount: finalTotal.toFixed(2),
+              orderId: orderReference
+            });
+            
+            // Handle email status information if available
+            if (result.payment && result.payment.emailStatus) {
+              const emailStatus = result.payment.emailStatus;
+              
+              // Log email status
+              logInfo(`Email confirmation status: ${emailStatus}`, 
+                     { message: result.payment?.emailMessage }, 
+                     'handleSepaPayment-email');
+              
+              // Show status-specific toast based on email sending status
+              if (emailStatus === 'sent' || emailStatus === 'completed') {
+                toast.success(`Order confirmation email sent to ${userEmail || 'your email address'}`, {
+                  autoClose: 5000,
+                  position: 'bottom-right',
+                  icon: '📧'
+                });
+              } else if (emailStatus === 'failed') {
+                toast.error(`Could not send confirmation email: ${result.payment?.emailError || 'Unknown error'}`, {
+                  autoClose: 7000,
+                  position: 'bottom-right',
+                  icon: '❌'
+                });
+              } else if (emailStatus === 'skipped') {
+                toast.warning('No confirmation email sent - no email address provided', {
+                  autoClose: 5000,
+                  position: 'bottom-right',
+                  icon: '⚠️'
+                });
+              }
+            }
+            
+            // Show general success message
+            toast.success('SEPA Credit Transfer initiated successfully!');
+            
+            // Save purchased items to localStorage for the success page to use
+            try {
+              localStorage.setItem('lastPurchasedItems', JSON.stringify(cart));
+            } catch (err) {
+              logError(err, {}, 'handleSepaPayment-localStorage');
+            }
+            
+            // Show payment recommendations before redirecting
+            setPaymentCompleted(true);
+            setShowRecommendations(true);
+            
+            // Extra toast to inform user about recommendations
+            setTimeout(() => {
+              toast.info('Looking for similar products you might like...', {
+                autoClose: 4000,
+                position: 'bottom-right'
+              });
+            }, 1000);
+            
+            // Wait for a longer period to let user see the recommendations
+            setTimeout(() => {
+              // Clear the cart
+              clearCart();
+              
+              // Redirect to success page with the reference
+              navigate(`/checkout/success?payment_id=${endToEndId}&status=pending&type=sepa_credit_transfer`);
+            }, 8000); // Display recommendations for 8 seconds before redirecting
+          } else {
+            logError('SEPA payment failed', result, 'handleSepaPayment-resultFailure');
+            throw new Error(result.message || 'Failed to initiate SEPA Credit Transfer');
+          }
+        } catch (error) {
+          const { logError } = await import('../services/logService').catch(() => ({ 
+            logError: (err) => console.error('Error logging service unavailable:', err)
+          }));
+          
+          logError(error, { 
+            sepaIban: sepaIban ? '***REDACTED***' : undefined,
+            sepaBic: sepaBic ? '***REDACTED***' : undefined,
+            finalTotal,
+            currency
+          }, 'handleSepaPayment');
+          
+          console.error('SEPA payment error:', error);
+          toast.error(error.message || 'SEPA Credit Transfer failed. Please try again or use another payment method.');
+          setIsSubmitting(false);
+        }
       }
     } catch (error) {
       const { logError } = await import('../services/logService').catch(() => ({ 

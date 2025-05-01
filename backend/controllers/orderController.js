@@ -137,6 +137,12 @@ const processPaymentSuccess = async (paymentData) => {
     
     const userId = paymentData.customer?.id || metadata.userId || null;
     
+    // Check if this is a SEPA payment
+    const isSepaPayment = 
+      paymentData.payment_method_types?.includes('sepa_credit_transfer') || 
+      paymentData.payment_method_types?.includes('sepa_debit') ||
+      metadata.payment_method === 'sepa_credit_transfer';
+    
     // Extract order details
     const orderData = {
       orderId: metadata.order_id || uuidv4(),
@@ -145,9 +151,9 @@ const processPaymentSuccess = async (paymentData) => {
       items: items,
       total: paymentData.amount / 100, // Convert from cents
       currency: paymentData.currency?.toUpperCase() || 'USD',
-      status: 'completed',
+      status: isSepaPayment ? 'pending' : 'completed', // SEPA payments start as pending
       paymentId: paymentData.id,
-      paymentMethod: paymentData.payment_method_types?.[0] || 'card',
+      paymentMethod: paymentData.payment_method_types?.[0] || metadata.payment_method || 'card',
       metadata
     };
     
@@ -199,6 +205,23 @@ const processPaymentSuccess = async (paymentData) => {
         }
         
         // Send email with template
+        let emailSubject = 'Your AI Agent Purchase';
+        let receiptUrl = '';
+        
+        // Customize for SEPA payments
+        if (isSepaPayment) {
+          emailSubject = 'Your SEPA Payment Received';
+          if (orderData.status === 'pending') {
+            emailSubject = 'Your SEPA Payment Initiated';
+          }
+          
+          // Add payment reference to receipt URL if available
+          if (paymentData.id) {
+            receiptUrl = `/account/orders/${orderData.orderId}?payment_ref=${paymentData.id}`;
+          }
+        }
+        
+        // Send email with template
         const emailResult = await emailService.sendAgentPurchaseEmail({
           email: email,
           firstName: userName,
@@ -206,7 +229,11 @@ const processPaymentSuccess = async (paymentData) => {
           agentDescription: agent.description || 'Your new AI agent',
           price: item.price || 0,
           currency: orderData.currency || 'USD',
-          receiptUrl: ''
+          receiptUrl: receiptUrl,
+          orderId: orderData.orderId,
+          orderDate: new Date().toLocaleDateString(), 
+          paymentMethod: orderData.paymentMethod,
+          paymentStatus: orderData.status
         });
         
         // Record delivery result
