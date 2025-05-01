@@ -169,6 +169,32 @@
       color: #388e3c;
     }
     
+    /* Download info */
+    .download-info {
+      margin-top: 20px;
+      padding: 20px;
+      background-color: #f9f9f9;
+      border-radius: 6px;
+      border-left: 4px solid #4a86e8;
+    }
+    
+    .download-button {
+      display: inline-block;
+      padding: 12px 25px;
+      background-color: #4a86e8;
+      color: #ffffff;
+      text-decoration: none;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-top: 15px;
+    }
+    
+    .download-note {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #777777;
+    }
+    
     /* Footer */
     .footer {
       background-color: #f5f5f5;
@@ -236,7 +262,22 @@
             <p>Your bank will process the payment within 1-2 business days.</p>
           </div>
           
-          <p>Once your payment is confirmed, we will prepare and deliver your AI agent template to your email.</p>
+          {{#if immediateDownload}}
+            <div class="download-info">
+              <h3>Immediate Access Available</h3>
+              <p>Good news! While your payment is being processed, we've prepared your AI agent template for immediate access.</p>
+              
+              {{#if downloadUrl}}
+                <a href="{{downloadUrl}}" class="download-button">Download Your Template Now</a>
+                <p class="download-note">This download link will remain active for 30 days.</p>
+              {{else}}
+                <a href="{{websiteUrl}}/account/orders/{{orderId}}" class="download-button">Access Your Template</a>
+                <p class="download-note">You can access your template from your account dashboard.</p>
+              {{/if}}
+            </div>
+          {{else}}
+            <p>Once your payment is confirmed, we will prepare and deliver your AI agent template to your email.</p>
+          {{/if}}
         {{else}}
           <p>Thank you for your SEPA Credit Transfer. Your payment has been confirmed and your AI agent template is ready.</p>
           
@@ -252,6 +293,13 @@
             <h3>{{agentName}}</h3>
             <p>{{agentDescription}}</p>
           </div>
+          
+          {{#if downloadUrl}}
+            <div class="download-info">
+              <a href="{{downloadUrl}}" class="download-button">Download Your Template</a>
+              <p class="download-note">This download link will remain active for 30 days.</p>
+            </div>
+          {{/if}}
           
           <div class="instructions">
             <h3>How to Use Your Agent Template</h3>

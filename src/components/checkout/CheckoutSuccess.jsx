@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { getPaymentStatus } from '../../services/paymentApi';
 import { toast } from 'react-hot-toast';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCheckCircle, faEnvelope, faExclamationTriangle, faMoneyBillTransfer } from '@fortawesome/free-solid-svg-icons';
+import { faCheckCircle, faEnvelope, faExclamationTriangle, faMoneyBillTransfer, faDownload } from '@fortawesome/free-solid-svg-icons';
 import PaymentSuccessRecommendations from '../../components/PaymentSuccessRecommendations';
 import './CheckoutSuccess.css';
 
@@ -19,9 +19,31 @@ const CheckoutSuccess = () => {
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [isSimulated, setIsSimulated] = useState(false);
   const [purchasedItems, setPurchasedItems] = useState([]);
+  const [downloadTemplates, setDownloadTemplates] = useState([]);
 
   const location = useLocation();
   const navigate = useNavigate();
+  
+  // Check for immediate download templates in session storage
+  useEffect(() => {
+    try {
+      const templatesData = sessionStorage.getItem('downloadTemplates');
+      const orderRef = sessionStorage.getItem('orderReference');
+      
+      if (templatesData) {
+        const templates = JSON.parse(templatesData);
+        setDownloadTemplates(templates);
+        console.log(`Found ${templates.length} templates available for download`);
+        
+        // If we have an order reference in session but not from URL, use it
+        if (orderRef && !orderId) {
+          setOrderId(orderRef);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading template download data:', err);
+    }
+  }, [orderId]);
   
   // Parse payment info from URL parameters
   useEffect(() => {
@@ -215,6 +237,38 @@ const CheckoutSuccess = () => {
   const handleViewOrder = () => {
     navigate(`/account/orders/${orderId}`);
   };
+  
+  // Render download buttons for available templates
+  const renderDownloadButtons = () => {
+    if (!downloadTemplates || downloadTemplates.length === 0) {
+      return null;
+    }
+    
+    return (
+      <div className="download-templates-section">
+        <h3>Your Templates Are Ready</h3>
+        <p>You can download your purchased templates immediately:</p>
+        
+        <div className="template-download-buttons">
+          {downloadTemplates.map((template, index) => (
+            <a 
+              key={index}
+              href={template.downloadUrl}
+              className="download-template-button"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <FontAwesomeIcon icon={faDownload} className="download-icon" />
+              Download: {template.agentName || `Template ${index + 1}`}
+            </a>
+          ))}
+        </div>
+        <p className="download-note">
+          Your download links will also be sent to your email and remain active for 30 days.
+        </p>
+      </div>
+    );
+  };
 
   return (
     <div className="checkout-success-container">
@@ -252,6 +306,9 @@ const CheckoutSuccess = () => {
                   </div>
                 )}
                 
+                {/* Render immediate download buttons if available */}
+                {renderDownloadButtons()}
+                
                 <div className="sepa-notification">
                   <FontAwesomeIcon icon={faMoneyBillTransfer} className="sepa-icon" />
                   <div>
@@ -274,6 +331,9 @@ const CheckoutSuccess = () => {
                     <p>Order ID: <strong>{orderId}</strong></p>
                   </div>
                 )}
+                
+                {/* Render immediate download buttons if available */}
+                {renderDownloadButtons()}
                 
                 <div className="email-notification">
                   <FontAwesomeIcon icon={faEnvelope} className="email-icon" />

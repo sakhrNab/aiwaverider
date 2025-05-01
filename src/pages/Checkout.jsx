@@ -1090,6 +1090,53 @@ const Checkout = () => {
               }
             }
             
+            // Check if templates are available for immediate download
+            if (result.payment && result.payment.templates && result.payment.templates.length > 0) {
+              // Log available templates
+              logInfo('Templates available for immediate download', { 
+                count: result.payment.templates.length,
+                templates: result.payment.templates.map(t => t.agentId)
+              }, 'handleSepaPayment');
+              
+              // Store download URLs in session storage for access after redirect
+              try {
+                sessionStorage.setItem('downloadTemplates', JSON.stringify(result.payment.templates));
+                sessionStorage.setItem('orderReference', result.payment.orderId || orderReference);
+                
+                // If we have a direct download URL, show immediate download button
+                if (result.payment.directDownloadUrl) {
+                  // Show toast with download button
+                  toast.success(
+                    <div>
+                      <p>Your template is ready for immediate download!</p>
+                      <button 
+                        onClick={() => window.open(result.payment.directDownloadUrl, '_blank')}
+                        style={{ 
+                          background: '#4a86e8', 
+                          color: 'white', 
+                          border: 'none', 
+                          padding: '8px 15px', 
+                          borderRadius: '4px',
+                          marginTop: '10px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Download Now
+                      </button>
+                    </div>,
+                    {
+                      autoClose: false,
+                      closeOnClick: false,
+                      position: 'bottom-center',
+                      icon: '📥'
+                    }
+                  );
+                }
+              } catch (storageError) {
+                logError('Failed to store template download links in session storage', storageError, 'handleSepaPayment');
+              }
+            }
+            
             // Show general success message
             toast.success('SEPA Credit Transfer initiated successfully!');
             

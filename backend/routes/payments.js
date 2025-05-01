@@ -1443,46 +1443,6 @@ router.post('/sepa-credit-transfer', async (req, res) => {
       
       await db.collection('payments').doc(transferReference).set(paymentDocData);
       
-      // Send email confirmation for SEPA payment initialization
-      try {
-        // Only send email if either authenticated user or email is provided
-        if ((isAuthenticated && sepaPayload.metadata?.userId) || (userEmail && userEmail.includes('@'))) {
-          const emailService = require('../services/emailService');
-          
-          // For initial SEPA confirmation (not the purchase confirmation yet)
-          const recipientEmail = userEmail || await getUserEmailById(sepaPayload.metadata.userId);
-          
-          if (recipientEmail) {
-            console.log(`[email] Sending SEPA initialization confirmation to ${recipientEmail}`);
-            
-            await emailService.sendCustomEmail({
-              email: recipientEmail,
-              firstName: sepaPayload.debtorInfo.name,
-              title: 'Your SEPA Credit Transfer Confirmation',
-              headerTitle: 'SEPA Credit Transfer Initiated',
-              subject: 'Your SEPA Credit Transfer Confirmation',
-              content: `
-                <p>Thank you for your payment via SEPA Credit Transfer.</p>
-                <p><strong>Payment Reference:</strong> ${transferReference}</p>
-                <p><strong>Amount:</strong> ${sepaPayload.paymentInfo.currency.toUpperCase()} ${parseFloat(sepaPayload.paymentInfo.amount).toFixed(2)}</p>
-                <p><strong>Status:</strong> ${isSimulation ? 'Simulated (Test Mode)' : 'Pending'}</p>
-                <p>You will receive your order confirmation once the payment is processed.</p>
-              `,
-              actionUrl: redirectUrl,
-              actionText: 'View Order Status'
-            });
-          } else {
-            console.log('Could not determine email address for SEPA initialization confirmation');
-          }
-        } else {
-          console.log('No valid email available for SEPA initialization confirmation, skipping email');
-        }
-      } catch (emailError) {
-        console.error(`Error sending SEPA confirmation email: ${emailError.message}`);
-        if (logger) logger.error(`Error sending SEPA confirmation email: ${emailError.message}`);
-        // Don't fail the overall request if email fails
-      }
-      
       // If we have simulation mode enabled, process the order now
       if (isSimulation) {
         try {
@@ -1515,7 +1475,8 @@ router.post('/sepa-credit-transfer', async (req, res) => {
             metadata: {
               ...sepaPayload.metadata,
               order_id: orderId,
-              email: customerEmail || null // Include email in metadata for order processing
+              email: customerEmail || null, // Include email in metadata for order processing
+              immediate_delivery: true // Flag for immediate template delivery
             },
             customer: {
               id: sepaPayload.metadata?.userId || null,
@@ -1529,6 +1490,26 @@ router.post('/sepa-credit-transfer', async (req, res) => {
           paymentData.orderId = orderResult.orderId;
           paymentData.emailStatus = 'unknown';
           
+          // Add immediate download URLs for templates if available
+          if (orderResult.templates && orderResult.templates.length > 0) {
+            paymentData.templates = orderResult.templates.map(template => ({
+              agentId: template.agentId,
+              agentName: template.agentName,
+              downloadUrl: template.downloadUrl || `/api/templates/download/${template.agentId}?orderId=${orderResult.orderId}&token=${template.accessToken || ''}`
+            }));
+            
+            // Add a direct download URL for the first template (common case)
+            if (orderResult.templates[0]) {
+              paymentData.directDownloadUrl = orderResult.templates[0].downloadUrl || 
+                `/api/templates/download/${orderResult.templates[0].agentId}?orderId=${orderResult.orderId}&token=${orderResult.templates[0].accessToken || ''}`;
+            }
+
+            logger.info(`SEPA payment - ${orderResult.templates.length} template(s) prepared for immediate download`);
+            console.log(`Templates prepared for order ${orderResult.orderId}`);
+          } else {
+            logger.warn(`SEPA payment - No templates available for immediate download for order ${orderResult.orderId}`);
+          }
+
           // Detailed logging for email delivery status
           if (orderResult.deliveryStatus === 'skipped') {
             console.log('Agent purchase email was skipped due to missing email address');

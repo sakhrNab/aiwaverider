@@ -15,7 +15,7 @@ const db = admin.firestore();
 /**
  * Get agent template content
  * @param {string} agentId - The agent ID
- * @returns {Promise<string>} - The template content
+ * @returns {Promise<Object>} - The template content as an object with all agent data
  */
 const getAgentTemplate = async (agentId) => {
   try {
@@ -28,14 +28,47 @@ const getAgentTemplate = async (agentId) => {
     
     const agent = agentDoc.data();
     
-    // Check if agent has a template
-    if (!agent.template && !agent.templateUrl) {
-      // Generate a basic template if none exists
-      return generateBasicTemplate(agent);
+    // Prepare a full agent template object
+    const templateObject = {
+      id: agentId,
+      name: agent.title || agent.name || 'AI Agent',
+      description: agent.description || 'No description available',
+      version: "1.0",
+      created: new Date().toISOString(),
+      type: "agent_template",
+      category: agent.category || "AI Agent",
+      tags: agent.tags || [],
+      // Include all agent properties, removing any that are undefined
+      ...Object.fromEntries(
+        Object.entries(agent).filter(([_, value]) => value !== undefined)
+      ),
+    };
+    
+    // If agent has a template field, use that as the template content
+    if (agent.template) {
+      // If template is already JSON, parse it and include it
+      if (typeof agent.template === 'string' && agent.template.trim().startsWith('{')) {
+        try {
+          const parsedTemplate = JSON.parse(agent.template);
+          templateObject.templateContent = parsedTemplate;
+        } catch (e) {
+          // If parsing fails, use it as is
+          templateObject.templateContent = agent.template;
+        }
+      } else {
+        // Use the template string directly
+        templateObject.templateContent = agent.template;
+      }
+    } else if (agent.templateUrl) {
+      // Include the template URL if available
+      templateObject.templateUrl = agent.templateUrl;
+    } else {
+      // Generate a basic template only as last resort
+      templateObject.templateContent = generateBasicTemplate(agent);
+      templateObject.isGenerated = true;
     }
     
-    // Return the template content
-    return agent.template || `Please download the template from: ${agent.templateUrl}`;
+    return JSON.stringify(templateObject, null, 2);
   } catch (error) {
     logger.error(`Error getting agent template: ${error.message}`);
     throw error;
@@ -143,6 +176,9 @@ const processPaymentSuccess = async (paymentData) => {
       paymentData.payment_method_types?.includes('sepa_debit') ||
       metadata.payment_method === 'sepa_credit_transfer';
     
+    // Check if immediate delivery is requested (for SEPA payments)
+    const immediateDelivery = isSepaPayment && metadata.immediate_delivery === true;
+    
     // Extract order details
     const orderData = {
       orderId: metadata.order_id || uuidv4(),
@@ -151,7 +187,7 @@ const processPaymentSuccess = async (paymentData) => {
       items: items,
       total: paymentData.amount / 100, // Convert from cents
       currency: paymentData.currency?.toUpperCase() || 'USD',
-      status: isSepaPayment ? 'pending' : 'completed', // SEPA payments start as pending
+      status: isSepaPayment ? 'successful' : 'completed', // Change SEPA payments to successful
       paymentId: paymentData.id,
       paymentMethod: paymentData.payment_method_types?.[0] || metadata.payment_method || 'card',
       metadata
@@ -160,14 +196,71 @@ const processPaymentSuccess = async (paymentData) => {
     // Create order record
     const order = await createOrder(orderData);
     
+    // If immediate delivery, generate download links for templates
+    const templates = [];
+    
+    if (immediateDelivery) {
+      logger.info(`Preparing templates for immediate delivery for order ${order.id}`);
+      
+      // Process each item to create template access
+      for (const item of items) {
+        try {
+          const agentId = item.id;
+          
+          // Get template content
+          const templateContent = await getAgentTemplate(agentId);
+          
+          // Get agent details
+          let agentName = item.title || 'AI Agent';
+          try {
+            const agentDoc = await db.collection('agents').doc(agentId).get();
+            if (agentDoc.exists) {
+              const agent = agentDoc.data();
+              agentName = agent.title || agent.name || agentName;
+            }
+          } catch (agentError) {
+            logger.warn(`Couldn't fetch agent details for ${agentId}: ${agentError.message}`);
+          }
+
+          // Generate a secure token for template access
+          const accessToken = uuidv4();
+          
+          // Store the template access token in the database
+          await db.collection('templateAccess').doc(accessToken).set({
+            orderId: order.id,
+            agentId,
+            userId,
+            email,
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days expiry
+            used: false
+          });
+          
+          // Add template to list
+          templates.push({
+            agentId,
+            agentName,
+            accessToken,
+            downloadUrl: `/api/templates/download/${agentId}?orderId=${order.id}&token=${accessToken}`
+          });
+          
+          logger.info(`Template access created for agent ${agentId} in order ${order.id}`);
+        } catch (templateError) {
+          logger.error(`Error preparing template for agent ${item.id}: ${templateError.message}`);
+        }
+      }
+    }
+    
     // Skip template delivery if no email is provided
     if (!email) {
       logger.warn(`Cannot deliver templates: No email provided for order ${order.id}`);
+      
       return {
         success: true,
         orderId: order.id,
         deliveryStatus: 'skipped',
-        message: 'Order created but templates not delivered (no email)'
+        message: 'Order created but templates not delivered (no email)',
+        templates: immediateDelivery ? templates : []
       };
     }
     
@@ -210,9 +303,12 @@ const processPaymentSuccess = async (paymentData) => {
         
         // Customize for SEPA payments
         if (isSepaPayment) {
-          emailSubject = 'Your SEPA Payment Received';
-          if (orderData.status === 'pending') {
-            emailSubject = 'Your SEPA Payment Initiated';
+          emailSubject = immediateDelivery ? 
+            'Your SEPA Payment - Template Available Now' : 
+            'Your SEPA Payment Successful';
+            
+          if (orderData.status === 'successful') {
+            emailSubject = 'Your SEPA Payment is Successful - Template Available Now';
           }
           
           // Add payment reference to receipt URL if available
@@ -220,6 +316,9 @@ const processPaymentSuccess = async (paymentData) => {
             receiptUrl = `/account/orders/${orderData.orderId}?payment_ref=${paymentData.id}`;
           }
         }
+        
+        // Find template download link if available
+        const templateLink = templates.find(t => t.agentId === agentId)?.downloadUrl || '';
         
         // Send email with template
         const emailResult = await emailService.sendAgentPurchaseEmail({
@@ -233,7 +332,12 @@ const processPaymentSuccess = async (paymentData) => {
           orderId: orderData.orderId,
           orderDate: new Date().toLocaleDateString(), 
           paymentMethod: orderData.paymentMethod,
-          paymentStatus: orderData.status
+          paymentStatus: 'successful', // Always use successful status
+          isSepaPayment: isSepaPayment,
+          immediateDownload: immediateDelivery,
+          downloadUrl: templateLink,
+          templateContent: templateContent, // Pass the template content
+          agentId: agentId // Pass the agent ID
         });
         
         // Record delivery result
@@ -268,7 +372,8 @@ const processPaymentSuccess = async (paymentData) => {
       success: true,
       orderId: order.id,
       deliveryStatus,
-      deliveryResults
+      deliveryResults,
+      templates: immediateDelivery ? templates : []
     };
   } catch (error) {
     logger.error(`Error processing payment success: ${error.message}`);

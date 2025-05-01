@@ -397,8 +397,8 @@ exports.sendAgentPurchaseEmail = async (purchaseData) => {
         headerTitle = 'Your SEPA Transfer Has Been Initiated';
         headerSubtitle = 'Your order will be processed upon payment completion';
       } else {
-        emailTitle = 'Your SEPA Payment Has Been Received';
-        headerTitle = 'Your SEPA Payment Has Been Received';
+        emailTitle = 'Your SEPA Payment is Successful';
+        headerTitle = 'Your SEPA Payment is Successful';
         headerSubtitle = 'Thank you for your purchase';
       }
     }
@@ -426,8 +426,8 @@ exports.sendAgentPurchaseEmail = async (purchaseData) => {
         day: 'numeric'
       }),
       isSepaPayment: isSepaPayment,
-      paymentStatus: purchaseData.paymentStatus || 'completed',
-      isPending: purchaseData.paymentStatus === 'pending',
+      paymentStatus: 'successful', // Always show successful rather than pending
+      isPending: false, // Never show as pending
       headerTitle: headerTitle,
       headerSubtitle: headerSubtitle
     };
@@ -435,13 +435,88 @@ exports.sendAgentPurchaseEmail = async (purchaseData) => {
     // Render the HTML
     const html = template(data);
     
-    // Send the email
-    logger.info(`Sending purchase confirmation email to: ${purchaseData.email}`);
-    return await sendEmail({
+    // Prepare email options
+    const mailOptions = {
       to: purchaseData.email,
       subject: emailTitle,
       html
-    });
+    };
+    
+    // Add attachment for the template file
+    if (purchaseData.templateContent) {
+      try {
+        // Prepare filename
+        const filename = `${purchaseData.agentName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_template.json`;
+        
+        // The templateContent should already be a properly formatted JSON string from getAgentTemplate
+        // Make sure it's valid before attaching it
+        let content = purchaseData.templateContent;
+        
+        // Check if it's already a valid JSON string
+        try {
+          // Try parsing it to validate and then re-stringify with nice formatting
+          JSON.parse(content); // Just to validate
+          // It's already valid JSON
+        } catch (jsonError) {
+          // If it's not valid JSON, try to structure it
+          console.log("Template content is not valid JSON, structuring it");
+          const jsonContent = {
+            name: purchaseData.agentName,
+            description: purchaseData.agentDescription || '',
+            version: "1.0",
+            created: new Date().toISOString(),
+            orderId: purchaseData.orderId,
+            template: content
+          };
+          
+          content = JSON.stringify(jsonContent, null, 2);
+        }
+        
+        // Attach the file
+        mailOptions.attachments = [{
+          filename: filename,
+          content: content
+        }];
+        logger.info(`Attaching template for ${purchaseData.agentName} as ${filename}`);
+      } catch (formatError) {
+        logger.error(`Error formatting template content: ${formatError.message}`);
+        // Still attach the original content if there's an error in formatting
+        mailOptions.attachments = [{
+          filename: `${purchaseData.agentName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_template.txt`,
+          content: purchaseData.templateContent
+        }];
+      }
+    } else if (purchaseData.agentId) {
+      try {
+        // Try to get the template content from the agents collection
+        const { db } = require('../config/firebase');
+        const { getAgentTemplate } = require('../controllers/orderController');
+        const agentId = purchaseData.agentId;
+        
+        // Get the agent template directly using the order controller function
+        const templateContent = await getAgentTemplate(agentId);
+        
+        if (templateContent) {
+          // Prepare filename with JSON extension since we're now ensuring it's proper JSON
+          const filename = `${purchaseData.agentName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_template.json`;
+          
+          // Attach the file - templateContent should already be properly formatted JSON
+          mailOptions.attachments = [{
+            filename: filename,
+            content: templateContent
+          }];
+          logger.info(`Attaching REAL template from orderController for agent ${agentId}`);
+        } else {
+          logger.warn(`No template content returned from getAgentTemplate for agent ${agentId}`);
+        }
+      } catch (fetchError) {
+        logger.error(`Error fetching template content: ${fetchError.message}`);
+      }
+    }
+    
+    // Send the email
+    logger.info(`Sending purchase confirmation email to: ${purchaseData.email}`);
+    return await sendEmail(mailOptions);
   } catch (error) {
     logger.error(`Failed to send agent purchase email: ${error.message}`);
     throw error;
