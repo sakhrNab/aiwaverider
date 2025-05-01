@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getPaymentStatus } from '../../services/paymentApi';
 import { toast } from 'react-hot-toast';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCheckCircle, faEnvelope, faExclamationTriangle, faMoneyBillTransfer, faDownload } from '@fortawesome/free-solid-svg-icons';
 import PaymentSuccessRecommendations from '../../components/PaymentSuccessRecommendations';
+import { HashLoader } from 'react-spinners';
 import './CheckoutSuccess.css';
 
 /**
@@ -12,6 +13,12 @@ import './CheckoutSuccess.css';
  * and displays a notification about the template being sent by email
  */
 const CheckoutSuccess = () => {
+  // Define the API URL from environment variables or use a default
+  const apiUrl = import.meta.env.VITE_APP_URL || '';
+  
+  // Add the missing ref for statusCheckInterval
+  const statusCheckInterval = useRef(null);
+  
   const [orderStatus, setOrderStatus] = useState('processing');
   const [orderId, setOrderId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -20,6 +27,14 @@ const CheckoutSuccess = () => {
   const [isSimulated, setIsSimulated] = useState(false);
   const [purchasedItems, setPurchasedItems] = useState([]);
   const [downloadTemplates, setDownloadTemplates] = useState([]);
+  const [paymentType, setPaymentType] = useState('card');
+  const [paymentId, setPaymentId] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
+  const [statusColor, setStatusColor] = useState('text-blue-600');
+  const [sepaDetails, setSepaDetails] = useState(null);
+  const [paymentDetails, setPaymentDetails] = useState({});
+  const [hasDownloadLinks, setHasDownloadLinks] = useState(false);
+  const [templates, setTemplates] = useState([]);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -29,6 +44,15 @@ const CheckoutSuccess = () => {
     try {
       const templatesData = sessionStorage.getItem('downloadTemplates');
       const orderRef = sessionStorage.getItem('orderReference');
+      const confirmationEmail = sessionStorage.getItem('confirmationEmail');
+      
+      // Store the confirmation email if available
+      if (confirmationEmail) {
+        setPaymentDetails(prev => ({
+          ...prev,
+          confirmationEmail
+        }));
+      }
       
       if (templatesData) {
         const templates = JSON.parse(templatesData);
@@ -55,6 +79,8 @@ const CheckoutSuccess = () => {
     
     setIsSimulated(simulated);
     setPaymentMethod(paymentType === 'sepa_credit_transfer' ? 'sepa' : 'card');
+    setPaymentType(paymentType);
+    setPaymentId(paymentId);
     
     // Try to get purchased items from localStorage
     try {
@@ -115,7 +141,7 @@ const CheckoutSuccess = () => {
         );
       } else {
         // Normal payment processing
-        checkPaymentStatus(paymentId, paymentType);
+        checkPaymentStatus();
       }
     } else {
       setIsLoading(false);
@@ -123,110 +149,103 @@ const CheckoutSuccess = () => {
     }
   }, [location]);
   
-  // Check payment status from server
-  const checkPaymentStatus = async (paymentId, type) => {
+  // Function to check payment status periodically
+  const checkPaymentStatus = useCallback(async () => {
     try {
-      setIsLoading(true);
+      // Determine the correct API endpoint based on payment type
+      let endpoint;
       
-      // Special handling for SEPA payments
-      if (type === 'sepa_credit_transfer') {
-        try {
-          // Get payment status from API
-          const response = await getPaymentStatus(paymentId, type);
-          
-          if (response?.status === 'pending' || 
-              response?.status === 'processing' || 
-              response?.status === 'completed' || 
-              response?.status === 'simulated') {
-            setOrderStatus(response.status);
-            
-            // Get order ID from metadata if available
-            if (response.result?.metadata?.orderId || response.result?.metadata?.order_id) {
-              setOrderId(response.result.metadata.orderId || response.result.metadata.order_id);
-            } else {
-              // Use payment ID as fallback order reference
-              setOrderId(paymentId);
-            }
-            
-            // Show appropriate notification toast
-            toast.success(
-              <div>
-                <strong>SEPA Credit Transfer Initiated!</strong>
-                <p>Your payment is being processed by your bank.</p>
-              </div>,
-              {
-                duration: 6000,
-                icon: <FontAwesomeIcon icon={faMoneyBillTransfer} />,
-                id: 'sepa-payment-toast'
-              }
-            );
-          } else {
-            setOrderStatus('failed');
-            setError('Payment could not be confirmed. Please contact support.');
-          }
-        } catch (sepaErr) {
-          console.error('Error checking SEPA payment status:', sepaErr);
-          // For SEPA, we'll still show a success page because the transfer has been initiated
-          console.log('Using fallback success for SEPA payment');
-          setOrderStatus('pending'); // SEPA payments start as pending
-          setOrderId(paymentId);
-        }
-        
-        setIsLoading(false);
+      if (paymentType === 'sepa_credit_transfer') {
+        endpoint = `/api/payments/sepa-credit-transfer/${paymentId}`;
+        console.log(`Checking SEPA payment status for ID: ${paymentId}`);
+      } else if (paymentType === 'crypto') {
+        endpoint = `/api/payments/crypto/${paymentId}`;
+      } else if (paymentType.startsWith('stripe') || paymentId.startsWith('pi_')) {
+        // Handle Stripe payments, including SEPA through Stripe
+        endpoint = `/api/payments/stripe/${paymentId}`;
+      } else {
+        console.warn(`Unknown payment type for status check: ${paymentType}`);
+        setIsLoading(false); // Add this to stop loading if payment type is unknown
+        return; // Exit if we don't know how to check this payment type
+      }
+      
+      const response = await fetch(`${apiUrl}${endpoint}`);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Payment status check failed:', data.error);
+        setIsLoading(false); // Add this to stop loading on error
         return;
       }
       
-      // Standard payment processing for non-SEPA payments
-      // Get payment status from API
-      const response = await getPaymentStatus(paymentId, type);
+      // Update payment status
+      setOrderStatus(data.status);
+      setIsLoading(false); // Ensure loading state is cleared
       
-      if (response?.status === 'succeeded' || response?.status === 'processing') {
-        setOrderStatus(response.status || 'processing');
+      // If payment completed successfully, update UI accordingly
+      if (data.status === 'completed' || data.status === 'successful' || data.status === 'succeeded') {
+        setStatusMessage('Your payment has been confirmed and your order is complete!');
+        setStatusColor('text-green-600');
+        clearInterval(statusCheckInterval.current);
         
-        // Get order ID from metadata if available
-        if (response.data?.metadata?.order_id || response.data?.metadata?.orderId) {
-          setOrderId(response.data.metadata.order_id || response.data.metadata.orderId);
-        } else {
-          // Use payment ID as fallback order reference
-          setOrderId(paymentId);
+        // Check for download links
+        if (data.templates && data.templates.length > 0) {
+          setTemplates(data.templates);
+          setHasDownloadLinks(true);
         }
-        
-        // Show email delivery notification
-        toast.success(
-          <div>
-            <strong>Thank you for your purchase!</strong>
-            <p>Your agent template has been sent to your email.</p>
-          </div>,
-          {
-            duration: 6000,
-            icon: <FontAwesomeIcon icon={faEnvelope} />,
-            id: 'email-delivery-toast'
-          }
-        );
-      } else {
-        setOrderStatus('failed');
-        setError('Payment could not be confirmed. Please contact support.');
+      } else if (data.status === 'processing') {
+        setStatusMessage('Your payment is being processed. This typically takes a few moments...');
+        setStatusColor('text-blue-600');
+      } else if (data.status === 'pending') {
+        // For SEPA payments, provide specific instructions
+        if (paymentType === 'sepa_credit_transfer') {
+          setStatusMessage('Your bank transfer is pending. Please complete the transfer using the bank details below.');
+          setSepaDetails(data.bankDetails);
+        } else {
+          setStatusMessage('Your payment is pending confirmation...');
+        }
+        setStatusColor('text-yellow-600');
+      } else if (data.status === 'failed' || data.status === 'canceled') {
+        setStatusMessage('Your payment could not be processed. Please try again or contact support.');
+        setStatusColor('text-red-600');
+        clearInterval(statusCheckInterval.current);
       }
-    } catch (err) {
-      console.error('Error checking payment status:', err);
       
-      // If we get a 404 for the payment ID but status was success in URL params,
-      // we should still show success page to the user
-      const queryParams = new URLSearchParams(location.search);
-      const status = queryParams.get('status');
-      
-      if (status === 'success') {
-        console.log('Payment ID not found but URL indicates success. Showing success page.');
-        setOrderStatus('succeeded');
-        setOrderId(`ORD-${Date.now().toString().substring(6)}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`);
-      } else {
-        setError('Could not verify payment status');
-        setOrderStatus('failed');
+      // Add Stripe-specific status information if available
+      if (data.stripeStatus) {
+        setPaymentDetails(prev => ({
+          ...prev,
+          stripeStatus: data.stripeStatus,
+          lastUpdated: data.lastUpdated
+        }));
       }
-    } finally {
+      
+    } catch (error) {
+      console.error('Error checking payment status:', error);
+      setIsLoading(false); // Add this to stop loading on error
+    }
+  }, [apiUrl, paymentId, paymentType]);
+  
+  // Setup interval for checking payment status
+  useEffect(() => {
+    if (paymentId && !isSimulated && (paymentType === 'sepa_credit_transfer' || paymentType.startsWith('stripe'))) {
+      // Initial check
+      checkPaymentStatus();
+      
+      // Set up interval for periodic checks (every 10 seconds)
+      statusCheckInterval.current = setInterval(checkPaymentStatus, 10000);
+      
+      // Clear interval on component unmount
+      return () => {
+        if (statusCheckInterval.current) {
+          clearInterval(statusCheckInterval.current);
+        }
+      };
+    } else {
+      // For other cases, just stop loading
       setIsLoading(false);
     }
-  };
+  }, [checkPaymentStatus, paymentId, isSimulated, paymentType]);
   
   // Return to agents page
   const handleContinueShopping = () => {
@@ -275,8 +294,8 @@ const CheckoutSuccess = () => {
       <div className="checkout-success-card">
         {isLoading ? (
           <div className="checkout-success-loading">
-            <div className="spinner"></div>
-            <p>Processing your order...</p>
+            <HashLoader color="#4FD1C5" size={60} speedMultiplier={0.8} />
+            <p className="mt-4">Processing your order...</p>
           </div>
         ) : error ? (
           <div className="checkout-error">
@@ -303,6 +322,9 @@ const CheckoutSuccess = () => {
                 {orderId && (
                   <div className="order-info">
                     <p>Payment Reference: <strong>{orderId}</strong></p>
+                    {paymentDetails.confirmationEmail && (
+                      <p>Confirmation sent to: <strong>{paymentDetails.confirmationEmail}</strong></p>
+                    )}
                   </div>
                 )}
                 

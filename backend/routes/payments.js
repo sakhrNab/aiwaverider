@@ -778,174 +778,313 @@ router.post('/process-apple-pay', async (req, res) => {
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 router.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  console.log('Stripe webhook received');
   const sig = req.headers['stripe-signature'];
-  let event;
   
   try {
+    // Log the raw body for debugging
+    console.log(`Webhook body length: ${req.body.length} bytes`);
+    console.log(`Webhook signature: ${sig ? 'present' : 'missing'}`);
+    console.log(`Webhook secret: ${endpointSecret ? 'configured' : 'missing'}`);
+    
+    let event;
+    
     // Verify webhook signature
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
-  } catch (err) {
-    logPayment('STRIPE', 'WEBHOOK_SIGNATURE_FAILED', null, err);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-  
-  // Handle the event
-  switch (event.type) {
-    case 'payment_intent.succeeded':
-      const paymentIntent = event.data.object;
-      // Log the successful payment
-      logPayment('STRIPE', 'PAYMENT_SUCCEEDED', { id: paymentIntent.id });
-      
+    if (endpointSecret) {
       try {
-        // Get cart items from metadata or fetch them based on the order ID
-        const metadata = paymentIntent.metadata || {};
-        const orderId = metadata.order_id || uuidv4();
-        logger.info(`Processing payment intent with order ID: ${orderId}`);
-        
-        // Try to retrieve items from metadata
-        let items = [];
-        try {
-          if (metadata.items) {
-            items = JSON.parse(metadata.items);
-          } else if (metadata.cart_id) {
-            // Fetch cart items from database using cart_id
-            items = await fetchCartItemsFromDatabase(metadata.cart_id);
-          }
-        } catch (parseError) {
-          logger.error(`Error parsing items metadata: ${parseError.message}`, parseError);
-        }
-        
-        // Process the payment and deliver agent templates
-        const result = await orderController.processPaymentSuccess({
-          id: paymentIntent.id,
-          amount: paymentIntent.amount,
-          currency: paymentIntent.currency,
-          payment_method_types: paymentIntent.payment_method_types,
-          metadata: {
-            ...metadata,
-            order_id: orderId // Ensure the orderId is passed to the controller
-          },
-          customer: paymentIntent.customer ? {
-            id: paymentIntent.customer,
-            email: metadata.email // Use email from metadata if available
-          } : null,
-          items: items
-        });
-        
-        // Log success with the order ID from the result
-        logger.info(`Order processed successfully: ${result.orderId}`, {
-          orderId: result.orderId, // Include orderId in the log data
-          deliveryStatus: result.deliveryStatus,
-          successCount: result.deliveryResults?.filter(r => r.success).length || 0,
-          failureCount: result.deliveryResults?.filter(r => !r.success).length || 0
-        });
-        
-        // If we have a notification service, send a success notification
-        try {
-          if (process.env.ENABLE_NOTIFICATIONS !== 'false' && metadata.email) {
-            logger.info(`Sending order success notification for order: ${result.orderId}`);
-            
-            // Send order success notification
-            await notificationService.sendOrderSuccessNotification({
-              orderId: result.orderId,
-              email: metadata.email,
-              userId: metadata.userId,
-              items: items,
-              orderTotal: paymentIntent.amount / 100, // Convert cents to dollars
-              agent: items.length === 1 ? items[0] : null
-            });
-          }
-        } catch (notificationError) {
-          logger.error(`Failed to send notification for order ${result.orderId}: ${notificationError.message}`);
-          // Non-critical error, don't throw
-        }
-      } catch (error) {
-        logger.error(`Error processing order after payment: ${error.message}`, error);
+        event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+        console.log(`Webhook verified! Event type: ${event.type}`);
+      } catch (err) {
+        console.log(`⚠️ Webhook signature verification failed: ${err.message}`);
+        logPayment('STRIPE', 'WEBHOOK_SIGNATURE_FAILED', null, err);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
       }
-      break;
-    case 'payment_intent.payment_failed':
-      const failedPayment = event.data.object;
-      // Handle failed payment
-      logPayment('STRIPE', 'PAYMENT_FAILED', { id: failedPayment.id });
-      break;
-    case 'checkout.session.completed':
-      const session = event.data.object;
-      // Fulfill the purchase
-      logPayment('STRIPE', 'CHECKOUT_COMPLETED', { id: session.id });
-      
+    } else {
+      // For development without a webhook secret
       try {
-        // Extract orderId from metadata
-        const metadata = session.metadata || {};
-        const orderId = metadata.order_id || uuidv4();
-        logger.info(`Processing checkout session with order ID: ${orderId}`);
-        
-        // Get line items from the checkout session
-        const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
-        const items = lineItems.data.map(item => ({
-          id: item.price?.product || item.price?.id || uuidv4(),
-          name: item.description,
-          price: item.price?.unit_amount / 100,
-          quantity: item.quantity || 1
-        }));
-        
-        // Process the payment and deliver agent templates
-        const result = await orderController.processPaymentSuccess({
-          id: session.id,
-          amount: session.amount_total,
-          currency: session.currency,
-          payment_method_types: [session.payment_method_types?.[0] || 'card'],
-          metadata: {
-            ...metadata,
-            order_id: orderId // Ensure the orderId is passed to the controller
-          },
-          customer: session.customer ? {
-            id: session.customer,
-            email: session.customer_email || session.customer_details?.email
-          } : null,
-          items: items
-        });
-        
-        // Log success with the order ID from the result
-        logger.info(`Checkout order processed successfully: ${result.orderId}`, {
-          orderId: result.orderId, // Include orderId in the log data
-          deliveryStatus: result.deliveryStatus,
-          successCount: result.deliveryResults?.filter(r => r.success).length || 0,
-          failureCount: result.deliveryResults?.filter(r => !r.success).length || 0
-        });
-        
-        // If we have a notification service, send a success notification
-        try {
-          // This could be an internal notification service or a third-party service
-          if (process.env.ENABLE_NOTIFICATIONS !== 'false' && (metadata.email || session.customer_email || session.customer_details?.email)) {
-            // Get the customer email from various possible sources
-            const customerEmail = metadata.email || session.customer_email || session.customer_details?.email;
-            logger.info(`Sending order success notification for order: ${result.orderId} to ${customerEmail}`);
-            
-            // Send order success notification
-            await notificationService.sendOrderSuccessNotification({
-              orderId: result.orderId,
-              email: customerEmail,
-              userId: metadata.userId,
-              items: items,
-              orderTotal: session.amount_total / 100, // Convert cents to dollars
-              agent: items.length === 1 ? items[0] : null
-            });
-          }
-        } catch (notificationError) {
-          logger.error(`Failed to send notification for order ${result.orderId}: ${notificationError.message}`);
-          // Non-critical error, don't throw
-        }
-      } catch (error) {
-        logger.error(`Error processing order after checkout: ${error.message}`, error);
+        event = JSON.parse(req.body.toString());
+        console.log(`Webhook parsed without verification. Event type: ${event.type}`);
+      } catch (parseError) {
+        console.log(`⚠️ Webhook parsing failed: ${parseError.message}`);
+        return res.status(400).send(`Webhook Error: ${parseError.message}`);
       }
-      break;
-    default:
-      // Unexpected event type
-      logPayment('STRIPE', `UNHANDLED_EVENT_${event.type}`, { id: event.id });
-  }
+    }
   
-  // Return a 200 response to acknowledge receipt of the event
-  res.status(200).send({ received: true });
+    // Handle the event
+    switch (event.type) {
+      case 'payment_intent.succeeded':
+        const paymentIntent = event.data.object;
+        // Log the successful payment
+        logPayment('STRIPE', 'PAYMENT_SUCCEEDED', { id: paymentIntent.id });
+        
+        try {
+          // Get cart items from metadata or fetch them based on the order ID
+          const metadata = paymentIntent.metadata || {};
+          const orderId = metadata.order_id || uuidv4();
+          logger.info(`Processing payment intent with order ID: ${orderId}`);
+          
+          // Try to retrieve items from metadata
+          let items = [];
+          try {
+            if (metadata.items) {
+              items = JSON.parse(metadata.items);
+            } else if (metadata.cart_id) {
+              // Fetch cart items from database using cart_id
+              items = await fetchCartItemsFromDatabase(metadata.cart_id);
+            }
+          } catch (parseError) {
+            logger.error(`Error parsing items metadata: ${parseError.message}`, parseError);
+          }
+          
+          // Process the payment and deliver agent templates
+          const result = await orderController.processPaymentSuccess({
+            id: paymentIntent.id,
+            amount: paymentIntent.amount,
+            currency: paymentIntent.currency,
+            payment_method_types: paymentIntent.payment_method_types,
+            metadata: {
+              ...metadata,
+              order_id: orderId // Ensure the orderId is passed to the controller
+            },
+            customer: paymentIntent.customer ? {
+              id: paymentIntent.customer,
+              email: metadata.email // Use email from metadata if available
+            } : null,
+            items: items
+          });
+          
+          // Log success with the order ID from the result
+          logger.info(`Order processed successfully: ${result.orderId}`, {
+            orderId: result.orderId, // Include orderId in the log data
+            deliveryStatus: result.deliveryStatus,
+            successCount: result.deliveryResults?.filter(r => r.success).length || 0,
+            failureCount: result.deliveryResults?.filter(r => !r.success).length || 0
+          });
+          
+          // If we have a notification service, send a success notification
+          try {
+            if (process.env.ENABLE_NOTIFICATIONS !== 'false' && metadata.email) {
+              logger.info(`Sending order success notification for order: ${result.orderId}`);
+              
+              // Send order success notification
+              await notificationService.sendOrderSuccessNotification({
+                orderId: result.orderId,
+                email: metadata.email,
+                userId: metadata.userId,
+                items: items,
+                orderTotal: paymentIntent.amount / 100, // Convert cents to dollars
+                agent: items.length === 1 ? items[0] : null
+              });
+            }
+          } catch (notificationError) {
+            logger.error(`Failed to send notification for order ${result.orderId}: ${notificationError.message}`);
+            // Non-critical error, don't throw
+          }
+        } catch (error) {
+          logger.error(`Error processing order after payment: ${error.message}`, error);
+        }
+        break;
+      case 'payment_intent.payment_failed':
+        const failedPayment = event.data.object;
+        // Handle failed payment
+        logPayment('STRIPE', 'PAYMENT_FAILED', { id: failedPayment.id });
+        break;
+      case 'checkout.session.completed':
+        const session = event.data.object;
+        // Fulfill the purchase
+        logPayment('STRIPE', 'CHECKOUT_COMPLETED', { id: session.id });
+        
+        try {
+          // Extract orderId from metadata
+          const metadata = session.metadata || {};
+          const orderId = metadata.order_id || uuidv4();
+          logger.info(`Processing checkout session with order ID: ${orderId}`);
+          
+          // Get line items from the checkout session
+          const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
+          const items = lineItems.data.map(item => ({
+            id: item.price?.product || item.price?.id || uuidv4(),
+            name: item.description,
+            price: item.price?.unit_amount / 100,
+            quantity: item.quantity || 1
+          }));
+          
+          // Process the payment and deliver agent templates
+          const result = await orderController.processPaymentSuccess({
+            id: session.id,
+            amount: session.amount_total,
+            currency: session.currency,
+            payment_method_types: [session.payment_method_types?.[0] || 'card'],
+            metadata: {
+              ...metadata,
+              order_id: orderId // Ensure the orderId is passed to the controller
+            },
+            customer: session.customer ? {
+              id: session.customer,
+              email: session.customer_email || session.customer_details?.email
+            } : null,
+            items: items
+          });
+          
+          // Log success with the order ID from the result
+          logger.info(`Checkout order processed successfully: ${result.orderId}`, {
+            orderId: result.orderId, // Include orderId in the log data
+            deliveryStatus: result.deliveryStatus,
+            successCount: result.deliveryResults?.filter(r => r.success).length || 0,
+            failureCount: result.deliveryResults?.filter(r => !r.success).length || 0
+          });
+          
+          // If we have a notification service, send a success notification
+          try {
+            // This could be an internal notification service or a third-party service
+            if (process.env.ENABLE_NOTIFICATIONS !== 'false' && (metadata.email || session.customer_email || session.customer_details?.email)) {
+              // Get the customer email from various possible sources
+              const customerEmail = metadata.email || session.customer_email || session.customer_details?.email;
+              logger.info(`Sending order success notification for order: ${result.orderId} to ${customerEmail}`);
+              
+              // Send order success notification
+              await notificationService.sendOrderSuccessNotification({
+                orderId: result.orderId,
+                email: customerEmail,
+                userId: metadata.userId,
+                items: items,
+                orderTotal: session.amount_total / 100, // Convert cents to dollars
+                agent: items.length === 1 ? items[0] : null
+              });
+            }
+          } catch (notificationError) {
+            logger.error(`Failed to send notification for order ${result.orderId}: ${notificationError.message}`);
+            // Non-critical error, don't throw
+          }
+        } catch (error) {
+          logger.error(`Error processing order after checkout: ${error.message}`, error);
+        }
+        break;
+      // Add specific handlers for SEPA payments
+      case 'payment_intent.processing':
+        const processingPayment = event.data.object;
+        // This is particularly important for SEPA payments which can take days to process
+        if (processingPayment.payment_method_types.includes('sepa_debit') ||
+            processingPayment.metadata?.payment_method === 'sepa_credit_transfer') {
+          
+          logPayment('STRIPE', 'SEPA_PAYMENT_PROCESSING', { id: processingPayment.id });
+          
+          try {
+            // Update the payment status in your database
+            const paymentRef = db.collection('payments').doc(processingPayment.id);
+            const paymentDoc = await paymentRef.get();
+            
+            if (paymentDoc.exists) {
+              await paymentRef.update({
+                status: 'processing',
+                updatedAt: new Date().toISOString(),
+                stripeEvent: event.type,
+                lastProcessedAt: new Date().toISOString()
+              });
+              
+              logger.info(`Updated SEPA payment status to processing: ${processingPayment.id}`);
+            } else {
+              logger.warn(`Could not find payment document for processing SEPA payment: ${processingPayment.id}`);
+            }
+          } catch (updateError) {
+            logger.error(`Error updating SEPA payment status: ${updateError.message}`);
+          }
+        }
+        break;
+      case 'charge.succeeded':
+        // This event occurs when a payment charge succeeds
+        const charge = event.data.object;
+        
+        // Check if this is related to a SEPA payment
+        if (charge.payment_method_details?.type === 'sepa_debit' || 
+            charge.metadata?.payment_method === 'sepa_credit_transfer') {
+          
+          logPayment('STRIPE', 'SEPA_CHARGE_SUCCEEDED', { id: charge.payment_intent });
+          
+          try {
+            // Get the payment intent ID
+            const paymentIntentId = charge.payment_intent;
+            
+            if (paymentIntentId) {
+              // Update the payment status in your database
+              const paymentRef = db.collection('payments').doc(paymentIntentId);
+              const paymentDoc = await paymentRef.get();
+              
+              if (paymentDoc.exists) {
+                await paymentRef.update({
+                  status: 'completed',
+                  chargeId: charge.id,
+                  updatedAt: new Date().toISOString(),
+                  stripeEvent: event.type,
+                  lastProcessedAt: new Date().toISOString()
+                });
+                
+                logger.info(`Updated SEPA payment status to completed: ${paymentIntentId}`);
+                
+                // If we haven't delivered the order yet, do it now
+                const paymentData = paymentDoc.data();
+                if (paymentData.orderProcessed !== true) {
+                  // Process the order - this will deliver templates and send emails
+                  const metadata = paymentData.metadata || {};
+                  let items = [];
+                  
+                  try {
+                    items = metadata.items || [];
+                  } catch (e) {
+                    logger.error(`Error parsing items for SEPA fulfillment: ${e.message}`);
+                  }
+                  
+                  // Get user email
+                  const userEmail = paymentData.customerEmail || metadata.email || charge.receipt_email;
+                  
+                  // Process the payment success
+                  const orderResult = await orderController.processPaymentSuccess({
+                    id: paymentIntentId,
+                    amount: charge.amount,
+                    currency: charge.currency,
+                    payment_method_types: ['sepa_debit'],
+                    metadata: {
+                      ...metadata,
+                      email: userEmail
+                    },
+                    customer: {
+                      id: charge.customer || null,
+                      email: userEmail
+                    },
+                    items: items
+                  });
+                  
+                  // Update the payment with order information
+                  await paymentRef.update({
+                    orderProcessed: true,
+                    orderId: orderResult.orderId,
+                    templates: orderResult.templates || [],
+                    deliveryStatus: orderResult.deliveryStatus
+                  });
+                  
+                  logger.info(`Processed delayed SEPA order fulfillment: ${orderResult.orderId}`);
+                }
+              } else {
+                logger.warn(`Could not find payment document for completed SEPA charge: ${paymentIntentId}`);
+              }
+            }
+          } catch (fulfillError) {
+            logger.error(`Error fulfilling SEPA order after charge: ${fulfillError.message}`);
+          }
+        }
+        break;
+      default:
+        // Unexpected event type
+        logPayment('STRIPE', `UNHANDLED_EVENT_${event.type}`, { id: event.id });
+    }
+  
+    // Return a 200 response to acknowledge receipt of the event
+    res.status(200).send({ received: true });
+  } catch (error) {
+    console.error('Error in Stripe webhook handler:', error);
+    if (logger) logger.error('Error in Stripe webhook handler:', error);
+    return res.status(500).json({ error: 'Error processing Stripe webhook' });
+  }
 });
 
 /**
@@ -1391,19 +1530,84 @@ router.post('/sepa-credit-transfer', async (req, res) => {
     
     // Use the provided orderId or generate a new one
     const orderId = sepaPayload.metadata?.orderId || uuidv4();
+
+    // Determine if we're in test mode or production
+    const isTestMode = process.env.NODE_ENV !== 'production' || process.env.SEPA_SIMULATION_MODE === 'true';
     
-    // Determine if we're in simulation mode (default to true in non-production)
-    const isSimulation = process.env.SEPA_SIMULATION_MODE === 'true' || process.env.NODE_ENV !== 'production';
+    // Set up Stripe payment based on the mode
+    let stripePaymentData;
+    let setupStripeCustomer = false;
+    
+    try {
+      // For SEPA payments, we need to create a PaymentIntent with sepa_debit payment method
+      // or use Stripe's source API for SEPA Credit Transfer
+      
+      // If the customer is authenticated, try to get or create their Stripe customer
+      let stripeCustomerId = null;
+      if (isAuthenticated && sepaPayload.metadata?.userId) {
+        // Get the user's Stripe customer ID from your database
+        const userDoc = await db.collection('users').doc(sepaPayload.metadata.userId).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          stripeCustomerId = userData.stripeCustomerId;
+          
+          // If user doesn't have a Stripe customer ID, create one
+          if (!stripeCustomerId) {
+            setupStripeCustomer = true;
+          }
+        }
+      }
+      
+      // Create the payment with Stripe
+      if (sepaPayload.paymentType === 'sepa_credit_transfer') {
+        // For SEPA Credit Transfer, we create a PaymentIntent with manual confirmation
+        // This represents the customer's intention to pay via bank transfer
+        
+        // Calculate amount in cents for Stripe
+        const amountInCents = Math.round(parseFloat(sepaPayload.paymentInfo.amount) * 100);
+        
+        // Create PaymentIntent
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amountInCents,
+          currency: 'eur', // SEPA is EUR only
+          payment_method_types: ['sepa_debit', 'customer_balance'], // Allow SEPA or manual bank transfer
+          capture_method: 'manual', // Manual capture for bank transfers
+          confirm: false,
+          customer: stripeCustomerId || undefined,
+          metadata: {
+            orderId: orderId,
+            transferReference: transferReference,
+            userEmail: userEmail || '',
+            userId: sepaPayload.metadata?.userId || '',
+            items: JSON.stringify(sepaPayload.metadata?.items || [])
+          }
+        });
+        
+        stripePaymentData = {
+          id: paymentIntent.id,
+          clientSecret: paymentIntent.client_secret,
+          status: paymentIntent.status
+        };
+      }
+      
+      console.log('Created Stripe payment:', stripePaymentData);
+    } catch (stripeError) {
+      console.error('Error creating Stripe payment:', stripeError);
+      logger.error(`Error creating Stripe SEPA payment: ${stripeError.message}`);
+      
+      // Proceed with non-Stripe flow if Stripe fails
+      console.log('Falling back to manual SEPA payment tracking');
+    }
     
     // Create payment data for the response
     const paymentData = {
-      id: transferReference,
+      id: stripePaymentData?.id || transferReference,
       amount: parseFloat(sepaPayload.paymentInfo.amount),
       currency: sepaPayload.paymentInfo.currency.toLowerCase(),
       type: 'sepa_credit_transfer',
       reference: transferReference,
       orderId,
-      status: isSimulation ? 'simulated' : 'pending',
+      status: 'pending',
       bankDetails: {
         beneficiary: process.env.SEPA_BENEFICIARY_NAME || sepaPayload.creditorInfo?.name || 'AI Wave Rider Ltd',
         iban: process.env.SEPA_IBAN || sepaPayload.creditorInfo?.iban || 'DE89370400440532013000',
@@ -1418,11 +1622,13 @@ router.post('/sepa-credit-transfer', async (req, res) => {
       },
       remittanceInfo: sepaPayload.paymentInfo.remittanceInfo,
       instructions: 'Please transfer the exact amount using the provided reference number.',
-      simulationMode: isSimulation
+      stripePaymentIntent: stripePaymentData?.id,
+      stripeClientSecret: stripePaymentData?.clientSecret,
+      testMode: isTestMode
     };
     
     // Build the URL for the success page, including the payment ID and order ID
-    const redirectUrl = sepaPayload.successUrl || `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout/success?payment_id=${transferReference}&order_id=${orderId}&status=pending&type=sepa_credit_transfer`;
+    const redirectUrl = sepaPayload.successUrl || `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout/success?payment_id=${stripePaymentData?.id || transferReference}&order_id=${orderId}&status=pending&type=sepa_credit_transfer`;
     
     // Store transfer in database for reference
     try {
@@ -1441,10 +1647,10 @@ router.post('/sepa-credit-transfer', async (req, res) => {
         userId: sepaPayload.metadata?.userId || null
       };
       
-      await db.collection('payments').doc(transferReference).set(paymentDocData);
+      await db.collection('payments').doc(stripePaymentData?.id || transferReference).set(paymentDocData);
       
       // If we have simulation mode enabled, process the order now
-      if (isSimulation) {
+      if (isTestMode) {
         try {
           // For order processing, get email for authenticated users from their profile
           let customerEmail = userEmail;
@@ -1468,7 +1674,7 @@ router.post('/sepa-credit-transfer', async (req, res) => {
           
           // Process the simulated payment
           const orderResult = await orderController.processPaymentSuccess({
-            id: transferReference,
+            id: stripePaymentData?.id || transferReference,
             amount: parseFloat(sepaPayload.paymentInfo.amount) * 100, // Convert to cents for consistency
             currency: sepaPayload.paymentInfo.currency.toLowerCase(),
             payment_method_types: ['sepa_credit_transfer'],
@@ -1620,9 +1826,6 @@ router.get('/sepa-credit-transfer/:id', async (req, res) => {
     console.log(`Checking SEPA Credit Transfer status for ${id}`);
     if (logger) logger.info(`Checking SEPA Credit Transfer status for ${id}`);
     
-    // In a real implementation, you would check with your banking API
-    // For now, we'll check our database and simulate statuses
-    
     let payment;
     try {
       const paymentDoc = await db.collection('payments').doc(id).get();
@@ -1644,11 +1847,68 @@ router.get('/sepa-credit-transfer/:id', async (req, res) => {
       });
     }
     
-    // Determine payment status based on simulation or time elapsed
+    // Determine payment status based on Stripe or simulation
     let status = payment.status;
+    let paymentDetails = {};
     
-    // If in simulation mode, we'll transition the status based on creation time
-    if (payment.simulationMode) {
+    // Check if this payment has a Stripe Payment Intent ID
+    if (payment.stripePaymentIntent || id.startsWith('pi_')) {
+      try {
+        // This is a Stripe-based payment, get real-time status from Stripe
+        const paymentIntentId = payment.stripePaymentIntent || id;
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        
+        // Map Stripe payment status to our status format
+        switch (paymentIntent.status) {
+          case 'succeeded':
+            status = 'completed';
+            break;
+          case 'processing':
+            status = 'processing';
+            break;
+          case 'requires_payment_method':
+          case 'requires_confirmation':
+          case 'requires_action':
+            status = 'pending';
+            break;
+          case 'canceled':
+            status = 'cancelled';
+            break;
+          default:
+            status = paymentIntent.status; // Use Stripe's status directly
+        }
+        
+        // Add Stripe payment details for the frontend
+        paymentDetails = {
+          stripeStatus: paymentIntent.status,
+          lastUpdated: new Date(paymentIntent.created * 1000).toISOString(),
+          paymentMethodDetails: paymentIntent.payment_method_details
+        };
+        
+        // Update the status in our database if it has changed
+        if (status !== payment.status) {
+          try {
+            await db.collection('payments').doc(id).update({
+              status,
+              updatedAt: new Date().toISOString(),
+              stripeStatus: paymentIntent.status
+            });
+            
+            // Update our local payment object too
+            payment.status = status;
+            logger.info(`Updated SEPA payment status from Stripe: ${id} => ${status}`);
+          } catch (updateError) {
+            logger.error(`Error updating SEPA payment status: ${updateError.message}`);
+            // Continue anyway since we're returning the current status
+          }
+        }
+      } catch (stripeError) {
+        logger.error(`Error retrieving Stripe payment: ${stripeError.message}`);
+        // Fall back to current stored status if Stripe API fails
+        console.log(`Falling back to stored payment status: ${payment.status}`);
+      }
+    } else if (payment.testMode || payment.simulationMode) {
+      // If in simulation mode, transition the status based on creation time
       const createdAt = new Date(payment.createdAt);
       const now = new Date();
       const minutesElapsed = (now - createdAt) / (1000 * 60);
@@ -1685,8 +1945,14 @@ router.get('/sepa-credit-transfer/:id', async (req, res) => {
       amount: payment.amount,
       currency: payment.currency,
       bankDetails: payment.bankDetails,
-      simulationMode: payment.simulationMode,
-      createdAt: payment.createdAt
+      testMode: payment.testMode || payment.simulationMode,
+      createdAt: payment.createdAt,
+      ...paymentDetails,
+      // Include additional details from our payment record
+      orderId: payment.orderId,
+      // Include template download links if they exist
+      templates: payment.templates || [],
+      directDownloadUrl: payment.directDownloadUrl
     });
   } catch (error) {
     console.error(`Error checking SEPA Credit Transfer status: ${error.message}`, error);

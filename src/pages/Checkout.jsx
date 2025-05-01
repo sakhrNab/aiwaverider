@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaInfoCircle, FaMinus, FaPlus, FaTrashAlt, FaShoppingCart, FaCreditCard, FaBitcoin, FaEuroSign, FaPaypal, FaApple, FaGooglePay } from 'react-icons/fa';
 import { SiStripe, SiApple, SiVisa, SiMastercard, SiAmericanexpress, SiPaypal } from 'react-icons/si';
@@ -28,6 +28,7 @@ import GooglePayButton from '../components/GooglePayButton';
 import ApplePayButton from '../components/ApplePayButton';
 import PaymentSuccessRecommendations from '../components/PaymentSuccessRecommendations';
 import '../styles/Checkout.css';
+import { HashLoader } from 'react-spinners';
 
 // Add some style fixes for the Stripe Elements and form fields
 const styleFixesCSS = `
@@ -441,41 +442,13 @@ const Checkout = () => {
   const { user } = useAuth();
   const isAuthenticated = !!user; // User is authenticated if user object exists
   
-  // Add ref for dynamic style element
-  const styleRef = React.useRef(null);
+  // Add loading state for the initial page load
+  const [isLoading, setIsLoading] = useState(true);
   
-  // Apply CSS fixes when component mounts
-  useEffect(() => {
-    // Add CSS fixes to head
-    if (!styleRef.current) {
-      const style = document.createElement('style');
-      style.textContent = styleFixesCSS;
-      document.head.appendChild(style);
-      styleRef.current = style;
-      
-      // Fix for touchstart passive event listener warning
-      const originalAddEventListener = document.addEventListener;
-      document.addEventListener = function(type, listener, options) {
-        let modifiedOptions = options;
-        if (type === 'touchstart' || type === 'touchmove') {
-          if (typeof options === 'object') {
-            modifiedOptions = { ...options, passive: true };
-          } else {
-            modifiedOptions = { passive: true };
-          }
-        }
-        return originalAddEventListener.call(this, type, listener, modifiedOptions);
-      };
-    }
-    
-    // Cleanup function
-    return () => {
-      if (styleRef.current) {
-        document.head.removeChild(styleRef.current);
-        styleRef.current = null;
-      }
-    };
-  }, []);
+  // Add ref for dynamic style element
+  const styleRef = useRef(null);
+  
+  // Various form state
   
   const [email, setEmail] = useState('');
   const [cardName, setCardName] = useState('');
@@ -505,6 +478,7 @@ const Checkout = () => {
   const [orderReference, setOrderReference] = useState('');
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   // Calculate VAT (variable based on country)
   const vatRate = country === 'United States' ? 0 : 0.2; // 20% VAT for non-US
@@ -743,6 +717,14 @@ const Checkout = () => {
       // Get email based on authentication status
       const userEmail = isAuthenticated && user?.email ? user.email : email;
       
+      // Add debugging for email issues
+      console.log('Email details:', {
+        isAuthenticated, 
+        userEmail, 
+        email,
+        'user?.email': user?.email
+      });
+      
       // Log the email source for debugging
       if (isAuthenticated && user?.email) {
         logInfo(`Using authenticated user email: ${user.email}`, {}, 'handleSepaPayment');
@@ -753,7 +735,6 @@ const Checkout = () => {
       }
       
       // Only validate email if it's provided (but not empty) and not from an authenticated user
-      // This allows empty email (optional) but validates it if user entered something
       if (!isAuthenticated && email && !email.includes('@')) {
         toast.error('Please enter a valid email address for payment confirmation');
         setIsSubmitting(false);
@@ -799,6 +780,7 @@ const Checkout = () => {
           name: cardName,
           iban: sepaIban.replace(/\s+/g, ''),
           bic: sepaBic || undefined, // Optional, only include if provided
+          email: userEmail || email || '', // Always include email, even if empty
           ...(userEmail && userEmail.includes('@') ? { email: userEmail } : {}) // Only include email if valid
         },
         creditorInfo: {
@@ -827,6 +809,7 @@ const Checkout = () => {
           customerConsent: true,
           totalAmount: finalTotal,
           discountApplied: discountApplied ? 'welcome10' : '',
+          email: userEmail || email || '', // Add email to metadata as well
           userEmail: userEmail || null, // Always include email in metadata even if not provided
           ...(isAuthenticated && user?.uid ? { userId: user.uid } : {}) // Include user ID for authenticated users
         }
@@ -860,9 +843,6 @@ const Checkout = () => {
         logInfo('Simulating SEPA payment in non-production environment', 
                { endToEndId, amount: finalTotal }, 
                'handleSepaPayment');
-        
-        // Simulate processing delay
-        await new Promise(resolve => setTimeout(resolve, 1500));
         
         // Define API URL - this was missing before
         const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -957,6 +937,9 @@ const Checkout = () => {
           logError('Error calling backend API in simulation mode', apiError, 'handleSepaPayment');
           // Continue with local simulation even if API call fails
         }
+
+        // Simulate processing delay
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
         // Show success message
         toast.success('SEPA Credit Transfer initiated successfully! (SIMULATION MODE)');
@@ -997,196 +980,181 @@ const Checkout = () => {
         }, 8000); // Display recommendations for 8 seconds before redirecting
         
         return;
-      } else {
-        // Production path - Check API connectivity before proceeding
-        try {
-          logInfo('Checking API connectivity before SEPA payment', {}, 'handleSepaPayment');
-          const { checkApiConnectivity } = await import('../services/paymentApi');
-          const connectivityCheck = await checkApiConnectivity();
+      }
+      
+      // Production path - Check API connectivity before proceeding
+      try {
+        logInfo('Checking API connectivity before SEPA payment', {}, 'handleSepaPayment');
+        const { checkApiConnectivity } = await import('../services/paymentApi');
+        const connectivityCheck = await checkApiConnectivity();
+        
+        if (!connectivityCheck.ok) {
+          logError('API connectivity check failed before SEPA payment', 
+                  connectivityCheck, 
+                  'handleSepaPayment');
           
-          if (!connectivityCheck.ok) {
-            logError('API connectivity check failed before SEPA payment', 
-                    connectivityCheck, 
-                    'handleSepaPayment');
-            
-            if (connectivityCheck.fallbackOk) {
-              toast.error(`Payment system issue: ${connectivityCheck.error}. Please try again in a few minutes.`);
-            } else {
-              toast.error(`Could not connect to payment server: ${connectivityCheck.error}`);
-            }
-            
-            setIsSubmitting(false);
-            return;
+          if (connectivityCheck.fallbackOk) {
+            toast.error(`Payment system issue: ${connectivityCheck.error}. Please try again in a few minutes.`);
+          } else {
+            toast.error(`Could not connect to payment server: ${connectivityCheck.error}`);
           }
-        } catch (connectivityError) {
-          logError(connectivityError, {}, 'handleSepaPayment-apiConnectivity');
-          toast.error('Could not verify payment system availability. Trying to proceed anyway...');
+          
+          setIsSubmitting(false);
+          return;
+        }
+      } catch (connectivityError) {
+        logError(connectivityError, {}, 'handleSepaPayment-apiConnectivity');
+        toast.error('Could not verify payment system availability. Trying to proceed anyway...');
+      }
+      
+      // Send the SEPA Credit Transfer request to our backend
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+      logInfo('Sending SEPA payment to backend', { endpoint: `${apiUrl}/api/payments/sepa-credit-transfer` }, 'handleSepaPayment');
+      
+      const response = await fetch(`${apiUrl}/api/payments/sepa-credit-transfer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(sepaPayload)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || `Server returned ${response.status} ${response.statusText}`;
+        
+        logError(errorMessage, { 
+          status: response.status, 
+          statusText: response.statusText,
+          errorData
+        }, 'handleSepaPayment-apiResponse');
+        
+        throw new Error(errorMessage);
+      }
+      
+      const result = await response.json();
+      
+      // Handle the response
+      if (result.success) {
+        // Log successful transaction
+        logTransaction(endToEndId, 'success', 'sepa_credit_transfer', { 
+          amount: finalTotal.toFixed(2),
+          orderId: orderReference,
+          email: userEmail || email || '' // Log email for tracking
+        });
+        
+        // Check email status from the response
+        const emailStatus = result.payment?.emailStatus || 'unknown';
+        
+        // Show status-specific toast based on email sending status
+        if (emailStatus === 'sent' || emailStatus === 'completed') {
+          toast.success(`Order confirmation email sent to ${userEmail || 'your email address'}`, {
+            autoClose: 5000,
+            position: 'bottom-right',
+            icon: '📧'
+          });
+        } else if (emailStatus === 'failed') {
+          toast.error(`Could not send confirmation email: ${result.payment?.emailError || 'Unknown error'}`, {
+            autoClose: 7000,
+            position: 'bottom-right',
+            icon: '❌'
+          });
+        } else if (emailStatus === 'skipped') {
+          toast.warning('No confirmation email sent - no email address provided', {
+            autoClose: 5000,
+            position: 'bottom-right',
+            icon: '⚠️'
+          });
         }
         
-        // Send the SEPA Credit Transfer request to our backend
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-        logInfo('Sending SEPA payment to backend', { endpoint: `${apiUrl}/api/payments/sepa-credit-transfer` }, 'handleSepaPayment');
+        // Show general success message with email notification
+        const emailMsg = userEmail || email 
+          ? 'Your order confirmation has been sent to your email.'
+          : 'Please contact support if you need an order confirmation email.';
+          
+        toast.success(`SEPA Credit Transfer initiated successfully! ${emailMsg}`);
         
-        try {
-          const response = await fetch(`${apiUrl}/api/payments/sepa-credit-transfer`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(sepaPayload)
-          });
-          
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const errorMessage = errorData.message || `Server returned ${response.status} ${response.statusText}`;
-            
-            logError(errorMessage, { 
-              status: response.status, 
-              statusText: response.statusText,
-              errorData
-            }, 'handleSepaPayment-apiResponse');
-            
-            throw new Error(errorMessage);
-          }
-          
-          const result = await response.json();
-          
-          // Handle the response
-          if (result.success) {
-            // Log successful transaction
-            logTransaction(endToEndId, 'success', 'sepa_credit_transfer', { 
-              amount: finalTotal.toFixed(2),
-              orderId: orderReference
-            });
-            
-            // Handle email status information if available
-            if (result.payment && result.payment.emailStatus) {
-              const emailStatus = result.payment.emailStatus;
-              
-              // Log email status
-              logInfo(`Email confirmation status: ${emailStatus}`, 
-                     { message: result.payment?.emailMessage }, 
-                     'handleSepaPayment-email');
-              
-              // Show status-specific toast based on email sending status
-              if (emailStatus === 'sent' || emailStatus === 'completed') {
-                toast.success(`Order confirmation email sent to ${userEmail || 'your email address'}`, {
-                  autoClose: 5000,
-                  position: 'bottom-right',
-                  icon: '📧'
-                });
-              } else if (emailStatus === 'failed') {
-                toast.error(`Could not send confirmation email: ${result.payment?.emailError || 'Unknown error'}`, {
-                  autoClose: 7000,
-                  position: 'bottom-right',
-                  icon: '❌'
-                });
-              } else if (emailStatus === 'skipped') {
-                toast.warning('No confirmation email sent - no email address provided', {
-                  autoClose: 5000,
-                  position: 'bottom-right',
-                  icon: '⚠️'
-                });
-              }
-            }
-            
-            // Check if templates are available for immediate download
-            if (result.payment && result.payment.templates && result.payment.templates.length > 0) {
-              // Log available templates
-              logInfo('Templates available for immediate download', { 
-                count: result.payment.templates.length,
-                templates: result.payment.templates.map(t => t.agentId)
-              }, 'handleSepaPayment');
-              
-              // Store download URLs in session storage for access after redirect
-              try {
-                sessionStorage.setItem('downloadTemplates', JSON.stringify(result.payment.templates));
-                sessionStorage.setItem('orderReference', result.payment.orderId || orderReference);
-                
-                // If we have a direct download URL, show immediate download button
-                if (result.payment.directDownloadUrl) {
-                  // Show toast with download button
-                  toast.success(
-                    <div>
-                      <p>Your template is ready for immediate download!</p>
-                      <button 
-                        onClick={() => window.open(result.payment.directDownloadUrl, '_blank')}
-                        style={{ 
-                          background: '#4a86e8', 
-                          color: 'white', 
-                          border: 'none', 
-                          padding: '8px 15px', 
-                          borderRadius: '4px',
-                          marginTop: '10px',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Download Now
-                      </button>
-                    </div>,
-                    {
-                      autoClose: false,
-                      closeOnClick: false,
-                      position: 'bottom-center',
-                      icon: '📥'
-                    }
-                  );
-                }
-              } catch (storageError) {
-                logError('Failed to store template download links in session storage', storageError, 'handleSepaPayment');
-              }
-            }
-            
-            // Show general success message
-            toast.success('SEPA Credit Transfer initiated successfully!');
-            
-            // Save purchased items to localStorage for the success page to use
-            try {
-              localStorage.setItem('lastPurchasedItems', JSON.stringify(cart));
-            } catch (err) {
-              logError(err, {}, 'handleSepaPayment-localStorage');
-            }
-            
-            // Show payment recommendations before redirecting
-            setPaymentCompleted(true);
-            setShowRecommendations(true);
-            
-            // Extra toast to inform user about recommendations
-            setTimeout(() => {
-              toast.info('Looking for similar products you might like...', {
-                autoClose: 4000,
-                position: 'bottom-right'
-              });
-            }, 1000);
-            
-            // Wait for a longer period to let user see the recommendations
-            setTimeout(() => {
-              // Clear the cart
-              clearCart();
-              
-              // Redirect to success page with the reference
-              navigate(`/checkout/success?payment_id=${endToEndId}&status=pending&type=sepa_credit_transfer`);
-            }, 8000); // Display recommendations for 8 seconds before redirecting
-          } else {
-            logError('SEPA payment failed', result, 'handleSepaPayment-resultFailure');
-            throw new Error(result.message || 'Failed to initiate SEPA Credit Transfer');
-          }
-        } catch (error) {
-          const { logError } = await import('../services/logService').catch(() => ({ 
-            logError: (err) => console.error('Error logging service unavailable:', err)
-          }));
-          
-          logError(error, { 
-            sepaIban: sepaIban ? '***REDACTED***' : undefined,
-            sepaBic: sepaBic ? '***REDACTED***' : undefined,
-            finalTotal,
-            currency
+        // Check if templates are available for immediate download
+        if (result.payment && result.payment.templates && result.payment.templates.length > 0) {
+          // Log available templates
+          logInfo('Templates available for immediate download', { 
+            count: result.payment.templates.length,
+            templates: result.payment.templates.map(t => t.agentId)
           }, 'handleSepaPayment');
           
-          console.error('SEPA payment error:', error);
-          toast.error(error.message || 'SEPA Credit Transfer failed. Please try again or use another payment method.');
-          setIsSubmitting(false);
+          // Store download URLs in session storage for access after redirect
+          try {
+            sessionStorage.setItem('downloadTemplates', JSON.stringify(result.payment.templates));
+            sessionStorage.setItem('orderReference', result.payment.orderId || orderReference);
+            
+            // If we have a direct download URL, show immediate download button
+            if (result.payment.directDownloadUrl) {
+              // Show toast with download button
+              toast.success(
+                <div>
+                  <p>Your template is ready for immediate download!</p>
+                  <button 
+                    onClick={() => window.open(result.payment.directDownloadUrl, '_blank')}
+                    style={{ 
+                      background: '#4a86e8', 
+                      color: 'white', 
+                      border: 'none', 
+                      padding: '8px 15px', 
+                      borderRadius: '4px',
+                      marginTop: '10px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Download Now
+                  </button>
+                </div>,
+                {
+                  autoClose: false,
+                  closeOnClick: false,
+                  position: 'bottom-center',
+                  icon: '📥'
+                }
+              );
+            }
+          } catch (storageError) {
+            logError('Failed to store template download links in session storage', storageError, 'handleSepaPayment');
+          }
         }
+        
+        // Save purchased items to localStorage for the success page to use
+        try {
+          localStorage.setItem('lastPurchasedItems', JSON.stringify(cart));
+          // Also store the email for confirmation purposes
+          if (userEmail || email) {
+            sessionStorage.setItem('confirmationEmail', userEmail || email);
+          }
+        } catch (err) {
+          logError(err, {}, 'handleSepaPayment-localStorage');
+        }
+        
+        // Show payment recommendations before redirecting
+        setPaymentCompleted(true);
+        setShowRecommendations(true);
+        
+        // Extra toast to inform user about recommendations
+        setTimeout(() => {
+          toast.info('Looking for similar products you might like...', {
+            autoClose: 4000,
+            position: 'bottom-right'
+          });
+        }, 1000);
+        
+        // Wait for a longer period to let user see the recommendations
+        setTimeout(() => {
+          // Clear the cart
+          clearCart();
+          
+          // Redirect to success page with the reference
+          navigate(`/checkout/success?payment_id=${endToEndId}&status=pending&type=sepa_credit_transfer`);
+        }, 8000); // Display recommendations for 8 seconds before redirecting
+        } else {
+        logError('SEPA payment failed', result, 'handleSepaPayment-resultFailure');
+        throw new Error(result.message || 'Failed to initiate SEPA Credit Transfer');
       }
     } catch (error) {
       const { logError } = await import('../services/logService').catch(() => ({ 
@@ -1470,6 +1438,49 @@ const Checkout = () => {
     }
   }, [currency, paymentMethod]);
   
+  // Apply CSS fixes when component mounts
+  useEffect(() => {
+    // Add CSS fixes to head
+    if (!styleRef.current) {
+      const style = document.createElement('style');
+      style.textContent = styleFixesCSS;
+      document.head.appendChild(style);
+      styleRef.current = style;
+      
+      // Fix for touchstart passive event listener warning
+      const originalAddEventListener = document.addEventListener;
+      document.addEventListener = function(type, listener, options) {
+        let modifiedOptions = options;
+        if (type === 'touchstart' || type === 'touchmove') {
+          if (typeof options === 'object') {
+            modifiedOptions = { ...options, passive: true };
+          } else {
+            modifiedOptions = { passive: true };
+          }
+        }
+        return originalAddEventListener.call(this, type, listener, modifiedOptions);
+      };
+    }
+    
+    // Cleanup function
+    return () => {
+      if (styleRef.current) {
+        document.head.removeChild(styleRef.current);
+        styleRef.current = null;
+      }
+    };
+  }, []);
+  
+  // Add useEffect for the loading state
+  useEffect(() => {
+    // Simulate loading state to ensure all components are ready
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, []);
+  
   // Empty cart view
   if (cart.length === 0) {
     return (
@@ -1490,6 +1501,23 @@ const Checkout = () => {
           <Link to="/agents" className="continue-shopping-btn">
             Browse Products
           </Link>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show loading screen initially
+  if (isLoading) {
+    return (
+      <div className="flex flex-col justify-center items-center h-screen bg-gradient-to-b from-gray-900 to-blue-900">
+        <div className="mb-8">
+          <HashLoader color="#4FD1C5" size={70} speedMultiplier={0.8} />
+        </div>
+        <div className="text-white text-xl font-semibold mt-4">
+          Loading Checkout
+        </div>
+        <div className="text-blue-300 text-sm mt-2">
+          Preparing your shopping cart...
         </div>
       </div>
     );
@@ -1955,6 +1983,11 @@ const Checkout = () => {
                   >
                     Switch to EUR
                   </button>
+                </div>
+              ) : isProcessing ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <HashLoader color="#4FD1C5" size={60} speedMultiplier={0.8} />
+                  <p className="mt-4 text-center text-gray-600">Initiating SEPA transfer...</p>
                 </div>
               ) : (
                 <>

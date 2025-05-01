@@ -159,6 +159,18 @@ app.get('/thankyou', (req, res) => {
   return res.redirect(redirectUrl);
 });
 
+// For Stripe webhook handling, we need to preserve the raw body
+// This middleware needs to be set before any routes that expect JSON payloads
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/payments/stripe-webhook') {
+    // Use raw body for Stripe webhook verification
+    next();
+  } else {
+    // Use standard JSON parsing for all other routes
+    express.json()(req, res, next);
+  }
+});
+
 // 404 handler for API routes
 app.use('/api/*', (req, res) => {
   console.error(`API 404: ${req.method} ${req.originalUrl}`);

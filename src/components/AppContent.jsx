@@ -15,7 +15,7 @@ import Agents from '../pages/Agents';
 import AgentDetail from '../pages/agent/AgentDetail';
 import Checkout from '../pages/Checkout';
 import ThankYou from '../pages/ThankYou';
-import CheckoutSuccess from './checkout/CheckoutSuccess';
+import CheckoutSuccess from '../components/checkout/CheckoutSuccess';
 import AITools from '../pages/AITools';
 import LatestTech from '../pages/LatestTech';
 import HomePage from '../pages/HomePage';
