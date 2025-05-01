@@ -469,6 +469,7 @@ const Checkout = () => {
   const [currency, setCurrency] = useState('USD');
   const [clientSecret, setClientSecret] = useState('');
   const [stripeLoading, setStripeLoading] = useState(false);
+  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(true); // Add new loading state for payment methods
   const [sepaIban, setSepaIban] = useState('');
   const [sepaIbanValid, setSepaIbanValid] = useState(null);
   const [sepaBic, setSepaBic] = useState('');
@@ -1525,6 +1526,16 @@ const Checkout = () => {
     return () => clearTimeout(timer);
   }, []);
   
+  // Add useEffect for payment methods loading
+  useEffect(() => {
+    // Allow time for payment method components to load
+    const paymentMethodsTimer = setTimeout(() => {
+      setPaymentMethodsLoading(false);
+    }, 1500);
+    
+    return () => clearTimeout(paymentMethodsTimer);
+  }, [paymentMethod, currency]); // Re-run when payment method or currency changes
+  
   // Empty cart view
   if (cart.length === 0) {
     return (
@@ -1702,151 +1713,165 @@ const Checkout = () => {
           {/* Payment method toggle */}
           <div className="payment-methods-container">
             <h3>Choose Payment Method</h3>
-            <div className="payment-methods grid grid-cols-3 gap-4">
-              {/* First Row: Card, SEPA, iDEAL */}
-              <div 
-                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.CARD ? 'active' : ''}`}
-                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.CARD)}
-              >
-                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.CARD)}</div>
-                <span>Card</span>
+            
+            {paymentMethodsLoading ? (
+              <div className="flex flex-col items-center justify-center py-8">
+                <HashLoader color="#4FD1C5" size={50} speedMultiplier={0.8} />
+                <p className="mt-4 text-center text-gray-600">Loading payment options...</p>
               </div>
-              
-              <div 
-                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.SEPA ? 'active' : ''}`}
-                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.SEPA)}
-              >
-                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.SEPA)}</div>
-                <span>SEPA</span>
-              </div>
-              
-              <div 
-                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.IDEAL ? 'active' : ''}`}
-                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.IDEAL)}
-              >
-                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.IDEAL)}</div>
-                <span>iDEAL</span>
-              </div>
-              
-              {/* Second Row: PayPal, Google Pay, Apple Pay */}
-              <div 
-                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.PAYPAL ? 'active' : ''}`}
-                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.PAYPAL)}
-              >
-                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.PAYPAL)}</div>
-                <span>PayPal</span>
-              </div>
-              
-              <div 
-                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.GOOGLE_PAY ? 'active' : ''}`}
-                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.GOOGLE_PAY)}
-              >
-                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.GOOGLE_PAY)}</div>
-                <span>Google Pay</span>
-              </div>
-
-              <div 
-                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.APPLE_PAY ? 'active' : ''}`}
-                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.APPLE_PAY)}
-              >
-                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.APPLE_PAY)}</div>
-                <span>Apple Pay</span>
-              </div>
-              
-              {/* Third Row: Crypto (centered) */}
-              <div className="col-span-3 flex justify-center">
+            ) : (
+              <div className="payment-methods grid grid-cols-3 gap-4">
+                {/* First Row: Card, SEPA, iDEAL */}
                 <div 
-                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.CRYPTO ? 'active' : ''}`}
-                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.CRYPTO)}
-                  style={{ width: '33%' }}
+                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.CARD ? 'active' : ''}`}
+                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.CARD)}
                 >
-                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.CRYPTO)}</div>
-                  <span>Crypto</span>
+                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.CARD)}</div>
+                  <span>Card</span>
+                </div>
+                
+                <div 
+                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.SEPA ? 'active' : ''}`}
+                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.SEPA)}
+                >
+                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.SEPA)}</div>
+                  <span>SEPA</span>
+                </div>
+                
+                <div 
+                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.IDEAL ? 'active' : ''}`}
+                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.IDEAL)}
+                >
+                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.IDEAL)}</div>
+                  <span>iDEAL</span>
+                </div>
+                
+                {/* Second Row: PayPal, Google Pay, Apple Pay */}
+                <div 
+                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.PAYPAL ? 'active' : ''}`}
+                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.PAYPAL)}
+                >
+                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.PAYPAL)}</div>
+                  <span>PayPal</span>
+                </div>
+                
+                <div 
+                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.GOOGLE_PAY ? 'active' : ''}`}
+                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.GOOGLE_PAY)}
+                >
+                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.GOOGLE_PAY)}</div>
+                  <span>Google Pay</span>
+                </div>
+
+                <div 
+                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.APPLE_PAY ? 'active' : ''}`}
+                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.APPLE_PAY)}
+                >
+                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.APPLE_PAY)}</div>
+                  <span>Apple Pay</span>
+                </div>
+                
+                {/* Third Row: Crypto (centered) */}
+                <div className="col-span-3 flex justify-center">
+                  <div 
+                    className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.CRYPTO ? 'active' : ''}`}
+                    onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.CRYPTO)}
+                    style={{ width: '33%' }}
+                  >
+                    <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.CRYPTO)}</div>
+                    <span>Crypto</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
           
           {/* Common customer information */}
-          {paymentMethod !== PAYMENT_METHODS.GOOGLE_PAY && 
-           paymentMethod !== PAYMENT_METHODS.APPLE_PAY && 
-           paymentMethod !== PAYMENT_METHODS.PAYPAL && 
-           paymentMethod !== PAYMENT_METHODS.SEPA && (
-            <>
-              <div className="form-group">
-                <label htmlFor="email">Email Address</label>
-                <input
-                  type="email"
-                  id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  placeholder="Your email address"
-                />
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="cardName">Name on Card</label>
-                <input
-                  type="text"
-                  id="cardName"
-                  value={cardName}
-                  onChange={(e) => setCardName(e.target.value)}
-                  required
-                  placeholder="Full name as it appears on card"
-                />
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="country">Country</label>
-                <select
-                  id="country"
-                  value={country}
-                  onChange={(e) => {
-                    setCountry(e.target.value);
-                    // Update payment methods based on country
-                    let code = 'US';
-                    if (e.target.value === 'United States') code = 'US';
-                    else if (e.target.value === 'United Kingdom') code = 'GB';
-                    else if (e.target.value === 'India') code = 'IN';
-                    else if (e.target.value === 'Germany') code = 'DE';
-                    else if (e.target.value === 'France') code = 'FR';
-                    else if (e.target.value === 'Netherlands') code = 'NL';
-                    setCountryCode(code);
-                    setAvailablePaymentMethods(getPaymentMethodsForCountry(code));
-                  }}
-                  required
-                >
-                  <option value="United States">United States</option>
-                  <option value="United Kingdom">United Kingdom</option>
-                  <option value="Canada">Canada</option>
-                  <option value="Australia">Australia</option>
-                  <option value="Germany">Germany</option>
-                  <option value="France">France</option>
-                  <option value="Netherlands">Netherlands</option>
-                  <option value="Belgium">Belgium</option>
-                  <option value="India">India</option>
-                  <option value="Japan">Japan</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="zipCode">Zip/Postal Code</label>
-                <input
-                  type="text"
-                  id="zipCode"
-                  value={zipCode}
-                  onChange={(e) => setZipCode(e.target.value)}
-                  required
-                  placeholder="Your postal code"
-                />
-              </div>
-            </>
+          {paymentMethodsLoading ? (
+            <div className="payment-method-loading mt-8 flex flex-col items-center justify-center py-6">
+              <HashLoader color="#4FD1C5" size={40} speedMultiplier={0.8} />
+              <p className="mt-4 text-center text-gray-600">Preparing payment form...</p>
+            </div>
+          ) : (
+            paymentMethod !== PAYMENT_METHODS.GOOGLE_PAY && 
+            paymentMethod !== PAYMENT_METHODS.APPLE_PAY && 
+            paymentMethod !== PAYMENT_METHODS.PAYPAL && 
+            paymentMethod !== PAYMENT_METHODS.SEPA && (
+              <>
+                <div className="form-group">
+                  <label htmlFor="email">Email Address</label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="Your email address"
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="cardName">Name on Card</label>
+                  <input
+                    type="text"
+                    id="cardName"
+                    value={cardName}
+                    onChange={(e) => setCardName(e.target.value)}
+                    required
+                    placeholder="Full name as it appears on card"
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="country">Country</label>
+                  <select
+                    id="country"
+                    value={country}
+                    onChange={(e) => {
+                      setCountry(e.target.value);
+                      // Update payment methods based on country
+                      let code = 'US';
+                      if (e.target.value === 'United States') code = 'US';
+                      else if (e.target.value === 'United Kingdom') code = 'GB';
+                      else if (e.target.value === 'India') code = 'IN';
+                      else if (e.target.value === 'Germany') code = 'DE';
+                      else if (e.target.value === 'France') code = 'FR';
+                      else if (e.target.value === 'Netherlands') code = 'NL';
+                      setCountryCode(code);
+                      setAvailablePaymentMethods(getPaymentMethodsForCountry(code));
+                    }}
+                    required
+                  >
+                    <option value="United States">United States</option>
+                    <option value="United Kingdom">United Kingdom</option>
+                    <option value="Canada">Canada</option>
+                    <option value="Australia">Australia</option>
+                    <option value="Germany">Germany</option>
+                    <option value="France">France</option>
+                    <option value="Netherlands">Netherlands</option>
+                    <option value="Belgium">Belgium</option>
+                    <option value="India">India</option>
+                    <option value="Japan">Japan</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="zipCode">Zip/Postal Code</label>
+                  <input
+                    type="text"
+                    id="zipCode"
+                    value={zipCode}
+                    onChange={(e) => setZipCode(e.target.value)}
+                    required
+                    placeholder="Your postal code"
+                  />
+                </div>
+              </>
+            )
           )}
           
           {/* Payment method specific forms */}
-
           {paymentMethod === PAYMENT_METHODS.PAYPAL && (
             <div className="paypal-container payment-method-focus">
               <h3>PayPal Checkout</h3>
