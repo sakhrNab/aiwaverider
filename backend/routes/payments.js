@@ -445,6 +445,9 @@ router.post('/create-payment-intent', async (req, res) => {
     // Default to card payment method if not specified
     const paymentTypes = paymentMethodTypes || ['card'];
     
+    // Generate an order ID for tracking
+    const orderId = metadata.orderId || uuidv4();
+    
     // Create the payment intent with Stripe
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInCents,
@@ -454,13 +457,84 @@ router.post('/create-payment-intent', async (req, res) => {
         ...metadata,
         email: email || '',
         createdAt: new Date().toISOString(),
-        paymentType: paymentTypes.includes('sepa_debit') ? 'sepa_debit' : 'card'
+        paymentType: paymentTypes.includes('sepa_debit') ? 'sepa_debit' : 'card',
+        order_id: orderId // Ensure order_id is included for webhook processing
       },
       receipt_email: email
     });
     
     logger.info('Payment intent created', { id: paymentIntent.id, paymentTypes });
     console.log('Created payment intent:', paymentIntent.id);
+    
+    // If this is a card payment and is set to process immediately, handle confirmation
+    if (metadata.process_immediately === true && paymentTypes.includes('card') && !paymentTypes.includes('sepa_debit')) {
+      try {
+        logger.info(`Processing immediate card payment for order ${orderId}`);
+        
+        // Make sure we have either items from metadata or directly in the request
+        let orderItems = [];
+        
+        if (metadata.items) {
+          // Convert items to array if it's a string
+          if (typeof metadata.items === 'string') {
+            try {
+              orderItems = JSON.parse(metadata.items);
+              logger.info(`Successfully parsed items from metadata string, found ${orderItems.length} items`);
+            } catch (parseError) {
+              logger.error(`Failed to parse items from metadata string: ${parseError.message}`);
+              console.error(`Error parsing items from metadata: ${parseError.message}`);
+              // Continue with empty items array
+            }
+          } else if (Array.isArray(metadata.items)) {
+            orderItems = metadata.items;
+          }
+        }
+        
+        logger.info(`Processing order with ${orderItems.length} items for email ${email || 'unknown'}`);
+        
+        // Process the payment and send email confirmations - similar to webhook handler
+        const result = await orderController.processPaymentSuccess({
+          id: paymentIntent.id,
+          amount: amountInCents,
+          currency: currency.toLowerCase(),
+          payment_method_types: paymentTypes,
+          metadata: {
+            ...metadata,
+            order_id: orderId
+          },
+          customer: {
+            id: metadata.userId || null,
+            email: email
+          },
+          items: orderItems
+        });
+        
+        logger.info(`Order processed immediately: ${result.orderId}`, {
+          orderId: result.orderId,
+          deliveryStatus: result.deliveryStatus
+        });
+        
+        // If email notification is enabled, send order confirmation
+        if (process.env.ENABLE_NOTIFICATIONS !== 'false' && email) {
+          logger.info(`Sending immediate order success notification for order: ${result.orderId}`);
+          
+          // Send order success notification
+          await notificationService.sendOrderSuccessNotification({
+            orderId: result.orderId,
+            email: email,
+            userId: metadata.userId,
+            items: orderItems,
+            orderTotal: amount,
+            agent: orderItems && orderItems.length === 1 ? orderItems[0] : null
+          });
+        } else if (!email) {
+          logger.warn(`Cannot send order confirmation email - no email provided for order ${result.orderId}`);
+        }
+      } catch (processingError) {
+        logger.error(`Error processing immediate card payment: ${processingError.message}`, processingError);
+        // We don't fail the payment intent creation - the webhook will retry
+      }
+    }
     
     // Store the payment intent in the database for tracking
     try {
@@ -473,7 +547,8 @@ router.post('/create-payment-intent', async (req, res) => {
         paymentType: paymentTypes.includes('sepa_debit') ? 'sepa_debit' : 'card',
         metadata: {
           ...metadata,
-          email: email || ''
+          email: email || '',
+          order_id: orderId
         },
         createdAt: new Date().toISOString(),
         paymentMethod: paymentTypes.includes('sepa_debit') ? 'sepa_debit' : 'card',
@@ -492,7 +567,8 @@ router.post('/create-payment-intent', async (req, res) => {
     // Return the client secret to the client
     return res.json({
       clientSecret: paymentIntent.client_secret,
-      id: paymentIntent.id
+      id: paymentIntent.id,
+      orderId: orderId
     });
   } catch (error) {
     logger.error('Error creating payment intent:', error);
@@ -976,13 +1052,21 @@ router.post('/stripe-webhook', express.raw({ type: 'application/json' }), async 
         let items = [];
         try {
           if (metadata.items) {
-            items = JSON.parse(metadata.items);
+            // Always treat items as a string that needs parsing
+            if (typeof metadata.items === 'string') {
+              items = JSON.parse(metadata.items);
+              logger.info(`Successfully parsed ${items.length} items from webhook metadata`);
+            } else if (typeof metadata.items === 'object') {
+              // Handle older format where items was passed as object
+              items = metadata.items;
+              logger.info(`Using items object directly from webhook metadata`);
+            }
           } else if (metadata.cart_id) {
             // Fetch cart items from database using cart_id
             items = await fetchCartItemsFromDatabase(metadata.cart_id);
           }
         } catch (parseError) {
-          logger.error(`Error parsing items metadata: ${parseError.message}`, parseError);
+          logger.error(`Error parsing items metadata in webhook: ${parseError.message}`, parseError);
         }
         
         // Process the payment and deliver agent templates
@@ -1049,14 +1133,33 @@ router.post('/stripe-webhook', express.raw({ type: 'application/json' }), async 
         const orderId = metadata.order_id || uuidv4();
         logger.info(`Processing checkout session with order ID: ${orderId}`);
         
-        // Get line items from the checkout session
-        const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
-        const items = lineItems.data.map(item => ({
-          id: item.price?.product || item.price?.id || uuidv4(),
-          name: item.description,
-          price: item.price?.unit_amount / 100,
-          quantity: item.quantity || 1
-        }));
+        // Check if we have items in metadata and parse them if needed
+        let items = [];
+        
+        if (metadata.items) {
+          try {
+            if (typeof metadata.items === 'string') {
+              items = JSON.parse(metadata.items);
+              logger.info(`Using ${items.length} items from checkout session metadata`);
+            } else if (typeof metadata.items === 'object') {
+              items = metadata.items;
+              logger.info(`Using items object directly from checkout session metadata`);
+            }
+          } catch (itemsError) {
+            logger.error(`Error parsing items from checkout session metadata: ${itemsError.message}`);
+          }
+        }
+        
+        // If no items in metadata, get line items from the checkout session
+        if (items.length === 0) {
+          const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
+          items = lineItems.data.map(item => ({
+            id: item.price?.product || item.price?.id || uuidv4(),
+            name: item.description,
+            price: item.price?.unit_amount / 100,
+            quantity: item.quantity || 1
+          }));
+        }
         
         // Process the payment and deliver agent templates
         const result = await orderController.processPaymentSuccess({

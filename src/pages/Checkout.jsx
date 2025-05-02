@@ -330,10 +330,18 @@ const CheckoutForm = ({ finalTotal, currency, email, handlePaymentSuccess, isSub
     
     try {
       // Create payment intent on the server
-      const { clientSecret } = await createPaymentIntent({
+      const { clientSecret, orderId } = await createPaymentIntent({
         amount: finalTotal,
         currency: currency.toLowerCase(),
+        email: email, // Send email for order confirmation
+        paymentMethodTypes: ['card'], // Specify card payment
+        metadata: {
+          source: 'checkout-form',
+          paymentType: 'card'
+        }
       });
+      
+      console.log('Payment intent created with order ID:', orderId);
       
       // Confirm the payment
       const result = await stripe.confirmCardPayment(clientSecret, {
@@ -352,7 +360,11 @@ const CheckoutForm = ({ finalTotal, currency, email, handlePaymentSuccess, isSub
       } else {
         if (result.paymentIntent.status === 'succeeded') {
           toast.success('Payment successful! Thank you for your purchase.');
-          handlePaymentSuccess();
+          // Pass the result object with both payment ID and order ID
+          handlePaymentSuccess({
+            id: result.paymentIntent.id,
+            orderId: orderId // Pass the order ID from createPaymentIntent
+          });
         }
       }
     } catch (err) {
@@ -651,7 +663,13 @@ const Checkout = () => {
     }
     
     // Otherwise construct a generic success URL
-    const successUrl = `/checkout/success?payment_id=${result?.id || 'unknown'}&status=success&type=payment_intent`;
+    // Include orderId if available for card payments (this is the key fix)
+    const paymentId = result?.id || 'unknown';
+    const orderId = result?.orderId || '';
+    const orderIdParam = orderId ? `&order_id=${orderId}` : '';
+    
+    const successUrl = `/checkout/success?payment_id=${paymentId}&status=success&type=payment_intent${orderIdParam}`;
+    console.log('Redirecting to success page with params:', { paymentId, orderId });
     navigate(successUrl);
   };
   

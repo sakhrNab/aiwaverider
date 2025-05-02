@@ -76,11 +76,18 @@ const CheckoutSuccess = () => {
     const paymentType = queryParams.get('type') || 'payment_intent';
     const status = queryParams.get('status');
     const simulated = queryParams.get('simulated') === 'true';
+    const orderIdFromParams = queryParams.get('order_id'); // Get order_id from URL parameters
     
     setIsSimulated(simulated);
     setPaymentMethod(paymentType === 'sepa_credit_transfer' ? 'sepa' : 'card');
     setPaymentType(paymentType);
     setPaymentId(paymentId);
+    
+    // If we have an order ID from URL parameters, use it directly
+    if (orderIdFromParams) {
+      setOrderId(orderIdFromParams);
+      console.log(`Using order ID from URL params: ${orderIdFromParams}`);
+    }
     
     // Try to get purchased items from localStorage
     try {
@@ -119,6 +126,24 @@ const CheckoutSuccess = () => {
             id: 'sepa-simulation-toast'
           }
         );
+      } else if (paymentId === 'unknown' && orderIdFromParams) {
+        // Special handling for credit card payments where we have an order ID but payment ID is unknown
+        console.log('Payment successful with unknown ID but order_id is available:', orderIdFromParams);
+        setOrderStatus('succeeded');
+        setIsLoading(false);
+        
+        // Show success notification
+        toast.success(
+          <div>
+            <strong>Thank you for your purchase!</strong>
+            <p>Your agent template has been sent to your email.</p>
+          </div>,
+          {
+            duration: 6000,
+            icon: <FontAwesomeIcon icon={faEnvelope} />,
+            id: 'email-delivery-toast'
+          }
+        );
       } else if (paymentId === 'unknown') {
         // Handle case where payment ID is unknown but status is success
         // This happens with some payment methods where the ID isn't returned properly
@@ -152,6 +177,16 @@ const CheckoutSuccess = () => {
   // Function to check payment status periodically
   const checkPaymentStatus = useCallback(async () => {
     try {
+      // If payment ID is unknown but we have an order ID, we can skip the status check
+      // as this is likely a credit card payment with a direct confirmation
+      if (paymentId === 'unknown' && orderId) {
+        console.log(`Skipping status check for unknown payment ID with order ID: ${orderId}`);
+        setOrderStatus('succeeded');
+        setIsLoading(false);
+        clearInterval(statusCheckInterval.current);
+        return;
+      }
+
       // Determine the correct API endpoint based on payment type
       let endpoint;
       
@@ -224,7 +259,7 @@ const CheckoutSuccess = () => {
       console.error('Error checking payment status:', error);
       setIsLoading(false); // Add this to stop loading on error
     }
-  }, [apiUrl, paymentId, paymentType]);
+  }, [apiUrl, paymentId, paymentType, orderId]);
   
   // Setup interval for checking payment status
   useEffect(() => {
@@ -411,7 +446,7 @@ const CheckoutSuccess = () => {
               </>
             ) : (
               <>
-                <h1>SEPA Credit Transfer Initiated!</h1>
+                <h1>Thank you for your purchase!</h1>
                 <p>
                   {isSimulated 
                     ? 'Your SEPA Credit Transfer has been simulated successfully.' 

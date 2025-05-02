@@ -12,7 +12,7 @@ const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = loadStripe(stripeKey);
 
 // Card Element Form Component
-const CardPaymentForm = ({ amount, currency, email, onPaymentSuccess, onPaymentError, disabled, paymentMethodType = 'card' }) => {
+const CardPaymentForm = ({ amount, currency, email, onPaymentSuccess, onPaymentError, disabled, paymentMethodType = 'card', items = [], userId = null }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState(null);
@@ -29,12 +29,19 @@ const CardPaymentForm = ({ amount, currency, email, onPaymentSuccess, onPaymentE
     setProcessing(true);
     
     try {
-      // Create payment intent on the server
-      const { clientSecret } = await createPaymentIntent({
+      // Create payment intent on the server with metadata for email notification
+      const { clientSecret, orderId } = await createPaymentIntent({
         amount,
         currency: currency.toLowerCase(),
         email,
-        paymentMethodTypes: [paymentMethodType]
+        paymentMethodTypes: [paymentMethodType],
+        metadata: {
+          items: items,
+          userId: userId,
+          process_immediately: true, // Flag to process the order immediately
+          userEmail: email,
+          country: navigator.language || 'en-US'
+        }
       });
       
       // Confirm the payment with the card details
@@ -49,7 +56,11 @@ const CardPaymentForm = ({ amount, currency, email, onPaymentSuccess, onPaymentE
         setError(result.error.message);
         if (onPaymentError) onPaymentError(result.error);
       } else if (result.paymentIntent.status === 'succeeded') {
-        if (onPaymentSuccess) onPaymentSuccess(result.paymentIntent);
+        // Pass the orderId in the success handler
+        if (onPaymentSuccess) onPaymentSuccess({
+          ...result.paymentIntent,
+          orderId: orderId
+        });
       }
     } catch (err) {
       setError(err.message || 'Payment processing failed');
@@ -105,7 +116,8 @@ const PaymentMethodSelector = ({
   email,
   onSuccess,
   onError,
-  className = ''
+  className = '',
+  userId = null
 }) => {
   const [selectedMethod, setSelectedMethod] = useState('card');
   const [isLoading, setIsLoading] = useState(false);
@@ -216,6 +228,27 @@ const PaymentMethodSelector = ({
     if (onError) onError(error);
   };
   
+  // Function that renders the card payment option
+  const renderCardPayment = () => {
+    return (
+      <div className="card-payment-container">
+        <Elements stripe={stripePromise}>
+          <CardPaymentForm
+            amount={cartTotal}
+            currency={currency}
+            email={email}
+            onPaymentSuccess={handleCardPaymentSuccess}
+            onPaymentError={handleCardPaymentError}
+            disabled={isLoading}
+            paymentMethodType={selectedMethod}
+            items={items}
+            userId={userId}
+          />
+        </Elements>
+      </div>
+    );
+  };
+  
   return (
     <div className={`payment-method-selector ${className}`}>
       <h3 className="text-lg font-semibold mb-4">Select Payment Method</h3>
@@ -266,17 +299,7 @@ const PaymentMethodSelector = ({
       
       <div className="flex flex-col space-y-4">
         {selectedMethod === 'card' ? (
-          <Elements stripe={stripePromise} options={{ currency }}>
-            <CardPaymentForm 
-              amount={cartTotal}
-              currency={currency}
-              email={email}
-              onPaymentSuccess={handleCardPaymentSuccess}
-              onPaymentError={handleCardPaymentError}
-              disabled={isLoading}
-              paymentMethodType={selectedMethod}
-            />
-          </Elements>
+          renderCardPayment()
         ) : (
           <button
             type="button"

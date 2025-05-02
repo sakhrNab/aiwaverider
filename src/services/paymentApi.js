@@ -313,13 +313,66 @@ export const createStripeCheckout = async (data) => {
  */
 export const createPaymentIntent = async (data) => {
   try {
-    const { amount, currency, email, metadata = {}, paymentMethodTypes } = data;
+    const { amount, currency, email, metadata = {}, paymentMethodTypes, items = [] } = data;
     
     if (!amount || !currency) {
       throw new Error('Amount and currency are required for payment');
     }
     
     console.log('Creating payment intent:', { amount, currency, paymentMethodTypes });
+    
+    // Get cart items from localStorage if not provided
+    let cartItems = items;
+    if (!cartItems || cartItems.length === 0) {
+      try {
+        const storedItems = localStorage.getItem('cartItems');
+        if (storedItems) {
+          cartItems = JSON.parse(storedItems);
+        }
+      } catch (err) {
+        console.warn('Could not retrieve cart items from localStorage', err);
+      }
+    }
+    
+    // If we still don't have items, try to get from cart context through localStorage
+    if (!cartItems || cartItems.length === 0) {
+      try {
+        const cart = localStorage.getItem('lastPurchasedItems');
+        if (cart) {
+          cartItems = JSON.parse(cart);
+        }
+      } catch (err) {
+        console.warn('Could not retrieve cart from localStorage', err);
+      }
+    }
+    
+    // Ensure items are in a format that can be properly serialized to JSON
+    const formattedItems = Array.isArray(cartItems) ? cartItems.map(item => ({
+      id: item.id || 'unknown',
+      title: item.title || item.name || 'Product',
+      price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
+      quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 1,
+      imageUrl: item.imageUrl || item.image || null
+    })) : [];
+    
+    // Generate a unique order ID for tracking
+    const generatedOrderId = 'ORD-' + Date.now().toString().substring(6) + 
+                             Math.random().toString(36).substring(2, 8).toUpperCase();
+    
+    // Try to get user ID from localStorage
+    let userId = null;
+    try {
+      userId = localStorage.getItem('userId') || null;
+      
+      // Check if we have user data in localStorage
+      const userData = localStorage.getItem('userData');
+      if (userData && !userId) {
+        const user = JSON.parse(userData);
+        userId = user.id || user.uid || null;
+      }
+    } catch (err) {
+      console.warn('Could not retrieve user ID from localStorage', err);
+    }
     
     const response = await fetch(`${API_URL}/api/payments/create-payment-intent`, {
       method: 'POST',
@@ -330,8 +383,16 @@ export const createPaymentIntent = async (data) => {
         amount,
         currency: currency.toLowerCase(),
         email,
-        metadata,
-        paymentMethodTypes: paymentMethodTypes || ['card'] // Default to card if not specified
+        paymentMethodTypes: paymentMethodTypes || ['card'], // Default to card if not specified
+        metadata: {
+          ...metadata,
+          orderId: generatedOrderId,
+          email: email || '',
+          process_immediately: true, // Important: tell the backend to process immediately
+          items: JSON.stringify(formattedItems), // Convert items array to a JSON string for metadata
+          userId: userId,
+          source: 'checkout-form'
+        }
       }),
     });
     
@@ -340,7 +401,10 @@ export const createPaymentIntent = async (data) => {
       throw new Error(errorData.error || `Payment intent creation failed: ${response.status}`);
     }
     
-    return await response.json();
+    const result = await response.json();
+    console.log('Payment intent created successfully:', result);
+    
+    return result;
   } catch (error) {
     console.error('Error creating payment intent:', error);
     throw error;
