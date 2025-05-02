@@ -26,13 +26,7 @@ import {
 import GooglePayButton from '../components/GooglePayButton';
 import ApplePayButton from '../components/ApplePayButton';
 import PaymentSuccessRecommendations from '../components/PaymentSuccessRecommendations';
-import { 
-  getProductImageUrl, 
-  createImageErrorHandler,
-  formatPrice,
-  formatRating,
-  getRecommendationsForPurchase
-} from '../services/recommendationService';
+
 import '../styles/Checkout.css';
 import { HashLoader } from 'react-spinners';
 
@@ -468,14 +462,13 @@ const Checkout = () => {
   const [discountApplied, setDiscountApplied] = useState(false);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [newsletter, setNewsletter] = useState(true);
-  const [relatedProducts, setRelatedProducts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS.CARD);
   const [availablePaymentMethods, setAvailablePaymentMethods] = useState([]);
   const [currency, setCurrency] = useState('USD');
   const [clientSecret, setClientSecret] = useState('');
   const [stripeLoading, setStripeLoading] = useState(false);
-  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(true); // Add new loading state for payment methods
+  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(true);
   const [sepaIban, setSepaIban] = useState('');
   const [sepaIbanValid, setSepaIbanValid] = useState(null);
   const [sepaBic, setSepaBic] = useState('');
@@ -571,28 +564,6 @@ const Checkout = () => {
     
     detectCountry();
   }, []);
-  
-  // Get related products
-  useEffect(() => {
-    const fetchRelatedProducts = async () => {
-    if (cart.length > 0) {
-        try {
-          const recommendations = await getRecommendationsForPurchase({
-            purchasedItems: [cart[0]], // Use the first cart item as reference
-            limit: 3,
-            category: cart[0].category || 'All'
-          });
-          
-          setRelatedProducts(recommendations);
-        } catch (error) {
-          console.error('Error fetching related products:', error);
-          setRelatedProducts([]);
-        }
-      }
-    };
-    
-    fetchRelatedProducts();
-  }, [cart]);
   
   // Set email from authenticated user when component mounts
   useEffect(() => {
@@ -2435,7 +2406,7 @@ const Checkout = () => {
         />
       )}
       
-      {relatedProducts.length > 0 && !paymentCompleted && (
+      {!paymentCompleted && cart.length > 0 && (
         <PaymentSuccessRecommendations 
           purchasedItems={[cart[0]]}
           currency={currency}
