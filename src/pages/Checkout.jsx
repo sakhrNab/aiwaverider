@@ -1981,40 +1981,67 @@ const Checkout = () => {
           
           {paymentMethod === PAYMENT_METHODS.GOOGLE_PAY && (
             <div className="google-pay-container payment-method-focus">
-              <h3>Google Pay Checkout</h3>
-              <p>Complete your payment quickly and securely with Google Pay:</p>
-              {/* 
-                PRODUCTION MIGRATION:
-                - Change environment from 'TEST' to 'PRODUCTION'
-                - Update merchantId with production merchant ID
-                - Verify domain in Google Pay console
-                - Update gateway parameters for production
-              */}
-              <GooglePayButton
-                cartTotal={finalTotal}
-                items={cart.map(item => ({
-                  id: item.id,
-                  title: item.title || item.name,
-                  price: item.price,
-                  quantity: item.quantity,
-                  imageUrl: item.image || item.imageUrl
-                }))}
-                currency={currency}
-                countryCode={countryCode}
-                email={email}
-                onSuccess={handlePaymentSuccess}
-                onError={(error) => {
-                  setIsSubmitting(false);
-                  toast.error(`Google Pay error: ${error.message || 'Unknown error'}`);
-                }}
-                className="w-full"
-              />
+              <h3>Express Card Checkout</h3>
+              <p>Complete your payment quickly and securely:</p>
+              
+              {!isAuthenticated && (
+                <div className="payment-warning">
+                  <p>Please provide a valid email address to receive your order confirmation.</p>
+                  <div className="email-input-container">
+                    <input
+                      type="email"
+                      value={email || ''}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onBlur={() => {
+                        // Only validate on blur to prevent issues while typing
+                        if (email && !email.includes('@')) {
+                          toast.warning('Please enter a valid email address with @ symbol');
+                        }
+                      }}
+                      placeholder="Your email address"
+                      className={email && !email.includes('@') ? 'invalid' : ''}
+                    />
+                    {email && !email.includes('@') && (
+                      <div className="field-error">Please enter a valid email address with @ symbol</div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {(isAuthenticated || (email && email.includes('@'))) && (
+                <GooglePayButton
+                  cartTotal={finalTotal}
+                  items={cart.map(item => ({
+                    id: item.id,
+                    title: item.title || item.name,
+                    price: item.price,
+                    quantity: item.quantity,
+                    imageUrl: item.image || item.imageUrl
+                  }))}
+                  currency={currency}
+                  countryCode={countryCode}
+                  email={isAuthenticated ? user?.email : email}
+                  onSuccess={handlePaymentSuccess}
+                  onError={(error) => {
+                    setIsSubmitting(false);
+                    toast.error(`Payment error: ${error.message || 'Unknown error'}`);
+                  }}
+                  className="w-full"
+                />
+              )}
+              
               <p className="payment-info-note">
-                Your order details will be securely transferred to Google Pay.
+                Your order details will be securely processed for immediate checkout.
+              </p>
+              <p className="email-note">
+                <strong>Note:</strong> A valid email address is required to receive your order confirmation.
+                {isAuthenticated && user?.email && (
+                  <span> Using your account email: {user.email}</span>
+                )}
               </p>
             </div>
           )}
-
+          
           {paymentMethod === PAYMENT_METHODS.CARD && (
                       <div>
                         {/* 

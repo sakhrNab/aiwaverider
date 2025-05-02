@@ -799,104 +799,149 @@ router.get('/thankyou', (req, res) => {
   return res.redirect(redirectUrl);
 });
 
-// Process Google Pay payment
+/**
+ * Process Google Pay payment
+ * @route POST /api/payments/process-google-pay
+ */
 router.post('/process-google-pay', async (req, res) => {
   try {
-    const { paymentToken, amount, currency, items, email } = req.body;
-    
-    if (!paymentToken) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Missing payment token' 
-      });
+    // Extract payment data from request
+    const { paymentData, orderDetails, email, metadata = {} } = req.body;
+
+    if (!paymentData || !paymentData.paymentMethodData) {
+      return res.status(400).json({ error: 'Invalid Google Pay payment data' });
     }
+
+    // Extract email from various possible sources 
+    const customerEmail = email || metadata.email || paymentData.email || '';
     
-    // Parse the payment token (it's a JSON string)
-    let paymentData;
-    try {
-      paymentData = JSON.parse(paymentToken);
-    } catch (error) {
-      console.error('Error parsing Google Pay token:', error);
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Invalid payment token format' 
+    // Validate email
+    if (!customerEmail || !customerEmail.includes('@')) {
+      logger.warn('Google Pay payment attempted without valid email', { 
+        emailProvided: !!customerEmail,
+        emailValid: customerEmail && customerEmail.includes('@'),
+        email: customerEmail ? customerEmail.substring(0, 3) + '...' : 'none' 
       });
+    } else {
+      logger.info('Processing Google Pay payment with email', { email: customerEmail });
     }
-    
+
     // Log the payment attempt
-    console.log('Processing Google Pay payment:', {
-      amount,
-      currency,
-      email: email || 'not provided',
-      items: items ? items.length : 0
+    logger.info('Processing Google Pay payment', { 
+      email: customerEmail || 'not provided', 
+      amount: orderDetails?.amount || 'unknown',
+      hasPaymentData: !!paymentData
     });
+
+    // Extract token from Google Pay response
+    const token = paymentData.paymentMethodData.tokenizationData.token;
     
-    if (logger) {
-      logger.info(`Processing Google Pay payment: ${JSON.stringify({
-        amount,
-        currency,
-        email: email ? 'provided' : 'not provided'
-      })}`);
+    // Parse the token which is a JSON string
+    let tokenData;
+    try {
+      tokenData = typeof token === 'string' ? JSON.parse(token) : token;
+    } catch (e) {
+      logger.error('Failed to parse Google Pay token', e);
+      return res.status(400).json({ error: 'Invalid payment token format' });
     }
-    
+
     // Create a payment method using the token
     const paymentMethod = await stripe.paymentMethods.create({
       type: 'card',
       card: {
-        token: paymentData.id
+        token: tokenData.id || tokenData
+      },
+      billing_details: {
+        email: email || 'customer@example.com'
       }
     });
+
+    // Create a payment intent with the payment method
+    const amount = parseFloat(orderDetails?.amount || 0) * 100; // Convert to cents
+    const currency = (orderDetails?.currency || 'USD').toLowerCase();
     
-    // Create a payment intent
+    // Generate order ID if not provided
+    const orderId = metadata.order_id || 
+                   metadata.orderId || 
+                   `ord_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: formatAmountForStripe(amount, currency),
-      currency: currency.toLowerCase(),
+      amount: Math.round(amount),
+      currency: currency,
       payment_method: paymentMethod.id,
-      confirmation_method: 'manual',
       confirm: true,
-      return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout/success?payment_id={PAYMENT_INTENT_ID}&status=success&type=payment_intent`,
+      return_url: `${req.headers.origin || process.env.FRONTEND_URL}/checkout/success`,
       metadata: {
-        order_id: uuidv4(),
-        email: email || 'anonymous',
-        items: JSON.stringify(items)
+        ...metadata,
+        payment_method: 'google_pay',
+        order_id: orderId,
+        email: email
       }
     });
-    
+
     // Check payment intent status
     if (
       paymentIntent.status === 'succeeded' ||
       paymentIntent.status === 'processing' ||
       paymentIntent.next_action
     ) {
-      // Generate order ID
-      const orderId = paymentIntent.metadata.order_id;
-      
-      // Prepare the redirect URL
-      const successUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout/success?payment_id=${paymentIntent.id}&status=success&type=payment_intent`;
-      
-      return res.json({
-        success: true,
-        orderId,
-        status: paymentIntent.status,
-        clientSecret: paymentIntent.client_secret,
-        redirectUrl: successUrl
-      });
+      // Process the order using orderController to send emails
+      try {
+        // Get proper customer email
+        const customerEmail = email || metadata.email || paymentData.email || '';
+        
+        if (!customerEmail || !customerEmail.includes('@')) {
+          logger.warn('No valid email for Google Pay order confirmation', { orderId });
+        }
+        
+        const orderResult = await orderController.processPaymentSuccess({
+          id: paymentIntent.id,
+          amount: paymentIntent.amount,
+          currency: paymentIntent.currency,
+          status: paymentIntent.status,
+          payment_method_types: ['card'],
+          customer: {
+            id: metadata.userId || 'google_pay_customer',
+            email: customerEmail
+          },
+          metadata: {
+            ...metadata,
+            email: customerEmail,
+            payment_method: 'google_pay',
+            orderId: orderId
+          }
+        });
+
+        // Return success response with order details
+        return res.status(200).json({
+          success: true,
+          message: 'Google Pay payment processed successfully',
+          paymentIntentId: paymentIntent.id,
+          status: paymentIntent.status,
+          client_secret: paymentIntent.client_secret,
+          amount: amount / 100,
+          currency: currency,
+          orderId: orderId,
+          orderDetails: orderResult || {}
+        });
+      } catch (orderError) {
+        logger.error('Error processing order after Google Pay payment', orderError);
+        // Continue with payment success even if order processing fails
+        // This prevents charging the customer but not giving them their product
+      }
     } else {
-      throw new Error(`Payment failed with status: ${paymentIntent.status}`);
+      // Payment failed or canceled
+      logger.error('Google Pay payment failed', { status: paymentIntent.status });
+      return res.status(400).json({
+        error: 'Payment failed',
+        status: paymentIntent.status,
+        details: paymentIntent.last_payment_error?.message || 'Unknown error'
+      });
     }
   } catch (error) {
-    console.error('Google Pay payment processing error:', error);
-    if (logger) logger.error(`Google Pay payment error: ${error.message}`);
-    
-    // Return detailed error information
+    logger.error('Error processing Google Pay payment', error);
     return res.status(500).json({
-      success: false,
-      error: error.message || 'Payment processing failed',
-      details: error.type ? {
-        type: error.type,
-        code: error.code,
-        param: error.param
-      } : undefined
+      error: error.message || 'Failed to process Google Pay payment'
     });
   }
 });
@@ -995,6 +1040,33 @@ router.post('/process-apple-pay', async (req, res) => {
     ) {
       // Generate order ID
       const orderId = paymentIntent.metadata.order_id;
+      
+      // Process the order using orderController to send emails
+      try {
+        const orderResult = await orderController.processPaymentSuccess({
+          id: paymentIntent.id,
+          amount: paymentIntent.amount,
+          currency: paymentIntent.currency,
+          status: paymentIntent.status,
+          payment_method_types: ['card'],
+          customer: {
+            id: metadata.userId || 'apple_pay_customer',
+            email: email
+          },
+          metadata: {
+            ...metadata,
+            email: email,
+            payment_method: 'apple_pay',
+            order_id: orderId
+          },
+          items: items
+        });
+        
+        logger.info(`Successfully processed Apple Pay order ${orderId}`);
+      } catch (orderError) {
+        logger.error(`Error processing Apple Pay order: ${orderError.message}`);
+        // Continue anyway since the payment was successful
+      }
       
       // Prepare the redirect URL
       const successUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout/success?payment_id=${paymentIntent.id}&status=success&type=payment_intent`;

@@ -706,23 +706,95 @@ export const validateApplePayMerchant = async (validationURL) => {
 
 /**
  * Process Google Pay payment
- * @param {Object} data - Payment data including paymentToken, amount, currency, items, and email
+ * @param {Object} data - Payment data including paymentData, amount, currency, items, and email
  * @returns {Promise<Object>} - Payment processing result
  */
 export const processGooglePay = async (data) => {
   try {
     console.log('Processing Google Pay payment');
     
-    if (!data.paymentToken) {
-      throw new Error('Missing payment token');
+    if (!data || !data.paymentData) {
+      throw new Error('Missing payment data');
     }
+    
+    // Enhance data with additional metadata for order processing
+    const enhancedData = { ...data };
+    
+    // Validate email
+    const email = data.email || '';
+    if (!email || !email.includes('@')) {
+      console.warn('Google Pay payment attempted without valid email', { emailProvided: !!email });
+    }
+    
+    // Try to get cart items from data or localStorage if not provided
+    if (!enhancedData.items || !enhancedData.items.length) {
+      try {
+        const storedItems = localStorage.getItem('cartItems');
+        if (storedItems) {
+          enhancedData.items = JSON.parse(storedItems);
+        }
+      } catch (err) {
+        console.error('Error retrieving cart from localStorage:', err);
+      }
+    }
+    
+    // Try to enhance metadata with user information
+    try {
+      // Ensure metadata object exists
+      enhancedData.metadata = enhancedData.metadata || {};
+      
+      const userId = localStorage.getItem('userId');
+      if (userId) {
+        enhancedData.metadata.userId = userId;
+        enhancedData.metadata.userEmail = email;
+      }
+      
+      // Store additional email in metadata to ensure it reaches the backend
+      if (email) {
+        enhancedData.metadata.email = email;
+      }
+    } catch (err) {
+      console.error('Error retrieving user data from localStorage:', err);
+    }
+    
+    // Generate a unique order ID for tracking
+    const generatedOrderId = 'ORD-' + Date.now().toString().substring(6) + 
+                             Math.random().toString(36).substring(2, 8).toUpperCase();
+    
+    enhancedData.metadata.orderId = generatedOrderId;
+    enhancedData.metadata.order_id = generatedOrderId;
+    enhancedData.metadata.payment_method = 'google_pay';
+    
+    // Create the orderDetails object
+    const orderDetails = {
+      amount: enhancedData.orderDetails?.amount || enhancedData.amount || enhancedData.cartTotal || 0,
+      currency: enhancedData.orderDetails?.currency || enhancedData.currency || 'USD',
+      items: enhancedData.orderDetails?.items || enhancedData.items || []
+    };
+    
+    // Convert items to JSON string if needed
+    if (enhancedData.items && Array.isArray(enhancedData.items)) {
+      enhancedData.metadata.items = JSON.stringify(enhancedData.items);
+    }
+    
+    console.log('Sending Google Pay request with data:', {
+      paymentData: 'REDACTED',
+      orderDetails,
+      email,
+      metadata: enhancedData.metadata
+    });
     
     const response = await fetch(`${API_URL}/api/payments/process-google-pay`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        paymentData: enhancedData.paymentData,
+        orderDetails,
+        email: email,
+        metadata: enhancedData.metadata
+      }),
     });
     
     if (!response.ok) {
@@ -760,12 +832,65 @@ export const processApplePay = async (data) => {
       throw new Error('Missing payment token');
     }
     
+    // Enhance data with additional metadata for order processing
+    const enhancedData = { ...data };
+    
+    // Try to get cart items from data or localStorage if not provided
+    if (!enhancedData.items || enhancedData.items.length === 0) {
+      try {
+        const storedItems = localStorage.getItem('cartItems');
+        if (storedItems) {
+          enhancedData.items = JSON.parse(storedItems);
+        }
+      } catch (err) {
+        console.warn('Could not retrieve cart items from localStorage', err);
+      }
+    }
+    
+    // Try to get user info from localStorage
+    if (!enhancedData.metadata) enhancedData.metadata = {};
+    
+    try {
+      // Try to get user ID from localStorage
+      const userId = localStorage.getItem('userId');
+      if (userId) {
+        enhancedData.metadata.userId = userId;
+      }
+      
+      // Try to get user data from localStorage
+      const userData = localStorage.getItem('userData');
+      if (userData) {
+        const user = JSON.parse(userData);
+        if (!enhancedData.email && user.email) {
+          enhancedData.email = user.email;
+        }
+        if (!enhancedData.metadata.userId && (user.id || user.uid)) {
+          enhancedData.metadata.userId = user.id || user.uid;
+        }
+      }
+    } catch (err) {
+      console.warn('Could not retrieve user data from localStorage', err);
+    }
+    
+    // Generate a unique order ID for tracking
+    const generatedOrderId = 'ORD-' + Date.now().toString().substring(6) + 
+                             Math.random().toString(36).substring(2, 8).toUpperCase();
+    
+    enhancedData.metadata.orderId = generatedOrderId;
+    enhancedData.metadata.order_id = generatedOrderId;
+    enhancedData.metadata.payment_method = 'apple_pay';
+    
+    // Convert items to JSON string if needed
+    if (enhancedData.items && Array.isArray(enhancedData.items)) {
+      enhancedData.metadata.items = JSON.stringify(enhancedData.items);
+    }
+    
     const response = await fetch(`${API_URL}/api/payments/process-apple-pay`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify(enhancedData),
     });
     
     if (!response.ok) {
