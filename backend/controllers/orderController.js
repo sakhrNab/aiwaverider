@@ -251,130 +251,151 @@ const processPaymentSuccess = async (paymentData) => {
       }
     }
     
-    // Skip template delivery if no email is provided
-    if (!email) {
-      logger.warn(`Cannot deliver templates: No email provided for order ${order.id}`);
+    // If we have a notification service, send a success notification
+    try {
+      // Check if we should skip email sending (used to prevent duplicates)
+      const skipEmailSending = metadata.skipEmailSending === true;
+      
+      if (skipEmailSending) {
+        logger.info(`Skipping email sending for order ${order.id} due to skipEmailSending flag`);
+        
+        return {
+          success: true,
+          orderId: order.id,
+          deliveryStatus: 'skipped_by_flag',
+          message: 'Order created but email skipped due to skipEmailSending flag',
+          templates: immediateDelivery ? templates : []
+        };
+      }
+      
+      // Skip template delivery if no email is provided
+      if (!email) {
+        logger.warn(`Cannot deliver templates: No email provided for order ${order.id}`);
+        
+        return {
+          success: true,
+          orderId: order.id,
+          deliveryStatus: 'skipped',
+          message: 'Order created but templates not delivered (no email)',
+          templates: immediateDelivery ? templates : []
+        };
+      }
+      
+      // Deliver templates for each item
+      const deliveryResults = [];
+      
+      for (const item of items) {
+        try {
+          // Get agent details
+          const agentId = item.id;
+          const agentDoc = await db.collection('agents').doc(agentId).get();
+          
+          if (!agentDoc.exists) {
+            deliveryResults.push({
+              agentId,
+              success: false,
+              error: 'Agent not found'
+            });
+            continue;
+          }
+          
+          const agent = agentDoc.data();
+          
+          // Get template content
+          const templateContent = await getAgentTemplate(agentId);
+          
+          // Get user's name if available
+          let userName = 'Valued Customer';
+          if (userId) {
+            const userDoc = await db.collection('users').doc(userId).get();
+            if (userDoc.exists) {
+              const userData = userDoc.data();
+              userName = userData.displayName || userData.firstName || 'Valued Customer';
+            }
+          }
+          
+          // Send email with template
+          let emailSubject = 'Your AI Agent Purchase';
+          let receiptUrl = '';
+          
+          // Customize for SEPA payments
+          if (isSepaPayment) {
+            emailSubject = immediateDelivery ? 
+              'Your SEPA Payment - Template Available Now' : 
+              'Your SEPA Payment Successful';
+              
+            if (orderData.status === 'successful') {
+              emailSubject = 'Your SEPA Payment is Successful - Template Available Now';
+            }
+            
+            // Add payment reference to receipt URL if available
+            if (paymentData.id) {
+              receiptUrl = `/account/orders/${orderData.orderId}?payment_ref=${paymentData.id}`;
+            }
+          }
+          
+          // Find template download link if available
+          const templateLink = templates.find(t => t.agentId === agentId)?.downloadUrl || '';
+          
+          // Send email with template
+          const emailResult = await emailService.sendAgentPurchaseEmail({
+            email: email,
+            firstName: userName,
+            agentName: agent.title || 'AI Agent',
+            agentDescription: agent.description || 'Your new AI agent',
+            price: item.price || 0,
+            currency: orderData.currency || 'USD',
+            receiptUrl: receiptUrl,
+            orderId: orderData.orderId,
+            orderDate: new Date().toLocaleDateString(), 
+            paymentMethod: orderData.paymentMethod,
+            paymentStatus: 'successful', // Always use successful status
+            isSepaPayment: isSepaPayment,
+            immediateDownload: immediateDelivery,
+            downloadUrl: templateLink,
+            templateContent: templateContent, // Pass the template content
+            agentId: agentId // Pass the agent ID
+          });
+          
+          // Record delivery result
+          deliveryResults.push({
+            agentId,
+            success: true,
+            messageId: emailResult.messageId
+          });
+          
+        } catch (error) {
+          logger.error(`Error delivering template for agent ${item.id}: ${error.message}`);
+          
+          deliveryResults.push({
+            agentId: item.id,
+            success: false,
+            error: error.message
+          });
+        }
+      }
+      
+      // Update order with delivery results
+      const deliveryStatus = deliveryResults.every(r => r.success) ? 'completed' : 
+                            deliveryResults.some(r => r.success) ? 'partial' : 'failed';
+      
+      await db.collection('orders').doc(order.id).update({
+        deliveryStatus,
+        deliveryResults,
+        updatedAt: new Date().toISOString()
+      });
       
       return {
         success: true,
         orderId: order.id,
-        deliveryStatus: 'skipped',
-        message: 'Order created but templates not delivered (no email)',
+        deliveryStatus,
+        deliveryResults,
         templates: immediateDelivery ? templates : []
       };
+    } catch (error) {
+      logger.error(`Error processing payment success: ${error.message}`);
+      throw error;
     }
-    
-    // Deliver templates for each item
-    const deliveryResults = [];
-    
-    for (const item of items) {
-      try {
-        // Get agent details
-        const agentId = item.id;
-        const agentDoc = await db.collection('agents').doc(agentId).get();
-        
-        if (!agentDoc.exists) {
-          deliveryResults.push({
-            agentId,
-            success: false,
-            error: 'Agent not found'
-          });
-          continue;
-        }
-        
-        const agent = agentDoc.data();
-        
-        // Get template content
-        const templateContent = await getAgentTemplate(agentId);
-        
-        // Get user's name if available
-        let userName = 'Valued Customer';
-        if (userId) {
-          const userDoc = await db.collection('users').doc(userId).get();
-          if (userDoc.exists) {
-            const userData = userDoc.data();
-            userName = userData.displayName || userData.firstName || 'Valued Customer';
-          }
-        }
-        
-        // Send email with template
-        let emailSubject = 'Your AI Agent Purchase';
-        let receiptUrl = '';
-        
-        // Customize for SEPA payments
-        if (isSepaPayment) {
-          emailSubject = immediateDelivery ? 
-            'Your SEPA Payment - Template Available Now' : 
-            'Your SEPA Payment Successful';
-            
-          if (orderData.status === 'successful') {
-            emailSubject = 'Your SEPA Payment is Successful - Template Available Now';
-          }
-          
-          // Add payment reference to receipt URL if available
-          if (paymentData.id) {
-            receiptUrl = `/account/orders/${orderData.orderId}?payment_ref=${paymentData.id}`;
-          }
-        }
-        
-        // Find template download link if available
-        const templateLink = templates.find(t => t.agentId === agentId)?.downloadUrl || '';
-        
-        // Send email with template
-        const emailResult = await emailService.sendAgentPurchaseEmail({
-          email: email,
-          firstName: userName,
-          agentName: agent.title || 'AI Agent',
-          agentDescription: agent.description || 'Your new AI agent',
-          price: item.price || 0,
-          currency: orderData.currency || 'USD',
-          receiptUrl: receiptUrl,
-          orderId: orderData.orderId,
-          orderDate: new Date().toLocaleDateString(), 
-          paymentMethod: orderData.paymentMethod,
-          paymentStatus: 'successful', // Always use successful status
-          isSepaPayment: isSepaPayment,
-          immediateDownload: immediateDelivery,
-          downloadUrl: templateLink,
-          templateContent: templateContent, // Pass the template content
-          agentId: agentId // Pass the agent ID
-        });
-        
-        // Record delivery result
-        deliveryResults.push({
-          agentId,
-          success: true,
-          messageId: emailResult.messageId
-        });
-        
-      } catch (error) {
-        logger.error(`Error delivering template for agent ${item.id}: ${error.message}`);
-        
-        deliveryResults.push({
-          agentId: item.id,
-          success: false,
-          error: error.message
-        });
-      }
-    }
-    
-    // Update order with delivery results
-    const deliveryStatus = deliveryResults.every(r => r.success) ? 'completed' : 
-                          deliveryResults.some(r => r.success) ? 'partial' : 'failed';
-    
-    await db.collection('orders').doc(order.id).update({
-      deliveryStatus,
-      deliveryResults,
-      updatedAt: new Date().toISOString()
-    });
-    
-    return {
-      success: true,
-      orderId: order.id,
-      deliveryStatus,
-      deliveryResults,
-      templates: immediateDelivery ? templates : []
-    };
   } catch (error) {
     logger.error(`Error processing payment success: ${error.message}`);
     throw error;

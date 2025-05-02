@@ -38,7 +38,6 @@ const CardPaymentForm = ({ amount, currency, email, onPaymentSuccess, onPaymentE
         metadata: {
           items: items,
           userId: userId,
-          process_immediately: true, // Flag to process the order immediately
           userEmail: email,
           country: navigator.language || 'en-US'
         }

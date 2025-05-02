@@ -466,76 +466,6 @@ router.post('/create-payment-intent', async (req, res) => {
     logger.info('Payment intent created', { id: paymentIntent.id, paymentTypes });
     console.log('Created payment intent:', paymentIntent.id);
     
-    // If this is a card payment and is set to process immediately, handle confirmation
-    if (metadata.process_immediately === true && paymentTypes.includes('card') && !paymentTypes.includes('sepa_debit')) {
-      try {
-        logger.info(`Processing immediate card payment for order ${orderId}`);
-        
-        // Make sure we have either items from metadata or directly in the request
-        let orderItems = [];
-        
-        if (metadata.items) {
-          // Convert items to array if it's a string
-          if (typeof metadata.items === 'string') {
-            try {
-              orderItems = JSON.parse(metadata.items);
-              logger.info(`Successfully parsed items from metadata string, found ${orderItems.length} items`);
-            } catch (parseError) {
-              logger.error(`Failed to parse items from metadata string: ${parseError.message}`);
-              console.error(`Error parsing items from metadata: ${parseError.message}`);
-              // Continue with empty items array
-            }
-          } else if (Array.isArray(metadata.items)) {
-            orderItems = metadata.items;
-          }
-        }
-        
-        logger.info(`Processing order with ${orderItems.length} items for email ${email || 'unknown'}`);
-        
-        // Process the payment and send email confirmations - similar to webhook handler
-        const result = await orderController.processPaymentSuccess({
-          id: paymentIntent.id,
-          amount: amountInCents,
-          currency: currency.toLowerCase(),
-          payment_method_types: paymentTypes,
-          metadata: {
-            ...metadata,
-            order_id: orderId
-          },
-          customer: {
-            id: metadata.userId || null,
-            email: email
-          },
-          items: orderItems
-        });
-        
-        logger.info(`Order processed immediately: ${result.orderId}`, {
-          orderId: result.orderId,
-          deliveryStatus: result.deliveryStatus
-        });
-        
-        // If email notification is enabled, send order confirmation
-        if (process.env.ENABLE_NOTIFICATIONS !== 'false' && email) {
-          logger.info(`Sending immediate order success notification for order: ${result.orderId}`);
-          
-          // Send order success notification
-          await notificationService.sendOrderSuccessNotification({
-            orderId: result.orderId,
-            email: email,
-            userId: metadata.userId,
-            items: orderItems,
-            orderTotal: amount,
-            agent: orderItems && orderItems.length === 1 ? orderItems[0] : null
-          });
-        } else if (!email) {
-          logger.warn(`Cannot send order confirmation email - no email provided for order ${result.orderId}`);
-        }
-      } catch (processingError) {
-        logger.error(`Error processing immediate card payment: ${processingError.message}`, processingError);
-        // We don't fail the payment intent creation - the webhook will retry
-      }
-    }
-    
     // Store the payment intent in the database for tracking
     try {
       // Create a record in the database with basic status information
@@ -552,16 +482,81 @@ router.post('/create-payment-intent', async (req, res) => {
         },
         createdAt: new Date().toISOString(),
         paymentMethod: paymentTypes.includes('sepa_debit') ? 'sepa_debit' : 'card',
-        clientSecret: paymentIntent.client_secret // Important for status checking
+        clientSecret: paymentIntent.client_secret, // Important for status checking
+        emailSent: false // Initialize with email not sent
       };
       
       // Store in database (adjust according to your actual database implementation)
       if (db && db.collection) {
         await db.collection('payments').doc(paymentIntent.id).set(paymentRecord);
+        logger.info(`Created payment record in database for ${paymentIntent.id}`);
       }
     } catch (dbError) {
       logger.error('Error storing payment record in database', dbError);
       // Continue even if database storage fails - payment can still succeed
+    }
+    
+    // For credit card payments, we need to process them here since the webhook might not be reliable
+    if (paymentTypes.includes('card') && !paymentTypes.includes('sepa_debit')) {
+      try {
+        logger.info(`Processing card payment for order ${orderId}`);
+        
+        // Parse items from metadata
+        let orderItems = [];
+        
+        if (metadata.items) {
+          if (typeof metadata.items === 'string') {
+            try {
+              orderItems = JSON.parse(metadata.items);
+              logger.info(`Successfully parsed items from metadata string, found ${orderItems.length} items`);
+            } catch (parseError) {
+              logger.error(`Failed to parse items from metadata string: ${parseError.message}`);
+              // Continue with empty items array
+            }
+          } else if (Array.isArray(metadata.items)) {
+            orderItems = metadata.items;
+          }
+        }
+        
+        // Process the order
+        const result = await orderController.processPaymentSuccess({
+          id: paymentIntent.id,
+          amount: amountInCents,
+          currency: currency.toLowerCase(),
+          payment_method_types: paymentTypes,
+          metadata: {
+            ...metadata,
+            order_id: orderId
+          },
+          customer: {
+            id: metadata.userId || null,
+            email: email || metadata.userEmail
+          },
+          items: orderItems
+        });
+        
+        logger.info(`Order processed: ${result.orderId}`, {
+          orderId: result.orderId,
+          deliveryStatus: result.deliveryStatus
+        });
+        
+        // Update database record
+        try {
+          await db.collection('payments').doc(paymentIntent.id).update({
+            emailSent: true,
+            emailSentAt: new Date().toISOString(),
+            processedAt: new Date().toISOString(),
+            orderId: result.orderId
+          });
+          logger.info(`Updated payment record for ${paymentIntent.id} - email sent status recorded`);
+        } catch (dbUpdateError) {
+          logger.error(`Error updating payment record: ${dbUpdateError.message}`);
+          // Non-critical error, continue
+        }
+      } catch (processingError) {
+        logger.error(`Error processing card payment: ${processingError.message}`);
+        // Continue - don't fail the payment intent creation
+      }
     }
     
     // Return the client secret to the client
@@ -1043,75 +1038,105 @@ router.post('/stripe-webhook', express.raw({ type: 'application/json' }), async 
       logPayment('STRIPE', 'PAYMENT_SUCCEEDED', { id: paymentIntent.id });
       
       try {
-        // Get cart items from metadata or fetch them based on the order ID
-        const metadata = paymentIntent.metadata || {};
-        const orderId = metadata.order_id || uuidv4();
-        logger.info(`Processing payment intent with order ID: ${orderId}`);
+        // First check if this payment was already processed and email sent
+        let paymentRecord = null;
+        let emailAlreadySent = false;
         
-        // Try to retrieve items from metadata
-        let items = [];
         try {
-          if (metadata.items) {
-            // Always treat items as a string that needs parsing
-            if (typeof metadata.items === 'string') {
-              items = JSON.parse(metadata.items);
-              logger.info(`Successfully parsed ${items.length} items from webhook metadata`);
-            } else if (typeof metadata.items === 'object') {
-              // Handle older format where items was passed as object
-              items = metadata.items;
-              logger.info(`Using items object directly from webhook metadata`);
+          const paymentDoc = await db.collection('payments').doc(paymentIntent.id).get();
+          if (paymentDoc.exists) {
+            paymentRecord = paymentDoc.data();
+            if (paymentRecord.emailSent === true) {
+              logger.info(`Skipping duplicate processing for payment ${paymentIntent.id} - email already sent`);
+              emailAlreadySent = true;
             }
-          } else if (metadata.cart_id) {
-            // Fetch cart items from database using cart_id
-            items = await fetchCartItemsFromDatabase(metadata.cart_id);
           }
-        } catch (parseError) {
-          logger.error(`Error parsing items metadata in webhook: ${parseError.message}`, parseError);
+        } catch (dbError) {
+          logger.error(`Error checking payment record: ${dbError.message}`);
+          // Continue processing even if DB check fails
         }
         
-        // Process the payment and deliver agent templates
-        const result = await orderController.processPaymentSuccess({
-          id: paymentIntent.id,
-          amount: paymentIntent.amount,
-          currency: paymentIntent.currency,
-          payment_method_types: paymentIntent.payment_method_types,
-          metadata: {
-            ...metadata,
-            order_id: orderId // Ensure the orderId is passed to the controller
-          },
-          customer: paymentIntent.customer ? {
-            id: paymentIntent.customer,
-            email: metadata.email // Use email from metadata if available
-          } : null,
-          items: items
-        });
-        
-        // Log success with the order ID from the result
-        logger.info(`Order processed successfully: ${result.orderId}`, {
-          orderId: result.orderId, // Include orderId in the log data
-          deliveryStatus: result.deliveryStatus,
-          successCount: result.deliveryResults?.filter(r => r.success).length || 0,
-          failureCount: result.deliveryResults?.filter(r => !r.success).length || 0
-        });
-        
-        // If we have a notification service, send a success notification
-        try {
-          if (process.env.ENABLE_NOTIFICATIONS !== 'false' && metadata.email) {
-            logger.info(`Sending order success notification for order: ${result.orderId}`);
-            
-            // Send order success notification
-            await notificationService.sendOrderSuccessNotification({
-              orderId: result.orderId,
-              email: metadata.email,
-              userId: metadata.userId,
-              items: items,
-              orderTotal: paymentIntent.amount / 100, // Convert cents to dollars
-              agent: items.length === 1 ? items[0] : null
-            });
+        // Only process if email wasn't already sent
+        if (!emailAlreadySent) {
+          // Get cart items from metadata or fetch them based on the order ID
+          const metadata = paymentIntent.metadata || {};
+          const orderId = metadata.order_id || uuidv4();
+          logger.info(`Processing payment intent with order ID: ${orderId}`);
+          
+          // Check if this is a SEPA payment
+          const isSepaPayment = 
+            paymentIntent.payment_method_types?.includes('sepa_debit') || 
+            paymentIntent.payment_method_types?.includes('sepa_credit_transfer') ||
+            metadata.payment_method === 'sepa_credit_transfer';
+          
+          // Be careful with SEPA payments - they might have already been processed manually
+          if (isSepaPayment && paymentRecord && paymentRecord.orderId) {
+            logger.info(`SEPA payment ${paymentIntent.id} has already been manually processed with order ${paymentRecord.orderId}`);
+            return res.status(200).send({ received: true }); // Exit early - SEPA payment already handled manually
           }
-        } catch (notificationError) {
-          logger.error(`Failed to send notification for order ${result.orderId}: ${notificationError.message}`);
-          // Non-critical error, don't throw
+          
+          // Try to retrieve items from metadata
+          let items = [];
+          try {
+            if (metadata.items) {
+              // Always treat items as a string that needs parsing
+              if (typeof metadata.items === 'string') {
+                try {
+                  items = JSON.parse(metadata.items);
+                  logger.info(`Successfully parsed ${items.length} items from webhook metadata`);
+                } catch (parseError) {
+                  logger.error(`Error parsing items metadata in webhook: ${parseError.message}`);
+                  console.error(`Error parsing items from metadata: ${parseError.message}`);
+                  // Continue with empty items array
+                }
+              } else if (Array.isArray(metadata.items)) {
+                items = metadata.items;
+              }
+            } else if (metadata.cart_id) {
+              // Fetch cart items from database using cart_id
+              items = await fetchCartItemsFromDatabase(metadata.cart_id);
+            }
+          } catch (parseError) {
+            logger.error(`Error parsing items metadata in webhook: ${parseError.message}`, parseError);
+          }
+          
+          // Process the payment and deliver agent templates
+          const result = await orderController.processPaymentSuccess({
+            id: paymentIntent.id,
+            amount: paymentIntent.amount,
+            currency: paymentIntent.currency,
+            payment_method_types: paymentIntent.payment_method_types,
+            metadata: {
+              ...metadata,
+              order_id: orderId
+            },
+            customer: {
+              id: metadata.userId || paymentIntent.customer,
+              email: metadata.email || metadata.userEmail
+            },
+            items: items
+          });
+          
+          // Log success with the order ID from the result
+          logger.info(`Order processed successfully via webhook: ${result.orderId}`, {
+            orderId: result.orderId,
+            deliveryStatus: result.deliveryStatus
+          });
+          
+          // Mark in database that the order was processed and email sent
+          try {
+            await db.collection('payments').doc(paymentIntent.id).update({
+              emailSent: true, 
+              emailSentAt: new Date().toISOString(),
+              processedAt: new Date().toISOString(),
+              orderId: result.orderId,
+              webhookProcessed: true
+            });
+            logger.info(`Marked payment ${paymentIntent.id} as processed by webhook`);
+          } catch (dbUpdateError) {
+            logger.error(`Error updating payment record: ${dbUpdateError.message}`);
+            // Non-critical error, continue
+          }
         }
       } catch (error) {
         logger.error(`Error processing order after payment: ${error.message}`, error);
@@ -1822,8 +1847,8 @@ router.post('/sepa-credit-transfer', async (req, res) => {
         const paymentIntent = await stripe.paymentIntents.create({
           amount: amountInCents,
           currency: 'eur', // SEPA is EUR only
-          payment_method_types: ['sepa_debit', 'customer_balance'], // Allow SEPA or manual bank transfer
-          capture_method: 'manual', // Manual capture for bank transfers
+          payment_method_types: ['sepa_debit'], // Only use sepa_debit, not customer_balance
+          capture_method: 'automatic', // SEPA requires automatic capture
           confirm: false,
           customer: stripeCustomerId || undefined,
           metadata: {

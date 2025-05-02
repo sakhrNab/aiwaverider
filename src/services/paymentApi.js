@@ -387,8 +387,8 @@ export const createPaymentIntent = async (data) => {
         metadata: {
           ...metadata,
           orderId: generatedOrderId,
-          email: email || '',
-          process_immediately: true, // Important: tell the backend to process immediately
+          email: email || metadata.userEmail || '',
+          userEmail: metadata.userEmail || email || '',
           items: JSON.stringify(formattedItems), // Convert items array to a JSON string for metadata
           userId: userId,
           source: 'checkout-form'
