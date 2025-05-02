@@ -277,7 +277,7 @@ const getPaymentMethodsForCountry = (countryCode) => {
 };
 
 // Stripe Elements Form
-const CheckoutForm = ({ finalTotal, currency, email, handlePaymentSuccess, isSubmitting, setIsSubmitting }) => {
+const CheckoutForm = ({ finalTotal, currency, email, handlePaymentSuccess, isSubmitting, setIsSubmitting, zipCode, cardName }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState(null);
@@ -337,18 +337,23 @@ const CheckoutForm = ({ finalTotal, currency, email, handlePaymentSuccess, isSub
         paymentMethodTypes: ['card'], // Specify card payment
         metadata: {
           source: 'checkout-form',
-          paymentType: 'card'
+          paymentType: 'card',
+          postalCode: zipCode // Add postal code to metadata for record-keeping
         }
       });
       
       console.log('Payment intent created with order ID:', orderId);
       
-      // Confirm the payment
+      // Confirm the payment with billing details
       const result = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
           card: elements.getElement(CardElement),
           billing_details: {
             email: email,
+            name: cardName || undefined,
+            address: {
+              postal_code: zipCode || undefined
+            }
           },
         },
       });
@@ -409,7 +414,7 @@ const CheckoutForm = ({ finalTotal, currency, email, handlePaymentSuccess, isSub
                     color: '#9e2146',
                   },
                 },
-                hidePostalCode: true,
+                hidePostalCode: true, // We collect postal code separately in the parent form
               }}
             />
           ) : (
@@ -2034,6 +2039,8 @@ const Checkout = () => {
                                 handlePaymentSuccess={handlePaymentSuccess}
                                 isSubmitting={isSubmitting}
                                 setIsSubmitting={setIsSubmitting}
+                                zipCode={zipCode}
+                                cardName={cardName}
                               />
                             </div>
                           </Elements>
