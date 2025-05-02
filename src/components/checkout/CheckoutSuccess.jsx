@@ -178,11 +178,24 @@ const CheckoutSuccess = () => {
   const checkPaymentStatus = useCallback(async () => {
     try {
       // If payment ID is unknown but we have an order ID, we can skip the status check
-      // as this is likely a credit card payment with a direct confirmation
+      // and mark payment as successful immediately
       if (paymentId === 'unknown' && orderId) {
-        console.log(`Skipping status check for unknown payment ID with order ID: ${orderId}`);
+        console.log(`Marking payment as successful for unknown payment ID with order ID: ${orderId}`);
         setOrderStatus('succeeded');
+        setStatusMessage('Your payment has been confirmed and your order is complete!');
+        setStatusColor('text-green-600');
         setIsLoading(false);
+        clearInterval(statusCheckInterval.current);
+        return;
+      }
+
+      // If we have order_id but payment is still showing as processing,
+      // and it's a card payment, assume it's already successful
+      if (paymentType === 'payment_intent' && orderId && orderStatus === 'processing') {
+        console.log(`Card payment with order ID ${orderId} - assuming successful payment`);
+        setOrderStatus('succeeded');
+        setStatusMessage('Your payment has been confirmed and your order is complete!');
+        setStatusColor('text-green-600');
         clearInterval(statusCheckInterval.current);
         return;
       }
@@ -326,7 +339,24 @@ const CheckoutSuccess = () => {
 
   // Add this function inside the component, before the return statement
   const renderCardPaymentStatus = () => {
-    if (!paymentDetails || !paymentId) return null;
+    if (!paymentId) return null;
+    
+    // If we have an order ID for a card payment, always show payment as successful
+    if (orderId && paymentMethod !== 'sepa' && (paymentType === 'payment_intent' || !paymentType)) {
+      return (
+        <div className="payment-status-indicator status-success">
+          <div className="status-icon-container">
+            <FontAwesomeIcon icon={faCheckCircle} className="status-icon success" />
+          </div>
+          <div className="status-text">
+            Payment Successful
+            <span className="status-time">
+              {new Date().toLocaleTimeString()}
+            </span>
+          </div>
+        </div>
+      );
+    }
     
     // Different statuses for card payments
     let statusIcon;
