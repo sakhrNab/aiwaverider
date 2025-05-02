@@ -5,7 +5,6 @@ import { SiStripe, SiApple, SiVisa, SiMastercard, SiAmericanexpress, SiPaypal } 
 import { toast } from 'react-toastify';
 import { useCart } from '../contexts/CartContext.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import { getRelatedProducts, getSimilarProductRecommendations } from '../utils/productData';
 import { PayPalButtons, usePayPalScriptReducer } from '@paypal/react-paypal-js';
 import { 
   createStripeCheckout, 
@@ -27,6 +26,13 @@ import {
 import GooglePayButton from '../components/GooglePayButton';
 import ApplePayButton from '../components/ApplePayButton';
 import PaymentSuccessRecommendations from '../components/PaymentSuccessRecommendations';
+import { 
+  getProductImageUrl, 
+  createImageErrorHandler,
+  formatPrice,
+  formatRating,
+  getRecommendationsForPurchase
+} from '../services/recommendationService';
 import '../styles/Checkout.css';
 import { HashLoader } from 'react-spinners';
 
@@ -568,10 +574,24 @@ const Checkout = () => {
   
   // Get related products
   useEffect(() => {
+    const fetchRelatedProducts = async () => {
     if (cart.length > 0) {
-      const related = getRelatedProducts(cart[0].id, 3);
-      setRelatedProducts(related);
-    }
+        try {
+          const recommendations = await getRecommendationsForPurchase({
+            purchasedItems: [cart[0]], // Use the first cart item as reference
+            limit: 3,
+            category: cart[0].category || 'All'
+          });
+          
+          setRelatedProducts(recommendations);
+        } catch (error) {
+          console.error('Error fetching related products:', error);
+          setRelatedProducts([]);
+        }
+      }
+    };
+    
+    fetchRelatedProducts();
   }, [cart]);
   
   // Set email from authenticated user when component mounts
@@ -778,7 +798,7 @@ const Checkout = () => {
       const sepaPayload = {
         paymentType: 'sepa_credit_transfer',
         debtorInfo: {
-          name: cardName,
+        name: cardName,
           iban: sepaIban.replace(/\s+/g, ''),
           bic: sepaBic || undefined, // Optional, only include if provided
           email: userEmail || email || '', // Always include email, even if empty
@@ -982,7 +1002,7 @@ const Checkout = () => {
           logError('Error calling backend API in simulation mode', apiError, 'handleSepaPayment');
           // Continue with local simulation even if API call fails
         }
-
+        
         // Simulate processing delay
         await new Promise(resolve => setTimeout(resolve, 1500));
         
@@ -1720,69 +1740,69 @@ const Checkout = () => {
                 <p className="mt-4 text-center text-gray-600">Loading payment options...</p>
               </div>
             ) : (
-              <div className="payment-methods grid grid-cols-3 gap-4">
-                {/* First Row: Card, SEPA, iDEAL */}
-                <div 
-                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.CARD ? 'active' : ''}`}
-                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.CARD)}
-                >
-                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.CARD)}</div>
-                  <span>Card</span>
-                </div>
-                
-                <div 
-                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.SEPA ? 'active' : ''}`}
-                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.SEPA)}
-                >
-                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.SEPA)}</div>
-                  <span>SEPA</span>
-                </div>
-                
-                <div 
-                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.IDEAL ? 'active' : ''}`}
-                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.IDEAL)}
-                >
-                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.IDEAL)}</div>
-                  <span>iDEAL</span>
-                </div>
-                
-                {/* Second Row: PayPal, Google Pay, Apple Pay */}
-                <div 
-                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.PAYPAL ? 'active' : ''}`}
-                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.PAYPAL)}
-                >
-                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.PAYPAL)}</div>
-                  <span>PayPal</span>
-                </div>
-                
-                <div 
-                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.GOOGLE_PAY ? 'active' : ''}`}
-                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.GOOGLE_PAY)}
-                >
-                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.GOOGLE_PAY)}</div>
-                  <span>Google Pay</span>
-                </div>
+            <div className="payment-methods grid grid-cols-3 gap-4">
+              {/* First Row: Card, SEPA, iDEAL */}
+              <div 
+                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.CARD ? 'active' : ''}`}
+                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.CARD)}
+              >
+                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.CARD)}</div>
+                <span>Card</span>
+              </div>
+              
+              <div 
+                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.SEPA ? 'active' : ''}`}
+                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.SEPA)}
+              >
+                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.SEPA)}</div>
+                <span>SEPA</span>
+              </div>
+              
+              <div 
+                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.IDEAL ? 'active' : ''}`}
+                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.IDEAL)}
+              >
+                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.IDEAL)}</div>
+                <span>iDEAL</span>
+              </div>
+              
+              {/* Second Row: PayPal, Google Pay, Apple Pay */}
+              <div 
+                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.PAYPAL ? 'active' : ''}`}
+                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.PAYPAL)}
+              >
+                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.PAYPAL)}</div>
+                <span>PayPal</span>
+              </div>
+              
+              <div 
+                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.GOOGLE_PAY ? 'active' : ''}`}
+                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.GOOGLE_PAY)}
+              >
+                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.GOOGLE_PAY)}</div>
+                <span>Google Pay</span>
+              </div>
 
+              <div 
+                className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.APPLE_PAY ? 'active' : ''}`}
+                onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.APPLE_PAY)}
+              >
+                <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.APPLE_PAY)}</div>
+                <span>Apple Pay</span>
+              </div>
+              
+              {/* Third Row: Crypto (centered) */}
+              <div className="col-span-3 flex justify-center">
                 <div 
-                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.APPLE_PAY ? 'active' : ''}`}
-                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.APPLE_PAY)}
+                  className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.CRYPTO ? 'active' : ''}`}
+                  onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.CRYPTO)}
+                  style={{ width: '33%' }}
                 >
-                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.APPLE_PAY)}</div>
-                  <span>Apple Pay</span>
-                </div>
-                
-                {/* Third Row: Crypto (centered) */}
-                <div className="col-span-3 flex justify-center">
-                  <div 
-                    className={`payment-method-toggle ${paymentMethod === PAYMENT_METHODS.CRYPTO ? 'active' : ''}`}
-                    onClick={() => handlePaymentMethodChange(PAYMENT_METHODS.CRYPTO)}
-                    style={{ width: '33%' }}
-                  >
-                    <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.CRYPTO)}</div>
-                    <span>Crypto</span>
-                  </div>
+                  <div className="method-icon">{renderPaymentMethodIcon(PAYMENT_METHODS.CRYPTO)}</div>
+                  <span>Crypto</span>
                 </div>
               </div>
+            </div>
             )}
           </div>
           
@@ -1794,80 +1814,80 @@ const Checkout = () => {
             </div>
           ) : (
             paymentMethod !== PAYMENT_METHODS.GOOGLE_PAY && 
-            paymentMethod !== PAYMENT_METHODS.APPLE_PAY && 
-            paymentMethod !== PAYMENT_METHODS.PAYPAL && 
-            paymentMethod !== PAYMENT_METHODS.SEPA && (
-              <>
-                <div className="form-group">
-                  <label htmlFor="email">Email Address</label>
-                  <input
-                    type="email"
-                    id="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    placeholder="Your email address"
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label htmlFor="cardName">Name on Card</label>
-                  <input
-                    type="text"
-                    id="cardName"
-                    value={cardName}
-                    onChange={(e) => setCardName(e.target.value)}
-                    required
-                    placeholder="Full name as it appears on card"
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label htmlFor="country">Country</label>
-                  <select
-                    id="country"
-                    value={country}
-                    onChange={(e) => {
-                      setCountry(e.target.value);
-                      // Update payment methods based on country
-                      let code = 'US';
-                      if (e.target.value === 'United States') code = 'US';
-                      else if (e.target.value === 'United Kingdom') code = 'GB';
-                      else if (e.target.value === 'India') code = 'IN';
-                      else if (e.target.value === 'Germany') code = 'DE';
-                      else if (e.target.value === 'France') code = 'FR';
-                      else if (e.target.value === 'Netherlands') code = 'NL';
-                      setCountryCode(code);
-                      setAvailablePaymentMethods(getPaymentMethodsForCountry(code));
-                    }}
-                    required
-                  >
-                    <option value="United States">United States</option>
-                    <option value="United Kingdom">United Kingdom</option>
-                    <option value="Canada">Canada</option>
-                    <option value="Australia">Australia</option>
-                    <option value="Germany">Germany</option>
-                    <option value="France">France</option>
-                    <option value="Netherlands">Netherlands</option>
-                    <option value="Belgium">Belgium</option>
-                    <option value="India">India</option>
-                    <option value="Japan">Japan</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                
-                <div className="form-group">
-                  <label htmlFor="zipCode">Zip/Postal Code</label>
-                  <input
-                    type="text"
-                    id="zipCode"
-                    value={zipCode}
-                    onChange={(e) => setZipCode(e.target.value)}
-                    required
-                    placeholder="Your postal code"
-                  />
-                </div>
-              </>
+           paymentMethod !== PAYMENT_METHODS.APPLE_PAY && 
+           paymentMethod !== PAYMENT_METHODS.PAYPAL && 
+           paymentMethod !== PAYMENT_METHODS.SEPA && (
+            <>
+              <div className="form-group">
+                <label htmlFor="email">Email Address</label>
+                <input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="Your email address"
+                />
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="cardName">Name on Card</label>
+                <input
+                  type="text"
+                  id="cardName"
+                  value={cardName}
+                  onChange={(e) => setCardName(e.target.value)}
+                  required
+                  placeholder="Full name as it appears on card"
+                />
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="country">Country</label>
+                <select
+                  id="country"
+                  value={country}
+                  onChange={(e) => {
+                    setCountry(e.target.value);
+                    // Update payment methods based on country
+                    let code = 'US';
+                    if (e.target.value === 'United States') code = 'US';
+                    else if (e.target.value === 'United Kingdom') code = 'GB';
+                    else if (e.target.value === 'India') code = 'IN';
+                    else if (e.target.value === 'Germany') code = 'DE';
+                    else if (e.target.value === 'France') code = 'FR';
+                    else if (e.target.value === 'Netherlands') code = 'NL';
+                    setCountryCode(code);
+                    setAvailablePaymentMethods(getPaymentMethodsForCountry(code));
+                  }}
+                  required
+                >
+                  <option value="United States">United States</option>
+                  <option value="United Kingdom">United Kingdom</option>
+                  <option value="Canada">Canada</option>
+                  <option value="Australia">Australia</option>
+                  <option value="Germany">Germany</option>
+                  <option value="France">France</option>
+                  <option value="Netherlands">Netherlands</option>
+                  <option value="Belgium">Belgium</option>
+                  <option value="India">India</option>
+                  <option value="Japan">Japan</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="zipCode">Zip/Postal Code</label>
+                <input
+                  type="text"
+                  id="zipCode"
+                  value={zipCode}
+                  onChange={(e) => setZipCode(e.target.value)}
+                  required
+                  placeholder="Your postal code"
+                />
+              </div>
+            </>
             )
           )}
           
@@ -2416,25 +2436,11 @@ const Checkout = () => {
       )}
       
       {relatedProducts.length > 0 && !paymentCompleted && (
-        <div className="related-products">
-          <h2>You Might Also Like</h2>
-          <div className="related-grid">
-            {relatedProducts.map(product => (
-              <div key={product.id} className="related-product">
-                <img src={product.imageUrl} alt={product.title} />
-                <h3>{product.title}</h3>
-                <p>
-                  {product.price > 0 
-                    ? `${currency} ${(product.price || 0).toFixed(2)}` 
-                    : 'Free'}
-                </p>
-                <Link to={`/product/${product.id}`} className="view-button">
-                  View Details
-                </Link>
-              </div>
-            ))}
-          </div>
-        </div>
+        <PaymentSuccessRecommendations 
+          purchasedItems={[cart[0]]}
+          currency={currency}
+          limit={3}
+        />
       )}
     </div>
   );

@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { FaStar, FaExternalLinkAlt } from 'react-icons/fa';
-import { fetchAgents } from '../utils/api';
+import { 
+  getRecommendationsForPurchase, 
+  getProductImageUrl, 
+  createImageErrorHandler, 
+  formatPrice, 
+  formatRating 
+} from '../services/recommendationService';
 import '../styles/PaymentSuccessRecommendations.css';
 
 /**
@@ -18,151 +24,22 @@ const PaymentSuccessRecommendations = ({ purchasedItems, currency = 'USD', limit
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Standard placeholder image for agents - using data URI instead of external service
-  const getPlaceholderImage = (text = 'Agent Image') => {
-    // Generate a random color from a palette of blues and purples
-    const colors = ['4a4de7', '3498db', '9b59b6', '2980b9', '8e44ad', '2c3e50'];
-    const bgColor = colors[Math.floor(Math.random() * colors.length)];
-    
-    // Create SVG with the product title embedded
-    const displayText = text.length > 15 ? text.substring(0, 15) + '...' : text;
-    return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%23${bgColor}'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='20' text-anchor='middle' dominant-baseline='middle' fill='%23ffffff'%3E${displayText}%3C/text%3E%3C/svg%3E`;
-  };
-
-  // Handle image loading errors by providing standard placeholder
-  const handleImageError = (e) => {
-    console.log('Image loading error:', e.target.src);
-    // Get the product title from the alt text or use a default
-    const productTitle = e.target.alt || 'Agent Image';
-    e.target.src = getPlaceholderImage(productTitle);
-    e.target.onerror = null; // Prevent infinite error loops
-  };
-
-  // Get image URL with robust fallback logic
-  const getImageUrl = (agent) => {
-    // Create a product title for use in placeholder
-    const productTitle = agent.title || agent.name || 'AI Agent';
-    
-    // First try local images from the assets directory
-    if (agent.id) {
-      try {
-        // Try to use a local image based on the agent ID
-        // This will work for development with static assets
-        return `/assets/agents/${agent.id}.jpg`;
-      } catch (e) {
-        // Will fall through to next option
-      }
-    }
-    
-    // Check for direct imageUrl property
-    if (agent.imageUrl) {
-      return agent.imageUrl;
-    }
-    
-    // Check if image info exists in a nested structure
-    if (agent.image) {
-      if (typeof agent.image === 'string') {
-        return agent.image;
-      }
-      if (agent.image.url) {
-        return agent.image.url;
-      }
-    }
-    
-    // Try to parse the data field if it's a string
-    if (agent.data && typeof agent.data === 'string') {
-      try {
-        const parsedData = JSON.parse(agent.data);
-        if (parsedData.imageUrl) {
-          return parsedData.imageUrl;
-        }
-      } catch (e) {
-        console.warn("Error parsing agent.data:", e);
-      }
-    } else if (agent.data && typeof agent.data === 'object') {
-      if (agent.data.imageUrl) {
-        return agent.data.imageUrl;
-      }
-    }
-    
-    // Return a data URI placeholder as last resort
-    return getPlaceholderImage(productTitle);
-  };
-
   useEffect(() => {
     const fetchRecommendations = async () => {
       try {
         setLoading(true);
         
-        // Extract categories from purchased items
-        const categories = purchasedItems
-          .filter(item => item && item.category)
-          .map(item => item.category);
+        // Use the shared utility function to get recommendations
+        const fetchedRecommendations = await getRecommendationsForPurchase({
+          purchasedItems,
+          limit
+        });
         
-        // If no categories found, use 'All' as default
-        const targetCategory = categories.length > 0 ? categories[0] : 'All';
-        console.log('Fetching recommendations for category:', targetCategory);
-        
-        // Use the fetchAgents function from the API (same as Agents.jsx)
-        // Add cache busting to ensure fresh data
-        const timestamp = new Date().getTime();
-        const agentsData = await fetchAgents(targetCategory, 'Top Rated', 1, { timestamp, limit });
-        
-        if (agentsData && agentsData.length > 0) {
-          console.log('Retrieved agents data:', agentsData);
-          
-          // Filter out any items that were just purchased
-          const filteredAgents = agentsData.filter(agent => 
-            !purchasedItems.some(item => item && item.id === agent.id)
-          );
-          
-          // Ensure we have enough recommendations
-          if (filteredAgents.length < limit) {
-            // If we don't have enough recommendations in the same category,
-            // fetch some additional ones from all categories
-            const additionalAgents = await fetchAgents('All', 'Hot & New', 1, { 
-              timestamp,
-              limit: limit - filteredAgents.length
-            });
-            
-            console.log('Retrieved additional agents:', additionalAgents);
-            
-            // Combine and ensure no duplicates
-            const combinedAgents = [
-              ...filteredAgents,
-              ...additionalAgents.filter(agent => 
-                !filteredAgents.some(a => a.id === agent.id) &&
-                !purchasedItems.some(item => item && item.id === agent.id)
-              )
-            ].slice(0, limit);
-            
-            setRecommendations(combinedAgents);
-          } else {
-            setRecommendations(filteredAgents.slice(0, limit));
-          }
-        } else {
-          // If no similar products found, get featured/trending products
-          const fallbackAgents = await fetchAgents('All', 'Hot & New', 1, { timestamp, limit });
-          console.log('Using fallback agents:', fallbackAgents);
-          setRecommendations(fallbackAgents.slice(0, limit));
-        }
-        
+        setRecommendations(fetchedRecommendations);
         setError(null);
       } catch (err) {
         console.error('Error fetching recommendations:', err);
         setError('Unable to load recommendations');
-        
-        // Try to use a fallback method if the API fails
-        try {
-          const fallbackAgents = await fetchAgents('All', 'Top Rated', 1, { limit });
-          if (fallbackAgents && fallbackAgents.length > 0) {
-            console.log('Using emergency fallback agents:', fallbackAgents);
-            setRecommendations(fallbackAgents.slice(0, limit));
-            setError(null); // Clear error if fallback succeeds
-          }
-        } catch (fallbackErr) {
-          console.error('Fallback recommendation fetch failed:', fallbackErr);
-        }
       } finally {
         setLoading(false);
       }
@@ -170,25 +47,6 @@ const PaymentSuccessRecommendations = ({ purchasedItems, currency = 'USD', limit
 
     fetchRecommendations();
   }, [purchasedItems, limit]);
-
-  // Format rating to display with 1 decimal place
-  const formatRating = (rating) => {
-    if (!rating) return "0.0";
-    return typeof rating === 'number' 
-      ? rating.toFixed(1) 
-      : (rating.average?.toFixed(1) || rating.toString());
-  };
-
-  // Format price with proper currency
-  const formatPrice = (price) => {
-    if (price === 0 || price === '0' || price === 'Free' || price === '$0') {
-      return 'Free';
-    }
-    
-    return typeof price === 'number'
-      ? `${currency} ${price.toFixed(2)}`
-      : price;
-  };
 
   if (loading) {
     return (
@@ -231,9 +89,9 @@ const PaymentSuccessRecommendations = ({ purchasedItems, currency = 'USD', limit
           >
             <div className="recommendation-image">
               <img 
-                src={getImageUrl(product)} 
+                src={getProductImageUrl(product)} 
                 alt={product.title || product.name || 'AI Agent'} 
-                onError={handleImageError}
+                onError={createImageErrorHandler(product.title || product.name)}
               />
               {product.isBestseller && <span className="bestseller-badge">Bestseller</span>}
               {product.isNew && <span className="new-badge">New</span>}
@@ -250,7 +108,7 @@ const PaymentSuccessRecommendations = ({ purchasedItems, currency = 'USD', limit
                   <span>{formatRating(product.rating)}</span>
                 </div>
                 <div className="recommendation-price">
-                  {formatPrice(product.price)}
+                  {formatPrice(product.price, currency)}
                 </div>
               </div>
               
