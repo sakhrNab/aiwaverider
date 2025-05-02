@@ -289,6 +289,64 @@ const CheckoutSuccess = () => {
     );
   };
 
+  // Add this function inside the component, before the return statement
+  const renderCardPaymentStatus = () => {
+    if (!paymentDetails || !paymentId) return null;
+    
+    // Different statuses for card payments
+    let statusIcon;
+    let statusText;
+    let statusClass;
+    
+    switch (orderStatus) {
+      case 'succeeded':
+      case 'completed':
+      case 'successful':
+        statusIcon = <FontAwesomeIcon icon={faCheckCircle} className="status-icon success" />;
+        statusText = 'Payment Successful';
+        statusClass = 'status-success';
+        break;
+      case 'processing':
+        statusIcon = <HashLoader color="#4299e1" size={24} />;
+        statusText = 'Processing Payment';
+        statusClass = 'status-processing';
+        break;
+      case 'requires_payment_method':
+      case 'requires_confirmation':
+      case 'requires_action':
+        statusIcon = <FontAwesomeIcon icon={faExclamationTriangle} className="status-icon warning" />;
+        statusText = 'Action Required';
+        statusClass = 'status-warning';
+        break;
+      case 'failed':
+      case 'canceled':
+        statusIcon = <FontAwesomeIcon icon={faExclamationTriangle} className="status-icon error" />;
+        statusText = 'Payment Failed';
+        statusClass = 'status-error';
+        break;
+      default:
+        statusIcon = <FontAwesomeIcon icon={faExclamationTriangle} className="status-icon" />;
+        statusText = 'Unknown Status';
+        statusClass = 'status-unknown';
+    }
+    
+    return (
+      <div className={`payment-status-indicator ${statusClass}`}>
+        <div className="status-icon-container">
+          {statusIcon}
+        </div>
+        <div className="status-text">
+          {statusText}
+          <span className="status-time">
+            {paymentDetails.lastUpdated ? 
+              new Date(paymentDetails.lastUpdated).toLocaleTimeString() : 
+              new Date().toLocaleTimeString()}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="checkout-success-container">
       <div className="checkout-success-card">
@@ -310,7 +368,48 @@ const CheckoutSuccess = () => {
           <div className="checkout-success-content">
             <FontAwesomeIcon icon={faCheckCircle} size="3x" className="success-icon" />
             
-            {paymentMethod === 'sepa' ? (
+            {paymentMethod !== 'sepa' ? (
+              <>
+                <h1>Thank you for your purchase!</h1>
+                <p>Your order {orderStatus === 'succeeded' || orderStatus === 'completed' ? 'has been completed' : 'is being processed'}.</p>
+                
+                {/* Display payment status indicator */}
+                {renderCardPaymentStatus()}
+                
+                {orderId && (
+                  <div className="order-info">
+                    <p>Order ID: <strong>{orderId}</strong></p>
+                    {paymentDetails.confirmationEmail && (
+                      <p>Confirmation sent to: <strong>{paymentDetails.confirmationEmail}</strong></p>
+                    )}
+                  </div>
+                )}
+                
+                {/* Render immediate download buttons if available */}
+                {renderDownloadButtons()}
+                
+                <div className="email-notification">
+                  <FontAwesomeIcon icon={faEnvelope} className="email-icon" />
+                  <div>
+                    <h3>Check Your Email</h3>
+                    <p>We've sent your AI agent template to your email address. If you don't see it, please check your spam folder.</p>
+                  </div>
+                </div>
+                
+                {/* Add card-specific info for failed payments */}
+                {orderStatus === 'failed' && (
+                  <div className="payment-error-help">
+                    <h3>Having trouble with your payment?</h3>
+                    <ul>
+                      <li>Check your card details and try again</li>
+                      <li>Contact your bank to make sure there are no restrictions</li>
+                      <li>Try a different payment method or card</li>
+                      <li>Contact our support team for assistance</li>
+                    </ul>
+                  </div>
+                )}
+              </>
+            ) : (
               <>
                 <h1>SEPA Credit Transfer Initiated!</h1>
                 <p>
@@ -340,28 +439,6 @@ const CheckoutSuccess = () => {
                         ? 'This is a simulated payment for testing purposes. In a real transaction, your bank would process the payment within 1-2 business days.'
                         : 'SEPA Credit Transfers typically take 1-2 business days to complete. You will receive confirmation when the payment is processed.'}
                     </p>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <h1>Thank you for your purchase!</h1>
-                <p>Your order {orderStatus === 'succeeded' ? 'has been completed' : 'is being processed'}.</p>
-                
-                {orderId && (
-                  <div className="order-info">
-                    <p>Order ID: <strong>{orderId}</strong></p>
-                  </div>
-                )}
-                
-                {/* Render immediate download buttons if available */}
-                {renderDownloadButtons()}
-                
-                <div className="email-notification">
-                  <FontAwesomeIcon icon={faEnvelope} className="email-icon" />
-                  <div>
-                    <h3>Check Your Email</h3>
-                    <p>We've sent your AI agent template to your email address. If you don't see it, please check your spam folder.</p>
                   </div>
                 </div>
               </>

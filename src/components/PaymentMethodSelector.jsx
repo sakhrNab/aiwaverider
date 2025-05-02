@@ -2,7 +2,102 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import GooglePayButton from './GooglePayButton';
 import ApplePayButton from './ApplePayButton';
-import { createStripeCheckout } from '../services/paymentApi';
+import { createStripeCheckout, createPaymentIntent } from '../services/paymentApi';
+import { SiVisa, SiMastercard, SiAmericanexpress } from 'react-icons/si';
+import { loadStripe } from '@stripe/stripe-js';
+import { CardElement, Elements, useStripe, useElements } from '@stripe/react-stripe-js';
+
+// Initialize Stripe with publishable key
+const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+const stripePromise = loadStripe(stripeKey);
+
+// Card Element Form Component
+const CardPaymentForm = ({ amount, currency, email, onPaymentSuccess, onPaymentError, disabled, paymentMethodType = 'card' }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [error, setError] = useState(null);
+  const [processing, setProcessing] = useState(false);
+  
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    
+    if (!stripe || !elements) {
+      setError('Payment system is still loading. Please try again in a moment.');
+      return;
+    }
+    
+    setProcessing(true);
+    
+    try {
+      // Create payment intent on the server
+      const { clientSecret } = await createPaymentIntent({
+        amount,
+        currency: currency.toLowerCase(),
+        email,
+        paymentMethodTypes: [paymentMethodType]
+      });
+      
+      // Confirm the payment with the card details
+      const result = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: elements.getElement(CardElement),
+          billing_details: { email }
+        }
+      });
+      
+      if (result.error) {
+        setError(result.error.message);
+        if (onPaymentError) onPaymentError(result.error);
+      } else if (result.paymentIntent.status === 'succeeded') {
+        if (onPaymentSuccess) onPaymentSuccess(result.paymentIntent);
+      }
+    } catch (err) {
+      setError(err.message || 'Payment processing failed');
+      if (onPaymentError) onPaymentError(err);
+    } finally {
+      setProcessing(false);
+    }
+  };
+  
+  return (
+    <form onSubmit={handleSubmit} className="card-payment-form">
+      <div className="card-element-container">
+        <CardElement 
+          options={{
+            style: {
+              base: {
+                fontSize: '16px',
+                color: '#424770',
+                '::placeholder': { color: '#aab7c4' }
+              },
+              invalid: { color: '#9e2146' }
+            },
+            hidePostalCode: true
+          }}
+        />
+      </div>
+      
+      {error && <div className="card-error">{error}</div>}
+      
+      <div className="card-brands mt-2 flex space-x-2">
+        <SiVisa size={24} />
+        <SiMastercard size={24} />
+        <SiAmericanexpress size={24} />
+      </div>
+      
+      <button 
+        type="submit" 
+        disabled={processing || disabled || !stripe}
+        className={`pay-button mt-4 w-full ${processing || disabled ? 'opacity-60' : ''}`}
+      >
+        {processing ? 'Processing...' : `Pay ${new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency
+        }).format(amount)}`}
+      </button>
+    </form>
+  );
+};
 
 const PaymentMethodSelector = ({
   cartTotal,
@@ -93,6 +188,10 @@ const PaymentMethodSelector = ({
       if (response && response.url) {
         window.location.href = response.url;
         if (onSuccess) onSuccess(response);
+      } else if (response && response.clientSecret) {
+        // Handle direct payment intents (if the API returns a client secret instead of URL)
+        toast.success('Payment initiated. Please complete the process.');
+        if (onSuccess) onSuccess(response);
       } else {
         throw new Error('Invalid response from payment server');
       }
@@ -105,58 +204,83 @@ const PaymentMethodSelector = ({
     }
   };
   
+  // Handle card payment success
+  const handleCardPaymentSuccess = (paymentIntent) => {
+    toast.success('Payment successful!');
+    if (onSuccess) onSuccess({ id: paymentIntent.id, status: 'succeeded' });
+  };
+  
+  // Handle card payment error
+  const handleCardPaymentError = (error) => {
+    toast.error(`Payment failed: ${error.message || 'Unknown error'}`);
+    if (onError) onError(error);
+  };
+  
   return (
     <div className={`payment-method-selector ${className}`}>
       <h3 className="text-lg font-semibold mb-4">Select Payment Method</h3>
       
-      <form onSubmit={handlePaymentSubmit}>
-        <div className="space-y-4 mb-6">
-          <div className="flex flex-col space-y-2">
-            <label className="flex items-center space-x-2">
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="card"
-                checked={selectedMethod === 'card'}
-                onChange={handlePaymentMethodChange}
-                className="form-radio"
-              />
-              <span>Credit/Debit Card</span>
-            </label>
-            
-            {countryCode === 'NL' || countryCode === 'BE' || countryCode === 'DE' && (
-              <>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="paymentMethod"
-                    value="ideal"
-                    checked={selectedMethod === 'ideal'}
-                    onChange={handlePaymentMethodChange}
-                    className="form-radio"
-                  />
-                  <span>iDEAL</span>
-                </label>
-                
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="paymentMethod"
-                    value="sepa"
-                    checked={selectedMethod === 'sepa'}
-                    onChange={handlePaymentMethodChange}
-                    className="form-radio"
-                  />
-                  <span>SEPA Direct Debit</span>
-                </label>
-              </>
-            )}
-          </div>
+      <div className="space-y-4 mb-6">
+        <div className="flex flex-col space-y-2">
+          <label className="flex items-center space-x-2">
+            <input
+              type="radio"
+              name="paymentMethod"
+              value="card"
+              checked={selectedMethod === 'card'}
+              onChange={handlePaymentMethodChange}
+              className="form-radio"
+            />
+            <span>Credit/Debit Card</span>
+          </label>
+          
+          {countryCode === 'NL' || countryCode === 'BE' || countryCode === 'DE' && (
+            <>
+              <label className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="ideal"
+                  checked={selectedMethod === 'ideal'}
+                  onChange={handlePaymentMethodChange}
+                  className="form-radio"
+                />
+                <span>iDEAL</span>
+              </label>
+              
+              <label className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="sepa"
+                  checked={selectedMethod === 'sepa'}
+                  onChange={handlePaymentMethodChange}
+                  className="form-radio"
+                />
+                <span>SEPA Direct Debit</span>
+              </label>
+            </>
+          )}
         </div>
-        
-        <div className="flex flex-col space-y-4">
+      </div>
+      
+      <div className="flex flex-col space-y-4">
+        {selectedMethod === 'card' ? (
+          <Elements stripe={stripePromise} options={{ currency }}>
+            <CardPaymentForm 
+              amount={cartTotal}
+              currency={currency}
+              email={email}
+              onPaymentSuccess={handleCardPaymentSuccess}
+              onPaymentError={handleCardPaymentError}
+              disabled={isLoading}
+              paymentMethodType={selectedMethod}
+            />
+          </Elements>
+        ) : (
           <button
-            type="submit"
+            type="button"
+            onClick={handlePaymentSubmit}
             disabled={isLoading}
             className={`bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors ${
               isLoading ? 'opacity-70 cursor-not-allowed' : ''
@@ -167,32 +291,32 @@ const PaymentMethodSelector = ({
               currency: currency
             }).format(cartTotal)}`}
           </button>
+        )}
+        
+        <div className="flex flex-col space-y-2">
+          <GooglePayButton
+            cartTotal={cartTotal}
+            items={items}
+            currency={currency}
+            countryCode={countryCode}
+            email={email}
+            onSuccess={onSuccess}
+            onError={onError}
+            className="w-full"
+          />
           
-          <div className="flex flex-col space-y-2">
-            <GooglePayButton
-              cartTotal={cartTotal}
-              items={items}
-              currency={currency}
-              countryCode={countryCode}
-              email={email}
-              onSuccess={onSuccess}
-              onError={onError}
-              className="w-full"
-            />
-            
-            <ApplePayButton
-              cartTotal={cartTotal}
-              items={items}
-              currency={currency}
-              countryCode={countryCode}
-              email={email}
-              onSuccess={onSuccess}
-              onError={onError}
-              className="w-full"
-            />
-          </div>
+          <ApplePayButton
+            cartTotal={cartTotal}
+            items={items}
+            currency={currency}
+            countryCode={countryCode}
+            email={email}
+            onSuccess={onSuccess}
+            onError={onError}
+            className="w-full"
+          />
         </div>
-      </form>
+      </div>
     </div>
   );
 };

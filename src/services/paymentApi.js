@@ -307,28 +307,97 @@ export const createStripeCheckout = async (data) => {
 };
 
 /**
- * Create a Stripe payment intent for Custom Elements
- * @param {Object} data - Payment data including amount, currency, and paymentMethodTypes
- * @returns {Promise<Object>} - Payment intent with client secret
+ * Create a Stripe Payment Intent for card payments
+ * @param {Object} data - Payment data including amount and currency
+ * @returns {Promise<Object>} - The payment intent data with client secret
  */
 export const createPaymentIntent = async (data) => {
   try {
+    const { amount, currency, email, metadata = {}, paymentMethodTypes } = data;
+    
+    if (!amount || !currency) {
+      throw new Error('Amount and currency are required for payment');
+    }
+    
+    console.log('Creating payment intent:', { amount, currency, paymentMethodTypes });
+    
     const response = await fetch(`${API_URL}/api/payments/create-payment-intent`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        amount,
+        currency: currency.toLowerCase(),
+        email,
+        metadata,
+        paymentMethodTypes: paymentMethodTypes || ['card'] // Default to card if not specified
+      }),
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to create payment intent');
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Payment intent creation failed: ${response.status}`);
     }
     
     return await response.json();
   } catch (error) {
     console.error('Error creating payment intent:', error);
+    throw error;
+  }
+};
+
+/**
+ * Confirm a card payment
+ * @param {string} clientSecret - The payment intent client secret
+ * @param {Object} paymentMethod - The payment method data
+ * @returns {Promise<Object>} - The payment confirmation result
+ */
+export const confirmCardPayment = async (clientSecret, paymentMethod) => {
+  // This is handled by Stripe.js directly on the client side
+  // We include this function for documentation purposes
+  try {
+    // In a real implementation, you might have additional server-side validation
+    // or logging related to the payment confirmation
+    console.log('Confirming card payment with client secret');
+    
+    // Return a structured object for consistent API
+    return {
+      success: true,
+      message: 'Payment confirmation initiated by client'
+    };
+  } catch (error) {
+    console.error('Error in confirmCardPayment:', error);
+    throw error;
+  }
+};
+
+/**
+ * Check the status of a card payment
+ * @param {string} paymentIntentId - The payment intent ID
+ * @returns {Promise<Object>} - The payment status
+ */
+export const checkCardPaymentStatus = async (paymentIntentId) => {
+  try {
+    if (!paymentIntentId) {
+      throw new Error('Payment ID is required');
+    }
+    
+    const response = await fetch(`${API_URL}/api/payments/payment-status/${paymentIntentId}?type=payment_intent`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Payment status check failed: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error checking card payment status:', error);
     throw error;
   }
 };

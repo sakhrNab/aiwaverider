@@ -315,8 +315,16 @@ export const getPlaceholderImage = (text = 'Product') => {
   const bgColor = colors[Math.floor(Math.random() * colors.length)];
   
   // Create SVG with the product title embedded
+  // Ensure any special characters like & are properly encoded
   const displayText = text.length > 15 ? text.substring(0, 15) + '...' : text;
-  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%23${bgColor}'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='20' text-anchor='middle' dominant-baseline='middle' fill='%23ffffff'%3E${displayText}%3C/text%3E%3C/svg%3E`;
+  const encodedText = displayText
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+  
+  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%23${bgColor}'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='20' text-anchor='middle' dominant-baseline='middle' fill='%23ffffff'%3E${encodedText}%3C/text%3E%3C/svg%3E`;
 };
 
 /**
@@ -326,11 +334,23 @@ export const getPlaceholderImage = (text = 'Product') => {
  * @returns {Function} - Error handler function for img elements
  */
 export const createImageErrorHandler = (fallbackText) => (e) => {
+  // Check if we've already tried to handle this error to prevent infinite loops
+  if (e.target.dataset.errorHandled === 'true') {
+    console.warn('Preventing infinite error loop for image:', e.target.alt || fallbackText);
+    return;
+  }
+  
   console.log('Image loading error:', e.target.src);
+  
+  // Mark the image as having been handled
+  e.target.dataset.errorHandled = 'true';
+  
   // Get the product title from the alt text or use the provided fallback
   const productTitle = e.target.alt || fallbackText || 'Product';
+  
+  // Set the new source and clear the original error handler
   e.target.src = getPlaceholderImage(productTitle);
-  e.target.onerror = null; // Prevent infinite error loops
+  e.target.onerror = null;
 };
 
 /**

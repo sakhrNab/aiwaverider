@@ -419,33 +419,85 @@ router.post('/create-checkout-session', async (req, res) => {
   }
 });
 
-// Create a payment intent for Stripe Elements
+/**
+ * Create a Stripe Payment Intent for card payments and SEPA transfers
+ * @route POST /api/payments/create-payment-intent
+ */
 router.post('/create-payment-intent', async (req, res) => {
   try {
-    const { amount, currency = 'usd', paymentMethodTypes = ['card'] } = req.body;
+    const { amount, currency = 'usd', email, metadata = {}, paymentMethodTypes } = req.body;
     
     if (!amount) {
       return res.status(400).json({ error: 'Amount is required' });
     }
     
-    // Create a PaymentIntent
+    logger.info('Creating payment intent', { amount, currency, email, paymentMethodTypes });
+    console.log('Creating payment intent:', { amount, currency, email, paymentMethodTypes });
+    
+    // Convert amount to cents/smallest currency unit for Stripe
+    const amountInCents = Math.round(parseFloat(amount) * 100);
+    
+    // Add basic validation
+    if (isNaN(amountInCents) || amountInCents <= 0) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+    
+    // Default to card payment method if not specified
+    const paymentTypes = paymentMethodTypes || ['card'];
+    
+    // Create the payment intent with Stripe
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: formatAmountForStripe(amount, currency),
+      amount: amountInCents,
       currency: currency.toLowerCase(),
-      payment_method_types: paymentMethodTypes,
+      payment_method_types: paymentTypes,
       metadata: {
-        order_id: uuidv4()
-      }
+        ...metadata,
+        email: email || '',
+        createdAt: new Date().toISOString(),
+        paymentType: paymentTypes.includes('sepa_debit') ? 'sepa_debit' : 'card'
+      },
+      receipt_email: email
     });
     
-    logPayment('STRIPE', 'PAYMENT_INTENT_CREATED', { id: paymentIntent.id });
+    logger.info('Payment intent created', { id: paymentIntent.id, paymentTypes });
+    console.log('Created payment intent:', paymentIntent.id);
+    
+    // Store the payment intent in the database for tracking
+    try {
+      // Create a record in the database with basic status information
+      const paymentRecord = {
+        id: paymentIntent.id,
+        amount: amountInCents / 100, // Convert back to decimal for storage
+        currency: currency.toLowerCase(),
+        status: paymentIntent.status,
+        paymentType: paymentTypes.includes('sepa_debit') ? 'sepa_debit' : 'card',
+        metadata: {
+          ...metadata,
+          email: email || ''
+        },
+        createdAt: new Date().toISOString(),
+        paymentMethod: paymentTypes.includes('sepa_debit') ? 'sepa_debit' : 'card',
+        clientSecret: paymentIntent.client_secret // Important for status checking
+      };
+      
+      // Store in database (adjust according to your actual database implementation)
+      if (db && db.collection) {
+        await db.collection('payments').doc(paymentIntent.id).set(paymentRecord);
+      }
+    } catch (dbError) {
+      logger.error('Error storing payment record in database', dbError);
+      // Continue even if database storage fails - payment can still succeed
+    }
+    
+    // Return the client secret to the client
     return res.json({
       clientSecret: paymentIntent.client_secret,
       id: paymentIntent.id
     });
   } catch (error) {
-    logPayment('STRIPE', 'PAYMENT_INTENT_CREATION_FAILED', null, error);
-    return res.status(500).json({ error: 'Failed to create payment intent' });
+    logger.error('Error creating payment intent:', error);
+    console.error('Error creating payment intent:', error);
+    return res.status(500).json({ error: error.message });
   }
 });
 
@@ -2060,6 +2112,83 @@ router.get('/sepa-credit-transfer/:id', async (req, res) => {
       error: 'Failed to check payment status',
       details: error.message
     });
+  }
+});
+
+/**
+ * Check the status of a card payment
+ * @route GET /api/payments/payment-status/:id
+ */
+router.get('/payment-status/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type = 'payment_intent' } = req.query;
+    
+    logger.info('Checking payment status', { id, type });
+    console.log('Checking payment status:', { id, type });
+    
+    if (!id) {
+      return res.status(400).json({ error: 'Payment ID is required' });
+    }
+    
+    let status = 'unknown';
+    let paymentData = null;
+    
+    // Find payment record in database first (for faster response)
+    try {
+      if (db && db.collection) {
+        const doc = await db.collection('payments').doc(id).get();
+        if (doc.exists) {
+          paymentData = doc.data();
+          status = paymentData.status;
+        }
+      }
+    } catch (dbError) {
+      logger.error('Error retrieving payment from database', dbError);
+      // Continue to check with Stripe if database lookup fails
+    }
+    
+    // If not found in database or type is explicitly payment_intent, check with Stripe
+    if (!paymentData || type === 'payment_intent') {
+      try {
+        const paymentIntent = await stripe.paymentIntents.retrieve(id);
+        status = paymentIntent.status;
+        
+        // Update database record if needed
+        if (db && db.collection && status !== paymentData?.status) {
+          await db.collection('payments').doc(id).update({
+            status,
+            lastUpdated: new Date().toISOString()
+          });
+        }
+        
+        paymentData = {
+          id: paymentIntent.id,
+          status: paymentIntent.status,
+          amount: paymentIntent.amount / 100,
+          currency: paymentIntent.currency,
+          metadata: paymentIntent.metadata,
+          lastUpdated: new Date().toISOString()
+        };
+      } catch (stripeError) {
+        // If not found in Stripe, try other payment processors or return unknown
+        logger.error('Error retrieving payment from Stripe', stripeError);
+        
+        if (!paymentData) {
+          return res.status(404).json({ error: 'Payment not found' });
+        }
+      }
+    }
+    
+    return res.json({
+      id,
+      status,
+      paymentData
+    });
+  } catch (error) {
+    logger.error('Error checking payment status:', error);
+    console.error('Error checking payment status:', error);
+    return res.status(500).json({ error: error.message });
   }
 });
 
