@@ -205,18 +205,57 @@ export const createPayPalOrder = async (data) => {
 };
 
 /**
- * Capture PayPal payment after approval
+ * Capture a PayPal payment after approval
  * @param {string} orderID - PayPal order ID to capture
  * @returns {Promise<Object>} - Capture details
  */
-export const capturePayPalPayment = async (orderID) => {
+export const capturePayPalPayment = async (orderID, metadata = {}) => {
   try {
+    // Try to get cart items from localStorage if not in metadata
+    if (!metadata.items) {
+      try {
+        const cartItems = localStorage.getItem('cartItems');
+        if (cartItems) {
+          metadata.items = cartItems;
+        }
+      } catch (err) {
+        console.warn('Could not retrieve cart items from localStorage', err);
+      }
+    }
+    
+    // Try to get user info from localStorage
+    if (!metadata.email) {
+      try {
+        const userData = localStorage.getItem('userData');
+        if (userData) {
+          const user = JSON.parse(userData);
+          metadata.email = user.email || '';
+          metadata.userId = user.id || user.uid || '';
+        }
+      } catch (err) {
+        console.warn('Could not retrieve user data from localStorage', err);
+      }
+    }
+    
+    // Generate a unique order ID for tracking
+    const generatedOrderId = metadata.orderId || 
+                             ('ORD-' + Date.now().toString().substring(6) + 
+                             Math.random().toString(36).substring(2, 8).toUpperCase());
+    
     const response = await fetch(`${API_URL}/api/payments/capture-paypal-payment`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ orderID }),
+      body: JSON.stringify({ 
+        orderID,
+        metadata: {
+          ...metadata,
+          orderId: generatedOrderId,
+          payment_method: 'paypal',
+          order_id: generatedOrderId
+        }
+      }),
     });
     
     if (!response.ok) {

@@ -176,8 +176,17 @@ const processPaymentSuccess = async (paymentData) => {
       paymentData.payment_method_types?.includes('sepa_debit') ||
       metadata.payment_method === 'sepa_credit_transfer';
     
-    // Check if immediate delivery is requested (for SEPA payments)
-    const immediateDelivery = isSepaPayment && metadata.immediate_delivery === true;
+    // Check for PayPal payments
+    const isPayPalPayment = 
+      paymentData.payment_method_types?.includes('paypal') || 
+      metadata.payment_method === 'paypal' ||
+      paymentData.payment_method === 'paypal';
+    
+    // Check if immediate delivery is requested
+    const immediateDelivery = (isSepaPayment && metadata.immediate_delivery === true) || 
+                             metadata.immediate_delivery === true || 
+                             isPayPalPayment || 
+                             !isSepaPayment; // Immediate delivery for all except pending SEPA
     
     // Extract order details
     const orderData = {
@@ -187,7 +196,7 @@ const processPaymentSuccess = async (paymentData) => {
       items: items,
       total: paymentData.amount / 100, // Convert from cents
       currency: paymentData.currency?.toUpperCase() || 'USD',
-      status: isSepaPayment ? 'successful' : 'completed', // Change SEPA payments to successful
+      status: 'completed', // Use completed status for all payment types
       paymentId: paymentData.id,
       paymentMethod: paymentData.payment_method_types?.[0] || metadata.payment_method || 'card',
       metadata
@@ -339,7 +348,7 @@ const processPaymentSuccess = async (paymentData) => {
             orderDate: new Date().toLocaleDateString(), 
             paymentMethod: orderData.paymentMethod,
             paymentStatus: 'successful', // Always use successful status
-            isSepaPayment: true, // Always use the SEPA email structure
+            isSepaPayment: true, // Always use the same email structure for all payment types
             immediateDownload: immediateDelivery,
             downloadUrl: templateLink,
             templateContent: templateContent, // Pass the template content

@@ -1418,8 +1418,17 @@ const Checkout = () => {
   
   const onPayPalApprove = async (data) => {
     try {
-      // Call backend to capture funds
-      await capturePayPalPayment(data.orderID);
+      // Prepare metadata for the payment
+      const metadata = {
+        items: JSON.stringify(cart),
+        email: email || '',
+        userId: localStorage.getItem('userId') || '',
+        userEmail: email || '',
+        payment_method: 'paypal'
+      };
+      
+      // Call backend to capture funds with metadata
+      await capturePayPalPayment(data.orderID, metadata);
       
       toast.success('Payment successful! Thank you for your purchase.');
       handlePaymentSuccess();

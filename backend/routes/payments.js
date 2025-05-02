@@ -325,11 +325,77 @@ router.post('/capture-paypal-payment', async (req, res) => {
       }
     });
     
-    // Save order details to your database here
-    // ...
+    // Extract order details from the PayPal response
+    const paypalOrderData = response.data;
+    const purchaseUnits = paypalOrderData.purchase_units || [];
+    const payer = paypalOrderData.payer || {};
     
-    logPayment('PAYPAL', 'PAYMENT_CAPTURED', { id: orderID, status: response.data.status });
-    return res.json(response.data);
+    // Get metadata from the request if available
+    const metadata = req.body.metadata || {};
+    
+    // Extract customer information
+    const email = payer.email_address || metadata.email || '';
+    
+    // Extract payment amount
+    let amount = 0;
+    let currency = 'USD';
+    
+    if (purchaseUnits.length > 0 && purchaseUnits[0].payments && purchaseUnits[0].payments.captures) {
+      const capture = purchaseUnits[0].payments.captures[0];
+      amount = parseFloat(capture.amount.value) * 100; // Convert to cents for consistency
+      currency = capture.amount.currency_code || 'USD';
+    }
+    
+    // Extract order items if available
+    let items = [];
+    if (metadata.items) {
+      try {
+        items = typeof metadata.items === 'string' ? JSON.parse(metadata.items) : metadata.items;
+      } catch (e) {
+        logger.error('Failed to parse items from metadata', e);
+      }
+    }
+    
+    // Process the order using orderController
+    try {
+      const orderResult = await orderController.processPaymentSuccess({
+        id: orderID,
+        amount: amount,
+        currency: currency.toLowerCase(),
+        status: 'succeeded',
+        payment_method_types: ['paypal'],
+        customer: {
+          id: payer.payer_id,
+          email: email
+        },
+        metadata: {
+          ...metadata,
+          email: email,
+          payment_method: 'paypal',
+          order_id: metadata.order_id || orderID
+        },
+        items: items
+      });
+      
+      logger.info(`Successfully processed PayPal order ${orderID}`);
+      
+      // Include the order processing result in the response
+      return res.json({
+        ...response.data,
+        order_processing: orderResult
+      });
+    } catch (orderError) {
+      logger.error(`Error processing PayPal order ${orderID}:`, orderError);
+      
+      // Still return success to the client as the payment was successful
+      return res.json({
+        ...response.data,
+        order_processing: {
+          success: false,
+          error: orderError.message
+        }
+      });
+    }
   } catch (error) {
     logPayment('PAYPAL', 'PAYMENT_CAPTURE_FAILED', { id: req.body.orderID }, error);
     return res.status(500).json({ error: 'Failed to capture PayPal payment' });
