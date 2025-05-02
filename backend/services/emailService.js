@@ -382,26 +382,10 @@ exports.sendAgentPurchaseEmail = async (purchaseData) => {
     // Get the agent purchase template
     const template = await getCompiledTemplate('agent_purchase');
     
-    // Check if this is a SEPA payment
-    const isSepaPayment = purchaseData.paymentMethod === 'sepa_credit_transfer' ||
-                          purchaseData.paymentMethod === 'sepa_debit';
-    
-    // Determine the correct email title based on payment method
-    let emailTitle = `Your AI Agent Purchase: ${purchaseData.agentName}`;
+    // Set consistent email subject and headers
+    let emailTitle = 'Your AI Agent Purchase: ' + purchaseData.agentName;
     let headerTitle = 'Your AI Agent Template is Ready!';
     let headerSubtitle = 'Thank you for your purchase';
-    
-    if (isSepaPayment) {
-      if (purchaseData.paymentStatus === 'pending') {
-        emailTitle = 'Your SEPA Payment Has Been Initiated';
-        headerTitle = 'Your SEPA Transfer Has Been Initiated';
-        headerSubtitle = 'Your order will be processed upon payment completion';
-      } else {
-        emailTitle = 'Your SEPA Payment is Successful';
-        headerTitle = 'Your SEPA Payment is Successful';
-        headerSubtitle = 'Thank you for your purchase';
-      }
-    }
     
     // Prepare the data
     const data = {
@@ -425,9 +409,7 @@ exports.sendAgentPurchaseEmail = async (purchaseData) => {
         month: 'long',
         day: 'numeric'
       }),
-      isSepaPayment: isSepaPayment,
-      paymentStatus: 'successful', // Always show successful rather than pending
-      isPending: false, // Never show as pending
+      paymentStatus: 'successful',
       headerTitle: headerTitle,
       headerSubtitle: headerSubtitle
     };

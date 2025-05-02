@@ -318,20 +318,9 @@ const processPaymentSuccess = async (paymentData) => {
           let emailSubject = 'Your AI Agent Purchase';
           let receiptUrl = '';
           
-          // Customize for SEPA payments
-          if (isSepaPayment) {
-            emailSubject = immediateDelivery ? 
-              'Your SEPA Payment - Template Available Now' : 
-              'Your SEPA Payment Successful';
-              
-            if (orderData.status === 'successful') {
-              emailSubject = 'Your SEPA Payment is Successful - Template Available Now';
-            }
-            
-            // Add payment reference to receipt URL if available
-            if (paymentData.id) {
-              receiptUrl = `/account/orders/${orderData.orderId}?payment_ref=${paymentData.id}`;
-            }
+          // Add payment reference to receipt URL if available
+          if (paymentData.id) {
+            receiptUrl = `/account/orders/${orderData.orderId}?payment_ref=${paymentData.id}`;
           }
           
           // Find template download link if available
@@ -350,7 +339,7 @@ const processPaymentSuccess = async (paymentData) => {
             orderDate: new Date().toLocaleDateString(), 
             paymentMethod: orderData.paymentMethod,
             paymentStatus: 'successful', // Always use successful status
-            isSepaPayment: isSepaPayment,
+            isSepaPayment: true, // Always use the SEPA email structure
             immediateDownload: immediateDelivery,
             downloadUrl: templateLink,
             templateContent: templateContent, // Pass the template content
