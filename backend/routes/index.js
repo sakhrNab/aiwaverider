@@ -15,9 +15,9 @@ const paymentsRoutes = require('./payments/payments');
 const recommendationsRoutes = require('./agents/recommendations');
 const aiToolsRoutes = require('./ai-tools/ai-tools');
 const adminRoutes = require('./admin/admin');
-const adminEmailRoutes = require('./admin/email');
+const adminEmailRoutes = require('./admin/adminEmailRoutes');
 const chatRoutes = require('./chat/chatRoutes');
-const emailRoutes = require('./api/email');
+const emailRoutes = require('./api/emailRoutes');
 
 // Mount routes - these will all be under /api in the main app
 router.use('/auth', authRoutes);
