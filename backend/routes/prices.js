@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const priceController = require('../controllers/agent/priceController');
-const validateFirebaseToken = require('../middleware/authenticate');
+const validateFirebaseToken = require('../middleware/auth').validateFirebaseToken;
 const publicCacheMiddleware = require('../middleware/publicCacheMiddleware');
 
 // Public endpoints (read-only, cached)

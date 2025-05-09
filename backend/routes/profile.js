@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
 const multer = require('multer');
-const validateFirebaseToken = require('../middleware/authenticate');
+const validateFirebaseToken = require('../middleware/auth').validateFirebaseToken;
 const crypto = require('crypto'); // NEW: require crypto
 
 // Configure multer for memory storage

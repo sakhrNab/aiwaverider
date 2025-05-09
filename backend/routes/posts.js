@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const validateFirebaseToken = require('../middleware/authenticate');
+const validateFirebaseToken = require('../middleware/auth').validateFirebaseToken;
 const { 
   createPost, 
   getPosts, 

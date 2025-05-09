@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { db, admin } = require('../config/firebase');
-const validateFirebaseToken = require('../middleware/authenticate');
+const validateFirebaseToken = require('../middleware/auth').validateFirebaseToken;
 const logger = require('../utils/logger');
 
 /**

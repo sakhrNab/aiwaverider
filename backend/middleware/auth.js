@@ -70,12 +70,19 @@ const auth = async (req, res, next) => {
 /**
  * Middleware to validate Firebase auth token
  * Attaches user data to the request object if valid
+ * Enhanced version with better error handling
  */
 const validateFirebaseToken = async (req, res, next) => {
   try {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Request path:', req.path);
+      console.log('Request method:', req.method);
+    }
+    
     // Get token from Authorization header
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('No token provided in Authorization header');
       return res.status(401).json({ error: 'No token provided' });
     }
 
@@ -84,12 +91,22 @@ const validateFirebaseToken = async (req, res, next) => {
     // Verify the token
     const decodedToken = await admin.auth().verifyIdToken(token);
     if (!decodedToken) {
+      console.log('Token verification failed');
       return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Token verified, decoded token:', {
+        uid: decodedToken.uid,
+        email: decodedToken.email,
+        exp: decodedToken.exp
+      });
     }
 
     // Get user data from Firestore
     const userDoc = await db.collection('users').doc(decodedToken.uid).get();
     if (!userDoc.exists) {
+      console.log('User not found in database for uid:', decodedToken.uid);
       return res.status(404).json({ error: 'User not found in database' });
     }
 
@@ -105,15 +122,56 @@ const validateFirebaseToken = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error('Authentication error:', error);
+    console.error('Token verification failed:', error);
     
     if (error.code === 'auth/id-token-expired') {
-      return res.status(401).json({ error: 'Authentication token expired' });
+      return res.status(401).json({ 
+        error: 'Token expired',
+        code: 'TOKEN_EXPIRED'
+      });
     }
     
+    if (error.code === 'auth/argument-error') {
+      // Check for network connectivity errors
+      if (error.message && (
+          error.message.includes('ENOTFOUND') || 
+          error.message.includes('getaddrinfo') ||
+          error.message.includes('connect ETIMEDOUT') ||
+          error.message.includes('network error')
+        )) {
+        return res.status(503).json({ 
+          error: 'Firebase authentication service is currently unreachable',
+          code: 'AUTH_SERVICE_UNREACHABLE',
+          details: 'The application cannot connect to Google authentication servers. This may be due to network connectivity issues.',
+          networkError: true,
+          originalError: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+      
+      return res.status(401).json({ 
+        error: 'Invalid token format',
+        code: 'INVALID_TOKEN_FORMAT'
+      });
+    }
+
+    // Generic network errors
+    if (error.code === 'ENOTFOUND' || 
+        error.code === 'ETIMEDOUT' || 
+        error.code === 'ENETUNREACH' || 
+        error.code === 'ECONNREFUSED') {
+      return res.status(503).json({ 
+        error: 'Network connectivity issue',
+        code: 'NETWORK_ERROR',
+        details: 'Could not connect to authentication services. Please check your internet connection.',
+        networkError: true,
+        originalError: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+
     return res.status(401).json({ 
-      error: 'Authentication failed', 
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined 
+      error: 'Authentication failed',
+      code: error.code || 'UNKNOWN_ERROR',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
