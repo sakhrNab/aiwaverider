@@ -5,7 +5,7 @@
  * and administrative functions
  */
 
-const emailService = require('../../services/emailService');
+const emailService = require('../../services/email/emailService');
 const emailNotificationModel = require('../../models/emailNotification');
 const logger = require('../../utils/logger');
 const { validateEmail } = require('../../utils/validators');

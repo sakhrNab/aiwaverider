@@ -9,8 +9,8 @@ const nodemailer = require('nodemailer');
 const fs = require('fs').promises;
 const path = require('path');
 const handlebars = require('handlebars');
-const config = require('../config/email');
-const logger = require('../utils/logger');
+const config = require('../../config/email');
+const logger = require('../../utils/logger');
 const Handlebars = require('handlebars');
 const { v4: uuidv4 } = require('uuid');
 
@@ -471,8 +471,8 @@ exports.sendAgentPurchaseEmail = async (purchaseData) => {
     } else if (purchaseData.agentId) {
       try {
         // Try to get the template content from the agents collection
-        const { db } = require('../config/firebase');
-        const { getAgentTemplate } = require('../controllers/payment/orderController');
+        const { db } = require('../../config/firebase');
+        const { getAgentTemplate } = require('../../controllers/payment/orderController');
         const agentId = purchaseData.agentId;
         
         // Get the agent template directly using the order controller function
@@ -655,7 +655,7 @@ const sendAgentUpdateEmail = async (emailOrOptions, name, title, content, latest
     if (!Array.isArray(agents) || agents.length === 0) {
       try {
         // First try to get the latest agents from the agents controller
-        const agentsController = require('../controllers/agent/agentsController');
+        const agentsController = require('../../controllers/agent/agentsController');
         agents = await agentsController.getLatestAgents(5);
         console.log(`Fetched ${agents.length} latest agents from controller`);
       } catch (error) {

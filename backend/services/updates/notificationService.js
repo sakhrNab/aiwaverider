@@ -7,7 +7,7 @@
 
 const admin = require('firebase-admin');
 const logger = require('../../utils/logger');
-const emailService = require('../emailService');
+const emailService = require('../email/emailService');
 const agentsController = require('../../controllers/agent/agentsController');
 
 // Initialize Firestore

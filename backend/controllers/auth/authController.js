@@ -1,7 +1,7 @@
 const { admin, db } = require('../../config/firebase');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const emailService = require('../../services/emailService');
+const emailService = require('../../services/email/emailService');
 const logger = require('../../utils/logger');
 
 // Collection reference
