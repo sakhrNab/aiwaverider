@@ -7,7 +7,7 @@
 const express = require('express');
 const router = express.Router();
 const emailController = require('../../controllers/email/emailController');
-const { isAdmin, auth } = require('../../middleware/auth');
+const { isAdmin, auth } = require('../../middleware/authenticationMiddleware');
 
 // Routes require authentication
 router.use(auth);

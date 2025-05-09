@@ -10,8 +10,8 @@
 
 const express = require('express');
 const router = express.Router();
-const validateFirebaseToken = require('../../middleware/auth').validateFirebaseToken;
-const { isAdmin } = require('../../middleware/auth');
+const validateFirebaseToken = require('../../middleware/authenticationMiddleware').validateFirebaseToken;
+const { isAdmin } = require('../../middleware/authenticationMiddleware');
 const emailController = require('../../controllers/email/emailController');
 
 /**

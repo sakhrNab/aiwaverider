@@ -2,12 +2,12 @@
 const express = require('express');
 const router = express.Router();
 const agentsController = require('../controllers/agent/agentsController');
-const validateFirebaseToken = require('../middleware/auth').validateFirebaseToken;
+const validateFirebaseToken = require('../middleware/authenticationMiddleware').validateFirebaseToken;
 const publicCacheMiddleware = require('../middleware/publicCacheMiddleware');
 const upload = require('../middleware/upload');
 const { db } = require('../config/firebase');
 const admin = require('firebase-admin');
-const { auth } = require('../middleware/auth');
+const { auth } = require('../middleware/authenticationMiddleware');
 
 // Helper function to increment agent download count
 async function incrementAgentDownloadCount(agentId) {

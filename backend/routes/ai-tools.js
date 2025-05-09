@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
-const { auth } = require('../middleware/auth');
+const { auth } = require('../middleware/authenticationMiddleware');
 
 // Collection reference
 const COLLECTION_NAME = 'ai_tools';
