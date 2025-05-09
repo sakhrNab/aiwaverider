@@ -1,8 +1,8 @@
 // backend/routes/agent.js
 const express = require('express');
 const router = express.Router();
-const agentsController = require('../controllers/agentsController');
-const priceController = require('../controllers/priceController');
+const agentsController = require('../controllers/agent/agentsController');
+const priceController = require('../controllers/agent/priceController');
 const validateFirebaseToken = require('../middleware/authenticate');
 const publicCacheMiddleware = require('../middleware/publicCacheMiddleware');
 const upload = require('../middleware/upload');

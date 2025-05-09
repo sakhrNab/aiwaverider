@@ -116,7 +116,7 @@ const mockFirebase = {
 };
 
 // Mock the postsController directly rather than trying to mock Firebase
-jest.mock('../controllers/postsController', () => {
+jest.mock('../controllers/posts/postsController', () => {
   return {
     // Read operations
     getPosts: jest.fn().mockImplementation((req, res) => {
@@ -209,7 +209,7 @@ jest.mock('../utils/cache', () => ({
 }));
 
 // Import the controller after all mocks are set up
-const postsController = require('../controllers/postsController');
+const postsController = require('../controllers/posts/postsController');
 
 // Test suite
 describe('Posts Controller', () => {

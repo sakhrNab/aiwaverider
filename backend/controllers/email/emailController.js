@@ -5,13 +5,13 @@
  * and administrative functions
  */
 
-const emailService = require('../services/emailService');
-const emailNotificationModel = require('../models/emailNotification');
-const logger = require('../utils/logger');
-const { validateEmail } = require('../utils/validators');
-const { db } = require('../config/firebase');
-const config = require('../config/email');
-const agentsController = require('../controllers/agentsController');
+const emailService = require('../../services/emailService');
+const emailNotificationModel = require('../../models/emailNotification');
+const logger = require('../../utils/logger');
+const { validateEmail } = require('../../utils/validators');
+const { db } = require('../../config/firebase');
+const config = require('../../config/email');
+const agentsController = require('../controllers/agent/agentsController');
 
 /**
  * Send a test email to verify configuration

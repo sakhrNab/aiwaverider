@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const validateFirebaseToken = require('../middleware/authenticate');
 const publicCacheMiddleware = require('../middleware/publicCacheMiddleware');
-const wishlistController = require('../controllers/wishlistController');
+const wishlistController = require('../controllers/agent/wishlistController');
 
 /**
  * GET /api/wishlists

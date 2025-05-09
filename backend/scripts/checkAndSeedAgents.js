@@ -2,7 +2,7 @@
 // Checks and seeds: agents, wishlists, featured agents, and recommended agents
 require('dotenv').config(); // Load environment variables
 const { db, admin } = require('../config/firebase');
-const agentsController = require('../controllers/agentsController');
+const agentsController = require('../controllers/agent/agentsController');
 
 const checkAndSeedCollections = async () => {
   try {

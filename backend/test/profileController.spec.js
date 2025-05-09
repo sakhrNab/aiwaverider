@@ -8,7 +8,7 @@
 
 // We need to mock the controller directly since the approach we used before isn't working
 // Let's create a proper mock for the controller
-jest.mock('../controllers/profileController', () => {
+jest.mock('../controllers/user/profileController', () => {
   // Mock user data
   const mockUserData = {
     'test-user-id': {
@@ -120,7 +120,7 @@ jest.mock('../controllers/profileController', () => {
 });
 
 // Import the mocked controller
-const profileController = require('../controllers/profileController');
+const profileController = require('../controllers/profileprofileController');
 
 // Test suite
 describe('Profile Controller', () => {

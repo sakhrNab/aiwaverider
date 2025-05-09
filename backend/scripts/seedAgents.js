@@ -1,7 +1,7 @@
 // Script to seed the database with mock agents
 require('dotenv').config(); // Load environment variables
 const { db, admin } = require('../config/firebase');
-const agentsController = require('../controllers/agentsController');
+const agentsController = require('../controllers/agent/agentsController');
 
 const seedDatabase = async () => {
   try {

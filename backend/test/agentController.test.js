@@ -7,7 +7,7 @@ require.cache[require.resolve('../config/firebase')] = {
 };
 
 // Import the controller we want to test
-const agentsController = require('../controllers/agentsController');
+const agentsController = require('../controllers/agent/agentsController');
 
 /**
  * Simple test script to verify the agentsController functions

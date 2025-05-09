@@ -4,7 +4,7 @@ console.log('=== Testing Agent Controller Imports ===');
 try {
   // Try to load the main agentsController.js file
   console.log('\n1. Testing agentsController.js (plural):');
-  const agentsController = require('../controllers/agentsController');
+  const agentsController = require('../controllers/agent/agentsController');
   console.log('  - Import successful');
   console.log('  - Available methods:');
   Object.keys(agentsController).forEach(method => {
@@ -14,7 +14,7 @@ try {
   // Try to load the singular agentController.js file
   console.log('\n2. Testing agentController.js (singular):');
   try {
-    const agentController = require('../controllers/agentController');
+    const agentController = require('../controllers/agent/agentController');
     console.log('  - Import successful');
     console.log('  - Available methods:');
     Object.keys(agentController).forEach(method => {
@@ -24,26 +24,12 @@ try {
     console.log(`  - Import failed: ${error.message}`);
   }
 
-  // Try to load the fixed version
-  console.log('\n3. Testing agentsController_fixed.js:');
-  try {
-    const agentsControllerFixed = require('../controllers/agentsController_fixed');
-    console.log('  - Import successful');
-    console.log('  - Available methods:');
-    Object.keys(agentsControllerFixed).forEach(method => {
-      console.log(`    - ${method}: ${typeof agentsControllerFixed[method] === 'function' ? 'Function' : 'Not a function'}`);
-    });
-  } catch (error) {
-    console.log(`  - Import failed: ${error.message}`);
-  }
-
   console.log('\n=== Comparison of Methods ===');
   
   // Load all controllers if possible
   let controllers = {};
-  try { controllers.main = require('../controllers/agentsController'); } catch (e) {}
-  try { controllers.singular = require('../controllers/agentController'); } catch (e) {}
-  try { controllers.fixed = require('../controllers/agentsController_fixed'); } catch (e) {}
+  try { controllers.main = require('../controllers/agent/agentsController'); } catch (e) {}
+  try { controllers.singular = require('../controllers/agent/agentController'); } catch (e) {}
   
   // Get all unique method names across controllers
   const allMethods = new Set();

@@ -5,7 +5,7 @@ const mockFirebase = require('./mockFirebase');
 jest.mock('../config/firebase', () => mockFirebase);
 
 // Import the controller under test
-const agentsController = require('../controllers/agentsController');
+const agentsController = require('../controllers/agent/agentsController');
 
 describe('Agent Controller', () => {
   let req;

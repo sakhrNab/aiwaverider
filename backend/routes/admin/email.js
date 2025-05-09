@@ -12,7 +12,7 @@ const express = require('express');
 const router = express.Router();
 const validateFirebaseToken = require('../../middleware/authenticate');
 const { isAdmin } = require('../../middleware/auth');
-const emailController = require('../../controllers/emailController');
+const emailController = require('../../controllers/email/emailController');
 
 /**
  * GET /api/admin/email/campaigns

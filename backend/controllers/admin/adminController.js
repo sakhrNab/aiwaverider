@@ -3,8 +3,8 @@
  * Handles admin-specific functionality
  */
 
-const { db } = require('../config/firebase');
-const logger = require('../utils/logger');
+const { db } = require('../../config/firebase');
+const logger = require('../../utils/logger');
 
 /**
  * Update agent creators to ensure they have username and role fields

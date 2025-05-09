@@ -50,8 +50,8 @@ const { v4: uuidv4 } = require('uuid');
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test..');
 const logger = require('../utils/logger');
-const orderController = require('../controllers/orderController');
-const notificationService = require('../utils/notificationService');
+const orderController = require('../controllers/payment/orderController');
+const notificationService = require('../services/updates/notificationService');
 const { db } = require('../config/firebase');
 
 // Diagnostic endpoint - always responds with 200 OK to verify route is working

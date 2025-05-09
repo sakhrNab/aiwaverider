@@ -1,6 +1,6 @@
-const { db } = require('../config/firebase');
-const { sanitizeUser } = require('../utils/sanitize');
-const { getCache, setCache, generateProfileCacheKey } = require('../utils/cache');
+const { db } = require('../../config/firebase');
+const { sanitizeUser } = require('../../utils/sanitize');
+const { getCache, setCache, generateProfileCacheKey } = require('../../utils/cache');
 
 // Collection reference
 const usersCollection = db.collection('users');

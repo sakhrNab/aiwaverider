@@ -8,13 +8,13 @@
  * - Tracking price history
  */
 
-const { db } = require('../config/firebase');
+const { db } = require('../../config/firebase');
 const { 
   validatePrice, 
   createPriceHistoryEntry, 
   isDiscountValid,
   calculateFinalPrice 
-} = require('../models/priceModel');
+} = require('../../models/priceModel');
 
 // Collection references
 const pricesCollection = db.collection('prices');

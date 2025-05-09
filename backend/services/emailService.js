@@ -472,7 +472,7 @@ exports.sendAgentPurchaseEmail = async (purchaseData) => {
       try {
         // Try to get the template content from the agents collection
         const { db } = require('../config/firebase');
-        const { getAgentTemplate } = require('../controllers/orderController');
+        const { getAgentTemplate } = require('../controllers/payment/orderController');
         const agentId = purchaseData.agentId;
         
         // Get the agent template directly using the order controller function
@@ -655,7 +655,7 @@ const sendAgentUpdateEmail = async (emailOrOptions, name, title, content, latest
     if (!Array.isArray(agents) || agents.length === 0) {
       try {
         // First try to get the latest agents from the agents controller
-        const agentsController = require('../controllers/agentsController');
+        const agentsController = require('../controllers/agent/agentsController');
         agents = await agentsController.getLatestAgents(5);
         console.log(`Fetched ${agents.length} latest agents from controller`);
       } catch (error) {

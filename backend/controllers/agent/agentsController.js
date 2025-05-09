@@ -1,10 +1,10 @@
 console.log('Loading agentsController.js');
 
 // Import necessary modules
-const { db } = require('../config/firebase');
+const { db } = require('../../config/firebase');
 const admin = require('firebase-admin');
 // const axios = require('axios'); // Uncomment if used
-const logger = require('../utils/logger');
+const logger = require('../../utils/logger');
 // const { parseCustomFilters } = require('../utils/queryParser'); // Uncomment if used
 // const { restructureAgent } = require('../scripts/update-agent-structure'); // REMOVED/COMMENTED OUT
 

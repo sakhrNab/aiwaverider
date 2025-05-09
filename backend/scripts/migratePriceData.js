@@ -18,7 +18,7 @@ const {
   normalizeAgentId, 
   createNormalizedPriceObject, 
   recordPriceHistory 
-} = require('../controllers/priceController');
+} = require('../controllers/agent/priceController');
 
 // Collection references
 const pricesCollection = db.collection('prices');

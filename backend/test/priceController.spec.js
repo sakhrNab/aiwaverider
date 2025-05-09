@@ -263,7 +263,7 @@ jest.mock('./mockFirebase', () => {
 });
 
 // Import the controller after mocks are set up
-const priceController = require('../controllers/priceController');
+const priceController = require('../controllers/agent/priceController');
 
 // Mock the recordPriceHistory function to avoid the external call that's causing the test to fail
 priceController.recordPriceHistory = jest.fn().mockResolvedValue('price-history-1');

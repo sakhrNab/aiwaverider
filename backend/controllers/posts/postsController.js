@@ -1,10 +1,10 @@
 // backend/controllers/postsController.js
 
-const sanitizeUtils = require('../utils/sanitize');
+const sanitizeUtils = require('../../utils/sanitize');
 const {
   uploadImageToGitHub,
   deleteImageFromGitHub,
-} = require('../utils/github');
+} = require('../../utils/github');
 const admin = require('firebase-admin');
 const {
   getCache,
@@ -14,7 +14,7 @@ const {
   generatePostsCacheKey,
   generatePostCacheKey,
   generateCommentsCacheKey,
-} = require('../utils/cache');
+} = require('../../utils/cache');
 
 const postsCollection = admin.firestore().collection('posts');
 const commentsCollection = admin.firestore().collection('comments');

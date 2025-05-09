@@ -9,9 +9,9 @@
  */
 
 require('dotenv').config();
-const orderController = require('./controllers/orderController');
+const orderController = require('./controllers/payment/orderController');
 const logger = require('./utils/logger');
-const notificationService = require('./utils/notificationService');
+const notificationService = require('./services/updates/notificationService');
 
 // Initialize Firebase Admin if needed
 let admin;

@@ -21,7 +21,7 @@ When a user completes a payment for an agent, the system automatically:
   - `sendAgentPurchaseEmail`: Sends agent templates after purchase
   - `sendWelcomeEmail`: Welcomes new users
 
-### 2. Order Controller (`backend/controllers/orderController.js`)
+### 2. Order Controller (`backend/controllers/payment/orderController.js`)
 - Handles order creation and management
 - Processes payment success events
 - Coordinates the template delivery process

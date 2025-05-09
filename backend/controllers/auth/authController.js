@@ -1,8 +1,8 @@
-const { admin, db } = require('../config/firebase');
+const { admin, db } = require('../../config/firebase');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const emailService = require('../services/emailService');
-const logger = require('../utils/logger');
+const emailService = require('../../services/emailService');
+const logger = require('../../utils/logger');
 
 // Collection reference
 const usersCollection = db.collection('users');

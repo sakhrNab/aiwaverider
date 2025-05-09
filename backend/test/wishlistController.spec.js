@@ -20,7 +20,7 @@ jest.mock('../utils/logger', () => ({
 }));
 
 // We need to mock the controller directly since Firebase is initialized at the module level
-jest.mock('../controllers/wishlistController', () => {
+jest.mock('../controllers/agent/wishlistController', () => {
   // Mock data for testing
   const mockWishlists = {
     'wishlist-1': {
@@ -563,7 +563,7 @@ jest.mock('../controllers/wishlistController', () => {
 });
 
 // Import the mocked controller
-const wishlistController = require('../controllers/wishlistController');
+const wishlistController = require('../controllers/agent/wishlistController');
 
 // Test suite
 describe('Wishlist Controller', () => {

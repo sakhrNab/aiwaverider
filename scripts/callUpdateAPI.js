@@ -3,7 +3,7 @@
  * This bypasses the Express routes and API authentication
  */
 
-const adminController = require('../controllers/adminController');
+const adminController = require('../controllers/admin/adminController');
 
 // Create a mock request and response
 const req = {};

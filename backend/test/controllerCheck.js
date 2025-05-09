@@ -13,7 +13,7 @@ console.log('=== Testing Agent Controller Imports ===');
 try {
   // Try to load the main agentsController.js file
   console.log('\n1. Testing agentsController.js (plural):');
-  const agentsController = require('../controllers/agentsController');
+  const agentsController = require('../controllers/agent/agentsController');
   console.log('  - Import successful');
   console.log('  - Available methods:');
   Object.keys(agentsController).forEach(method => {
@@ -39,24 +39,11 @@ try {
   // Try to load the singular agentController.js file if it exists
   console.log('\n2. Testing agentController.js (singular):');
   try {
-    const agentController = require('../controllers/agentController');
+    const agentController = require('../controllers/agent/agentControllerler');
     console.log('  - Import successful');
     console.log('  - Available methods:');
     Object.keys(agentController).forEach(method => {
       console.log(`    - ${method}: ${typeof agentController[method] === 'function' ? 'Function' : 'Not a function'}`);
-    });
-  } catch (error) {
-    console.log(`  - Import failed: ${error.message}`);
-  }
-
-  // Try to load the fixed version if it exists
-  console.log('\n3. Testing agentsController_fixed.js:');
-  try {
-    const agentsControllerFixed = require('../controllers/agentsController_fixed');
-    console.log('  - Import successful');
-    console.log('  - Available methods:');
-    Object.keys(agentsControllerFixed).forEach(method => {
-      console.log(`    - ${method}: ${typeof agentsControllerFixed[method] === 'function' ? 'Function' : 'Not a function'}`);
     });
   } catch (error) {
     console.log(`  - Import failed: ${error.message}`);

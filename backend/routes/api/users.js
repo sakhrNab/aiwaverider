@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const userController = require('../../controllers/userController');
+const userController = require('../../controllers/user/userController');
 const validateFirebaseToken = require('../../middleware/authenticate');
 
 // Apply authentication middleware to all routes

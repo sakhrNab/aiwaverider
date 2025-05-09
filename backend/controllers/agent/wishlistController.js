@@ -1,10 +1,10 @@
-const { db, admin } = require('../config/firebase');
+const { db, admin } = require('../../config/firebase');
 
 // Modify this line to handle the case where sanitize might not be available
 let sanitizeObject;
 try {
   // Try to load the sanitize utility
-  const sanitizeUtils = require('../utils/sanitize');
+  const sanitizeUtils = require('../../utils/sanitize');
   sanitizeObject = sanitizeUtils.sanitizeObject;
 } catch (err) {
   // If sanitize utility isn't available, create a simple passthrough function

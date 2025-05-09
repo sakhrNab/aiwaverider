@@ -1,7 +1,7 @@
 // backend/routes/agents.js
 const express = require('express');
 const router = express.Router();
-const agentsController = require('../controllers/agentsController');
+const agentsController = require('../controllers/agent/agentsController');
 const validateFirebaseToken = require('../middleware/authenticate');
 const publicCacheMiddleware = require('../middleware/publicCacheMiddleware');
 const upload = require('../middleware/upload');

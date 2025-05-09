@@ -1,6 +1,6 @@
-const { db } = require('../config/firebase');
+const { db } = require('../../config/firebase');
 const bcrypt = require('bcrypt');
-const { sanitizeUser } = require('../utils/sanitize');
+const { sanitizeUser } = require('../../utils/sanitize');
 const admin = require('firebase-admin');
 
 // Collection reference

@@ -19,7 +19,7 @@ const {
   updateComment,
   incrementViews,
   initializeViewCounts
-} = require('../controllers/postsController');
+} = require('../controllers/posts/postsController');
 const admin = require('firebase-admin');
 // Initialize Firestore
 const db = admin.firestore();

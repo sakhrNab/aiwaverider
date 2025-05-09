@@ -119,7 +119,7 @@ To run a specific test suite:
 
 ```bash
 # Run profile controller tests
-npm run test:jest -- test/profileController.spec.js
+npm run test:jest -- test/user/profileController.spec.js
 
 # Run order controller tests
 npm run test:jest -- test/orderController.spec.js
@@ -132,7 +132,7 @@ npm run test:jest -- test/orderController.spec.js
 For controllers that initialize Firebase at the module level, we use direct mocking of the controller itself:
 
 ```javascript
-jest.mock('../controllers/profileController', () => {
+jest.mock('../controllers/user/profileController', () => {
   return {
     getProfile: jest.fn().mockImplementation((req, res) => {
       // Mock implementation

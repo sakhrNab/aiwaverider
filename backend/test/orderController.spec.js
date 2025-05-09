@@ -29,7 +29,7 @@ jest.mock('uuid', () => ({
 }));
 
 // We need to mock the controller directly since Firebase is initialized at the module level
-jest.mock('../controllers/orderController', () => {
+jest.mock('../controllers/payment/orderController', () => {
   // Mock data for testing
   const mockAgents = {
     'agent-1': {
@@ -321,7 +321,7 @@ Remember to be respectful, maintain user privacy, and clarify when you're uncert
 });
 
 // Import the mocked controller
-const orderController = require('../controllers/orderController');
+const orderController = require('../controllers/payment/orderController');
 
 // Test suite
 describe('Order Controller', () => {

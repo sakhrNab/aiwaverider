@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const priceController = require('../controllers/priceController');
+const priceController = require('../controllers/agent/priceController');
 const validateFirebaseToken = require('../middleware/authenticate');
 const publicCacheMiddleware = require('../middleware/publicCacheMiddleware');
 
