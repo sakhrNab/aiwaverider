@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { db, admin } = require('../config/firebase');
-const validateFirebaseToken = require('../middleware/authenticationMiddleware').validateFirebaseToken;
-const logger = require('../utils/logger');
+const { db, admin } = require('../../config/firebase');
+const validateFirebaseToken = require('../../middleware/authenticationMiddleware').validateFirebaseToken;
+const logger = require('../../utils/logger');
 
 /**
  * GET /api/recommendations/test

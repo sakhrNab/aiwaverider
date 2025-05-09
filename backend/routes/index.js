@@ -4,19 +4,19 @@ const router = express.Router();
 // Import all API routes
 const authRoutes = require('./api/authRoutes');
 const usersRoutes = require('./api/users');
-const postsRoutes = require('./posts');
-const profileRoutes = require('./profile');
-const agentsRoutes = require('./agents');
-const agentRoutes = require('./agent'); 
-const wishlistsRoutes = require('./wishlists');
-const pricesRoutes = require('./prices');
+const postsRoutes = require('./posts/posts');
+const profileRoutes = require('./users/profile');
+const agentsRoutes = require('./agents/agents');
+const agentRoutes = require('./agents/agent'); 
+const wishlistsRoutes = require('./agents/wishlists');
+const pricesRoutes = require('./agents/prices');
 const testRoutes = require('./test');
-const paymentsRoutes = require('./payments');
-const recommendationsRoutes = require('./recommendations');
-const aiToolsRoutes = require('./ai-tools');
-const adminRoutes = require('./admin');
+const paymentsRoutes = require('./payments/payments');
+const recommendationsRoutes = require('./agents/recommendations');
+const aiToolsRoutes = require('./ai-tools/ai-tools');
+const adminRoutes = require('./admin/admin');
 const adminEmailRoutes = require('./admin/email');
-const chatRoutes = require('./chatRoutes');
+const chatRoutes = require('./chat/chatRoutes');
 const emailRoutes = require('./api/email');
 
 // Mount routes - these will all be under /api in the main app

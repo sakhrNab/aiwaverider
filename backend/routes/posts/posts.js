@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const validateFirebaseToken = require('../middleware/authenticationMiddleware').validateFirebaseToken;
+const validateFirebaseToken = require('../../middleware/authenticationMiddleware').validateFirebaseToken;
 const { 
   createPost, 
   getPosts, 
@@ -19,7 +19,7 @@ const {
   updateComment,
   incrementViews,
   initializeViewCounts
-} = require('../controllers/posts/postsController');
+} = require('../../controllers/posts/postsController');
 const admin = require('firebase-admin');
 // Initialize Firestore
 const db = admin.firestore();

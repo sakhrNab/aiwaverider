@@ -1,11 +1,11 @@
 // backend/routes/agent.js
 const express = require('express');
 const router = express.Router();
-const agentsController = require('../controllers/agent/agentsController');
-const priceController = require('../controllers/agent/priceController');
-const validateFirebaseToken = require('../middleware/authenticationMiddleware').validateFirebaseToken;
-const publicCacheMiddleware = require('../middleware/publicCacheMiddleware');
-const upload = require('../middleware/upload');
+const agentsController = require('../../controllers/agent/agentsController');
+const priceController = require('../../controllers/agent/priceController');
+const validateFirebaseToken = require('../../middleware/authenticationMiddleware').validateFirebaseToken;
+const publicCacheMiddleware = require('../../middleware/publicCacheMiddleware');
+const upload = require('../../middleware/upload');
 
 // Log that this file is being loaded
 console.log('Loading agent.js routes file with proper imports');

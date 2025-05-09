@@ -7,10 +7,10 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs').promises;
-const { validateFirebaseToken, isAdmin } = require('../middleware/authenticationMiddleware');
-const { getSettings, updateSettings, resetSettings } = require('../models/siteSettings');
-const { db } = require('../config/firebase');
-const adminController = require('../controllers/admin/adminController');
+const { validateFirebaseToken, isAdmin } = require('../../middleware/authenticationMiddleware');
+const { getSettings, updateSettings, resetSettings } = require('../../models/siteSettings');
+const { db } = require('../../config/firebase');
+const adminController = require('../../controllers/admin/adminController');
 
 // Apply authentication middleware to all admin routes
 router.use(validateFirebaseToken);

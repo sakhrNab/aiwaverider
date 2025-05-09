@@ -107,7 +107,7 @@ setInterval(() => {
 
 // Import routes
 const apiRoutes = require('./routes/index');
-const chatRoutes = require('./routes/chatRoutes');
+const chatRoutes = require('./routes/chat/chatRoutes');
 
 // Mount API routes - all routes in apiRoutes will be prefixed with /api
 // So routes defined as '/agents' in routes/index.js will be accessible as '/api/agents'
