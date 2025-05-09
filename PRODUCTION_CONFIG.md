@@ -33,7 +33,7 @@ VITE_PAYPAL_CLIENT_ID=your_production_paypal_client_id
 # Google Pay Configuration
 VITE_GOOGLE_PAY_ENVIRONMENT=PRODUCTION
 VITE_GOOGLE_PAY_GATEWAY=stripe
-VITE_MERCHANT_NAME=AI Wave Rider
+VITE_MERCHANT_NAME=AI Waverider
 
 # Apple Pay Configuration
 VITE_APPLE_PAY_MERCHANT_ID=merchant.com.aiwaverider.production
@@ -89,7 +89,7 @@ SMTP_SECURE=true
 SMTP_USER=support@aiwaverider.com
 SMTP_PASS=your_smtp_password
 FROM_EMAIL=support@aiwaverider.com
-FROM_NAME=AI Wave Rider
+FROM_NAME=AI Waverider
 
 # Session/Security
 SESSION_SECRET=your_strong_session_secret

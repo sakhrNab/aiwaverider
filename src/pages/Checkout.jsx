@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback,useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaInfoCircle, FaMinus, FaPlus, FaTrashAlt, FaShoppingCart, FaCreditCard, FaBitcoin, FaEuroSign, FaPaypal, FaApple, FaGooglePay } from 'react-icons/fa';
 import { SiStripe, SiApple, SiVisa, SiMastercard, SiAmericanexpress, SiPaypal } from 'react-icons/si';
@@ -26,8 +26,8 @@ import {
 import GooglePayButton from '../components/GooglePayButton';
 import ApplePayButton from '../components/ApplePayButton';
 import PaymentSuccessRecommendations from '../components/PaymentSuccessRecommendations';
-
 import '../styles/Checkout.css';
+
 import { HashLoader } from 'react-spinners';
 
 // Add some style fixes for the Stripe Elements and form fields
@@ -108,17 +108,17 @@ iframe.StripeElement {
   color: #666;
 }
 `;
-
+const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 // Initialize Stripe with your publishable key
-// Use environment variable now that we've fixed the .env.local file
-const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_51R2112HlDxuwLTKvZuzoJTkH5l9gKERbMTvhYVVROWdmkzcN6WzLCMvZa8j71BSeOVDtrWAYGbCfDmb8AGjKr0YS00m8aH9BD8';
-console.log('Stripe key available:', !!stripeKey, 'Key length:', stripeKey ? stripeKey.length : 0);
-// Added extra logging to debug
-console.log('Environment variables:', {
-  VITE_STRIPE_PUBLISHABLE_KEY: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY,
-  VITE_API_URL: import.meta.env.VITE_API_URL,
-  NODE_ENV: import.meta.env.NODE_ENV
-});
+// // Use environment variable now that we've fixed the .env.local file
+// const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_51R2112HlDxuwLTKvZuzoJTkH5l9gKERbMTvhYVVROWdmkzcN6WzLCMvZa8j71BSeOVDtrWAYGbCfDmb8AGjKr0YS00m8aH9BD8';
+// console.log('Stripe key available:', !!stripeKey, 'Key length:', stripeKey ? stripeKey.length : 0);
+// // Added extra logging to debug
+// console.log('Environment variables:', {
+//   VITE_STRIPE_PUBLISHABLE_KEY: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY,
+//   VITE_API_URL: import.meta.env.VITE_API_URL,
+//   NODE_ENV: import.meta.env.NODE_ENV
+// });
 
 /**
  * PAYMENT METHODS MIGRATION TO PRODUCTION
@@ -235,10 +235,16 @@ const stripePromise = new Promise((resolve) => {
   }, 100);
 });
 
-// Warn if no Stripe key is available
-if (!stripeKey) {
-  console.warn('No Stripe publishable key available. Stripe payments will not work. Make sure VITE_STRIPE_PUBLISHABLE_KEY is set in your .env.local file.');
+
+
+// Log Stripe availability only once
+const stripeAvailable = !!stripeKey;
+if (process.env.NODE_ENV === 'development') {
+  console.log('Stripe key available:', stripeAvailable, stripeKey ? `Key length: ${stripeKey.length}` : '');
+  console.log('Environment variables:', import.meta.env);
 }
+
+
 
 // Define available payment methods
 const PAYMENT_METHODS = {

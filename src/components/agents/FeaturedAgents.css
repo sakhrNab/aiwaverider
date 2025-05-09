@@ -149,10 +149,11 @@
   overflow: hidden;
   margin: 0.625rem;
   border-radius: 0.5rem;
-  background: rgba(73, 63, 147, 0.8);
-  backdrop-filter: blur(8px);
+  /* background: transparent; */
+  /* backdrop-filter: blur(8px); */
   transition: transform 0.3s ease, box-shadow 0.3s ease;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .featured-card:hover {
@@ -165,6 +166,7 @@
   overflow: hidden;
   border-radius: 8px 8px 0 0;
   height: 160px;
+  background-color: #4a4de7;
 }
 
 .featured-card__image {
@@ -172,8 +174,16 @@
   height: 100%;
   object-fit: cover;
   transition: transform 0.3s ease;
+  /* z-index: 1; */
 }
 
+/* Remove any overlays on the image */
+/* .featured-card__image::before,
+.featured-card__image::after {
+  display: none !important;
+} */
+
+/* Restore hover effect */
 .featured-card:hover .featured-card__image {
   transform: scale(1.05);
 }
@@ -219,6 +229,7 @@
   padding: 1rem;
   flex: 1;
   color: white;
+  background: rgba(73, 63, 147, 0.8);
 }
 
 .featured-card__title {
@@ -459,4 +470,51 @@
     width: 2.25rem;
     height: 2.25rem;
   }
+}
+
+/* Add styles for the action buttons */
+.featured-card__actions {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+}
+
+.featured-card__wishlist-button,
+.featured-card__cart-button {
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0.8;
+}
+
+.featured-card__wishlist-button:hover,
+.featured-card__cart-button:hover {
+  background-color: rgba(0, 0, 0, 0.7);
+  transform: scale(1.1);
+  opacity: 1;
+}
+
+.featured-card__wishlist-button.active {
+  color: #ff4d4d;
+  background-color: rgba(0, 0, 0, 0.6);
+}
+
+.featured-card__cart-button {
+  background-color: rgba(73, 85, 224, 0.7);
+}
+
+.featured-card__cart-button:hover {
+  background-color: rgba(73, 85, 224, 0.9);
 } 

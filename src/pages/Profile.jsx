@@ -13,6 +13,7 @@ import {
 } from '../utils/api';
 import { AuthContext } from '../contexts/AuthContext';
 import { INTEREST_CATEGORIES } from '../constants/categories';
+// import { handleGoogleProfileImage } from '../utils/imageUtils';
 
 // Cache keys
 const PROFILE_CACHE_KEY = 'profile_data';

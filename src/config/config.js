@@ -58,7 +58,7 @@ export const PAYMENT = {
   GOOGLE_PAY: {
     ENVIRONMENT: import.meta.env.VITE_GOOGLE_PAY_ENVIRONMENT || 'TEST',
     GATEWAY: import.meta.env.VITE_GOOGLE_PAY_GATEWAY || 'stripe',
-    MERCHANT_NAME: import.meta.env.VITE_MERCHANT_NAME || 'AI Wave Rider'
+    MERCHANT_NAME: import.meta.env.VITE_MERCHANT_NAME || 'AI Waverider'
   },
   APPLE_PAY: {
     MERCHANT_ID: import.meta.env.VITE_APPLE_PAY_MERCHANT_ID

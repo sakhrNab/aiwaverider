@@ -32,7 +32,7 @@ const Welcome = () => {
           Revolutionizing AI Integration
         </h1>
         <p className={`text-xl md:text-2xl ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
-          AI Wave Rider helps you navigate the complex world of artificial intelligence,
+          AI Waverider helps you navigate the complex world of artificial intelligence,
           making it accessible and practical for your business needs.
         </p>
       </div>
@@ -60,7 +60,7 @@ const Welcome = () => {
           <iframe
             className="w-full h-full"
             src={`https://www.youtube-nocookie.com/embed/${videoId}?controls=1&rel=0`}
-            title="AI Wave Rider Introduction"
+            title="AI Waverider Introduction"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
             onLoad={handleVideoLoad}

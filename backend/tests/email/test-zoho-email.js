@@ -16,7 +16,7 @@ const config = {
   user: process.env.SMTP_USER || 'support@aiwaverider.com',
   password: process.env.SMTP_PASS,
   fromEmail: process.env.FROM_EMAIL || 'support@aiwaverider.com',
-  fromName: process.env.FROM_NAME || 'AI Wave Rider'
+  fromName: process.env.FROM_NAME || 'AI Waverider'
 };
 
 // Display config (without showing password)
@@ -52,7 +52,7 @@ async function testEmailSending(recipientEmail) {
     const mailOptions = {
       from: `"${config.fromName}" <${config.fromEmail}>`,
       to: recipientEmail,
-      subject: 'AI Wave Rider - Email Configuration Test With Zoho',
+      subject: 'AI Waverider - Email Configuration Test With Zoho',
       html: `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 5px;">
           <h1 style="color: #4a86e8; border-bottom: 2px solid #eee; padding-bottom: 10px;">Email Configuration Test</h1>
@@ -86,7 +86,7 @@ async function testEmailSending(recipientEmail) {
           <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
           
           <p style="font-size: 12px; color: #777;">
-            This is an automated message from AI Wave Rider.
+            This is an automated message from AI Waverider.
             Please do not reply to this email.
           </p>
         </div>

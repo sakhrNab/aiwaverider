@@ -1,4 +1,4 @@
-# Testing Guide for AI Wave Rider Backend
+# Testing Guide for AI Waverider Backend
 
 This document provides instructions for running tests for the backend services.
 

@@ -252,31 +252,31 @@ export const sendCustomEmail = async (emailData) => {
  * Get email statistics
  * @returns {Promise<Object>} - Email stats data
  */
-export const getEmailStats = async () => {
-  try {
-    const token = localStorage.getItem('authToken');
+// export const getEmailStats = async () => {
+//   try {
+//     const token = localStorage.getItem('authToken');
     
-    if (!token) {
-      throw new Error('Authentication token not found');
-    }
+//     if (!token) {
+//       throw new Error('Authentication token not found');
+//     }
     
-    const response = await fetch(`${API_URL}/api/email/stats`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
+//     const response = await fetch(`${API_URL}/api/email/stats`, {
+//       headers: {
+//         'Authorization': `Bearer ${token}`
+//       }
+//     });
     
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || 'Failed to get email statistics');
-    }
+//     if (!response.ok) {
+//       const errorData = await response.json().catch(() => ({}));
+//       throw new Error(errorData.message || 'Failed to get email statistics');
+//     }
     
-    return await response.json();
-  } catch (error) {
-    console.error('Email stats error:', error);
-    throw error;
-  }
-};
+//     return await response.json();
+//   } catch (error) {
+//     console.error('Email stats error:', error);
+//     throw error;
+//   }
+// };
 
 /**
  * Get email template

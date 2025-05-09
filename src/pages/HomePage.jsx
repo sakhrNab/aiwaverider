@@ -29,7 +29,7 @@ const HomePage = () => {
           <HashLoader color="#4FD1C5" size={70} speedMultiplier={0.8} />
         </div>
         <div className="text-white text-xl font-semibold mt-4">
-          Initializing AI Wave Rider
+          Initializing AI Waverider
         </div>
         <div className="text-blue-300 text-sm mt-2">
           Connecting to neural networks...
@@ -72,7 +72,7 @@ const HomePage = () => {
       <div className="bg-indigo-900 py-6 px-6">
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
           <div>
-            <h2 className="text-3xl font-bold text-white">AI Wave Rider</h2>
+            <h2 className="text-3xl font-bold text-white">AI Waverider</h2>
             <p className="text-yellow-500 font-medium">Your Gateway to AI Mastery</p>
           </div>
           <div className="mt-4 md:mt-0">
@@ -99,7 +99,7 @@ const HomePage = () => {
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-teal-400">Ride The AI Wave</span> & Turn Your Skills Into Income
               </h1>
               <p className="text-xl md:text-2xl mb-8 max-w-2xl">
-                Learn how to monetize AI without being technical. 7 proven business models to help you sell AI services and make $2,000-$10,000/month as an AI Wave Rider.
+                Learn how to monetize AI without being technical. 7 proven business models to help you sell AI services and make $2,000-$10,000/month as an AI Waverider.
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 mb-8">
@@ -127,7 +127,7 @@ const HomePage = () => {
             <div className="lg:w-1/2">
               <img 
                 src="/ai-surfer-hero.png" 
-                alt="AI Wave Rider" 
+                alt="AI Waverider" 
                 className="rounded-lg shadow-2xl w-full max-w-lg mx-auto transform hover:-translate-y-2 transition-transform duration-300" 
                 onError={(e) => { e.target.src = 'https://placehold.co/800x600/blue/white?text=AI+Wave+Rider'; }}
               />

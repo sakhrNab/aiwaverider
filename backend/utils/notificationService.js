@@ -498,7 +498,7 @@ const sendWelcomeNotification = async (userData) => {
     const userName = firstName || displayName || email.split('@')[0];
     
     // Prepare notification
-    const title = 'Welcome to AI Wave Rider!';
+    const title = 'Welcome to AI Waverider!';
     const message = `We're excited to have you join our community, ${userName}!`;
     const notificationData = {
       userId: uid,
@@ -598,8 +598,8 @@ const sendWeeklyUpdate = async (updateData) => {
         channel: CHANNELS.EMAIL, // Weekly updates are typically email-only
         email: user.email,
         userId: doc.id,
-        title: `AI Wave Rider Weekly: ${weekLabel || 'Latest Updates'}`,
-        message: 'Here are this week\'s updates from AI Wave Rider',
+        title: `AI Waverider Weekly: ${weekLabel || 'Latest Updates'}`,
+        message: 'Here are this week\'s updates from AI Waverider',
         data: userData
       }).then(notificationResult => {
         if (notificationResult.success) {
@@ -651,7 +651,7 @@ const sendGlobalAnnouncement = async (announcementData) => {
       ctaText, 
       ctaUrl, 
       targetGroups = ['all'],
-      sender = 'AI Wave Rider Team'
+      sender = 'AI Waverider Team'
     } = announcementData;
     
     // Validate required fields

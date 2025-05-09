@@ -17,7 +17,7 @@ This means the PayPal client ID used in your application isn't valid or doesn't 
 3. Navigate to "My Apps & Credentials"
 4. Select the "Sandbox" tab (for testing) or "Live" tab (for production)
 5. Click "Create App"
-6. Give your app a name (e.g., "AI Wave Rider")
+6. Give your app a name (e.g., "AI Waverider")
 7. Select "Merchant" as the app type
 8. Click "Create App"
 9. Once created, you'll see your Client ID and Secret

@@ -48,7 +48,7 @@ const { v4: uuidv4 } = require('uuid');
  *    - Test refund and dispute handling processes
  */
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_51R2ydLCWt3snxVwEJxJQNsGNifhLhfQrJEBJgPPr9W4dRDfbjh11FvYLrxQ');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test..');
 const logger = require('../utils/logger');
 const orderController = require('../controllers/orderController');
 const notificationService = require('../utils/notificationService');
@@ -266,7 +266,7 @@ router.post('/create-paypal-order', async (req, res) => {
         }
       ],
       application_context: {
-        brand_name: 'AI Wave Rider',
+        brand_name: 'AI Waverider',
         landing_page: 'NO_PREFERENCE',
         user_action: 'PAY_NOW',
         return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout/success?payment_id=${uuidv4()}&status=success&type=paypal_order`,
@@ -2024,7 +2024,7 @@ router.post('/sepa-credit-transfer', async (req, res) => {
       orderId,
       status: 'pending',
       bankDetails: {
-        beneficiary: process.env.SEPA_BENEFICIARY_NAME || sepaPayload.creditorInfo?.name || 'AI Wave Rider Ltd',
+        beneficiary: process.env.SEPA_BENEFICIARY_NAME || sepaPayload.creditorInfo?.name || 'AI Waverider Ltd',
         iban: process.env.SEPA_IBAN || sepaPayload.creditorInfo?.iban || 'DE89370400440532013000',
         bic: process.env.SEPA_BIC || sepaPayload.creditorInfo?.bic || 'DEUTDEFFXXX',
         bankName: process.env.SEPA_BANK_NAME || 'Example Bank',

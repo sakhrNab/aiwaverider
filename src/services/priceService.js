@@ -75,7 +75,6 @@ export const updateAgentPrice = async (agentId, priceData) => {
     
     // Normalize the price data to ensure it has expected properties
     const normalizedPriceData = {
-      ...priceData,
       basePrice: parseFloat(priceData.basePrice) || 0,
       // IMPORTANT: If discountedPrice is provided, use it directly
       // This is crucial for manual price adjustments
@@ -83,10 +82,31 @@ export const updateAgentPrice = async (agentId, priceData) => {
         ? parseFloat(priceData.discountedPrice) 
         : (parseFloat(priceData.basePrice) || 0),
       currency: priceData.currency || 'USD',
-      isFree: priceData.isFree || parseFloat(priceData.basePrice) === 0
+      isFree: priceData.isFree || parseFloat(priceData.basePrice) === 0,
+      isSubscription: priceData.isSubscription || false,
+      discountPercentage: calculateDiscountPercentage(
+        parseFloat(priceData.basePrice) || 0, 
+        priceData.discountedPrice !== undefined ? parseFloat(priceData.discountedPrice) : undefined
+      )
     };
     
-    console.log('Sending normalized price data to backend:', normalizedPriceData);
+    // Ensure free agents have 0 prices
+    if (normalizedPriceData.isFree) {
+      normalizedPriceData.basePrice = 0;
+      normalizedPriceData.discountedPrice = 0;
+    }
+    
+    // Create the payload with priceDetails structure
+    const payload = {
+      // Only include price and isFree at root level for backward compatibility
+      price: normalizedPriceData.discountedPrice, 
+      isFree: normalizedPriceData.isFree,
+      
+      // Use nested priceDetails object for all price fields
+      priceDetails: normalizedPriceData
+    };
+    
+    console.log('Sending normalized price data to backend:', payload);
     
     // Make request to update agent price
     const response = await fetch(`${API_URL}/api/agent/${baseAgentId}/price${cacheBuster}`, {
@@ -96,7 +116,7 @@ export const updateAgentPrice = async (agentId, priceData) => {
         'Content-Type': 'application/json'
       },
       credentials: 'include',
-      body: JSON.stringify(normalizedPriceData)
+      body: JSON.stringify(payload)
     });
     
     // Handle non-OK responses
@@ -119,6 +139,26 @@ export const updateAgentPrice = async (agentId, priceData) => {
       mock: true
     };
   }
+};
+
+/**
+ * Calculate discount percentage from base price and discounted price
+ * @param {number} basePrice - The base price
+ * @param {number} discountedPrice - The discounted price
+ * @returns {number} - The discount percentage
+ */
+const calculateDiscountPercentage = (basePrice, discountedPrice) => {
+  // If no base price or no discounted price, return 0
+  if (!basePrice || !discountedPrice) return 0;
+  
+  // If they're the same, there's no discount
+  if (basePrice === discountedPrice) return 0;
+  
+  // Calculate discount percentage
+  const discount = ((basePrice - discountedPrice) / basePrice) * 100;
+  
+  // Return rounded to one decimal place
+  return Math.round(discount * 10) / 10;
 };
 
 /**

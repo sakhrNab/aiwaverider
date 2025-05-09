@@ -41,7 +41,7 @@ const corsOptions = {
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cache-Control', 'Pragma'],
   credentials: true,
   maxAge: 86400 // 24 hours
 };
@@ -109,10 +109,11 @@ setInterval(() => {
 const apiRoutes = require('./routes/index');
 const chatRoutes = require('./routes/chatRoutes');
 
-// Mount API routes
+// Mount API routes - all routes in apiRoutes will be prefixed with /api
+// So routes defined as '/agents' in routes/index.js will be accessible as '/api/agents'
 app.use('/api', apiRoutes);
 
-// Mount chat routes
+// Mount chat routes separately for special handling
 app.use('/api/chat', chatRoutes);
 
 // Add diagnostic route for the recommendations API

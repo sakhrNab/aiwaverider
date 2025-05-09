@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import './styles/globals.css';
 import AppContent from './components/AppContent';
 import { AuthProvider } from './contexts/AuthContext';
@@ -12,6 +12,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import AuthCallback from './components/AuthCallback';
 import { PAYMENT } from './config/config';
+import useAgentStore from './store/agentStore'; // Import agentStore
 
 // PayPal initial options from config
 const paypalOptions = {
@@ -21,16 +22,34 @@ const paypalOptions = {
   "disable-funding": "paylater,venmo,credit", // Optional: disable specific payment methods
 };
 
+// Track if app has been initialized - use module scope
+let appInitialized = false;
+
 const App = () => {
   // State to track if app has initialized
   const [isInitialized, setIsInitialized] = useState(false);
+  // Ref to prevent multiple initialization
+  const initRef = useRef(false);
 
   useEffect(() => {
-    // Simple initialization - no static data population
+    // Only initialize once across all renders
+    if (initRef.current || appInitialized) return;
+    initRef.current = true;
+    
+    // Enhanced initialization with data preloading
     const initializeApp = async () => {
       try {
-        // Any global app initialization can go here
-        console.log('App initialized without static data')
+        console.log('Initializing application and preloading essential data...');
+        
+        // Preload agent data to avoid duplicate API calls later
+        const agentStore = useAgentStore.getState();
+        await agentStore.loadInitialData();
+        console.log('Agent data preloaded successfully');
+        
+        if (process.env.NODE_ENV === 'development' && !appInitialized) {
+          console.log('App initialized with preloaded data');
+          appInitialized = true;
+        }
       } catch (error) {
         console.error('Error during app initialization:', error);
       } finally {

@@ -37,7 +37,7 @@ const BookingHeader = () => {
       };
     } else {
       return {
-        title: 'AI Wave Rider',
+        title: 'AI Waverider',
         subtitle: 'Your Gateway to AI Mastery'
       };
     }

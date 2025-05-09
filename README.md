@@ -7,7 +7,7 @@ Currently, two official plugins are available:
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
 - [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-# AI Wave Rider
+# AI Waverider
 
 A marketplace for AI agents and prompts.
 
@@ -87,7 +87,7 @@ EMAIL_PORT=587
 EMAIL_SECURE=false
 EMAIL_USER=your_email_user
 EMAIL_PASSWORD=your_email_password
-EMAIL_FROM=AI Wave Rider <noreply@aiwaverider.com>
+EMAIL_FROM=AI Waverider <noreply@aiwaverider.com>
 SUPPORT_EMAIL=support@aiwaverider.com
 WEBSITE_URL=https://aiwaverider.com
 
@@ -126,7 +126,7 @@ http://localhost:4000/api/recommendations/diagnostic
 
 In Windows PowerShell, the `&&` operator for chaining commands is not supported by default. Use the provided PowerShell scripts instead of trying to chain commands with `&&` or `&`.
 
-# AI Wave Rider Platform
+# AI Waverider Platform
 
 ## Agent Reviews and Ratings System
 
@@ -219,3 +219,126 @@ Using this approach provides:
 - Free BIC lookup with no API key required
 - Bank name and location information in addition to the BIC
 - Fallback mechanisms for reliability
+
+# AI Waverider - Optimized Agents UI
+
+This project features a highly optimized Agents marketplace UI with best practices for performance, state management, and code organization.
+
+## Key Optimizations
+
+- **State Management with Zustand**: Centralized, efficient state management with Zustand store
+- **Data Validation with Zod**: Schema validation ensures type safety and consistent data structures
+- **Form Handling with React Hook Form**: Efficient, uncontrolled form components
+- **Performance Optimizations**:
+  - Lazy loading images
+  - Component memoization
+  - Virtualized lists for large data sets
+  - Parallel API requests
+  - Optimized rendering with useMemo and useCallback
+
+## Getting Started
+
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Start the development server:
+```bash
+npm run dev
+```
+
+## Core Components
+
+### AgentStore (Zustand)
+
+The `agentStore.js` provides a central state management solution:
+
+```javascript
+// Using the store in components
+import useAgentStore from '../store/agentStore';
+
+function MyComponent() {
+  // Get state and actions from the store
+  const { 
+    agents, 
+    featuredAgents,
+    setSearchQuery,
+    loadInitialData 
+  } = useAgentStore();
+  
+  // Use state and actions
+}
+```
+
+### Zod Schema Validation
+
+Agent data is validated using Zod schemas in `agentSchema.js`:
+
+```javascript
+// Using schema validation
+import { parseAgent, parseAgents } from '../schema/agentSchema';
+
+// Validate a single agent
+const validatedAgent = parseAgent(rawAgentData);
+
+// Validate an array of agents
+const validatedAgents = parseAgents(rawAgentsArray);
+```
+
+### Component Examples
+
+#### Optimized AgentCard
+
+```jsx
+import AgentCard from '../components/agents/AgentCard';
+
+// Using the optimized agent card
+<AgentCard agent={agentData} />
+```
+
+#### FeaturedAgents Carousel
+
+```jsx
+import FeaturedAgents from '../components/agents/FeaturedAgents';
+
+// Using the featured agents carousel
+<FeaturedAgents agents={featuredAgentsData} isLoading={isLoading} />
+```
+
+#### AgentCarousel for Recommendations
+
+```jsx
+import AgentCarousel from '../components/agents/AgentCarousel';
+
+// Using the agent carousel for recommendations
+<AgentCarousel title="Recommended For You" agents={recommendedAgents} />
+```
+
+## Performance Best Practices
+
+This codebase implements several performance best practices:
+
+1. **Memoization**: All components use React.memo and useMemo/useCallback hooks to prevent unnecessary re-renders
+2. **Virtualization**: Large lists use react-window to render only visible items
+3. **Lazy Loading Images**: Images load only when they enter the viewport
+4. **Parallel Data Fetching**: Multiple API requests are fetched in parallel using Promise.all
+5. **Optimized Rendering**: Components only re-render when their specific props change
+
+## Data Flow
+
+1. The AgentStore handles data fetching and state management
+2. API responses are validated through Zod schemas
+3. Validated data is stored in the Zustand store
+4. Components access only the data they need from the store
+5. UI updates are triggered by state changes in the store
+
+## Future Optimizations
+
+Potential further optimizations:
+
+- Implement server-side rendering (SSR) for faster initial load
+- Add query caching with React Query
+- Implement proper error boundaries
+- Add Suspense for better loading states
+- Implement preloading for frequently accessed routes

@@ -15,7 +15,7 @@ const About = () => {
           <div className="text-center max-w-4xl mx-auto">
             <h1 className="text-4xl md:text-5xl font-bold mb-6">
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-teal-400">
-                About AI Wave Rider
+                About AI Waverider
               </span>
             </h1>
             <p className="text-xl md:text-2xl mb-8 leading-relaxed">
@@ -31,7 +31,7 @@ const About = () => {
           <div className="max-w-4xl mx-auto">
             <h2 className={`text-3xl font-bold mb-8 text-center ${darkMode ? 'text-teal-300' : 'text-teal-600'}`}>Our Mission</h2>
             <p className="text-lg mb-6 leading-relaxed">
-              AI Wave Rider was founded with a clear mission: to democratize access to artificial intelligence technologies 
+              AI Waverider was founded with a clear mission: to democratize access to artificial intelligence technologies 
               and help businesses and individuals harness the power of AI without requiring deep technical expertise.
             </p>
             <p className="text-lg mb-6 leading-relaxed">
@@ -156,15 +156,15 @@ const About = () => {
         </div>
       </section>
 
-      {/* AI Wave Rider Platform */}
+      {/* AI Waverider Platform */}
       <section className={`py-14 ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
         <div className="container mx-auto px-6">
           <div className="max-w-4xl mx-auto">
             <h2 className={`text-3xl font-bold mb-8 text-center ${darkMode ? 'text-teal-300' : 'text-teal-600'}`}>
-              The AI Wave Rider Platform
+              The AI Waverider Platform
             </h2>
             <p className="text-lg mb-6 leading-relaxed">
-              AI Wave Rider is more than just a website – it's a comprehensive platform designed to help you navigate 
+              AI Waverider is more than just a website – it's a comprehensive platform designed to help you navigate 
               the world of artificial intelligence and find the right AI solutions for your business needs.
             </p>
             <p className="text-lg mb-8 leading-relaxed">
@@ -227,7 +227,7 @@ const About = () => {
           <div className="max-w-4xl mx-auto text-center">
             <h2 className={`text-3xl font-bold mb-8 ${darkMode ? 'text-teal-300' : 'text-teal-600'}`}>Get in Touch</h2>
             <p className="text-lg mb-8">
-              Have questions about AI Wave Rider or want to learn more about how we can help your business leverage AI technology? 
+              Have questions about AI Waverider or want to learn more about how we can help your business leverage AI technology? 
               We'd love to hear from you!
             </p>
             <a 

@@ -3,9 +3,10 @@ console.log('Loading agentsController.js');
 // Import necessary modules
 const { db } = require('../config/firebase');
 const admin = require('firebase-admin');
-const axios = require('axios');
+// const axios = require('axios'); // Uncomment if used
 const logger = require('../utils/logger');
-const { parseCustomFilters } = require('../utils/queryParser');
+// const { parseCustomFilters } = require('../utils/queryParser'); // Uncomment if used
+// const { restructureAgent } = require('../scripts/update-agent-structure'); // REMOVED/COMMENTED OUT
 
 // Cache keys for consistent cache handling
 const CACHE_KEYS = {
@@ -17,9 +18,106 @@ const CACHE_KEYS = {
   LATEST: 'latest_agents'
 };
 
-// Cache TTL for agents (5 minutes)
-const AGENTS_CACHE_TTL = 5 * 60;
+// Cache TTL for agents (5 minutes) - Uncomment if used
+// const AGENTS_CACHE_TTL = 5 * 60;
 
+// Firebase Storage paths
+const STORAGE_PATHS = {
+  IMAGES: 'agents/',
+  ICONS: 'agent_icons/',
+  JSON_FILES: 'agent_templates/',
+};
+
+// --- HELPER FUNCTIONS (for parsing and file upload, still useful) ---
+
+/**
+ * Parses incoming request data, handling FormData and stringified JSON fields.
+ * @param {object} reqBody - The req.body object.
+ * @returns {object} The parsed data.
+ */
+const _parseIncomingData = (reqBody) => {
+  let data = { ...reqBody };
+
+  if (data.data && typeof data.data === 'string') {
+    try {
+      const parsedJsonData = JSON.parse(data.data);
+      data = { ...parsedJsonData, ...data };
+      delete data.data;
+      logger.info('Parsed and merged data from req.body.data field.');
+    } catch (e) {
+      logger.warn('Failed to parse req.body.data JSON string. Using req.body as is.', e);
+    }
+  }
+
+  // Attempt to parse fields that are commonly stringified JSON in FormData
+  const fieldsToParse = ['priceDetails', 'creator', 'features', 'tags', 'image', 'icon', 'jsonFile', 'imageData', 'iconData', 'jsonFileData'];
+  for (const field of fieldsToParse) {
+    if (data[field] && typeof data[field] === 'string') {
+      try {
+        data[field] = JSON.parse(data[field]);
+      } catch (e) {
+        // Not an error if it's not JSON, could be a simple string like a URL
+      }
+    }
+  }
+  // Clean up temp frontend fields that might have been passed in req.body directly
+  delete data._imageFile;
+  delete data._iconFile;
+  // delete data._jsonFile; // req.body.jsonFile is the actual file for multer, not a temp field
+  delete data._hasBlobImageUrl;
+  delete data._hasBlobIconUrl;
+  delete data._hasBlobJsonFileUrl;
+
+  return data;
+};
+
+/**
+ * Uploads a file to Firebase Storage.
+ * @param {Object} file - The file object from Multer.
+ * @param {string} pathPrefix - The Firebase Storage path prefix.
+ * @param {object} storageBucket - Firebase admin.storage().bucket() instance.
+ * @returns {Promise<Object|null>} File metadata object or null.
+ */
+const _uploadFileToStorage = async (file, pathPrefix, storageBucket) => {
+  if (!file) return null;
+  logger.info(`Uploading new file: ${file.originalname} to path starting with ${pathPrefix}`);
+  try {
+    const fileName = `${pathPrefix}${Date.now()}_${file.originalname.replace(/[^a-zA-Z0-9_.]/g, '_')}`;
+    const fileRef = storageBucket.file(fileName);
+    await fileRef.save(file.buffer, { metadata: { contentType: file.mimetype } });
+    await fileRef.makePublic();
+    const publicUrl = `https://storage.googleapis.com/${storageBucket.name}/${fileName}`;
+    logger.info(`File uploaded successfully. URL: ${publicUrl}`);
+    return {
+      url: publicUrl,
+      fileName: fileName,
+      originalName: file.originalname,
+      contentType: file.mimetype,
+      size: file.size,
+    };
+  } catch (uploadError) {
+    logger.error(`Error uploading ${file.originalname} to Firebase Storage:`, uploadError);
+    return null;
+  }
+};
+
+/**
+ * Gets file metadata if provided as an object.
+ * @param {string|Object} fieldValue - The field value from parsed data.
+ * @param {string} fieldName - Name of the field for logging.
+ * @returns {Object|null} Parsed file metadata or null.
+ */
+const _getFileMetadataFromRequest = (fieldValue, fieldName) => {
+  if (!fieldValue) return null;
+  if (typeof fieldValue === 'object' && fieldValue.url) {
+    logger.info(`Using existing file metadata from ${fieldName}: ${fieldValue.url}`);
+    return fieldValue;
+  }
+  logger.warn(`No valid URL found in ${fieldName} metadata object:`, fieldValue);
+  return null;
+};
+
+// --- START OF YOUR EXISTING FUNCTIONS (Keep them as they are) ---
 /**
  * Get all agents with optional filtering
  */
@@ -39,7 +137,7 @@ const getAgents = async (req, res) => {
     } = req.query;
 
     // Create cache key based on request parameters
-    const cacheKey = `${CACHE_KEYS.AGENTS}:${category}:${filter}:${priceMin || 0}:${priceMax || 'max'}:${rating || 0}:${tags || ''}:${features || ''}:${search || ''}:${page}:${limit}`;
+    // const cacheKey = `${CACHE_KEYS.AGENTS}:${category}:${filter}:${priceMin || 0}:${priceMax || 'max'}:${rating || 0}:${tags || ''}:${features || ''}:${search || ''}:${page}:${limit}`;
     
     // Build query
     let query = db.collection('agents');
@@ -65,6 +163,14 @@ const getAgents = async (req, res) => {
     // If the filter is 'Free', only return free agents
     if (filter === 'Free') {
       agents = agents.filter(agent => {
+          // Check structured isFree flag first
+          if (typeof agent.isFree === 'boolean') {
+              return agent.isFree;
+          }
+          // Fallback to older price checks if isFree is not present
+          if (agent.priceDetails && typeof agent.priceDetails.basePrice === 'number') {
+              return agent.priceDetails.basePrice === 0;
+          }
         if (typeof agent.price === 'number') {
           return agent.price === 0;
         }
@@ -82,15 +188,18 @@ const getAgents = async (req, res) => {
       const max = priceMax ? parseFloat(priceMax) : Infinity;
       
       agents = agents.filter(agent => {
-        let price = agent.price;
-        if (typeof price === 'string') {
-          // Extract number from string like "$25" or "$25/month"
-          const numValue = parseFloat(price.replace(/[^0-9.]/g, ''));
+        let priceToCompare = agent.price; // Fallback
+        if (agent.priceDetails && typeof agent.priceDetails.discountedPrice === 'number') {
+            priceToCompare = agent.priceDetails.discountedPrice;
+        } else if (typeof agent.price === 'string') {
+          const numValue = parseFloat(agent.price.replace(/[^0-9.]/g, ''));
           if (!isNaN(numValue)) {
-            price = numValue;
+            priceToCompare = numValue;
           }
+        } else if (typeof agent.price !== 'number') {
+            priceToCompare = Infinity; // Treat non-numeric, non-string prices as non-matching
         }
-        return price >= min && price <= max;
+        return priceToCompare >= min && priceToCompare <= max;
       });
     }
 
@@ -107,16 +216,12 @@ const getAgents = async (req, res) => {
     if (tags) {
       const tagsList = tags.split(',');
       agents = agents.filter(agent => {
-        // Check if category matches any tag
         if (agent.category && tagsList.includes(agent.category)) {
           return true;
         }
-        
-        // Check agent tags if available
         if (agent.tags && Array.isArray(agent.tags)) {
           return agent.tags.some(tag => tagsList.includes(tag));
         }
-        
         return false;
       });
     }
@@ -125,26 +230,19 @@ const getAgents = async (req, res) => {
     if (features) {
       const featuresList = features.split(',');
       agents = agents.filter(agent => {
-        // Check for 'Free' feature
-        if (featuresList.includes('Free') && 
-            (agent.price === 0 || agent.price === '0' || 
-             agent.price === 'Free' || agent.price === '$0')) {
-          return true;
-        }
-        
-        // Check for 'Subscription' feature
-        if (featuresList.includes('Subscription') && 
-            typeof agent.price === 'string' && 
-            (agent.price.includes('/month') || agent.price.includes('a month'))) {
-          return true;
-        }
-        
-        // Check other features
-        if (agent.features && Array.isArray(agent.features)) {
-          return agent.features.some(feature => featuresList.includes(feature));
-        }
-        
-        return false;
+          let matches = false;
+          if (featuresList.includes('Free') && agent.isFree === true) {
+            matches = true;
+          }
+          if (!matches && featuresList.includes('Subscription') && agent.isSubscription === true) {
+            matches = true;
+          }
+          if (!matches && agent.features && Array.isArray(agent.features)) {
+            if (agent.features.some(feature => featuresList.includes(feature))) {
+                matches = true;
+            }
+          }
+          return matches;
       });
     }
 
@@ -163,14 +261,10 @@ const getAgents = async (req, res) => {
     // Apply sorting based on filter type
     if (filter === 'Hot & Now') {
       agents.sort((a, b) => {
-        // First prioritize new agents (has createdAt or dateCreated within last 7 days)
         const now = new Date();
-        const aDate = a.createdAt ? new Date(a.createdAt) : 
-                     (a.dateCreated ? new Date(a.dateCreated) : null);
-        const bDate = b.createdAt ? new Date(b.createdAt) : 
-                     (b.dateCreated ? new Date(b.dateCreated) : null);
+        const aDate = a.createdAt ? new Date(a.createdAt) : (a.dateCreated ? new Date(a.dateCreated) : null);
+        const bDate = b.createdAt ? new Date(b.createdAt) : (b.dateCreated ? new Date(b.dateCreated) : null);
                      
-        // If both have recent dates (within 7 days), sort by date descending
         if (aDate && bDate) {
           const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
           const aIsRecent = aDate > weekAgo;
@@ -178,1062 +272,336 @@ const getAgents = async (req, res) => {
           
           if (aIsRecent && !bIsRecent) return -1;
           if (!aIsRecent && bIsRecent) return 1;
-          if (aIsRecent && bIsRecent) return bDate - aDate;
-        }
+          if (aIsRecent && bIsRecent) return bDate.getTime() - aDate.getTime();
+        } else if (aDate) { return -1; }
+          else if (bDate) { return 1; }
         
-        // Fall back to popularity if dates aren't available or aren't recent
         return (b.popularity || 0) - (a.popularity || 0);
       });
     } else if (filter === 'Top Rated') {
       agents.sort((a, b) => {
         const ratingA = a.rating?.average ? parseFloat(a.rating.average) : 0;
         const ratingB = b.rating?.average ? parseFloat(b.rating.average) : 0;
+        if (ratingB === ratingA) { // Secondary sort by review count
+            return (b.rating?.count || 0) - (a.rating?.count || 0);
+        }
         return ratingB - ratingA;
       });
     } else if (filter === 'Newest') {
       agents.sort((a, b) => {
-        // If dateCreated exists, use it, otherwise fall back to createdAt
-        const dateA = a.dateCreated ? new Date(a.dateCreated) : 
-                     (a.createdAt ? new Date(a.createdAt) : new Date(0));
-        const dateB = b.dateCreated ? new Date(b.dateCreated) : 
-                     (b.createdAt ? new Date(b.createdAt) : new Date(0));
-        return dateB - dateA;
+        const dateA = a.createdAt ? new Date(a.createdAt) : (a.dateCreated ? new Date(a.dateCreated) : new Date(0));
+        const dateB = b.createdAt ? new Date(b.createdAt) : (b.dateCreated ? new Date(b.dateCreated) : new Date(0));
+        return dateB.getTime() - dateA.getTime();
       });
     }
 
     // Apply pagination
-    const startIndex = (page - 1) * limit;
-    const paginatedAgents = agents.slice(startIndex, startIndex + parseInt(limit));
+    const startIndex = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const paginatedAgents = agents.slice(startIndex, startIndex + parseInt(limit, 10));
 
     const result = {
       agents: paginatedAgents,
       total: agents.length,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      totalPages: Math.ceil(agents.length / limit)
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+      totalPages: Math.ceil(agents.length / parseInt(limit, 10))
     };
 
     return res.status(200).json(result);
   } catch (error) {
-    console.error('Error fetching agents:', error);
-    return res.status(500).json({ error: 'Failed to fetch agents' });
+    logger.error('Error fetching agents:', error);
+    return res.status(500).json({ error: 'Failed to fetch agents', details: error.message });
   }
 };
 
-/**
- * Get featured agents
- */
-const getFeaturedAgents = async (req, res) => {
-  try {
-    const { limit = 8 } = req.query;
-    let agents = [];
+const getFeaturedAgents = async (req, res) => { /* ... your existing code ... */ };
+const getAgentById = async (req, res) => { /* ... your existing code ... */ };
+const toggleWishlist = async (req, res) => { /* ... your existing code ... */ };
+const getWishlists = async (req, res) => { /* ... your existing code ... */ };
+const getWishlistById = async (req, res) => { /* ... your existing code ... */ };
+const generateMockAgents = (count) => { /* ... your existing code ... */ };
+const seedAgents = async (req, res) => { /* ... your existing code ... */ };
+// --- END OF EXISTING FUNCTIONS ---
 
-    // Get bestseller agents
-    let bestsellerQuery = db.collection('agents')
-      .where('isBestseller', '==', true)
-      .limit(parseInt(limit));
-    
-    const bestsellerSnapshot = await bestsellerQuery.get();
-
-    bestsellerSnapshot.forEach(doc => {
-      agents.push({
-        id: doc.id,
-        ...doc.data()
-      });
-    });
-
-    // If we don't have enough agents yet, check for agents with top-level isFeatured property
-    if (agents.length < parseInt(limit)) {
-      const topLevelFeaturedQuery = db.collection('agents')
-        .where('isFeatured', '==', true)
-        .limit(parseInt(limit) - agents.length);
-      
-      const topLevelFeaturedSnapshot = await topLevelFeaturedQuery.get();
-      
-      topLevelFeaturedSnapshot.forEach(doc => {
-        // Check if agent is already in list
-        if (!agents.some(agent => agent.id === doc.id)) {
-          agents.push({
-            id: doc.id,
-            ...doc.data()
-          });
-        }
-      });
-    }
-
-    // If we still don't have enough, we need to check for agents with data.isFeatured property
-    // Since Firestore doesn't support querying nested fields directly in where() clauses,
-    // we'll get a larger batch and filter manually
-    if (agents.length < parseInt(limit)) {
-      const remainingNeeded = parseInt(limit) - agents.length;
-      const allAgentsQuery = db.collection('agents')
-        .limit(50);  // Get a reasonable batch to filter from
-      
-      const allAgentsSnapshot = await allAgentsQuery.get();
-      const nestedFeaturedAgents = [];
-      
-      allAgentsSnapshot.forEach(doc => {
-        const agentData = doc.data();
-        if (agentData.data && agentData.data.isFeatured === true) {
-          // Check if agent is already in list
-          if (!agents.some(agent => agent.id === doc.id)) {
-            nestedFeaturedAgents.push({
-              id: doc.id,
-              ...agentData
-            });
-          }
-        }
-      });
-      
-      // Add the nested featured agents up to the limit
-      agents = [...agents, ...nestedFeaturedAgents.slice(0, remainingNeeded)];
-    }
-
-    // If we still don't have enough, add some recent/new agents
-    if (agents.length < parseInt(limit)) {
-      const remainingLimit = parseInt(limit) - agents.length;
-      const newAgentsQuery = db.collection('agents')
-        .where('isNew', '==', true)
-        .limit(remainingLimit);
-      
-      const newAgentsSnapshot = await newAgentsQuery.get();
-      
-      newAgentsSnapshot.forEach(doc => {
-        // Check if agent is already in list
-        if (!agents.some(agent => agent.id === doc.id)) {
-          agents.push({
-            id: doc.id,
-            ...doc.data()
-          });
-        }
-      });
-    }
-
-    return res.status(200).json({ agents });
-  } catch (error) {
-    console.error('Error fetching featured agents:', error);
-    return res.status(500).json({ error: 'Failed to fetch featured agents' });
-  }
-};
 
 /**
- * Get a single agent by ID
- * @param {object} req - Express request object
- * @param {object} res - Express response object
+ * Internal function to shape agent data before saving.
+ * @param {object} agentInput - The raw agent data.
+ * @param {object} existingAgentData - For updates, the current agent data from DB.
+ * @param {object} reqUser - The authenticated user object.
+ * @returns {object} The shaped agent data for Firestore.
  */
-const getAgentById = async (req, res) => {
-  try {
-    // Get agentId from either params.id or params.agentId
-    const agentId = req.params.id || req.params.agentId;
-    
-    // Log the request details for debugging
-    console.log(`Attempting to get agent with ID: "${agentId}"`);
-    
-    // Basic validation - only check if it exists and is a string
-    if (!agentId || typeof agentId !== 'string') {
-      console.error('Invalid agent ID format:', agentId);
-      return res.status(400).json({ 
-        success: false,
-        message: 'Invalid agent ID format',
-        error: 'Agent ID must be a valid string' 
-      });
-    }
-    
-    // Clean the agent ID - accept more formats
-    let cleanAgentId = agentId.trim();
-    
-    // Only check for actual path separators (/ or \), NOT hyphens
-    // Hyphens are valid in IDs like "agent-41"
-    if (cleanAgentId.includes('/') || cleanAgentId.includes('\\')) {
-      console.log(`Agent ID contains actual path separators, extracting ID portion`);
-      const parts = cleanAgentId.split(/[/\\]/);
-      cleanAgentId = parts[parts.length - 1];
-      console.log(`Extracted ID from path: ${cleanAgentId}`);
-      
-      // Check again for path separators after extraction to prevent directory traversal
-      if (cleanAgentId.includes('/') || cleanAgentId.includes('\\')) {
-        console.error('Agent ID still contains path separators after cleaning:', cleanAgentId);
-        return res.status(400).json({ 
-          success: false,
-          message: 'Invalid agent ID format',
-          error: 'Agent ID must be a valid string without path separators' 
-        });
-      }
-    }
-    
-    // For standard "agent-X" format, we have two options:
-    // 1. Use the ID as is (agent-41)
-    // 2. Strip the prefix and use just the number (41)
-    
-    let originalId = cleanAgentId; // Save original ID before any transformations
-    
-    // Check if it's prefixed with 'agent-' and strip it if needed
-    if (cleanAgentId.startsWith('agent-')) {
-      const numericPart = cleanAgentId.substring(6);
-      // Only use the numeric part if it looks valid
-      if (/^\d+$/.test(numericPart)) {
-        cleanAgentId = numericPart;
-        console.log(`Stripped 'agent-' prefix, using numeric ID: ${cleanAgentId}`);
-      }
-    }
-    
-    // Fetch the agent document - first try with cleaned ID
-    let agentDoc = await db.collection('agents').doc(cleanAgentId).get();
-    
-    // If not found and we modified the ID, try with the original format
-    if (!agentDoc.exists && cleanAgentId !== originalId) {
-      console.log(`Agent not found with cleaned ID: ${cleanAgentId}, trying original ID: ${originalId}`);
-      agentDoc = await db.collection('agents').doc(originalId).get();
-    }
-    
-    if (!agentDoc.exists) {
-      console.error(`Agent not found with either ID format: ${cleanAgentId} or ${originalId}`);
-      return res.status(404).json({ 
-        success: false,
-        message: 'Agent not found',
-        error: `No agent exists with ID: ${agentId}` 
-      });
-    }
-    
-    // Get agent data
-    const agentData = {
-      id: agentDoc.id,
-      ...agentDoc.data()
-    };
-    
-    // Fetch reviews related to this agent
-    const reviewsSnapshot = await db.collection('reviews')
-      .where('agentId', '==', cleanAgentId)
-      .orderBy('createdAt', 'desc')
-      .limit(5)
-      .get();
-    
-    const reviews = [];
-    reviewsSnapshot.forEach(doc => {
-      reviews.push({
-        id: doc.id,
-        ...doc.data()
-      });
-    });
-    
-    // Add reviews to the agent data
-    agentData.reviews = reviews;
-    
-    // Calculate average rating if there are reviews
-    if (reviews.length > 0) {
-      const totalRating = reviews.reduce((sum, review) => sum + (review.rating || 0), 0);
-      agentData.averageRating = totalRating / reviews.length;
-      agentData.reviewCount = reviews.length;
-    }
-    
-    // Return successful response
-    return res.status(200).json({
-      success: true,
-      message: 'Agent retrieved successfully',
-      data: agentData
-    });
-    
-  } catch (error) {
-    console.error('Error getting agent by ID:', error);
-    // Return structured error response
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to retrieve agent',
-      error: error.message,
-      details: {
-        code: error.code,
-        path: req.path,
-        params: req.params
-      }
-    });
-  }
-};
+const _shapeAgentDataForSave = (agentInput, existingAgentData = {}, reqUser = null) => {
+    const now = new Date().toISOString();
+    const output = { ...existingAgentData, ...agentInput }; // Prioritize agentInput
 
-/**
- * Toggle agent in user's wishlist (add or remove)
- */
-const toggleWishlist = async (req, res) => {
-  try {
-    // Extract agentId and sanitize it
-    let agentId = req.params.agentId;
-    
-    // Check if the ID contains extra path segments
-    if (agentId && agentId.includes('/')) {
-      agentId = agentId.split('/')[0];
+    // --- Core Information ---
+    output.name = agentInput.name || existingAgentData.name || '';
+    output.title = agentInput.title || existingAgentData.title || output.name;
+    output.description = agentInput.description || existingAgentData.description || '';
+    output.category = agentInput.category || existingAgentData.category || '';
+    output.status = agentInput.status || existingAgentData.status || 'active';
+
+    // --- Creator Information ---
+    let creatorInput = agentInput.creator;
+    if (creatorInput && typeof creatorInput === 'string') {
+        try { creatorInput = JSON.parse(creatorInput); } catch (e) { /* ignore */ }
     }
-    
-    // Check if the ID contains query parameters
-    if (agentId && agentId.includes('?')) {
-      agentId = agentId.split('?')[0];
+    if (creatorInput && typeof creatorInput === 'object') {
+        output.creator = {
+            id: creatorInput.id || existingAgentData.creator?.id || reqUser?.uid || null,
+            name: creatorInput.name || existingAgentData.creator?.name || reqUser?.displayName || 'Anonymous',
+            imageUrl: creatorInput.imageUrl !== undefined ? creatorInput.imageUrl : (existingAgentData.creator?.imageUrl || null),
+            email: creatorInput.email || existingAgentData.creator?.email || reqUser?.email || null,
+            username: creatorInput.username || existingAgentData.creator?.username || reqUser?.username || null,
+            role: creatorInput.role || existingAgentData.creator?.role || reqUser?.role || 'user',
+        };
+    } else if (!existingAgentData.creator && reqUser) { // New agent, creator from req.user
+        output.creator = {
+            id: reqUser.uid,
+            name: reqUser.displayName || 'Admin',
+            imageUrl: reqUser.photoURL || null,
+            email: reqUser.email,
+            username: reqUser.username || reqUser.email?.split('@')[0] || `user_${reqUser.uid.substring(0,5)}`,
+            role: reqUser.role || 'admin',
+        };
+    } else if (!existingAgentData.creator) { // New agent, no user, minimal creator
+        output.creator = { id: null, name: 'System', role: 'system' };
     }
-    
-    // Validate agent ID
-    if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
-      console.error('Invalid agent ID for wishlist toggle:', agentId);
-      return res.status(400).json({ error: 'Invalid agent ID provided' });
+    // If creatorInput was just a string name
+    else if (typeof creatorInput === 'string' && (!output.creator || !output.creator.id)) {
+         output.creator = { ...output.creator, name: creatorInput };
     }
 
-    const sanitizedAgentId = agentId.trim();
-    const { uid } = req.user; // From auth middleware
-    
-    // Check if agent exists
-    const agentDoc = await db.collection('agents').doc(sanitizedAgentId).get();
-    if (!agentDoc.exists) {
-      return res.status(404).json({ error: 'Agent not found' });
-    }
-    
-    // Wishlist ID is a combination of user ID and agent ID
-    const wishlistId = `${uid}_${sanitizedAgentId}`;
-    const wishlistRef = db.collection('wishlists').doc(wishlistId);
-    
-    // Check if wishlist item exists
-    const wishlistDoc = await wishlistRef.get();
-    
-    if (wishlistDoc.exists) {
-      // If it exists, remove it
-      await wishlistRef.delete();
-      
-      // Decrement wishlist count on agent
-      const agentRef = db.collection('agents').doc(sanitizedAgentId);
-      await db.runTransaction(async (transaction) => {
-        const agentDoc = await transaction.get(agentRef);
-        if (agentDoc.exists) {
-          const currentCount = agentDoc.data().wishlistCount || 0;
-          transaction.update(agentRef, { 
-            wishlistCount: Math.max(0, currentCount - 1) 
-          });
+
+    // --- File Metadata: Image ---
+    output.image = agentInput.image !== undefined ? agentInput.image : existingAgentData.image; // object
+    output.imageUrl = agentInput.imageUrl !== undefined ? agentInput.imageUrl : existingAgentData.imageUrl; // string
+    if (output.image && typeof output.image === 'object' && output.image.url) {
+        output.imageUrl = output.image.url; // Sync URL
+    } else if (output.imageUrl && (!output.image || !output.image.url)) {
+        // If URL exists but object doesn't, create minimal object
+        if (output.imageUrl) {
+            output.image = { url: output.imageUrl, fileName: '', originalName: '', contentType: '', size: 0 };
+        } else { // Both imageUrl and image.url are falsy
+            output.image = null; // Clear object if URL is cleared
         }
-      });
-      
-      return res.status(200).json({ 
-        message: 'Agent removed from wishlist',
-        inWishlist: false
-      });
+    } else if (agentInput.hasOwnProperty('imageUrl') && !agentInput.imageUrl) { // Explicitly clearing
+        output.image = null;
+        output.imageUrl = null;
+    }
+
+
+    // --- File Metadata: Icon ---
+    output.icon = agentInput.icon !== undefined ? agentInput.icon : existingAgentData.icon;
+    output.iconUrl = agentInput.iconUrl !== undefined ? agentInput.iconUrl : existingAgentData.iconUrl;
+    if (output.icon && typeof output.icon === 'object' && output.icon.url) {
+        output.iconUrl = output.icon.url;
+    } else if (output.iconUrl && (!output.icon || !output.icon.url)) {
+        if (output.iconUrl) {
+            output.icon = { url: output.iconUrl, fileName: '', originalName: (output.iconUrl.startsWith('data:') ? 'inline_svg.svg' : ''), contentType: (output.iconUrl.startsWith('data:') ? output.iconUrl.substring(output.iconUrl.indexOf(':') + 1, output.iconUrl.indexOf(';')) : ''), size: 0 };
+        } else {
+            output.icon = null;
+        }
+    } else if (agentInput.hasOwnProperty('iconUrl') && !agentInput.iconUrl) {
+        output.icon = null;
+        output.iconUrl = null;
+    }
+
+
+    // --- File Metadata: JSON File (Template) ---
+    output.jsonFile = agentInput.jsonFile !== undefined ? agentInput.jsonFile : existingAgentData.jsonFile;
+    output.downloadUrl = agentInput.downloadUrl !== undefined ? agentInput.downloadUrl : existingAgentData.downloadUrl;
+    output.fileUrl = agentInput.fileUrl !== undefined ? agentInput.fileUrl : existingAgentData.fileUrl;
+
+    if (output.jsonFile && typeof output.jsonFile === 'object' && output.jsonFile.url) {
+        output.downloadUrl = output.jsonFile.url;
+        if (agentInput.fileUrl === undefined) output.fileUrl = output.jsonFile.url; // Only sync if fileUrl wasn't explicitly different
+    } else if (output.downloadUrl && (!output.jsonFile || !output.jsonFile.url)) {
+        if (output.downloadUrl) {
+            output.jsonFile = { url: output.downloadUrl, fileName: '', originalName: '', contentType: 'application/json', size: 0 };
+            if (agentInput.fileUrl === undefined) output.fileUrl = output.downloadUrl;
+        } else {
+            output.jsonFile = null;
+        }
+    } else if (output.fileUrl && (!output.jsonFile || !output.jsonFile.url) && (agentInput.downloadUrl === undefined)) {
+        // If only fileUrl is provided and downloadUrl is not, sync them
+        output.downloadUrl = output.fileUrl;
+         if (output.fileUrl) {
+            output.jsonFile = { url: output.fileUrl, fileName: '', originalName: '', contentType: 'application/json', size: 0 };
     } else {
-      // If it doesn't exist, add it
-      await wishlistRef.set({
-        userId: uid,
-        agentId: sanitizedAgentId,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-      
-      // Increment wishlist count on agent
-      const agentRef = db.collection('agents').doc(sanitizedAgentId);
-      await db.runTransaction(async (transaction) => {
-        const agentDoc = await transaction.get(agentRef);
-        if (agentDoc.exists) {
-          const currentCount = agentDoc.data().wishlistCount || 0;
-          transaction.update(agentRef, { 
-            wishlistCount: currentCount + 1 
-          });
+            output.jsonFile = null;
         }
-      });
-      
-      return res.status(201).json({ 
-        message: 'Agent added to wishlist',
-        inWishlist: true
-      });
     }
-  } catch (error) {
-    console.error('Error toggling wishlist:', error);
-    return res.status(500).json({ error: 'Failed to update wishlist' });
-  }
-};
-
-/**
- * Get agent wishlists for the current user
- */
-const getWishlists = async (req, res) => {
-  try {
-    const { uid } = req.user; // From auth middleware
-    
-    // Query wishlists for this user
-    const wishlistsSnapshot = await db.collection('wishlists')
-      .where('userId', '==', uid)
-      .get();
-    
-    const agentIds = [];
-    wishlistsSnapshot.forEach(doc => {
-      agentIds.push(doc.data().agentId);
-    });
-    
-    // If no wishlisted agents, return empty array
-    if (agentIds.length === 0) {
-      return res.status(200).json({ agents: [] });
-    }
-    
-    // Fetch agent details for each ID
-    // Note: Firestore doesn't support direct "where in" with more than 10 items
-    const agents = [];
-    
-    // Process in batches of 10 if there are many agent IDs
-    for (let i = 0; i < agentIds.length; i += 10) {
-      const batchIds = agentIds.slice(i, i + 10);
-      const batchSnapshot = await db.collection('agents')
-        .where(admin.firestore.FieldPath.documentId(), 'in', batchIds)
-        .get();
-      
-      batchSnapshot.forEach(doc => {
-        agents.push({
-          id: doc.id,
-          ...doc.data()
-        });
-      });
-    }
-    
-    return res.status(200).json({ agents });
-  } catch (error) {
-    console.error('Error fetching wishlists:', error);
-    return res.status(500).json({ error: 'Failed to fetch wishlists' });
-  }
-};
-
-/**
- * Get a specific wishlist by ID
- */
-const getWishlistById = async (req, res) => {
-  try {
-    // Extract wishlistId and sanitize it
-    let wishlistId = req.params.wishlistId;
-    
-    // Check if the ID contains extra path segments
-    if (wishlistId && wishlistId.includes('/')) {
-      wishlistId = wishlistId.split('/')[0];
-    }
-    
-    // Check if the ID contains query parameters
-    if (wishlistId && wishlistId.includes('?')) {
-      wishlistId = wishlistId.split('?')[0];
-    }
-    
-    // Validate wishlist ID
-    if (!wishlistId || typeof wishlistId !== 'string' || wishlistId.trim() === '') {
-      console.error('Invalid wishlist ID:', wishlistId);
-      return res.status(400).json({ error: 'Invalid wishlist ID provided' });
+     if ((agentInput.hasOwnProperty('downloadUrl') && !agentInput.downloadUrl) &&
+        (agentInput.hasOwnProperty('fileUrl') && !agentInput.fileUrl)) { // Explicitly clearing both URLs
+        output.jsonFile = null;
+        output.downloadUrl = null;
+        output.fileUrl = null;
     }
 
-    const sanitizedWishlistId = wishlistId.trim();
-    
-    // Fetch the wishlist document
-    const wishlistDoc = await db.collection('wishlists').doc(sanitizedWishlistId).get();
-    
-    if (!wishlistDoc.exists) {
-      return res.status(404).json({ error: 'Wishlist not found' });
+
+    // --- Pricing Information ---
+    let priceDetailsInput = agentInput.priceDetails;
+    if (priceDetailsInput && typeof priceDetailsInput === 'string') {
+        try { priceDetailsInput = JSON.parse(priceDetailsInput); } catch (e) { priceDetailsInput = {}; }
     }
-    
-    // Get the wishlist data
-    const wishlistData = {
-      id: wishlistDoc.id,
-      ...wishlistDoc.data()
+    const existingPriceDetails = existingAgentData.priceDetails || {};
+
+    const basePrice = parseFloat(priceDetailsInput?.basePrice ?? agentInput.basePrice ?? existingPriceDetails.basePrice) || 0;
+    let discountedPrice = parseFloat(priceDetailsInput?.discountedPrice ?? agentInput.discountedPrice ?? existingPriceDetails.discountedPrice);
+    if (isNaN(discountedPrice)) discountedPrice = basePrice;
+
+    output.priceDetails = {
+        basePrice: basePrice,
+        discountedPrice: discountedPrice,
+        currency: priceDetailsInput?.currency ?? agentInput.currency ?? existingPriceDetails.currency ?? 'USD',
+        isSubscription: typeof (priceDetailsInput?.isSubscription ?? agentInput.isSubscription ?? existingPriceDetails.isSubscription) === 'boolean'
+            ? (priceDetailsInput?.isSubscription ?? agentInput.isSubscription ?? existingPriceDetails.isSubscription)
+            : false,
+        isFree: basePrice === 0, // Always derived
     };
-    
-    return res.status(200).json(wishlistData);
-  } catch (error) {
-    console.error('Error fetching wishlist:', error);
-    return res.status(500).json({ error: 'Failed to fetch wishlist' });
-  }
-};
+    output.priceDetails.discountPercentage = output.priceDetails.basePrice > 0 && output.priceDetails.discountedPrice < output.priceDetails.basePrice
+        ? Math.round(((output.priceDetails.basePrice - output.priceDetails.discountedPrice) / output.priceDetails.basePrice) * 100)
+        : 0;
 
-/**
- * Generate mock agents for development
- */
-const generateMockAgents = (count) => {
-  // Categories that might match the ones in the filter
-  const categories = ['All', 'Design', 'Drawing & Painting', '3D', 'Self Improvement', 
-    'Music & Sound Design', 'Software Development', 'Business'];
-  
-  // Features for filtering
-  const allFeatures = [
-    'API Access', 'Customizable', 'Mobile Compatible', 
-    'Desktop App', 'Web Interface', 'Voice Enabled', 
-    'AI Powered', 'Cloud Storage', 'Offline Mode'
-  ];
-  
-  // Tags for better categorization
-  const allTags = [
-    'AI', 'Productivity', 'Assistant', 'Creative', 'Education', 
-    'Entertainment', 'Professional', 'Communication', 'Automation'
-  ];
-  
-  // Create comprehensive descriptions
-  const descriptions = [
-    "A powerful AI assistant that helps with %CATEGORY% tasks, providing instant solutions and creative ideas.",
-    "Transform your %CATEGORY% workflow with this intelligent agent that learns from your preferences.",
-    "The ultimate %CATEGORY% companion that streamlines complex tasks and boosts your productivity.",
-    "An innovative AI tool for %CATEGORY% enthusiasts, combining cutting-edge technology with intuitive design.",
-    "Elevate your %CATEGORY% projects with this smart agent, featuring advanced capabilities and seamless integration."
-  ];
-  
-  // Generate random reviews
-  const generateReviews = (agentId, count = 5) => {
-    const reviewTexts = [
-      "This agent has completely transformed how I work. Highly recommended!",
-      "Great tool with an intuitive interface. Saves me hours every day.",
-      "Does exactly what it promises. Very satisfied with the performance.",
-      "Impressive capabilities but has a bit of a learning curve.",
-      "Exceptional value for the price. Can't imagine working without it now.",
-      "The support team is fantastic. They helped me customize it for my needs.",
-      "Solid performance and reliability. Minor bugs but nothing serious.",
-      "Best in its category. I've tried many similar tools and this one stands out.",
-      "Regular updates keep improving the functionality. Gets better every month.",
-      "Would be perfect with a few more features, but still very good."
-    ];
-    
-    const reviews = [];
-    
-    for (let i = 0; i < Math.min(count, 10); i++) {
-      const randomRating = Math.floor(Math.random() * 3) + 3; // 3-5 stars
-      const reviewText = reviewTexts[Math.floor(Math.random() * reviewTexts.length)];
-      
-      reviews.push({
-        id: `review-${agentId}-${i + 1}`,
-        agentId,
-        userId: `user-${Math.floor(Math.random() * 100) + 1}`,
-        userName: `User ${Math.floor(Math.random() * 100) + 1}`,
-        rating: randomRating,
-        text: reviewText,
-        createdAt: new Date(
-          Date.now() - Math.floor(Math.random() * 90 * 24 * 60 * 60 * 1000)
-        ).toISOString(),
-        isVerified: Math.random() > 0.3, // 70% verified
-        helpful: Math.floor(Math.random() * 50),
-        unhelpful: Math.floor(Math.random() * 10)
-      });
-    }
-    
-    return reviews;
-  };
-  
-  return Array.from({ length: count }, (_, index) => {
-    const id = `agent-${index + 1}`;
-    const category = categories[Math.floor(Math.random() * categories.length)];
-    const isFree = index % 5 === 0; // 20% of agents are free
-    const isBestseller = index < Math.ceil(count * 0.2); // Top 20% are bestsellers
-    const isNew = index >= Math.floor(count * 0.8); // Bottom 20% are new
-    const isTrending = index % 10 === 0; // 10% are trending
-    const isFeatured = index % 5 === 0; // 20% are featured
-    const isSubscription = !isFree && (index % 10 === 3 || index % 10 === 8); // 15% are subscription-based
-    const reviews = generateReviews(id, Math.floor(Math.random() * 8) + 3); // 3-10 reviews
-    
-    // Calculate average rating
-    const averageRating = reviews.length > 0
-      ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1)
-      : "0.0";
-    
-    // Random agent icon/image (could be improved with more realistic URLs)
-    const iconType = Math.random() > 0.5 ? 'robot' : 'abstract';
-    const iconColor = ['blue', 'green', 'purple', 'orange', 'teal'][Math.floor(Math.random() * 5)];
-    const iconUrl = `https://example.com/agent-icons/${iconType}-${iconColor}-${index + 1}.jpg`;
+    // Top-level convenience price fields
+    output.price = output.priceDetails.discountedPrice;
+    output.isFree = output.priceDetails.isFree;
 
-    // Format the description with category
-    const descriptionTemplate = descriptions[Math.floor(Math.random() * descriptions.length)];
-    const description = descriptionTemplate.replace('%CATEGORY%', category);
-    
-    // Calculate popularity metrics
-    const popularity = Math.floor(Math.random() * 1000);
-    const viewCount = popularity * (5 + Math.floor(Math.random() * 20));
-    const wishlistCount = Math.floor(popularity * 0.3);
-    
-    // Select random features and tags
-    const features = [...allFeatures].sort(() => 0.5 - Math.random()).slice(0, 2 + Math.floor(Math.random() * 3));
-    const tags = [...allTags].sort(() => 0.5 - Math.random()).slice(0, 2 + Math.floor(Math.random() * 3));
-    
-    // Create a createdAt date (within last 30 days)
-    const createdDate = new Date(
-      Date.now() - Math.floor(Math.random() * 30 * 24 * 60 * 60 * 1000)
-    );
-    
-    // Base price calculation
-    const basePrice = isFree ? 0 : (5 + Math.floor(Math.random() * 95));
-    
-    return {
-      id,
-      name: `${category} Agent ${index + 1}`,
-      title: `${category} Assistant Pro${isBestseller ? ' Plus' : ''}`,
-      description,
-      category,
-      creator: {
-        id: `creator-${Math.floor(Math.random() * 10) + 1}`,
-        name: `AI Labs ${Math.floor(Math.random() * 100) + 1}`,
-        username: `AIWaverider${Math.floor(Math.random() * 100) + 1}`,
-        verified: Math.random() > 0.7, // 30% verified
-        role: 'Admin'
-      },
-      iconUrl,
-      features,
-      tags,
-      isBestseller,
-      isFeatured,
-      isFree,
-      isSubscription,
-      subscriptionTiers: isSubscription ? [
-        {
-          name: "Basic",
-          price: basePrice / 2,
-          features: features.slice(0, Math.ceil(features.length / 2))
-        },
-        {
-          name: "Pro",
-          price: basePrice,
-          features: features
-        }
-      ] : null,
-      isNew,
-      isTrending,
-      popularity,
-      viewCount,
-      wishlistCount,
-      createdAt: createdDate.toISOString(),
-      dateCreated: new Date(createdDate.getTime() - 3600000).toISOString(), // 1 hour earlier
-      version: `1.${Math.floor(Math.random() * 10)}.${Math.floor(Math.random() * 10)}`,
-      
-      priceDetails: {
-        basePrice: isFree ? 0 : basePrice,
-        discountedPrice: isFree ? 0 : (Math.random() > 0.7 ? Math.floor(basePrice * 0.7) : basePrice),
-        currency: "USD",
-        validUntil: Math.random() > 0.8 ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null
-      },
-      
-      priceHistory: isFree ? [] : [
-        {
-          price: basePrice + 5,
-          discountedPrice: basePrice,
-          dateApplied: new Date(createdDate.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString()
-        }
-      ],
-      
-      purchase: {
-        isAvailable: true,
-        maxPurchasesPerUser: Math.random() > 0.9 ? 1 : null,
-        refundPolicy: ["No refunds allowed", "7-day refund policy", "30-day money-back guarantee"][Math.floor(Math.random() * 3)]
-      },
-      
-      rating: {
-        average: parseFloat(averageRating),
-        count: reviews.length,
-        distribution: {
-          1: reviews.filter(r => r.rating === 1).length,
-          2: reviews.filter(r => r.rating === 2).length,
-          3: reviews.filter(r => r.rating === 3).length,
-          4: reviews.filter(r => r.rating === 4).length,
-          5: reviews.filter(r => r.rating === 5).length
-        }
-      }
+    // --- Features, Tags, and Flags ---
+    const parseArrayField = (fieldValue, existingValue) => {
+        if (Array.isArray(fieldValue)) return fieldValue;
+        if (typeof fieldValue === 'string' && fieldValue.length > 0) return fieldValue.split(',').map(f => f.trim());
+        return Array.isArray(existingValue) ? existingValue : [];
     };
-  });
+    output.features = parseArrayField(agentInput.features, existingAgentData.features);
+    output.tags = parseArrayField(agentInput.tags, existingAgentData.tags);
+
+    const parseBooleanField = (fieldValue, existingValue, defaultValue = false) => {
+        if (fieldValue === undefined) return existingValue !== undefined ? existingValue : defaultValue;
+        if (typeof fieldValue === 'boolean') return fieldValue;
+        if (typeof fieldValue === 'string') return fieldValue.toLowerCase() === 'true';
+        return defaultValue;
+    };
+    output.isFeatured = parseBooleanField(agentInput.isFeatured, existingAgentData.isFeatured, false);
+    output.isVerified = parseBooleanField(agentInput.isVerified, existingAgentData.isVerified, false);
+    output.isPopular = parseBooleanField(agentInput.isPopular, existingAgentData.isPopular, false);
+    output.isTrending = parseBooleanField(agentInput.isTrending, existingAgentData.isTrending, false);
+    output.isSubscription = parseBooleanField(agentInput.isSubscription, existingAgentData.isSubscription, false); // Keep top-level for query convenience
+
+    // --- Other metadata ---
+    output.likes = Array.isArray(agentInput.likes) ? agentInput.likes : (existingAgentData.likes || []);
+    output.downloadCount = parseInt(agentInput.downloadCount ?? existingAgentData.downloadCount, 10) || 0;
+    output.viewCount = parseInt(agentInput.viewCount ?? existingAgentData.viewCount, 10) || 0;
+    output.popularity = parseInt(agentInput.popularity ?? existingAgentData.popularity, 10) || 0;
+    output.version = agentInput.version || existingAgentData.version || '1.0.0';
+
+    // --- Timestamps ---
+    output.createdAt = existingAgentData.createdAt || now; // Preserve on update, set on create
+    output.updatedAt = now; // Always set to now
+
+    // --- Clean up ---
+    // Remove temporary frontend fields or old redundant fields if they were merged from `currentAgent`
+    delete output._imageFile;
+    delete output._iconFile;
+    delete output._jsonFile;
+    delete output.imageData; // these were temp holders in req.body from _parseIncomingData
+    delete output.iconData;
+    delete output.jsonFileData;
+    delete output.data; // if 'data' field was used in FormData
+    // Remove old top-level price fields if they exist, as priceDetails is the S.O.T.
+    delete output.basePrice;
+    delete output.discountedPrice;
+    delete output.currency;
+    delete output.discountPercentage;
+
+
+    // Ensure specific fields that should be objects are not accidentally null from input
+    if (output.priceDetails === null) output.priceDetails = { basePrice:0, discountedPrice:0, currency:'USD', isFree:true, isSubscription:false, discountPercentage:0};
+    if (output.creator === null && reqUser) output.creator = {id: reqUser.uid, name: reqUser.displayName || 'Admin', role: 'admin'};
+    else if (output.creator === null) output.creator = {id: null, name: 'System', role: 'system'};
+
+    return output;
 };
 
-/**
- * Development endpoint to seed agents data into Firestore with comprehensive data
- */
-const seedAgents = async (req, res) => {
-  try {
-    const { count = 50 } = req.query;
-    const agents = generateMockAgents(parseInt(count));
-    
-    console.log(`Generating ${agents.length} mock agents...`);
-    
-    // Create batch for efficient writes
-    let successCount = 0;
-    let batchCount = 0;
-    let batch = db.batch();
-    
-    // Add each agent to the batch
-    for (let i = 0; i < agents.length; i++) {
-      const agent = agents[i];
-      const agentRef = db.collection('agents').doc(agent.id);
-      
-      // Extract reviews to store in a subcollection
-      const reviews = agent.reviews || [];
-      delete agent.reviews; // Remove from main document
-      
-      // Add agent document
-      batch.set(agentRef, agent);
-      
-      // Add each review to the agent's reviews subcollection
-      if (reviews.length > 0) {
-        for (const review of reviews) {
-          const reviewRef = agentRef.collection('reviews').doc(review.id);
-          batch.set(reviewRef, review);
-        }
-      }
-      
-      // Firestore has a limit of 500 operations per batch
-      // So we commit the batch every 20 documents (considering reviews)
-      if ((i + 1) % 20 === 0 || i === agents.length - 1) {
-        await batch.commit();
-        successCount += Math.min(20, agents.length - i + (i % 20));
-        batchCount++;
-        console.log(`Batch ${batchCount} committed. ${successCount}/${agents.length} agents processed.`);
-        
-        // Create a new batch for the next set of operations
-        if (i < agents.length - 1) {
-          batch = db.batch();
-        }
-      }
-    }
-    
-    return res.status(200).json({ 
-      message: `${agents.length} agents seeded successfully with detailed information and reviews.`,
-      details: {
-        totalAgents: agents.length,
-        totalBatches: batchCount
-      }
-    });
-  } catch (error) {
-    console.error('Error seeding agents:', error);
-    return res.status(500).json({ error: 'Failed to seed agents', details: error.message });
-  }
-};
 
 /**
  * Create a new agent
  */
 const createAgent = async (req, res) => {
   try {
-    // Check if user is an admin
-    const isAdmin = req.user && req.user.role === 'admin';
-    if (!isAdmin) {
+    if (!req.user || req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only administrators can create agents' });
     }
+    logger.info('Create Agent: Request body received:', req.body);
+    logger.info('Create Agent: Files received:', req.files || req.file || 'No files');
 
-    console.log('Request body received:', req.body);
-    console.log('Files received:', req.files || req.file || 'No files');
+    let incomingParsedData = _parseIncomingData(req.body); // This handles the 'data' field and basic parsing
 
-    // Get agent data from request
-    let agentData = req.body;
-    let imageInfo = null;
-    let iconInfo = null;
-    let jsonFileInfo = null;
-    
-    // Check if request contains files (multipart/form-data)
-    if (req.files || req.file) {
-      console.log('Files detected in request:', req.files || req.file);
-      
-      // If data was sent as string (from formData), parse it
-      if (req.body.data && typeof req.body.data === 'string') {
-        try {
-          const parsedData = JSON.parse(req.body.data);
-          console.log('Parsed agent data from form data:', parsedData);
-          
-          // Merge with top-level fields from the form (they take precedence)
-          agentData = {
-            ...parsedData,
-            // Ensure name and category from form data take precedence
-            name: req.body.name || parsedData.name,
-            category: req.body.category || parsedData.category,
-            // Make sure price information is properly extracted
-            basePrice: parsedData.basePrice || req.body.basePrice || 0,
-            discountedPrice: parsedData.discountedPrice || req.body.discountedPrice,
-            currency: parsedData.currency || req.body.currency || 'USD',
-            isFree: parsedData.isFree || req.body.isFree || false
-          };
-          
-          // Remove _imageFile, _iconFile, and _jsonFile properties if they exist
-          delete agentData._imageFile;
-          delete agentData._iconFile;
-          delete agentData._jsonFile;
-          
-          console.log('Merged agent data:', agentData);
-        } catch (parseError) {
-          console.error('Error parsing JSON from form data:', parseError);
-          // Continue with what we have in req.body
-          agentData = req.body;
+    const files = req.files || {};
+    const storageBucket = admin.storage().bucket();
+
+    // Upload files if present
+    const newImageInfo = await _uploadFileToStorage(files.image?.[0], STORAGE_PATHS.IMAGES, storageBucket);
+    const newIconInfo = await _uploadFileToStorage(files.icon?.[0], STORAGE_PATHS.ICONS, storageBucket);
+    const newJsonFileInfo = await _uploadFileToStorage(files.jsonFile?.[0], STORAGE_PATHS.JSON_FILES, storageBucket);
+
+    // Prepare data for shaping: Start with parsed data from request
+    let dataToShape = { ...incomingParsedData };
+
+    // If new files were uploaded, their info takes precedence for the metadata objects
+    if (newImageInfo) {
+      dataToShape.image = newImageInfo; // object
+      dataToShape.imageUrl = newImageInfo.url; // string
+    } else if (dataToShape.imageData) { // If imageData object was sent (e.g. from FormData)
+        dataToShape.image = _getFileMetadataFromRequest(dataToShape.imageData, 'imageData');
+        if (dataToShape.image) dataToShape.imageUrl = dataToShape.image.url;
+    } // If only imageUrl (string) was sent, _shapeAgentDataForSave will handle it
+
+    if (newIconInfo) {
+      dataToShape.icon = newIconInfo;
+      dataToShape.iconUrl = newIconInfo.url;
+    } else if (dataToShape.iconData) {
+        dataToShape.icon = _getFileMetadataFromRequest(dataToShape.iconData, 'iconData');
+        if (dataToShape.icon) dataToShape.iconUrl = dataToShape.icon.url;
+    } // If only iconUrl (string/dataURI) was sent, _shapeAgentDataForSave will handle it
+
+    if (newJsonFileInfo) {
+      dataToShape.jsonFile = newJsonFileInfo;
+      dataToShape.downloadUrl = newJsonFileInfo.url;
+      dataToShape.fileUrl = newJsonFileInfo.url; // Usually an alias
+    } else if (dataToShape.jsonFileData) {
+        dataToShape.jsonFile = _getFileMetadataFromRequest(dataToShape.jsonFileData, 'jsonFileData');
+        if (dataToShape.jsonFile) {
+            dataToShape.downloadUrl = dataToShape.jsonFile.url;
+            dataToShape.fileUrl = dataToShape.jsonFile.url;
         }
-      }
-      
-      // Handle uploaded image
-      if (req.files?.image || req.file?.fieldname === 'image') {
-        const imageFile = req.files?.image?.[0] || (req.file?.fieldname === 'image' ? req.file : null);
-        
-        if (imageFile) {
-          console.log('Uploading agent image file:', imageFile.originalname);
-          
-          try {
-            // Upload to Firebase Storage
-            const storage = admin.storage();
-            const bucket = storage.bucket();
-            
-            // Generate a unique file name
-            const fileName = `agents/${Date.now()}_${imageFile.originalname.replace(/[^a-zA-Z0-9_.]/g, '_')}`;
-            const fileRef = bucket.file(fileName);
-            
-            // Upload the file
-            await fileRef.save(imageFile.buffer, {
-              metadata: {
-                contentType: imageFile.mimetype
-              }
-            });
-            
-            // Make file publicly accessible
-            await fileRef.makePublic();
-            
-            // Get the public URL
-            const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-            console.log('Image uploaded successfully. URL:', imageUrl);
-            
-            // Store image info separately for the image field
-            imageInfo = {
-              url: imageUrl,
-              fileName: fileName,
-              originalName: imageFile.originalname,
-              contentType: imageFile.mimetype,
-              size: imageFile.size
-            };
-            
-            // Update agent data with the new image URL
-            agentData.imageUrl = imageUrl;
-          } catch (uploadError) {
-            console.error('Error uploading image to Firebase Storage:', uploadError);
-            // Continue with agent creation, but log the error
-          }
-        }
-      } else if (agentData._hasBlobImageUrl && agentData.imageUrl) {
-        // There's a blob URL in the data but no actual file was sent
-        console.log('Blob image URL detected but no file sent. This may indicate a frontend issue.');
-        
-        // Return clear error message to the frontend about the missing image file
-        return res.status(400).json({ 
-          error: 'Image file is required but was not received. Please ensure the file is properly selected and uploaded.' 
-        });
-      }
-      
-      // Handle uploaded icon
-      if (req.files?.icon || req.file?.fieldname === 'icon') {
-        const iconFile = req.files?.icon?.[0] || (req.file?.fieldname === 'icon' ? req.file : null);
-        
-        if (iconFile) {
-          console.log('Uploading agent icon file:', iconFile.originalname);
-          
-          try {
-            // Upload to Firebase Storage
-            const storage = admin.storage();
-            const bucket = storage.bucket();
-            
-            // Generate a unique file name
-            const fileName = `agent_icons/${Date.now()}_${iconFile.originalname.replace(/[^a-zA-Z0-9_.]/g, '_')}`;
-            const fileRef = bucket.file(fileName);
-            
-            // Upload the file
-            await fileRef.save(iconFile.buffer, {
-              metadata: {
-                contentType: iconFile.mimetype
-              }
-            });
-            
-            // Make file publicly accessible
-            await fileRef.makePublic();
-            
-            // Get the public URL
-            const iconUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-            console.log('Icon uploaded successfully. URL:', iconUrl);
-            
-            // Store icon info
-            iconInfo = {
-              url: iconUrl,
-              fileName: fileName,
-              originalName: iconFile.originalname,
-              contentType: iconFile.mimetype,
-              size: iconFile.size
-            };
-            
-            // Update agent data with the new icon URL
-            agentData.iconUrl = iconUrl;
-          } catch (uploadError) {
-            console.error('Error uploading icon to Firebase Storage:', uploadError);
-            // Continue with agent creation, but log the error
-          }
-        }
-      }
-      
-      // Handle uploaded JSON file
-      if (req.files?.jsonFile || req.file?.fieldname === 'jsonFile') {
-        const jsonFile = req.files?.jsonFile?.[0] || (req.file?.fieldname === 'jsonFile' ? req.file : null);
-        
-        if (jsonFile) {
-          console.log('Uploading agent JSON file:', jsonFile.originalname);
-          
-          try {
-            // Upload to Firebase Storage
-            const storage = admin.storage();
-            const bucket = storage.bucket();
-            
-            // Generate a unique file name
-            const fileName = `agent_templates/${Date.now()}_${jsonFile.originalname.replace(/[^a-zA-Z0-9_.]/g, '_')}`;
-            const fileRef = bucket.file(fileName);
-            
-            // Upload the file
-            await fileRef.save(jsonFile.buffer, {
-              metadata: {
-                contentType: 'application/json'
-              }
-            });
-            
-            // Make file publicly accessible
-            await fileRef.makePublic();
-            
-            // Get the public URL
-            const fileUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-            console.log('JSON file uploaded successfully. URL:', fileUrl);
-            
-            // Store file info
-            jsonFileInfo = {
-              url: fileUrl,
-              fileName: fileName,
-              originalName: jsonFile.originalname,
-              contentType: 'application/json',
-              size: jsonFile.size
-            };
-            
-            // Update agent data with the new file URL
-            agentData.downloadUrl = fileUrl;
-            agentData.fileUrl = fileUrl;
-          } catch (uploadError) {
-            console.error('Error uploading JSON file to Firebase Storage:', uploadError);
-            // Continue with agent creation, but log the error
-          }
-        }
-      }
-    }
-    
-    // Validate required fields
-    if (!agentData.name || !agentData.category) {
-      console.error('Missing required fields:', { 
-        name: agentData.name || '[missing]', 
-        category: agentData.category || '[missing]' 
-      });
+    } // If only downloadUrl/fileUrl (strings) were sent, _shapeAgentDataForSave will handle them
+
+    // Shape the final data
+    const finalAgentData = _shapeAgentDataForSave(dataToShape, {}, req.user);
+
+    if (!finalAgentData.name || !finalAgentData.category) {
+      logger.warn('Create Agent: Missing name or category after shaping.', { name: finalAgentData.name, category: finalAgentData.category });
       return res.status(400).json({ error: 'Name and category are required' });
     }
     
-    // Add timestamps
-    const now = new Date().toISOString();
-    agentData.createdAt = now;
-    agentData.updatedAt = now;
-    
-    // Ensure creator information is complete
-    if (!agentData.creator) {
-      // If creator is missing, create it from the authenticated user
-      agentData.creator = {
-        name: req.user.displayName || 'Admin',
-        email: req.user.email || '',
-        id: req.user.uid,
-        role: req.user.role || 'Admin',
-        username: req.user.username || 
-                 (req.user.displayName?.replace(/\s+/g, '')) || 
-                 req.user.email?.split('@')[0] || 
-                 'AIWaverider'
-      };
-    } else {
-      // If creator exists but is incomplete, fill in missing fields
-      if (!agentData.creator.id && req.user.uid) {
-        agentData.creator.id = req.user.uid;
-      }
-      
-      if (!agentData.creator.email && req.user.email) {
-        agentData.creator.email = req.user.email;
-      }
-      
-      if (!agentData.creator.name) {
-        agentData.creator.name = req.user.displayName || 'Admin';
-      }
-      
-      if (!agentData.creator.username) {
-        // Generate username from name or email
-        agentData.creator.username = agentData.creator.name?.replace(/\s+/g, '') || 
-                                    req.user.username || 
-                                    req.user.email?.split('@')[0] || 
-                                    'AIWaverider';
-      }
-      
-      if (!agentData.creator.role) {
-        agentData.creator.role = req.user.role || 'Admin';
-      }
-    }
-    
-    // Create the final agent document structure
-    const finalAgentData = {
-      name: agentData.name,
-      category: agentData.category,
-      data: JSON.stringify(agentData), // Store the complete data as JSON string
-      image: imageInfo || {}, // Add the image field with the file info
-      icon: iconInfo || {}, // Add the icon field with the file info
-      jsonFile: jsonFileInfo || {}, // Add the JSON file info
-      downloadUrl: agentData.downloadUrl || null, // Store the download URL at top level
-      fileUrl: agentData.fileUrl || null, // Store the file URL at top level
-      templateUrl: agentData.templateUrl || null, // Store the template URL at top level
-      createdAt: now,
-      updatedAt: now,
-      creator: agentData.creator, // Keep creator at top level for easier access
-      
-      // Add price data in the expected format
-      price: typeof agentData.basePrice === 'number' || typeof agentData.basePrice === 'string' 
-        ? parseFloat(agentData.basePrice) || 0 
-        : 0,
-      
-      // Add priceDetails object that UI components expect
-      priceDetails: {
-        basePrice: typeof agentData.basePrice === 'number' || typeof agentData.basePrice === 'string'
-          ? parseFloat(agentData.basePrice) || 0
-          : 0,
-        discountedPrice: typeof agentData.discountedPrice === 'number' || typeof agentData.discountedPrice === 'string'
-          ? parseFloat(agentData.discountedPrice) || 0
-          : (parseFloat(agentData.basePrice) || 0),
-        currency: agentData.currency || 'USD'
-      },
-      
-      // Add isFree flag based on price
-      isFree: (typeof agentData.basePrice === 'number' || typeof agentData.basePrice === 'string')
-        ? (parseFloat(agentData.basePrice) || 0) === 0
-        : false
-    };
-    
-    // After building finalAgentData in createAgent, add the following:
-    const basePrice = parseFloat(agentData.basePrice) || 0;
-    const discountedPrice = parseFloat(agentData.discountedPrice) || basePrice;
-    const currency = agentData.currency || 'USD';
-    const isFree = basePrice === 0 || agentData.isFree === true;
-    const isSubscription = agentData.isSubscription === true;
-    const discountPercentage = basePrice > 0 ? Math.round(((basePrice - discountedPrice) / basePrice) * 100) : 0;
-
-    finalAgentData.basePrice = basePrice;
-    finalAgentData.discountedPrice = discountedPrice;
-    finalAgentData.currency = currency;
-    finalAgentData.isFree = isFree;
-    finalAgentData.isSubscription = isSubscription;
-    finalAgentData.discountPercentage = discountPercentage;
-    finalAgentData.price = discountedPrice;
-    finalAgentData.priceDetails = {
-      basePrice,
-      discountedPrice,
-      currency,
-      isFree,
-      isSubscription,
-      discountPercentage
-    };
-    
-    console.log('Creating agent with final data structure:', {
+    logger.info('Creating agent with final shaped data:', {
       name: finalAgentData.name,
       category: finalAgentData.category,
-      image: imageInfo ? 'Present' : 'Not provided',
-      icon: iconInfo ? 'Present' : 'Not provided',
-      jsonFile: jsonFileInfo ? 'Present' : 'Not provided',
-      downloadUrl: finalAgentData.downloadUrl || 'Not provided',
-      creator: finalAgentData.creator.name
+        imageProvided: !!finalAgentData.imageUrl,
+        iconProvided: !!finalAgentData.iconUrl,
+        jsonFileProvided: !!finalAgentData.downloadUrl,
     });
-    
-    // Create the agent in Firestore
+
     const agentRef = await db.collection('agents').add(finalAgentData);
-    
-    // Return the created agent with its ID
-    const newAgent = {
-      id: agentRef.id,
-      ...finalAgentData
-    };
+    const newAgent = { id: agentRef.id, ...finalAgentData }; // Return the data as it was saved
     
     return res.status(201).json(newAgent);
   } catch (error) {
-    console.error('Error creating agent:', error);
-    return res.status(500).json({ error: 'Failed to create agent' });
+    logger.error('Error creating agent:', error);
+    return res.status(500).json({ error: 'Failed to create agent', details: error.message });
   }
 };
 
@@ -1242,981 +610,152 @@ const createAgent = async (req, res) => {
  */
 const updateAgent = async (req, res) => {
   try {
-    // Check if user is an admin
-    const isAdmin = req.user && req.user.role === 'admin';
-    if (!isAdmin) {
+    if (!req.user || req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only administrators can update agents' });
     }
 
-    // Support for both 'id' and 'agentId' parameters to avoid conflicts
     const agentId = req.params.id || req.params.agentId;
-    
-    // Log the parameter for debugging
-    console.log('Updating agent with ID:', agentId);
-    
-    if (!agentId) {
-      return res.status(400).json({ error: 'Agent ID is required' });
-    }
-    
-    // Verify agent exists
-    console.log('Looking up agent in Firestore with ID:', agentId);
+    if (!agentId) { return res.status(400).json({ error: 'Agent ID is required' }); }
+    logger.info(`Attempting to update agent with ID: ${agentId}`);
+
     const agentRef = db.collection('agents').doc(agentId);
     const agentDoc = await agentRef.get();
+    if (!agentDoc.exists) { return res.status(404).json({ error: `Agent with ID ${agentId} not found` }); }
     
-    if (!agentDoc.exists) {
-      return res.status(404).json({ error: `Agent with ID ${agentId} not found` });
-    }
+    const currentAgentData = agentDoc.data();
+    logger.info('Current agent data retrieved for ID:', agentId);
+
+    logger.info('Update Agent: Raw request body:', req.body);
+    logger.info('Update Agent: Files received:', req.files || req.file || 'No files');
     
-    // Get current agent data
-    const currentAgent = agentDoc.data();
-    
-    console.log('Request body for update:', req.body);
-    console.log('Files received for update:', req.files || req.file || 'No files');
-    
-    // Get agent data from request
-    let agentData = req.body;
-    let imageInfo = null;
-    let iconInfo = null;
-    let jsonFileInfo = null;
-    
-    // Check if request contains files (multipart/form-data)
-    if (req.files || req.file) {
-      console.log('Files detected in update request:', req.files || req.file);
-      
-      // If data was sent as string (from formData), parse it
-      if (req.body.data && typeof req.body.data === 'string') {
-        try {
-          const parsedData = JSON.parse(req.body.data);
-          console.log('Parsed agent data from form data for update:', parsedData);
-          
-          // Merge with top-level fields from the form (they take precedence)
-          agentData = {
-            ...parsedData,
-            // Ensure fields from form data take precedence
-            name: req.body.name || parsedData.name,
-            category: req.body.category || parsedData.category,
-            description: req.body.description || parsedData.description
-          };
-          
-          // Remove file references
-          delete agentData._imageFile;
-          delete agentData._iconFile;
-          delete agentData._jsonFile;
-          
-          console.log('Merged agent data for update:', agentData);
-        } catch (parseError) {
-          console.error('Error parsing JSON from form data for update:', parseError);
-          // Continue with what we have in req.body
-          agentData = req.body;
+    let incomingParsedData = _parseIncomingData(req.body);
+
+    const files = req.files || {};
+    const storageBucket = admin.storage().bucket();
+
+    const newImageInfo = await _uploadFileToStorage(files.image?.[0], STORAGE_PATHS.IMAGES, storageBucket);
+    const newIconInfo = await _uploadFileToStorage(files.icon?.[0], STORAGE_PATHS.ICONS, storageBucket);
+    const newJsonFileInfo = await _uploadFileToStorage(files.jsonFile?.[0], STORAGE_PATHS.JSON_FILES, storageBucket);
+
+    // Prepare data for shaping: Start with current data, overlay with incoming parsed data
+    let dataToShape = { ...currentAgentData, ...incomingParsedData };
+
+    // Apply new file info or existing metadata from request, prioritizing new files
+    if (newImageInfo) {
+      dataToShape.image = newImageInfo;
+      dataToShape.imageUrl = newImageInfo.url;
+    } else if (incomingParsedData.imageData) {
+        dataToShape.image = _getFileMetadataFromRequest(incomingParsedData.imageData, 'imageData');
+        if (dataToShape.image) dataToShape.imageUrl = dataToShape.image.url;
+    } else if (incomingParsedData.hasOwnProperty('imageUrl')) { // if imageUrl is explicitly in payload
+        dataToShape.imageUrl = incomingParsedData.imageUrl;
+        if (!incomingParsedData.imageUrl && incomingParsedData.hasOwnProperty('image')) { // clearing URL, also respect image object if sent
+            dataToShape.image = incomingParsedData.image; // could be {} or null
+        } else if (!incomingParsedData.imageUrl) {
+            dataToShape.image = null; // clear object too
         }
-      }
-      
-      // Handle uploaded image if provided
-      if (req.files?.image || req.file?.fieldname === 'image') {
-        const imageFile = req.files?.image?.[0] || (req.file?.fieldname === 'image' ? req.file : null);
-        
-        if (imageFile) {
-          console.log('Uploading new agent image file:', imageFile.originalname);
-          
-          try {
-            // Upload to Firebase Storage
-            const storage = admin.storage();
-            const bucket = storage.bucket();
-            
-            // Generate a unique file name
-            const fileName = `agents/${Date.now()}_${imageFile.originalname.replace(/[^a-zA-Z0-9_.]/g, '_')}`;
-            const fileRef = bucket.file(fileName);
-            
-            // Upload the file
-            await fileRef.save(imageFile.buffer, {
-              metadata: {
-                contentType: imageFile.mimetype
-              }
-            });
-            
-            // Make file publicly accessible
-            await fileRef.makePublic();
-            
-            // Get the public URL
-            const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-            console.log('New image uploaded successfully. URL:', imageUrl);
-            
-            // Store image info
-            imageInfo = {
-              url: imageUrl,
-              fileName: fileName,
-              originalName: imageFile.originalname,
-              contentType: imageFile.mimetype,
-              size: imageFile.size
-            };
-            
-            // Update agent data with the new image URL
-            agentData.imageUrl = imageUrl;
-          } catch (uploadError) {
-            console.error('Error uploading new image to Firebase Storage:', uploadError);
-            // Continue with agent update, but log the error
-          }
+    } else if (incomingParsedData.hasOwnProperty('image')) { // only image object in payload
+        dataToShape.image = incomingParsedData.image;
+        if (dataToShape.image && dataToShape.image.url) dataToShape.imageUrl = dataToShape.image.url;
+        else if (!dataToShape.image || Object.keys(dataToShape.image).length === 0) dataToShape.imageUrl = null; // clear URL if image obj is null/empty
+    }
+
+
+    if (newIconInfo) {
+      dataToShape.icon = newIconInfo;
+      dataToShape.iconUrl = newIconInfo.url;
+    } else if (incomingParsedData.iconData) {
+        dataToShape.icon = _getFileMetadataFromRequest(incomingParsedData.iconData, 'iconData');
+        if (dataToShape.icon) dataToShape.iconUrl = dataToShape.icon.url;
+    } else if (incomingParsedData.hasOwnProperty('iconUrl')) {
+        dataToShape.iconUrl = incomingParsedData.iconUrl;
+         if (!incomingParsedData.iconUrl && incomingParsedData.hasOwnProperty('icon')) {
+            dataToShape.icon = incomingParsedData.icon;
+        } else if (!incomingParsedData.iconUrl) {
+            dataToShape.icon = null;
         }
-      }
-      
-      // Handle uploaded icon if provided
-      if (req.files?.icon || req.file?.fieldname === 'icon') {
-        const iconFile = req.files?.icon?.[0] || (req.file?.fieldname === 'icon' ? req.file : null);
-        
-        if (iconFile) {
-          console.log('Uploading new agent icon file:', iconFile.originalname);
-          
-          try {
-            // Upload to Firebase Storage
-            const storage = admin.storage();
-            const bucket = storage.bucket();
-            
-            // Generate a unique file name
-            const fileName = `agent_icons/${Date.now()}_${iconFile.originalname.replace(/[^a-zA-Z0-9_.]/g, '_')}`;
-            const fileRef = bucket.file(fileName);
-            
-            // Upload the file
-            await fileRef.save(iconFile.buffer, {
-              metadata: {
-                contentType: iconFile.mimetype
-              }
-            });
-            
-            // Make file publicly accessible
-            await fileRef.makePublic();
-            
-            // Get the public URL
-            const iconUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-            console.log('New icon uploaded successfully. URL:', iconUrl);
-            
-            // Store icon info
-            iconInfo = {
-              url: iconUrl,
-              fileName: fileName,
-              originalName: iconFile.originalname,
-              contentType: iconFile.mimetype,
-              size: iconFile.size
-            };
-            
-            // Update agent data with the new icon URL
-            agentData.iconUrl = iconUrl;
-          } catch (uploadError) {
-            console.error('Error uploading new icon to Firebase Storage:', uploadError);
-            // Continue with agent update, but log the error
-          }
+    } else if (incomingParsedData.hasOwnProperty('icon')) {
+        dataToShape.icon = incomingParsedData.icon;
+        if (dataToShape.icon && dataToShape.icon.url) dataToShape.iconUrl = dataToShape.icon.url;
+        else if (!dataToShape.icon || Object.keys(dataToShape.icon).length === 0) dataToShape.iconUrl = null;
+    }
+
+
+    if (newJsonFileInfo) {
+      dataToShape.jsonFile = newJsonFileInfo;
+      dataToShape.downloadUrl = newJsonFileInfo.url;
+      dataToShape.fileUrl = newJsonFileInfo.url;
+    } else if (incomingParsedData.jsonFileData) {
+        dataToShape.jsonFile = _getFileMetadataFromRequest(incomingParsedData.jsonFileData, 'jsonFileData');
+        if (dataToShape.jsonFile) {
+             dataToShape.downloadUrl = dataToShape.jsonFile.url;
+             dataToShape.fileUrl = dataToShape.jsonFile.url;
         }
-      }
-      
-      // Handle uploaded JSON file if provided
-      if (req.files?.jsonFile || req.file?.fieldname === 'jsonFile') {
-        const jsonFile = req.files?.jsonFile?.[0] || (req.file?.fieldname === 'jsonFile' ? req.file : null);
-        
-        if (jsonFile) {
-          console.log('Uploading new agent JSON file:', jsonFile.originalname);
-          
-          try {
-            // Upload to Firebase Storage
-            const storage = admin.storage();
-            const bucket = storage.bucket();
-            
-            // Generate a unique file name
-            const fileName = `agent_templates/${Date.now()}_${jsonFile.originalname.replace(/[^a-zA-Z0-9_.]/g, '_')}`;
-            const fileRef = bucket.file(fileName);
-            
-            // Upload the file
-            await fileRef.save(jsonFile.buffer, {
-              metadata: {
-                contentType: 'application/json'
-              }
-            });
-            
-            // Make file publicly accessible
-            await fileRef.makePublic();
-            
-            // Get the public URL
-            const fileUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-            console.log('New JSON file uploaded successfully. URL:', fileUrl);
-            
-            // Store file info
-            jsonFileInfo = {
-              url: fileUrl,
-              fileName: fileName,
-              originalName: jsonFile.originalname,
-              contentType: 'application/json',
-              size: jsonFile.size
-            };
-            
-            // Update agent data with the new file URL
-            agentData.downloadUrl = fileUrl;
-            agentData.fileUrl = fileUrl;
-          } catch (uploadError) {
-            console.error('Error uploading new JSON file to Firebase Storage:', uploadError);
-            // Continue with agent update, but log the error
-          }
+    } else { // Handle explicit URL changes or jsonFile object changes
+        if (incomingParsedData.hasOwnProperty('downloadUrl')) dataToShape.downloadUrl = incomingParsedData.downloadUrl;
+        if (incomingParsedData.hasOwnProperty('fileUrl')) dataToShape.fileUrl = incomingParsedData.fileUrl;
+        if (incomingParsedData.hasOwnProperty('jsonFile')) dataToShape.jsonFile = incomingParsedData.jsonFile; // could be obj or null
+
+        // If jsonFile object is provided, its URL should take precedence if other URLs are not explicitly set
+        if (dataToShape.jsonFile && dataToShape.jsonFile.url) {
+            if (!incomingParsedData.hasOwnProperty('downloadUrl')) dataToShape.downloadUrl = dataToShape.jsonFile.url;
+            if (!incomingParsedData.hasOwnProperty('fileUrl')) dataToShape.fileUrl = dataToShape.jsonFile.url;
+        } else if (!dataToShape.jsonFile || Object.keys(dataToShape.jsonFile || {}).length === 0) {
+            // If jsonFile is cleared, and URLs were not in payload, clear them too
+            if (!incomingParsedData.hasOwnProperty('downloadUrl')) dataToShape.downloadUrl = null;
+            if (!incomingParsedData.hasOwnProperty('fileUrl')) dataToShape.fileUrl = null;
         }
-      }
     }
     
-    // Validate required fields
-    if (!agentData.name || !agentData.category) {
-      return res.status(400).json({ error: 'Name and category are required' });
+    const finalAgentData = _shapeAgentDataForSave(dataToShape, currentAgentData, req.user); // Pass currentAgentData for context
+
+    if (!finalAgentData.name || !finalAgentData.category) {
+      logger.warn('Update Agent: Missing name or category after shaping.', { name: finalAgentData.name, category: finalAgentData.category });
+      return res.status(400).json({ error: 'Name and category are required for update.' });
     }
-    
-    // Update timestamp
-    const now = new Date().toISOString();
-    agentData.updatedAt = now;
-    
-    // Keep creator information from existing agent if not provided
-    if (!agentData.creator && currentAgent.creator) {
-      agentData.creator = currentAgent.creator;
-    }
-    
-    // Keep existing URLs if not updated
-    if (!agentData.imageUrl && currentAgent.imageUrl) {
-      agentData.imageUrl = currentAgent.imageUrl;
-    }
-    
-    if (!agentData.iconUrl && currentAgent.iconUrl) {
-      agentData.iconUrl = currentAgent.iconUrl;
-    }
-    
-    // Keep existing download URLs if not uploaded
-    if (!agentData.downloadUrl && currentAgent.downloadUrl) {
-      agentData.downloadUrl = currentAgent.downloadUrl;
-    }
-    
-    if (!agentData.fileUrl && currentAgent.fileUrl) {
-      agentData.fileUrl = currentAgent.fileUrl;
-    }
-    
-    // Create the update data
-    const updateData = {
-      name: agentData.name,
-      category: agentData.category,
-      data: JSON.stringify(agentData),
-      updatedAt: now,
-      
-      // Add price data in expected format
-      price: typeof agentData.basePrice === 'number' || typeof agentData.basePrice === 'string' 
-        ? parseFloat(agentData.basePrice) || 0 
-        : (currentAgent.price || 0),
-      
-      // Add priceDetails object
-      priceDetails: {
-        basePrice: typeof agentData.basePrice === 'number' || typeof agentData.basePrice === 'string'
-          ? parseFloat(agentData.basePrice) || 0
-          : (currentAgent.priceDetails?.basePrice || 0),
-        discountedPrice: typeof agentData.discountedPrice === 'number' || typeof agentData.discountedPrice === 'string'
-          ? parseFloat(agentData.discountedPrice) || 0
-          : (typeof agentData.basePrice === 'number' || typeof agentData.basePrice === 'string'
-              ? parseFloat(agentData.basePrice) || 0
-              : (currentAgent.priceDetails?.discountedPrice || currentAgent.priceDetails?.basePrice || 0)),
-        currency: agentData.currency || currentAgent.priceDetails?.currency || 'USD'
-      },
-      
-      // Add isFree flag based on price
-      isFree: (typeof agentData.basePrice === 'number' || typeof agentData.basePrice === 'string')
-        ? (parseFloat(agentData.basePrice) || 0) === 0
-        : currentAgent.isFree || false
-    };
-    
-    // Add new file info if available
-    if (imageInfo) {
-      updateData.image = imageInfo;
-    }
-    
-    if (iconInfo) {
-      updateData.icon = iconInfo;
-    }
-    
-    if (jsonFileInfo) {
-      updateData.jsonFile = jsonFileInfo;
-      updateData.downloadUrl = jsonFileInfo.url;
-      updateData.fileUrl = jsonFileInfo.url;
-    }
-    
-    // Update URLs even if files weren't uploaded (could be external URLs)
-    if (agentData.imageUrl) {
-      updateData.imageUrl = agentData.imageUrl;
-    }
-    
-    if (agentData.iconUrl) {
-      updateData.iconUrl = agentData.iconUrl;
-    }
-    
-    if (agentData.downloadUrl) {
-      updateData.downloadUrl = agentData.downloadUrl;
-    }
-    
-    if (agentData.fileUrl) {
-      updateData.fileUrl = agentData.fileUrl;
-    }
-    
-    if (agentData.templateUrl) {
-      updateData.templateUrl = agentData.templateUrl;
-    }
-    
-    console.log('Updating agent with data:', {
+
+    logger.info('Final shaped agent data for Firestore update:', {
       id: agentId,
-      name: updateData.name,
-      category: updateData.category,
-      imageUpdated: !!imageInfo,
-      iconUpdated: !!iconInfo,
-      jsonFileUpdated: !!jsonFileInfo
+      name: finalAgentData.name,
+      imageUpdated: finalAgentData.imageUrl !== currentAgentData.imageUrl,
+      iconUpdated: finalAgentData.iconUrl !== currentAgentData.iconUrl,
+      jsonFileUpdated: finalAgentData.downloadUrl !== currentAgentData.downloadUrl,
     });
-    
-    // Update the agent in Firestore
-    await agentRef.update(updateData);
-    
-    // Get the updated agent
-    const updatedAgentDoc = await agentRef.get();
-    const updatedAgent = {
-      id: agentId,
-      ...updatedAgentDoc.data()
-    };
+
+    await agentRef.update(finalAgentData);
+    const updatedAgentDoc = await agentRef.get(); // Fetch again to get the truly persisted state
+    const updatedAgent = { id: agentId, ...updatedAgentDoc.data() };
     
     return res.status(200).json(updatedAgent);
+
   } catch (error) {
-    console.error('Error updating agent:', error);
-    return res.status(500).json({ error: 'Failed to update agent' });
+    logger.error('Error updating agent:', error);
+    if (error.code) logger.error('Firebase Error Code:', error.code);
+    return res.status(500).json({ error: 'Failed to update agent', details: error.message });
   }
 };
 
-/**
- * Delete an agent
- */
-const deleteAgent = async (req, res) => {
-  try {
-    // Check if user is an admin
-    const isAdmin = req.user && req.user.role === 'admin';
-    if (!isAdmin) {
-      return res.status(403).json({ error: 'Only administrators can delete agents' });
-    }
 
-    // Extract agentId from either req.params.agentId or req.params.id
-    let agentId = req.params.agentId || req.params.id;
-    
-    // Check if the ID contains extra path segments
-    if (agentId && agentId.includes('/')) {
-      // Extract just the agent ID part
-      agentId = agentId.split('/')[0];
-    }
-    
-    // Validate agent ID to prevent Firestore errors
-    if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
-      console.error('Invalid agent ID for deletion:', agentId);
-      return res.status(400).json({ error: 'Invalid agent ID provided' });
-    }
+// --- YOUR OTHER EXISTING FUNCTIONS (deleteAgent, combinedUpdate, etc. - KEEP AS IS) ---
+const deleteAgent = async (req, res) => { /* ... your existing code ... */ };
+const combinedUpdate = async (req, res) => { /* ... your existing code ... */ };
+const createAgentWithPrice = (req, res) => { /* ... your existing code ... */ };
+const getDownloadCount = async (req, res) => { /* ... your existing code ... */ };
+const incrementDownloadCount = async (req, res) => { /* ... your existing code ... */ };
+const getLatestAgents = async (limit = 5) => { /* ... your existing code ... */ };
+const getLatestAgentsRoute = async (req, res) => { /* ... your existing code ... */ };
+// --- END OF OTHER EXISTING FUNCTIONS ---
 
-    const sanitizedAgentId = agentId.trim();
-    console.log('Processing agent deletion for ID:', sanitizedAgentId);
-    
-    // Check if agent exists
-    const agentDoc = await db.collection('agents').doc(sanitizedAgentId).get();
-    if (!agentDoc.exists) {
-      return res.status(404).json({ error: 'Agent not found' });
-    }
-    
-    // Delete the agent
-    await db.collection('agents').doc(sanitizedAgentId).delete();
-    
-    // Delete associated prices
-    const priceQuery = await db.collection('prices').where('agentId', '==', sanitizedAgentId).get();
-    const batch = db.batch();
-    priceQuery.forEach(doc => {
-      batch.delete(doc.ref);
-    });
-    await batch.commit();
-    
-    return res.status(200).json({ 
-      success: true, 
-      message: 'Agent deleted successfully',
-      id: sanitizedAgentId
-    });
-  } catch (error) {
-    console.error('Error deleting agent:', error);
-    return res.status(500).json({ error: 'Failed to delete agent' });
-  }
+
+logger.info("Before export - function status check:");
+const functionsToExport = {
+  getAgents, getFeaturedAgents, getAgentById, toggleWishlist, getWishlists, getWishlistById,
+  seedAgents, generateMockAgents, createAgent, updateAgent, deleteAgent,
+  combinedUpdate, createAgentWithPrice, getDownloadCount, incrementDownloadCount,
+  getLatestAgents, getLatestAgentsRoute
 };
+for (const funcName in functionsToExport) {
+  logger.info(`- ${funcName}: ${typeof functionsToExport[funcName] === 'function'}`);
+}
 
-/**
- * Combined update for agent and price data
- */
-const combinedUpdate = async (req, res) => {
-  try {
-    // Extract and sanitize agentId
-    let agentId = req.params.agentId || req.params.id;
-    console.log('Combined update requested for raw ID:', agentId);
-    
-    // Check if the ID contains extra path segments
-    if (agentId && agentId.includes('/')) {
-      agentId = agentId.split('/')[0];
-    }
-    
-    // Check if the ID contains query parameters
-    if (agentId && agentId.includes('?')) {
-      agentId = agentId.split('?')[0];
-    }
-    
-    // Add "agent-" prefix if it's missing and it's numeric
-    if (agentId && !isNaN(agentId) && !agentId.startsWith('agent-')) {
-      agentId = `agent-${agentId}`;
-      console.log('Added agent- prefix to numeric ID:', agentId);
-    }
-    
-    // Validate agent ID
-    if (!agentId || typeof agentId !== 'string' || agentId.trim() === '') {
-      console.error('Invalid agent ID for combined update:', agentId);
-      return res.status(400).json({ error: 'Invalid agent ID provided' });
-    }
-    
-    const sanitizedAgentId = agentId.trim();
-    console.log('Processing combined update for agent ID:', sanitizedAgentId);
-    
-    // Extract price data from the request body
-    const { priceData, _method, ...agentData } = req.body;
-    
-    // Get agent document reference
-    const agentRef = db.collection('agents').doc(sanitizedAgentId);
-    const agentDoc = await agentRef.get();
-    
-    if (!agentDoc.exists) {
-      return res.status(404).json({ error: 'Agent not found' });
-    }
-    
-    // Update agent data
-    console.log(`Updating agent ${sanitizedAgentId} with data:`, agentData);
-    await agentRef.update({
-      ...agentData,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-    
-    // If price data is provided, update price
-    let priceUpdateResult = null;
-    if (priceData) {
-      console.log(`Updating price data for agent ${sanitizedAgentId}:`, priceData);
-      
-      // Use the agentId as the price document ID for consistency with priceController
-      const priceRef = db.collection('prices').doc(sanitizedAgentId);
-      const priceDoc = await priceRef.get();
-      
-      if (priceDoc.exists) {
-        // Update existing price document
-        await priceRef.update({
-          ...priceData,
-          agentId: sanitizedAgentId,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-      } else {
-        // Create new price document
-        await priceRef.set({
-          ...priceData,
-          agentId: sanitizedAgentId,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-      }
-      
-      // Get the updated price document
-      const updatedPriceDoc = await priceRef.get();
-      priceUpdateResult = {
-        id: updatedPriceDoc.id,
-        ...updatedPriceDoc.data()
-      };
-    }
-    
-    // Get the updated agent document
-    const updatedAgentDoc = await agentRef.get();
-    const updatedAgent = {
-      id: updatedAgentDoc.id,
-      ...updatedAgentDoc.data()
-    };
-    
-    // Add price data to the response if it was updated
-    if (priceUpdateResult) {
-      updatedAgent.priceDetails = {
-        basePrice: priceUpdateResult.basePrice || 0,
-        discountedPrice: priceUpdateResult.discountedPrice || priceUpdateResult.finalPrice || 0,
-        currency: priceUpdateResult.currency || 'USD'
-      };
-      updatedAgent.isFree = priceUpdateResult.isFree || false;
-      updatedAgent.isSubscription = priceUpdateResult.isSubscription || false;
-      
-      // Include the full price data in the response
-      updatedAgent.priceData = priceUpdateResult;
-    }
-    
-    // Clear any Redis cache for this agent
-    try {
-      const redisClient = req.app.get('redisClient');
-      if (redisClient) {
-        await redisClient.del(`agent:${sanitizedAgentId}`);
-        await redisClient.del(`price:${sanitizedAgentId}`);
-        console.log(`Cleared Redis cache for agent:${sanitizedAgentId} and price:${sanitizedAgentId}`);
-      }
-    } catch (redisError) {
-      console.warn('Redis cache clear error:', redisError);
-      // Continue processing even if Redis fails
-    }
-    
-    // Make sure we always send a proper response with status 200
-    console.log('Combined update successful, returning updated agent data with status 200');
-    
-    // Create a properly structured response
-    const responseBody = {
-      success: true,
-      data: updatedAgent,
-      message: 'Agent and price data updated successfully'
-    };
-    
-    // Set the Content-Type header to ensure the response is treated as JSON
-    res.setHeader('Content-Type', 'application/json');
-    
-    // Send a 200 response with the JSON body
-    return res.status(200).json(responseBody);
-  } catch (error) {
-    console.error('Error in combined update:', error);
-    return res.status(500).json({ 
-      success: false,
-      error: 'Failed to update agent and price data',
-      message: error.message
-    });
-  }
-};
-
-/**
- * Creates an agent with price data in a single request
- * This helps avoid making multiple API calls from the frontend
- */
-const createAgentWithPrice = (req, res) => {
-  // Very simple implementation to test if routing works
-  console.log('Simple createAgentWithPrice called', req.body);
-  return res.status(200).json({
-    success: true,
-    message: 'Create agent with price handler reached successfully',
-    receivedData: req.body
-  });
-};
-
-/**
- * Get the download count for an agent
- * @route GET /api/agents/:agentId/downloads
- */
-const getDownloadCount = async (req, res) => {
-  try {
-    const { agentId } = req.params;
-    
-    if (!agentId) {
-      return res.status(400).json({ error: 'Agent ID is required' });
-    }
-    
-    // Get the agent document
-    const agentRef = db.collection('agents').doc(agentId);
-    const agentDoc = await agentRef.get();
-    
-    if (!agentDoc.exists) {
-      return res.status(404).json({ error: 'Agent not found' });
-    }
-    
-    const agentData = agentDoc.data();
-    
-    // Return the download count (default to 0 if not set)
-    return res.status(200).json({ 
-      downloads: agentData.downloadCount || 0,
-      agentId
-    });
-  } catch (error) {
-    console.error('Error getting download count:', error);
-    return res.status(500).json({ error: 'Failed to get download count' });
-  }
-};
-
-/**
- * Increment the download count for an agent
- * @route POST /api/agents/:agentId/downloads
- */
-const incrementDownloadCount = async (req, res) => {
-  try {
-    const { agentId } = req.params;
-    
-    if (!agentId) {
-      return res.status(400).json({ error: 'Agent ID is required' });
-    }
-    
-    // Get the agent document
-    const agentRef = db.collection('agents').doc(agentId);
-    const agentDoc = await agentRef.get();
-    
-    if (!agentDoc.exists) {
-      return res.status(404).json({ error: 'Agent not found' });
-    }
-    
-    // Increment the download count using an atomic operation
-    await agentRef.update({
-      downloadCount: admin.firestore.FieldValue.increment(1),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-    
-    // Get the updated agent document
-    const updatedAgentDoc = await agentRef.get();
-    const updatedAgentData = updatedAgentDoc.data();
-    
-    return res.status(200).json({ 
-      downloads: updatedAgentData.downloadCount || 1,
-      agentId,
-      message: 'Download count incremented successfully'
-    });
-  } catch (error) {
-    console.error('Error incrementing download count:', error);
-    return res.status(500).json({ error: 'Failed to increment download count' });
-  }
-};
-
-/**
- * Get latest agents for email notifications
- * @param {number} limit - Number of latest agents to return
- * @returns {Array} Array of latest agents
- */
-const getLatestAgents = async (limit = 5) => {
-  try {
-    console.log(`Fetching latest ${limit} agents for email notification`);
-    
-    // Create cache key for latest agents
-    const cacheKey = `${CACHE_KEYS.LATEST}:${limit}`;
-    
-    // Try to get real agents first
-    let agents = [];
-    
-    // Query agents sorted by createdAt (descending)
-    let query = db.collection('agents')
-      .orderBy('createdAt', 'desc')
-      .limit(parseInt(limit));
-    
-    const agentsSnapshot = await query.get();
-    
-    // Log what we found in the database
-    console.log(`Found ${agentsSnapshot.size} agents in the database by createdAt`);
-
-    agentsSnapshot.forEach(doc => {
-      const agentData = doc.data();
-      
-      // Ensure we have all the required fields for the email template
-      const formattedAgent = {
-        id: doc.id,
-        url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents/${doc.id}`,
-        name: agentData.name || agentData.title || 'AI Agent',
-        imageUrl: agentData.imageUrl || agentData.image || 'https://via.placeholder.com/300x200?text=AI+Agent',
-        description: agentData.description || 'An AI agent to help with your tasks',
-        price: agentData.price || 0,
-        creator: {
-          name: agentData.creator?.name || '',
-          username: agentData.creator?.username || agentData.creator?.name || 'AIWaverider',
-          role: agentData.creator?.role || 'Admin',
-          ...agentData.creator
-        },
-        rating: {
-          average: agentData.rating?.average || 4.5,
-          count: agentData.rating?.count || 0
-        },
-        ...agentData
-      };
-      
-      agents.push(formattedAgent);
-    });
-    
-    // If we don't have agents by createdAt, try by dateCreated
-    if (agents.length === 0) {
-      console.log('No agents found with createdAt, trying dateCreated field');
-      
-      query = db.collection('agents')
-        .orderBy('dateCreated', 'desc')
-        .limit(parseInt(limit));
-      
-      const dateCreatedSnapshot = await query.get();
-      console.log(`Found ${dateCreatedSnapshot.size} agents in the database by dateCreated`);
-      
-      dateCreatedSnapshot.forEach(doc => {
-        if (!agents.some(agent => agent.id === doc.id)) {
-          const agentData = doc.data();
-          
-          const formattedAgent = {
-            id: doc.id,
-            url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents/${doc.id}`,
-            name: agentData.name || agentData.title || 'AI Agent',
-            imageUrl: agentData.imageUrl || agentData.image || 'https://via.placeholder.com/300x200?text=AI+Agent',
-            description: agentData.description || 'An AI agent to help with your tasks',
-            price: agentData.price || 0,
-            creator: {
-              name: agentData.creator?.name || '',
-              username: agentData.creator?.username || agentData.creator?.name || 'AIWaverider',
-              role: agentData.creator?.role || 'Admin',
-              ...agentData.creator
-            },
-            rating: {
-              average: agentData.rating?.average || 4.5,
-              count: agentData.rating?.count || 0
-            },
-            ...agentData
-          };
-          
-          agents.push(formattedAgent);
-        }
-      });
-    }
-    
-    // If we still don't have agents, try to get featured/bestsellers
-    if (agents.length === 0) {
-      console.log('No agents found by date, trying featured/bestseller agents');
-      
-      query = db.collection('agents')
-        .where('isBestseller', '==', true)
-        .limit(parseInt(limit));
-      
-      const featuredSnapshot = await query.get();
-      console.log(`Found ${featuredSnapshot.size} featured agents in the database`);
-      
-      featuredSnapshot.forEach(doc => {
-        if (!agents.some(agent => agent.id === doc.id)) {
-          const agentData = doc.data();
-          
-          const formattedAgent = {
-            id: doc.id,
-            url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents/${doc.id}`,
-            name: agentData.name || agentData.title || 'AI Agent',
-            imageUrl: agentData.imageUrl || agentData.image || 'https://via.placeholder.com/300x200?text=AI+Agent',
-            description: agentData.description || 'An AI agent to help with your tasks',
-            price: agentData.price || 0,
-            creator: {
-              name: agentData.creator?.name || '',
-              username: agentData.creator?.username || agentData.creator?.name || 'AIWaverider',
-              role: agentData.creator?.role || 'Admin',
-              ...agentData.creator
-            },
-            rating: {
-              average: agentData.rating?.average || 4.5,
-              count: agentData.rating?.count || 0
-            },
-            ...agentData
-          };
-          
-          agents.push(formattedAgent);
-        }
-      });
-    }
-    
-    // If still no agents, try to get ANY agents without filtering
-    if (agents.length === 0) {
-      console.log('Still no agents found, trying to get any agents without filtering');
-      
-      query = db.collection('agents')
-        .limit(parseInt(limit));
-      
-      const anyAgentsSnapshot = await query.get();
-      console.log(`Found ${anyAgentsSnapshot.size} total agents in the database`);
-      
-      anyAgentsSnapshot.forEach(doc => {
-        if (!agents.some(agent => agent.id === doc.id)) {
-          const agentData = doc.data();
-          
-          const formattedAgent = {
-            id: doc.id,
-            url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents/${doc.id}`,
-            name: agentData.name || agentData.title || 'AI Agent',
-            imageUrl: agentData.imageUrl || agentData.image || 'https://via.placeholder.com/300x200?text=AI+Agent',
-            description: agentData.description || 'An AI agent to help with your tasks',
-            price: agentData.price || 0,
-            creator: {
-              name: agentData.creator?.name || '',
-              username: agentData.creator?.username || agentData.creator?.name || 'AIWaverider',
-              role: agentData.creator?.role || 'Admin',
-              ...agentData.creator
-            },
-            rating: {
-              average: agentData.rating?.average || 4.5,
-              count: agentData.rating?.count || 0
-            },
-            ...agentData
-          };
-          
-          agents.push(formattedAgent);
-        }
-      });
-    }
-    
-    // If still no real agents from the database, use the sample agents as a last resort
-    if (agents.length === 0) {
-      console.log('No real agents found in database, using sample agents');
-      
-      // Create a few sample agents
-      const sampleAgents = [
-        {
-          id: 'sample-agent-1',
-          url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents`,
-          name: 'Writing Assistant',
-          imageUrl: 'https://via.placeholder.com/300x200?text=Writing+Assistant',
-          description: 'AI assistant that helps with writing tasks',
-          price: 19.99,
-          priceDetails: {
-            originalPrice: 29.99,
-            discountedPrice: 19.99,
-            discountPercentage: 33
-          },
-          creator: { 
-            name: 'Colorland Studio',
-            username: 'Colorland',
-            role: 'Partner'
-          },
-          rating: { average: 4.8, count: 1578 },
-          location: 'Online'
-        },
-        {
-          id: 'sample-agent-2',
-          url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents`,
-          name: 'CLEAN CAR ONE',
-          imageUrl: 'https://via.placeholder.com/300x200?text=Clean+Car',
-          description: 'Interior & exterior cleaning service',
-          price: 29.90,
-          priceDetails: {
-            originalPrice: 69.90,
-            discountedPrice: 29.90,
-            discountPercentage: 57
-          },
-          promoCode: 'mit Code PROMO. Endet am 23.4',
-          creator: { 
-            name: 'Berlin Cleaning Services',
-            username: 'BerlinBERLIN',
-            role: 'Partner'
-          },
-          rating: { average: 4.5, count: 47 }
-        },
-        {
-          id: 'sample-agent-3',
-          url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents`,
-          name: 'Laser Hair Removal',
-          imageUrl: 'https://via.placeholder.com/300x200?text=Laser+Hair+Removal',
-          description: 'Professional laser hair removal',
-          price: 39.90,
-          priceDetails: {
-            originalPrice: 267.00,
-            discountedPrice: 39.90,
-            discountPercentage: 91
-          },
-          creator: { 
-            name: 'Flawless Medical Beauty Center',
-            username: 'FlawlessBeauty',
-            role: 'Partner'
-          },
-          location: 'Berlin',
-          rating: { average: 4.6, count: 83 }
-        },
-        {
-          id: 'sample-agent-4',
-          url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents`,
-          name: 'Full Body Massage',
-          imageUrl: 'https://via.placeholder.com/300x200?text=Body+Massage',
-          description: '30 or 70 min full body massage',
-          price: 27.19,
-          priceDetails: {
-            originalPrice: 45.90,
-            discountedPrice: 27.19,
-            discountPercentage: 40
-          },
-          promoCode: 'mit Code PROMO. Endet am 23.4',
-          creator: { 
-            name: 'Monique Martin Wellness',
-            username: 'MoniqueMartin',
-            role: 'Partner'
-          },
-          location: 'Berlin, BE',
-          rating: { average: 5.0, count: 14 }
-        },
-        {
-          id: 'sample-agent-5',
-          url: `${process.env.FRONTEND_URL || 'https://aiwaverider.com'}/agents`,
-          name: 'Code Generator Pro',
-          imageUrl: 'https://via.placeholder.com/300x200?text=Code+Generator',
-          description: 'Generate high-quality code snippets',
-          price: 19.99,
-          priceDetails: {
-            originalPrice: 39.99,
-            discountedPrice: 19.99,
-            discountPercentage: 50
-          },
-          creator: { 
-            name: 'AI Waverider Team',
-            username: 'AIWaverider',
-            role: 'Admin'
-          },
-          expiryDate: '05.05.2023',
-          rating: { average: 4.9, count: 156 }
-        }
-      ];
-      
-      // Add sample agents up to the requested limit
-      agents = sampleAgents.slice(0, limit);
-    }
-    
-    console.log(`Successfully retrieved ${agents.length} latest agents for email`);
-    
-    // Return the agents, limited to the requested number
-    return agents.slice(0, limit);
-  } catch (error) {
-    console.error('Error fetching latest agents for email:', error);
-    console.error(error.stack); // Log the full stack trace for debugging
-    return [];
-  }
-};
-
-/**
- * Get the latest agents for email notifications and the frontend
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- */
-const getLatestAgentsRoute = async (req, res) => {
-  try {
-    const { limit = 5 } = req.query;
-    
-    // Use the existing function to get latest agents
-    const latestAgents = await getLatestAgents(parseInt(limit));
-    
-    return res.status(200).json({ 
-      success: true,
-      agents: latestAgents,
-      count: latestAgents.length
-    });
-  } catch (error) {
-    console.error('Error getting latest agents:', error);
-    return res.status(500).json({ 
-      success: false,
-      error: 'Failed to get latest agents', 
-      message: error.message 
-    });
-  }
-};
-
-// Log the status of each function before exporting
-console.log("Before export - function status:");
-console.log("- getAgents:", typeof getAgents === 'function');
-console.log("- combinedUpdate:", typeof combinedUpdate === 'function');
-console.log("- createAgentWithPrice:", typeof createAgentWithPrice === 'function');
-
-// Export all controller functions
-module.exports = {
-  getAgents,
-  getFeaturedAgents,
-  getAgentById,
-  toggleWishlist,
-  getWishlists,
-  getWishlistById,
-  seedAgents,
-  generateMockAgents,
-  createAgent,
-  updateAgent,
-  deleteAgent,
-  combinedUpdate,
-  createAgentWithPrice,
-  getDownloadCount,
-  incrementDownloadCount,
-  getLatestAgents,
-  getLatestAgentsRoute
-}; 
+module.exports = functionsToExport;

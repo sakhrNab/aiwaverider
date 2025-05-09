@@ -15,7 +15,9 @@
     "seed:agents": "node scripts/seedAgents.js",
     "check:agents": "node scripts/checkAndSeedAgents.js",
     "check:collections": "node scripts/checkAndSeedAgents.js",
-    "migrate:prices": "node scripts/migratePrices.js"
+    "migrate:prices": "node scripts/migratePrices.js",
+    "seed": "node ./scripts/seedData.js",
+    "cleanup:prices": "node ./scripts/runCleanup.js"
   },
   "keywords": [],
   "author": "",

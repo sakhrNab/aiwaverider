@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './FilterSidebar.css';
+import { FaCheck } from 'react-icons/fa';
 
 const FilterSidebar = ({ 
   selectedTags = [], 
@@ -115,8 +116,10 @@ const FilterSidebar = ({
   };
   
   const handleRatingSelect = (rating) => {
+    console.log('Rating selected:', rating, 'Previous rating:', selectedRating);
     if (onRatingChange) {
       onRatingChange(rating);
+      console.log('Called onRatingChange with rating:', rating);
     }
   };
 
@@ -176,7 +179,7 @@ const FilterSidebar = ({
               onClick={() => handleRatingSelect(rating)}
             >
               <div className={`checkbox ${selectedRating === rating ? 'checked' : ''}`}>
-                {selectedRating === rating && <span className="checkmark">✓</span>}
+                {selectedRating === rating && <FaCheck className="checkmark" size={10} />}
               </div>
               <div className="stars">{renderStars(rating)}</div>
               <span className="filter-label">&amp; Up</span>
@@ -197,7 +200,7 @@ const FilterSidebar = ({
               onClick={() => handleTagSelect(tag.name)}
             >
               <div className={`checkbox ${selectedTags.includes(tag.name) ? 'checked' : ''}`}>
-                {selectedTags.includes(tag.name) && <span className="checkmark">✓</span>}
+                {selectedTags.includes(tag.name) && <FaCheck className="checkmark" size={10} />}
               </div>
               <span className="filter-label">{tag.name}</span>
               <span className="filter-count">{tag.count}</span>
@@ -223,7 +226,7 @@ const FilterSidebar = ({
               onClick={() => handleFeatureSelect(feature.name)}
             >
               <div className={`checkbox ${selectedFeatures.includes(feature.name) ? 'checked' : ''}`}>
-                {selectedFeatures.includes(feature.name) && <span className="checkmark">✓</span>}
+                {selectedFeatures.includes(feature.name) && <FaCheck className="checkmark" size={10} />}
               </div>
               <span className="filter-label">{feature.name}</span>
               <span className="filter-count">{feature.count}</span>

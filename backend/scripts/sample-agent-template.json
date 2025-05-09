@@ -3,7 +3,7 @@
   "name": "Sample Agent Template",
   "version": "1.0.0",
   "description": "A sample template that can be used for agent customization",
-  "author": "AI Wave Rider",
+  "author": "AI Waverider",
   "created_at": "2023-09-14T12:00:00Z",
   "parameters": [
     {

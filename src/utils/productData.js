@@ -278,7 +278,7 @@ if (debugRecommendations.length > 0) {
         imageUrl: debugRec.imageUrl || 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=600&auto=format&fit=crop',
         category: 'AI Tools',
         creator: {
-          name: 'AI Wave Rider',
+          name: 'AI Waverider',
           id: 'ai-wave-rider',
           avatar: 'https://randomuser.me/api/portraits/men/22.jpg'
         },

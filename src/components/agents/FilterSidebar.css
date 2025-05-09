@@ -1,30 +1,32 @@
 .filter-sidebar {
-  background-color: #fff;
+  background-color: rgba(255, 255, 255, 0.15);
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   width: 100%;
   max-width: 300px;
   padding-bottom: 12px;
   height: fit-content;
   position: sticky;
   top: 20px;
+  color: white;
+  /* backdrop-filter: blur(6px); */
 }
 
 .filter-header-main {
   padding: 16px 20px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .filter-header-main h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: white;
 }
 
 .filter-section {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .filter-section:last-child {
@@ -48,7 +50,7 @@
   margin: 0;
   font-size: 15px;
   font-weight: 600;
-  color: #111827;
+  color: white;
 }
 
 .filter-content {
@@ -76,7 +78,7 @@
 .checkbox {
   width: 18px;
   height: 18px;
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
   border-radius: 3px;
   margin-right: 10px;
   display: flex;
@@ -84,28 +86,34 @@
   justify-content: center;
   transition: all 0.2s ease;
   flex-shrink: 0;
+  position: relative;
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .checkbox.checked {
-  background-color: #401b9c;
-  border-color: #401b9c;
+  background-color: #6b21ff;
+  border-color: #8a5fff;
 }
 
 .checkbox .checkmark {
   color: white;
   font-size: 12px;
   font-weight: bold;
+  position: absolute;
+  line-height: 1;
+  display: block;
+  z-index: 2;
 }
 
 .filter-label {
   flex-grow: 1;
   font-size: 14px;
   margin-right: 8px;
-  color: #111827;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .filter-count {
-  color: #4B5563;
+  color: rgba(255, 255, 255, 0.7);
   font-size: 13px;
 }
 

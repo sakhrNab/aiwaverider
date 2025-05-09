@@ -97,7 +97,13 @@ const AITools = () => {
     setError(null);
     
     try {
-      const fetchedTools = await aiToolsService.getAllAITools();
+      // Manually clear localStorage cache to force fresh data fetch
+      localStorage.removeItem('ai_tools_cache');
+      localStorage.removeItem('ai_tools_cache_timestamp');
+      
+      // Force refresh by passing true parameter
+      const fetchedTools = await aiToolsService.getAllAITools(true);
+      
       if (fetchedTools && fetchedTools.length > 0) {
         setTools(fetchedTools);
         
@@ -106,10 +112,14 @@ const AITools = () => {
         setTags(['All', ...toolTags]);
       } else {
         setTools([]);
+        // Set default tags if no tools are available
+        setTags(defaultAvailableTags);
       }
     } catch (err) {
       console.error('Error fetching AI tools:', err);
       setError('Failed to load AI tools. Please try again later.');
+      // Set default tags when there's an error
+      setTags(defaultAvailableTags);
     } finally {
       setLoading(false);
     }
@@ -128,6 +138,40 @@ const AITools = () => {
     const tagMatch = selectedTag === '' || selectedTag === 'All' || (tool.tags && tool.tags.includes(selectedTag));
     return titleMatch && tagMatch;
   });
+
+  // Helper function to get the appropriate image for a tool
+  const getToolImage = (tool) => {
+    // Check all possible image field names
+    if (tool.imageUrl && !tool.imageUrl.includes('substackcdn.com') && !tool.imageUrl.includes('gallerycdn.vsassets.io')) {
+      return tool.imageUrl;
+    }
+    if (tool.image && !tool.image.includes('substackcdn.com') && !tool.image.includes('gallerycdn.vsassets.io')) {
+      return tool.image;
+    }
+    
+    // Match common tools to their default icons
+    if (tool.title?.toLowerCase().includes('github copilot')) {
+      return 'https://via.placeholder.com/300x300/333333/ffffff?text=GitHub+Copilot';
+    }
+    if (tool.title?.toLowerCase().includes('chatgpt')) {
+      return 'https://via.placeholder.com/300x300/10a37f/ffffff?text=ChatGPT';
+    }
+    if (tool.title?.toLowerCase().includes('midjourney')) {
+      return 'https://via.placeholder.com/300x300/6b21ff/ffffff?text=Midjourney';
+    }
+    
+    // Try to get an icon based on the tool's name or keyword
+    const toolName = tool.title?.split(' ')[0];
+    if (iconMap[toolName]) {
+      return iconMap[toolName];
+    }
+    if (iconMap[tool.keyword]) {
+      return iconMap[tool.keyword];
+    }
+    
+    // Return default icon as fallback
+    return defaultAiIcon;
+  };
 
   // Use the new loader component
   if (loading) {
@@ -152,7 +196,7 @@ const AITools = () => {
       <div className="bg-indigo-900 py-6 px-6">
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
           <div>
-            <h2 className="text-3xl font-bold text-white">AI Wave Rider</h2>
+            <h2 className="text-3xl font-bold text-white">AI Waverider</h2>
             <p className="text-yellow-500 font-medium">Your Gateway to AI Mastery</p>
           </div>
           <div className="mt-4 md:mt-0">
@@ -263,7 +307,7 @@ const AITools = () => {
                       filteredTools.map((tool, index) => (
                         <a
                           key={tool.id || `tool-${index}`}
-                          href={formatLink(tool.link)}
+                          href={formatLink(tool.url || tool.link)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="ai-tool-card glass-effect animate-fade-in shimmer-effect"
@@ -271,12 +315,16 @@ const AITools = () => {
                         >
                           <div className="tool-icon-container">
                             <img 
-                              src={tool.image || iconMap[tool.keyword] || defaultAiIcon} 
+                              src={getToolImage(tool)}
                               alt={tool.title} 
                               className="img-loading w-full h-full" 
                               onLoad={handleImageLoad}
                               onError={(e) => {
-                                e.target.src = iconMap[tool.keyword] || defaultAiIcon;
+                                // First try the fallback specific to this tool's name
+                                const toolName = tool.title?.split(' ')[0];
+                                const fallbackIcon = iconMap[toolName] || iconMap[tool.keyword] || defaultAiIcon;
+                                console.log(`Image load error for ${tool.title}, using fallback: ${fallbackIcon}`);
+                                e.target.src = fallbackIcon;
                                 e.target.setAttribute('data-aspect', 'square');
                                 e.target.classList.remove('img-loading');
                               }}
@@ -290,7 +338,7 @@ const AITools = () => {
                             <p className="ai-tool-description">{tool.description}</p>
                             <div className="ai-tool-tags">
                               <span className="ai-tool-primary-tag">
-                                {tool.keyword}
+                                {tool.category || tool.keyword || 'AI Tool'}
                               </span>
                               {tool.tags?.slice(0, 2).map((tag, tagIndex) => (
                                 <span 

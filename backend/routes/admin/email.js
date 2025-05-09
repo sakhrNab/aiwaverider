@@ -32,7 +32,7 @@ const emailController = require('../../controllers/emailController');
  * GET /api/admin/email/stats
  * Get email preference statistics
  */
-router.get('/stats', validateFirebaseToken, isAdmin, emailController.getEmailStats);
+// router.get('/stats', validateFirebaseToken, isAdmin, emailController.getEmailStats);
 
 /**
  * POST /api/admin/email/welcome/:userId

@@ -23,6 +23,8 @@ import {
   FaInfoCircle
 } from 'react-icons/fa';
 import './Header.css'; // Import custom Header CSS
+// import { toggleDarkMode, isDarkMode } from '../utils/theme';
+// import { handleGoogleProfileImage } from '../utils/imageUtils';
 
 const Header = ({ openSignUpModal }) => {
   const { user, signOut } = useContext(AuthContext);
@@ -129,7 +131,7 @@ const Header = ({ openSignUpModal }) => {
     <header className="main-header shadow-md sticky top-0 z-50">
       <div className="container mx-auto px-4 py-3 md:py-4 flex justify-between items-center">
         <Link to="/" className="flex-shrink-0 flex items-center mr-4">
-          <img src={logo} alt="AI Wave Rider" className="min-w-[40px] w-10 md:w-12 h-auto site-logo" />
+          <img src={logo} alt="AI Waverider" className="min-w-[40px] w-10 md:w-12 h-auto site-logo" />
         </Link>
         
         {/* Desktop Navigation */}

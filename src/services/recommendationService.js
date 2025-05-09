@@ -17,6 +17,10 @@ console.log('Recommendation Service initialized with API_URL:', API_URL);
 // Import the product data utilities and agent utilities
 import { getFeaturedProducts, getRelatedProducts } from '../utils/productData';
 import { fetchAgents, fetchFeaturedAgents } from '../utils/api';
+// Import agentStore for shared state
+import useAgentStore from '../store/agentStore';
+// Import the imageUtils functions directly at the top of the file
+import { fixPlaceholderUrl, generatePlaceholderImage } from '../utils/imageUtils';
 
 /**
  * Validate a recommendation object to ensure it has required fields
@@ -154,40 +158,85 @@ export const getPersonalizedRecommendations = async (options = {}) => {
 };
 
 /**
- * Get recommendations from agents in the database - uses the same logic as Agents.jsx
- * This provides real agents rather than debug placeholder data
+ * Get recommendations from agents in the store
+ * Uses the shared agentStore data instead of making duplicate API calls
  * 
  * @param {number} limit - Maximum number of recommendations to return
+ * @param {boolean} forceRefresh - Whether to force a refresh of the data
  * @returns {Promise<Array>} - Array of recommended agents
  */
-const getAgentRecommendations = async (limit = 3) => {
-  console.log('Falling back to direct agent recommendations from database');
+const getAgentRecommendations = async (limit = 3, forceRefresh = false) => {
+  console.log('Getting agent recommendations from store', { limit, forceRefresh });
+  
   try {
-    // First try to get featured agents
-    const featuredAgents = await fetchFeaturedAgents(limit);
+    // Get data from agentStore
+    const store = useAgentStore.getState();
+    
+    // Check if we need to load data first
+    if (forceRefresh || !store.lastLoadTime || store.allAgents.length === 0) {
+      console.log('Store data not available or refresh requested, loading data...');
+      await store.loadInitialData(forceRefresh);
+    }
+    
+    // Get updated store state after loading
+    const updatedStore = useAgentStore.getState();
+    
+    // First try to get recommended agents using the store method
+    const recommendedFromStore = updatedStore.getRecommendedAgents(limit);
+    if (recommendedFromStore && recommendedFromStore.length > 0) {
+      console.log('Using recommendedAgents from store method:', recommendedFromStore.length);
+      return formatRecommendations(recommendedFromStore);
+    }
+    
+    // Next try to get featured agents using the store method
+    const featuredFromStore = updatedStore.getFeaturedAgents(limit);
+    if (featuredFromStore && featuredFromStore.length > 0) {
+      console.log('Using featuredAgents from store method:', featuredFromStore.length);
+      return formatRecommendations(featuredFromStore);
+    }
+    
+    // Last resort: use allAgents and sort by rating
+    if (updatedStore.allAgents && updatedStore.allAgents.length > 0) {
+      console.log('Using sorted allAgents from store:', updatedStore.allAgents.length);
+      // Sort by rating
+      const topRated = [...updatedStore.allAgents].sort((a, b) => {
+        const aRating = a.rating?.average || 0;
+        const bRating = b.rating?.average || 0;
+        return bRating - aRating;
+      });
+      
+      return formatRecommendations(topRated.slice(0, limit));
+    }
+    
+    // If we've reached here, we couldn't get data from the store
+    // Fall back to direct API calls as a last resort
+    console.warn('Could not get recommendations from store, falling back to direct API call');
+    throw new Error('Store data not available');
+  } catch (error) {
+    console.error('Failed to get agent recommendations from store:', error);
+    
+    // Fall back to direct API calls as absolute last resort
+    try {
+      console.log('Using direct API calls as fallback');
+      
+      // Try to get featured agents with forceRefresh flag
+      const featuredAgents = await fetchFeaturedAgents(limit, { forceRefresh: true });
     if (featuredAgents && featuredAgents.length > 0) {
-      console.log('Using featured agents as recommendations:', featuredAgents.length);
+        console.log('Using featured agents from direct API call:', featuredAgents.length);
       return formatRecommendations(featuredAgents);
     }
     
     // If no featured agents, try top rated
-    const topRatedAgents = await fetchAgents('All', 'Top Rated', 1, limit);
+      const topRatedAgents = await fetchAgents('All', 'Top Rated', 1, { limit });
     if (topRatedAgents && topRatedAgents.length > 0) {
-      console.log('Using top rated agents as recommendations:', topRatedAgents.length);
+        console.log('Using top rated agents from direct API call:', topRatedAgents.length);
       return formatRecommendations(topRatedAgents);
     }
-    
-    // Last resort, get any agents
-    const anyAgents = await fetchAgents('All', 'All', 1, limit);
-    if (anyAgents && anyAgents.length > 0) {
-      console.log('Using any available agents as recommendations:', anyAgents.length);
-      return formatRecommendations(anyAgents);
+    } catch (apiError) {
+      console.error('Direct API fallback also failed:', apiError);
     }
     
     // If all else fails, use local fallback data
-    throw new Error('No agents available from database');
-  } catch (error) {
-    console.error('Failed to get agent recommendations:', error);
     return formatRecommendations(getFallbackRecommendations(limit));
   }
 };
@@ -310,21 +359,16 @@ export const getRecentlyViewedProducts = async (limit = 5) => {
  * @returns {string} - Data URI for the placeholder image
  */
 export const getPlaceholderImage = (text = 'Product') => {
-  // Generate a random color from a palette of blues and purples
-  const colors = ['4a4de7', '3498db', '9b59b6', '2980b9', '8e44ad', '2c3e50', '7a75b1'];
-  const bgColor = colors[Math.floor(Math.random() * colors.length)];
+  // Generate a consistent color for placeholders
+  const bgColor = '3498db';
   
   // Create SVG with the product title embedded
-  // Ensure any special characters like & are properly encoded
-  const displayText = text.length > 15 ? text.substring(0, 15) + '...' : text;
-  const encodedText = displayText
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+  // Ensure any special characters are properly encoded
+  const displayText = text.length > 20 ? text.substring(0, 20) + '...' : text;
+  const encodedText = encodeURIComponent(displayText);
   
-  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%23${bgColor}'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='20' text-anchor='middle' dominant-baseline='middle' fill='%23ffffff'%3E${encodedText}%3C/text%3E%3C/svg%3E`;
+  // Using the same format as used in our components
+  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%23${bgColor}'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='16' text-anchor='middle' dominant-baseline='middle' fill='%23ffffff'%3E${encodedText}%3C/text%3E%3C/svg%3E`;
 };
 
 /**
@@ -348,8 +392,8 @@ export const createImageErrorHandler = (fallbackText) => (e) => {
   // Get the product title from the alt text or use the provided fallback
   const productTitle = e.target.alt || fallbackText || 'Product';
   
-  // Set the new source and clear the original error handler
-  e.target.src = getPlaceholderImage(productTitle);
+  // Set the new source using the same SVG placeholder approach as in the components
+  e.target.src = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%233498db'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='16' text-anchor='middle' dominant-baseline='middle' fill='%23ffffff'%3E${encodeURIComponent(productTitle)}%3C/text%3E%3C/svg%3E`;
   e.target.onerror = null;
 };
 
@@ -360,52 +404,28 @@ export const createImageErrorHandler = (fallbackText) => (e) => {
  * @returns {string} - URL for the product image
  */
 export const getProductImageUrl = (product) => {
+  try {
   // Create a product title for use in placeholder
   const productTitle = product?.title || product?.name || 'Product';
   
-  // First try local images from the assets directory
-  if (product?.id) {
-    try {
-      // Try to use a local image based on the product ID
-      return `/assets/agents/${product.id}.jpg`;
-    } catch (e) {
-      // Will fall through to next option
+    // Check if image info exists in a nested structure
+    if (product?.image && product.image.url) {
+      return fixPlaceholderUrl(product.image.url);
     }
+    
+    // Check for direct imageUrl property
+    if (product?.imageUrl) {
+      return fixPlaceholderUrl(product.imageUrl);
+    }
+    
+    // Use agent name in the placeholder
+    return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%233498db'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='16' text-anchor='middle' dominant-baseline='middle' fill='%23ffffff'%3E${encodeURIComponent(productTitle)}%3C/text%3E%3C/svg%3E`;
+  } catch (e) {
+    console.warn('Error in getProductImageUrl:', e);
+    // Still return a placeholder even if there was an error
+    const productTitle = product?.title || product?.name || 'Product';
+    return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%233498db'/%3E%3Ctext x='150' y='100' font-family='Arial' font-size='16' text-anchor='middle' dominant-baseline='middle' fill='%23ffffff'%3E${encodeURIComponent(productTitle)}%3C/text%3E%3C/svg%3E`;
   }
-  
-  // Check for direct imageUrl property
-  if (product?.imageUrl) {
-    return product.imageUrl;
-  }
-  
-  // Check if image info exists in a nested structure
-  if (product?.image) {
-    if (typeof product.image === 'string') {
-      return product.image;
-    }
-    if (product.image?.url) {
-      return product.image.url;
-    }
-  }
-  
-  // Try to parse the data field if it's a string
-  if (product?.data && typeof product.data === 'string') {
-    try {
-      const parsedData = JSON.parse(product.data);
-      if (parsedData.imageUrl) {
-        return parsedData.imageUrl;
-      }
-    } catch (e) {
-      console.warn("Error parsing product.data:", e);
-    }
-  } else if (product?.data && typeof product.data === 'object') {
-    if (product.data.imageUrl) {
-      return product.data.imageUrl;
-    }
-  }
-  
-  // Return a data URI placeholder as last resort
-  return getPlaceholderImage(productTitle);
 };
 
 /**
@@ -465,7 +485,7 @@ export const formatPrice = (price, currency = 'USD') => {
 
 /**
  * Fetch recommendations for a product page.
- * This function has smart caching to prevent redundant API calls.
+ * This function uses the shared agentStore data when possible.
  * 
  * @param {Object} options - Configuration options
  * @param {Array} options.purchasedItems - Items that were purchased (to exclude)
@@ -512,7 +532,7 @@ export const getRecommendationsForPurchase = async (options = {}) => {
       ).pop() : 
       category;
     
-    console.log('Fetching recommendations for category:', targetCategory);
+    console.log('Finding recommendations for category:', targetCategory);
     
     // Analyze purchased items for attributes to determine recommendation strategy
     const purchasedAttributes = {
@@ -548,39 +568,44 @@ export const getRecommendationsForPurchase = async (options = {}) => {
     
     console.log('Analyzed purchased attributes:', purchasedAttributes);
     
-    // Determine the best sort strategy based on purchased attributes
-    let sortBy = 'Top Rated'; // default sort
-    
-    if (purchasedAttributes.isBestseller) {
-      sortBy = 'Best Sellers';
-    } else if (purchasedAttributes.isNew || purchasedAttributes.isTrending) {
-      sortBy = 'Hot & New';
-    } else if (purchasedAttributes.highestRating >= 4.5) {
-      sortBy = 'Top Rated';
-    } else if (purchasedAttributes.isFeatured) {
-      sortBy = 'Featured';
+    // Get the store and ensure it's loaded
+    const store = useAgentStore.getState();
+    if (!store.allAgents || store.allAgents.length === 0) {
+      console.log('Store data not available, loading data first');
+      await store.loadInitialData();
     }
     
-    console.log(`Using sort strategy: ${sortBy} for recommendations`);
-    
-    // Add cache busting to ensure fresh data
-    const timestamp = new Date().getTime();
-    const agentsData = await fetchAgents(targetCategory, sortBy, 1, { timestamp, limit: limit + 5 }); // Fetch extra to account for filtering
-    
-    if (!agentsData || agentsData.length === 0) {
-      throw new Error('No recommendations found for category');
+    // Get the updated store data after loading
+    const updatedStore = useAgentStore.getState();
+    if (!updatedStore.allAgents || updatedStore.allAgents.length === 0) {
+      console.error('Failed to load store data');
+      return [];
     }
+    
+    // Get a filtered copy of all agents
+    let filteredAgents = [...updatedStore.allAgents];
     
     // Filter out any items that were just purchased
     const purchasedIds = new Set(purchasedItems
       .filter(item => item && item.id)
       .map(item => item.id));
     
-    let filteredAgents = agentsData.filter(agent => 
+    filteredAgents = filteredAgents.filter(agent => 
       agent && agent.id && !purchasedIds.has(agent.id)
     );
     
-    // Apply additional attribute-based filtering for better personalization
+    // If targeting a specific category, filter for it
+    if (targetCategory && targetCategory !== 'All') {
+      const categoryFiltered = filteredAgents.filter(agent => agent.category === targetCategory);
+      // Only use category filtering if we have enough results
+      if (categoryFiltered.length >= limit) {
+        filteredAgents = categoryFiltered;
+      } else {
+        console.log(`Not enough agents in category ${targetCategory}, using all categories`);
+      }
+    }
+    
+    // Apply attribute-based filtering for better personalization
     
     // If user bought bestsellers, prioritize other bestsellers
     if (purchasedAttributes.isBestseller) {
@@ -596,28 +621,6 @@ export const getRecommendationsForPurchase = async (options = {}) => {
       if (newItems.length >= limit) {
         filteredAgents = newItems;
       }
-    }
-    
-    // If we don't have enough recommendations, fetch additional ones
-    if (filteredAgents.length < limit) {
-      console.log('Not enough recommendations, fetching more with different criteria');
-      
-      // Try a different sort strategy
-      const backupSortBy = sortBy === 'Best Sellers' ? 'Hot & New' : 'Best Sellers';
-      
-      // Fetch some additional agents from all categories
-      const additionalAgents = await fetchAgents('All', backupSortBy, 1, { 
-        timestamp,
-        limit: limit - filteredAgents.length + 3 // Add a few extra for filtering
-      });
-      
-      // Combine and ensure no duplicates
-      const existingIds = new Set(filteredAgents.map(a => a.id));
-      const additionalFiltered = additionalAgents.filter(agent => 
-        agent && agent.id && !existingIds.has(agent.id) && !purchasedIds.has(agent.id)
-      );
-      
-      filteredAgents = [...filteredAgents, ...additionalFiltered];
     }
     
     // Sort recommendations by relevance
@@ -663,7 +666,7 @@ export const getRecommendationsForPurchase = async (options = {}) => {
     // Get the requested number of recommendations
     const recommendations = filteredAgents.slice(0, limit);
     
-    // Cache the results to avoid redundant API calls
+    // Cache the results to avoid redundant processing
     try {
       sessionStorage.setItem(cacheKey, JSON.stringify({
         recommendations,
@@ -677,16 +680,7 @@ export const getRecommendationsForPurchase = async (options = {}) => {
   } catch (err) {
     console.error('Error fetching recommendations:', err);
     
-    // Try to use a fallback method if the primary API fails
-    try {
-      const fallbackAgents = await fetchAgents('All', 'Top Rated', 1, { limit: options.limit });
-      if (fallbackAgents && fallbackAgents.length > 0) {
-        return fallbackAgents.slice(0, options.limit);
-      }
-    } catch (fallbackErr) {
-      console.error('Fallback recommendation fetch failed:', fallbackErr);
-    }
-    
-    return [];
+    // Use the getAgentRecommendations function which uses the store
+    return getAgentRecommendations(options.limit);
   }
 }; 

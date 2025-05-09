@@ -56,7 +56,7 @@ The email service can be configured using the following environment variables:
 - `EMAIL_SECURE`: Whether to use TLS (default: false)
 - `EMAIL_USER`: SMTP username
 - `EMAIL_PASSWORD`: SMTP password
-- `EMAIL_FROM`: Sender email address (default: "AI Wave Rider <noreply@aiwavesrider.com>")
+- `EMAIL_FROM`: Sender email address (default: "AI Waverider <noreply@aiwavesrider.com>")
 - `SUPPORT_EMAIL`: Support email address (default: "support@aiwavesrider.com")
 - `WEBSITE_URL`: Website URL (default: "https://aiwavesrider.com")
 

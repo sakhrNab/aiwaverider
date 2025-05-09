@@ -66,7 +66,7 @@ router.post('/send-tool-update', isAdmin, emailController.sendToolUpdateEmail);
  * @desc    Get email statistics
  * @access  Admin
  */
-router.get('/stats', isAdmin, emailController.getEmailStats);
+// router.get('/stats', isAdmin, emailController.getEmailStats);
 
 /**
  * @route   PUT /api/email/preferences/:userId

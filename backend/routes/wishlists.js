@@ -50,6 +50,6 @@ router.post('/toggle', validateFirebaseToken, wishlistController.toggleWishlistI
  * GET /api/wishlists/check/:agentId
  * Check if agent is in user's wishlist
  */
-router.get('/check/:agentId', wishlistController.checkWishlistItem);
+// router.get('/check/:agentId', wishlistController.checkWishlistItem);
 
 module.exports = router; 

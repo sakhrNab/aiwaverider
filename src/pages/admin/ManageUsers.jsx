@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { FaUser, FaEdit, FaTrash, FaExclamationTriangle, FaSearch, FaPlus, FaSpinner, FaAngleLeft, FaAngleRight, FaBell, FaEnvelope, FaTools, FaRobot } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaExclamationTriangle, FaSearch, FaPlus, FaSpinner, FaAngleLeft, FaAngleRight, FaBell, FaEnvelope, FaTools, FaRobot } from 'react-icons/fa';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { fetchUsers, createUser, updateUser, deleteUser } from '../../utils/api';
 import { toast } from 'react-toastify';
 import './ManageUsers.css';
+import { handleGoogleProfileImage } from '../../utils/imageUtils';
 
 /**
  * Admin page for managing users
@@ -536,9 +537,11 @@ const ManageUsers = () => {
                         <div className="user-info">
                           <div className="user-avatar">
                             {user.photoURL ? (
-                              <img src={user.photoURL} alt={user.username} />
+                              <img src={handleGoogleProfileImage(user.photoURL)} alt={user.username} />
                             ) : (
-                              <FaUser />
+                              <div className="avatar-placeholder">
+                                {(user.firstName?.charAt(0) || user.username?.charAt(0) || '?').toUpperCase()}
+                              </div>
                             )}
                           </div>
                           <span>{user.username || user.displayName}</span>

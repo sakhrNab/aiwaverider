@@ -19,7 +19,7 @@ const adminEmailRoutes = require('./admin/email');
 const chatRoutes = require('./chatRoutes');
 const emailRoutes = require('./api/email');
 
-// Mount routes
+// Mount routes - these will all be under /api in the main app
 router.use('/auth', authRoutes);
 router.use('/users', usersRoutes);
 router.use('/posts', postsRoutes);
@@ -33,20 +33,9 @@ router.use('/payments', paymentsRoutes);
 router.use('/recommendations', recommendationsRoutes);
 router.use('/ai-tools', aiToolsRoutes);
 router.use('/admin', adminRoutes);
-router.use('/api/admin', adminRoutes);
-router.use('/api/admin/email', adminEmailRoutes);
-router.use('/api/posts', postsRoutes);
-router.use('/api/chat', chatRoutes);
-router.use('/api/ai-tools', aiToolsRoutes);
-router.use('/api/wishlists', wishlistsRoutes);
-router.use('/api/profile', profileRoutes);
-router.use('/api/prices', pricesRoutes);
-router.use('/api/agents', agentsRoutes);
-router.use('/api/agent', agentRoutes);
-router.use('/api/payments', paymentsRoutes);
-router.use('/api/recommendations', recommendationsRoutes);
+router.use('/admin/email', adminEmailRoutes);
+// Note: /api/chat is mounted separately in the main app file
 router.use('/email', emailRoutes);
-router.use('/api/email', emailRoutes);
 
 // Add redirect for product routes to the agents routes
 // This handles legacy or alternative product URLs
@@ -56,12 +45,12 @@ router.get('/product/:productId', (req, res) => {
 });
 
 // Add API endpoint for product/:id that forwards to agents/:id
-router.get('/api/product/:productId', (req, res) => {
+router.get('/product/:productId', (req, res) => {
   const productId = req.params.productId;
-  console.log(`Forwarding API request from /api/product/${productId} to /api/agents/${productId}`);
+  console.log(`Forwarding API request from /product/${productId} to /agents/${productId}`);
   
   // Forward the request to the agents API endpoint
-  req.url = `/api/agents/${productId}`;
+  req.url = `/agents/${productId}`;
   router.handle(req, res);
 });
 

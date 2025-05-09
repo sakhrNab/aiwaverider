@@ -1,35 +1,11 @@
 // src/components/AppContent.jsx
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import '../styles/globals.css'; // Tailwind global styles
 import Header from './Header';
-import Body from './Body';
 import Footer from './Footer';
 import SignUp from './SignUp';
-import SignIn from './SignIn';
-import ProtectedRoute from './ProtectedRoute';
-import PostDetail from '../posts/PostDetail';
-import CreatePost from '../posts/CreatePost';
-import Profile from '../pages/Profile';
-import Agents from '../pages/Agents';
-import AgentDetail from '../pages/agent/AgentDetail';
-import Checkout from '../pages/Checkout';
-import ThankYou from '../pages/ThankYou';
-import CheckoutSuccess from '../components/checkout/CheckoutSuccess';
-import AITools from '../pages/AITools';
-import LatestTech from '../pages/LatestTech';
-import HomePage from '../pages/HomePage';
-import About from '../pages/About';
-// Import admin pages
-import Dashboard from '../pages/admin/Dashboard';
-import ManageAgents from '../pages/admin/ManageAgents';
-import ManageUsers from '../pages/admin/ManageUsers';
-import AdminAnalytics from '../pages/admin/Analytics';
-import Settings from '../pages/admin/Settings';
-import Pricing from '../pages/admin/Pricing';
-import AIToolsManager from './admin/AIToolsManager';
-import EmailManagement from '../pages/admin/EmailManagement';
-import EmailComposer from '../pages/admin/EmailComposer';
+import AppRoutes from '../routes/routes.jsx';
 import ChatBot from './ChatBot';
 import BackToTop from './BackToTop';
 import { Analytics as VercelAnalytics } from '@vercel/analytics/react';
@@ -62,139 +38,7 @@ const AppContent = () => {
           <Header openSignUpModal={openSignUpModal} />
 
           <div className="flex-grow">
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/" element={<HomePage />} />
-              <Route path="/sign-in" element={<SignIn />} />
-              <Route path="/sign-up" element={<SignUp />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/agents" element={<Agents />} />
-              <Route path="/ai-tools" element={<AITools />} />
-              <Route path="/latest-tech" element={<LatestTech />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/agents/:agentId" element={<AgentDetail />} />
-              <Route path="/product/:agentId" element={<AgentDetail />} />
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/thankyou" element={<ThankYou />} />
-              <Route path="/checkout/success" element={<CheckoutSuccess />} />
-
-              {/* Protected: Admin only */}
-              {/* Create Post route */}
-              <Route
-                path="/posts/create" // or /admin/create
-                element={
-                  <ProtectedRoute roles={['admin']}>
-                    <CreatePost />
-                  </ProtectedRoute>
-                }
-              />
-
-              {/* Admin Routes */}
-              <Route
-                path="/admin"
-                element={
-                  <ProtectedRoute roles={['admin']}>
-                    <Navigate to="/admin/dashboard" replace />
-                  </ProtectedRoute>
-                }
-              />
-              
-              {/* Admin Dashboard */}
-              <Route
-                path="/admin/dashboard"
-                element={
-                  <ProtectedRoute roles={['admin']}>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
-              
-              {/* Manage Agents */}
-              <Route
-                path="/admin/agents"
-                element={
-                  <ProtectedRoute roles={['admin']}>
-                    <ManageAgents />
-                  </ProtectedRoute>
-                }
-              />
-
-              {/* AI Tools Manager */}
-              <Route
-                path="/admin/ai-tools"
-                element={
-                  <ProtectedRoute roles={['admin']}>
-                    <AIToolsManager />
-                  </ProtectedRoute>
-                }
-              />
-
-              {/* Manage Users */}
-              <Route
-                path="/admin/users"
-                element={
-                  <ProtectedRoute roles={['admin']}>
-                    <ManageUsers />
-                  </ProtectedRoute>
-                }
-              />
-
-              {/* Analytics */}
-              <Route
-                path="/admin/analytics"
-                element={
-                  <ProtectedRoute roles={['admin']}>
-                    <AdminAnalytics />
-                  </ProtectedRoute>
-                }
-              />
-
-              {/* Settings */}
-              <Route
-                path="/admin/settings"
-                element={
-                  <ProtectedRoute roles={['admin']}>
-                    <Settings />
-                  </ProtectedRoute>
-                }
-              />
-
-              {/* Pricing */}
-              <Route
-                path="/admin/pricing"
-                element={
-                  <ProtectedRoute roles={['admin']}>
-                    <Pricing />
-                  </ProtectedRoute>
-                }
-              />
-              
-              {/* Email Management */}
-              <Route
-                path="/admin/email"
-                element={
-                  <ProtectedRoute roles={['admin']}>
-                    <EmailManagement />
-                  </ProtectedRoute>
-                }
-              />
-              
-              {/* Email Composer */}
-              <Route
-                path="/admin/email-composer"
-                element={
-                  <ProtectedRoute roles={['admin']}>
-                    <EmailComposer />
-                  </ProtectedRoute>
-                }
-              />
-
-              {/* Post Detail */}
-              <Route path="/posts/:postId" element={<PostDetail />} />
-
-              {/* Fallback */}
-              <Route path="*" element={<HomePage />} />
-            </Routes>
+            <AppRoutes />
           </div>
 
           <Footer />

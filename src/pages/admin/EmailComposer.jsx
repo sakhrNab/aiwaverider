@@ -6,6 +6,8 @@ import { FaEnvelope, FaUsers, FaUser, FaSearch, FaEye, FaPaperPlane, FaRobot, Fa
 import { fetchUsers } from '../../utils/api';
 import { sendCustomEmail } from '../../services/emailService';
 import RichTextEditor from '../../components/RichTextEditor';
+import 'react-quill/dist/quill.snow.css';
+// import { handleGoogleProfileImage } from '../../utils/imageUtils';
 import './EmailComposer.css';
 
 const EmailComposer = () => {
@@ -449,11 +451,13 @@ const EmailComposer = () => {
                       }
                     }}
                   >
-                    <div className="user-avatar">
+                    <div className="user-item-avatar">
                       {user.photoURL ? (
                         <img src={user.photoURL} alt={formatUserName(user)} />
                       ) : (
-                        <FaUser />
+                        <div className="avatar-placeholder">
+                          {user.firstName?.charAt(0) || user.username?.charAt(0) || '?'}
+                        </div>
                       )}
                     </div>
                     <div className="user-info">

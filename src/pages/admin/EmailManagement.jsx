@@ -14,7 +14,7 @@ const EmailManagement = () => {
   
   // Welcome email state
   const [welcomeTemplate, setWelcomeTemplate] = useState({
-    subject: 'Welcome to AI Wave Rider!',
+    subject: 'Welcome to AI Waverider!',
     content: 'Thank you for joining our platform. We\'re excited to have you on board!'
   });
   

@@ -24,7 +24,7 @@ const Home = () => {
           <HashLoader color="#4FD1C5" size={70} speedMultiplier={0.8} />
         </div>
         <div className="text-white text-xl font-semibold mt-4">
-          Initializing AI Wave Rider
+          Initializing AI Waverider
         </div>
         <div className="text-blue-300 text-sm mt-2">
           Connecting to neural networks...
@@ -38,7 +38,7 @@ const Home = () => {
     {
       name: "Sarah Johnson",
       role: "Marketing Director",
-      text: "AI Wave Rider transformed our business workflows. The AI agents saved us countless hours of manual work.",
+      text: "AI Waverider transformed our business workflows. The AI agents saved us countless hours of manual work.",
       image: "https://randomuser.me/api/portraits/women/44.jpg"
     },
     {
@@ -50,7 +50,7 @@ const Home = () => {
     {
       name: "Emily Rodriguez",
       role: "Content Creator",
-      text: "The AI tools recommended by AI Wave Rider have helped me create better content in half the time.",
+      text: "The AI tools recommended by AI Waverider have helped me create better content in half the time.",
       image: "https://randomuser.me/api/portraits/women/68.jpg"
     }
   ];
@@ -84,7 +84,7 @@ const Home = () => {
               <div className="relative">
                 <div className="absolute -top-5 -left-5 w-24 h-24 bg-blue-500 rounded-full opacity-20 animate-pulse"></div>
                 <div className="absolute -bottom-8 -right-8 w-40 h-40 bg-purple-500 rounded-full opacity-20 animate-pulse delay-300"></div>
-                <img src="/hero-image.webp" alt="AI Technology" className="relative z-10 rounded-xl shadow-2xl max-w-full h-auto" onError={(e) => { e.target.src = 'https://via.placeholder.com/600x400?text=AI+Wave+Rider'; }} />
+                <img src="/hero-image.webp" alt="AI Technology" className="relative z-10 rounded-xl shadow-2xl max-w-full h-auto" onError={(e) => { e.target.src = 'https://placehold.co/600x400/444/white?text=AI+Wave+Rider'; }} />
               </div>
             </div>
           </div>
@@ -248,7 +248,7 @@ const Home = () => {
               What Our Clients Say
             </h2>
             <p className={`max-w-2xl mx-auto text-xl ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-              Hear from businesses and individuals who've transformed their work with AI Wave Rider.
+              Hear from businesses and individuals who've transformed their work with AI Waverider.
             </p>
           </div>
 
@@ -341,7 +341,7 @@ const Home = () => {
             Start Your AI Journey Today
           </h2>
           <p className={`max-w-2xl mx-auto text-lg mb-8 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-            Join the hundreds of businesses and individuals who have transformed their work with AI Wave Rider.
+            Join the hundreds of businesses and individuals who have transformed their work with AI Waverider.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link to="/agents" className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all">

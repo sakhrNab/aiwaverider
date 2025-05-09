@@ -34,6 +34,9 @@ import ConfirmationModal from "../../components/ConfirmationModal";
 import { Link, useNavigate } from "react-router-dom";
 import { CATEGORIES } from "../../constants/categories";
 import '../../styles/admin/ManageAgentsCards.css';
+import Select from 'react-select';
+import { PulseLoader } from 'react-spinners';
+import { handleGoogleProfileImage } from '../../utils/imageUtils';
 
 /**
  * Admin page for managing agents, posts, and users with CRUD functionality
@@ -945,30 +948,61 @@ const ManageAgents = () => {
   // Function to handle form submission
   const handleFormSubmit = async (agentData) => {
     try {
-      let savedAgent;
-      let agentId = selectedAgent?.id;
+      setFormSubmitting(true);
+      setFormError(null);
+      
+      // Get the agent ID from the selected agent
+      const agentId = selectedAgent?.id;
+      
+      console.log('Submitting agent form with data:', agentData);
 
-      // Extract price data from agent data to avoid duplication in payload
+      // Separate price data from agent data
       const {
         basePrice,
         discountedPrice,
+        currency, 
         isFree,
         isSubscription,
+        discountPercentage, 
         ...agentDataWithoutPrice
       } = agentData;
 
-      // Create a price payload if pricing data is provided
+      // Create price payload
       const pricePayload = {
-        basePrice: basePrice || 0,
-        discountedPrice: discountedPrice || 0,
-        isFree: isFree || false,
-        isSubscription: isSubscription || false,
-        currency: agentData.currency || "USD",
+        basePrice: parseFloat(basePrice) || 0,
+        discountedPrice: parseFloat(discountedPrice) || parseFloat(basePrice) || 0,
+        currency: currency || 'USD',
+        isFree: isFree === true || basePrice === 0 || basePrice === '0',
+        isSubscription: isSubscription === true,
+        discountPercentage: discountPercentage || 0
       };
+      
+      console.log('Price payload:', pricePayload);
+      
+      let savedAgent;
+      
+      // Import the combined update function
+      let updateAgentWithPrice;
+      try {
+        // Using dynamic import to ensure the function is loaded
+        const api = await import('../../utils/api');
+        updateAgentWithPrice = api.updateAgentWithPrice;
+      } catch (importError) {
+        console.error('Error importing updateAgentWithPrice:', importError);
+        // Will fall back to separate calls
+      }
 
       if (agentId) {
         // Handle update case
+        if (updateAgentWithPrice) {
+          // Use the combined update if available (more efficient)
+          console.log('Using combined update for agent and price');
+          savedAgent = await updateAgentWithPrice(agentId, agentDataWithoutPrice, pricePayload);
+        } else {
+          // Fall back to just updating the agent data
+          console.log('Falling back to separate agent update');
         savedAgent = await apiRequest(`/api/agents/${agentId}`, 'PUT', agentDataWithoutPrice);
+        }
       } else {
         // Handle create case
         savedAgent = await createAgent({
@@ -1010,6 +1044,8 @@ const ManageAgents = () => {
       toast.error(`Failed to ${selectedAgent ? 'update' : 'create'} agent: ${error.message}`);
       // Keep form open on error
       return null;
+    } finally {
+      setFormSubmitting(false);
     }
   };
 
@@ -1403,16 +1439,13 @@ const ManageAgents = () => {
                     <tr key={user.id} className={`user-row ${user.status === 'inactive' ? 'inactive' : ''}`}>
                       <td className="user-name-cell">
                         {user.photoURL ? (
-                          <img src={user.photoURL} alt={user.firstName} className="user-avatar" />
+                          <img src={handleGoogleProfileImage(user.photoURL)} alt={user.firstName} className="user-avatar" />
                         ) : (
-                          <div className="user-avatar-placeholder">
-                            {(user.firstName?.[0] || '') + (user.lastName?.[0] || '')}
+                          <div className="avatar-placeholder">
+                            {user.firstName?.charAt(0) || user.username?.charAt(0) || '?'}
                           </div>
                         )}
-                        <div className="user-name">
-                          <span className="full-name">{`${user.firstName || ''} ${user.lastName || ''}`}</span>
-                          <span className="username">@{user.username || 'user'}</span>
-                        </div>
+                        <span>{user.displayName || user.firstName || user.username}</span>
                       </td>
                       <td>{user.email}</td>
                       <td>
@@ -2046,16 +2079,13 @@ const ManageAgents = () => {
                           <tr key={user.id} className={`user-row ${user.status === 'inactive' ? 'inactive' : ''}`}>
                             <td className="user-name-cell">
                               {user.photoURL ? (
-                                <img src={user.photoURL} alt={user.firstName} className="user-avatar" />
+                                <img src={handleGoogleProfileImage(user.photoURL)} alt={user.firstName} className="user-avatar" />
                               ) : (
-                                <div className="user-avatar-placeholder">
-                                  {(user.firstName?.[0] || '') + (user.lastName?.[0] || '')}
+                                <div className="avatar-placeholder">
+                                  {user.firstName?.charAt(0) || user.username?.charAt(0) || '?'}
                                 </div>
                               )}
-                              <div className="user-name">
-                                <span className="full-name">{`${user.firstName || ''} ${user.lastName || ''}`}</span>
-                                <span className="username">@{user.username || 'user'}</span>
-                              </div>
+                              <span>{user.displayName || user.firstName || user.username}</span>
                             </td>
                             <td>{user.email}</td>
                             <td>
@@ -2427,14 +2457,14 @@ const ManageAgents = () => {
                               <span className="manage-info-value price">{formatPrice(agent)}</span>
                             </div>
                             
-                            {agent.features && agent.features.length > 0 && (
+                            {agent.features && Array.isArray(agent.features) && agent.features.length > 0 && (
                               <div className="manage-agent-info-item features">
                                 <span className="manage-info-label">Features:</span>
                                 <ul className="manage-features-list">
-                                  {agent.features.slice(0, 3).map((feature, index) => (
+                                  {Array.isArray(agent.features) && agent.features.slice(0, 3).map((feature, index) => (
                                     <li key={`${agent.id}-feature-${index}`}>{feature}</li>
                                   ))}
-                                  {agent.features.length > 3 && (
+                                  {Array.isArray(agent.features) && agent.features.length > 3 && (
                                     <li key={`${agent.id}-more-features`}>+{agent.features.length - 3} more...</li>
                                   )}
                                 </ul>

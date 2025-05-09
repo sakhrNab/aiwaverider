@@ -16,7 +16,7 @@ module.exports = {
   
   // Sender Information
   fromEmail: process.env.FROM_EMAIL || process.env.EMAIL_FROM || 'support@aiwaverider.com',
-  fromName: process.env.FROM_NAME || process.env.EMAIL_FROM_NAME || 'AI Wave Rider',
+  fromName: process.env.FROM_NAME || process.env.EMAIL_FROM_NAME || 'AI Waverider',
   
   // Website Information (for links in emails)
   websiteUrl: process.env.WEBSITE_URL || 'https://aiwaverider.com',

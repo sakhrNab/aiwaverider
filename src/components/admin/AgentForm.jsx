@@ -135,6 +135,14 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange, hideOnSubmit = fa
       id: user?.uid || ''
     },
     isFree: false,
+    priceDetails: {
+      basePrice: 0,
+      discountedPrice: 0,
+      currency: 'USD',
+      isFree: false,
+      isSubscription: false,
+      discountPercentage: 0
+    },
     features: [''],
     tags: [''],
     isFeatured: false,
@@ -142,9 +150,7 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange, hideOnSubmit = fa
     isPopular: false,
     isTrending: false,
     status: 'active',
-    templateUrl: '',  // Add default for template URL
-    downloadUrl: '',  // Add default for download URL
-    // Add other default fields as needed
+    downloadUrl: '',
   };
   
   // Default price data to prevent uncontrolled to controlled component warnings
@@ -152,139 +158,10 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange, hideOnSubmit = fa
     basePrice: 0,
     discountedPrice: 0,
     currency: 'USD',
-    isFree: false
+    isFree: false,
+    isSubscription: false,
+    discountPercentage: 0
   };
-  
-  // State for form data
-  const [formData, setFormData] = useState(() => {
-    console.log("Initial useState for formData, agent:", agent);
-    
-    if (!agent) {
-      // For new agents, use current user info for creator
-      return { ...defaultFormData };
-    }
-    
-    // Start with the agent object itself
-    let combinedAgent = { ...agent };
-    console.log("Using agent data for initialization:", combinedAgent);
-    
-    // First, parse the data field if it's a JSON string
-    let parsedOuterData = {};
-    if (agent.data && typeof agent.data === 'string') {
-      try {
-        parsedOuterData = JSON.parse(agent.data);
-        console.log("Successfully parsed outer data field (init):", parsedOuterData);
-        // Merge the parsed data into our combined data
-        combinedAgent = { ...combinedAgent, ...parsedOuterData };
-      } catch (e) {
-        console.error("Error parsing agent.data (init):", e);
-      }
-    } else if (agent.data && typeof agent.data === 'object') {
-      // The data is already an object, merge it
-      combinedAgent = { ...combinedAgent, ...agent.data };
-    }
-    
-    // Next, check if there's a nested data property inside the parsed data
-    if (parsedOuterData.data && typeof parsedOuterData.data === 'string') {
-      try {
-        const parsedInnerData = JSON.parse(parsedOuterData.data);
-        console.log("Successfully parsed nested inner data field (init):", parsedInnerData);
-        // Merge the inner parsed data, giving it highest priority
-        combinedAgent = { ...combinedAgent, ...parsedInnerData };
-      } catch (e) {
-        console.error("Error parsing nested inner data (init):", e);
-      }
-    } else if (parsedOuterData.data && typeof parsedOuterData.data === 'object') {
-      // The nested data is already an object, merge it
-      combinedAgent = { ...combinedAgent, ...parsedOuterData.data };
-    }
-    
-    // Get image URLs from various possible locations
-    const imageUrl = 
-      combinedAgent.imageUrl || 
-      (agent.image && agent.image.url) || 
-      (parsedOuterData.image && parsedOuterData.image.url) || 
-      '';
-      
-    const iconUrl = 
-      combinedAgent.iconUrl || 
-      (agent.icon && agent.icon.url) || 
-      (parsedOuterData.icon && parsedOuterData.icon.url) || 
-      '';
-    
-    // Helper functions for safe image handling
-    const safeImageUrl = (url) => {
-      // If it's a blob URL, empty string, or not valid (including example.com), use a placeholder
-      if (!url || isBlobUrl(url) || !isValidImageUrl(url)) {
-        return generatePlaceholderImage('image', combinedAgent.name?.charAt(0) || 'A');
-      }
-      return url;
-    };
-    
-    const safeIconUrl = (url) => {
-      // If it's a blob URL, empty string, or not valid (including example.com), use a placeholder
-      if (!url || isBlobUrl(url) || !isValidImageUrl(url)) {
-        return generatePlaceholderImage('icon', combinedAgent.name?.charAt(0) || 'A');
-      }
-      return url;
-    };
-    
-    // Important: Log each field to debug what's happening
-    console.log("Agent fields being used for initialization (combined):");
-    console.log("- name:", combinedAgent.name);
-    console.log("- title:", combinedAgent.title);
-    console.log("- description:", combinedAgent.description);
-    console.log("- category:", combinedAgent.category);
-    console.log("- imageUrl:", imageUrl);
-    console.log("- iconUrl:", iconUrl);
-    console.log("- features:", combinedAgent.features);
-    
-    return {
-      ...defaultFormData,
-      ...combinedAgent,
-      // Ensure these fields are always defined
-      id: combinedAgent.id || '',
-      name: combinedAgent.name || '',
-      title: combinedAgent.title || '',
-      description: combinedAgent.description || '',
-      category: combinedAgent.category || '',
-      // Use combined image URLs
-      imageUrl: safeImageUrl(imageUrl),
-      iconUrl: safeIconUrl(iconUrl),
-      version: combinedAgent.version || '',
-      templateUrl: combinedAgent.templateUrl || '',
-      downloadUrl: combinedAgent.downloadUrl || '',
-      fileUrl: combinedAgent.fileUrl || '',
-      creator: {
-        ...defaultFormData.creator,
-        ...(combinedAgent.creator || {}),
-        name: combinedAgent.creator?.name || defaultFormData.creator.name,
-        email: combinedAgent.creator?.email || defaultFormData.creator.email,
-        username: combinedAgent.creator?.username || defaultFormData.creator.username,
-        role: combinedAgent.creator?.role || defaultFormData.creator.role,
-        id: combinedAgent.creator?.id || defaultFormData.creator.id
-      },
-      features: Array.isArray(combinedAgent.features) && combinedAgent.features.length > 0 ? combinedAgent.features : [''],
-      tags: Array.isArray(combinedAgent.tags) && combinedAgent.tags.length > 0 ? combinedAgent.tags : [''],
-      isFree: combinedAgent.isFree ?? false,
-      isSubscription: combinedAgent.isSubscription ?? false,
-      isFeatured: combinedAgent.isFeatured ?? false,
-      isVerified: combinedAgent.isVerified ?? false,
-      isPopular: combinedAgent.isPopular ?? false,
-      isTrending: combinedAgent.isTrending ?? false,
-      status: combinedAgent.status || 'active',
-      basePrice: combinedAgent.basePrice || combinedAgent.priceDetails?.basePrice || 0,
-      discountedPrice: combinedAgent.discountedPrice || combinedAgent.priceDetails?.discountedPrice || 0,
-      currency: combinedAgent.currency || combinedAgent.priceDetails?.currency || 'USD'
-    };
-  });
-  
-  // Track original values to detect actual changes
-  const [originalData, setOriginalData] = useState({});
-  
-  // State for image and icon previews
-  const [imagePreview, setImagePreview] = useState('');
-  const [iconPreview, setIconPreview] = useState('');
   
   // Initialize priceData with default values to prevent uncontrolled inputs
   const [priceData, setPriceData] = useState(() => {
@@ -301,6 +178,105 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange, hideOnSubmit = fa
       isSubscription: safeAgent.isSubscription ?? false
     };
   });
+  
+  // State for form data
+  const [formData, setFormData] = useState(() => {
+    console.log("Initial useState for formData, agent:", agent);
+    
+    if (!agent) {
+      // For new agents, use current user info for creator
+      return { ...defaultFormData };
+    }
+    
+    // Start with the agent object itself
+    let combinedAgent = { ...agent };
+    console.log("Using agent data for initialization:", combinedAgent);
+    
+    // First, parse the data field if it's a JSON string
+    if (agent.data && typeof agent.data === 'string') {
+      try {
+        const parsedData = JSON.parse(agent.data);
+        console.log("Successfully parsed outer data field (init):", parsedData);
+        // Merge the parsed data into our combined data
+        combinedAgent = { ...combinedAgent, ...parsedData };
+      } catch (e) {
+        console.error("Error parsing agent.data (init):", e);
+      }
+    } else if (agent.data && typeof agent.data === 'object') {
+      // The data is already an object, merge it
+      combinedAgent = { ...combinedAgent, ...agent.data };
+    }
+    
+    // Always remove the data field after extracting its contents
+    delete combinedAgent.data;
+    
+    // Handle price details from either priceDetails object or individual fields
+    const priceDetails = combinedAgent.priceDetails || {
+      basePrice: combinedAgent.basePrice || 0,
+      discountedPrice: combinedAgent.discountedPrice || 0,
+      currency: combinedAgent.currency || 'USD',
+      isFree: combinedAgent.isFree || false,
+      isSubscription: combinedAgent.isSubscription || false,
+      discountPercentage: combinedAgent.discountPercentage || 0
+    };
+    
+    // Set initial price data
+    setPriceData(priceDetails);
+    
+    // Ensure features and tags are arrays
+    if (!Array.isArray(combinedAgent.features)) {
+      combinedAgent.features = [];
+    }
+    
+    if (!Array.isArray(combinedAgent.tags)) {
+      combinedAgent.tags = [];
+    }
+    
+    // Special handling for isFree based on price
+    if (priceDetails.basePrice === 0 || priceDetails.discountedPrice === 0) {
+      priceDetails.isFree = true;
+    }
+    
+    // Set initial price data for the form
+    setPriceData({
+      basePrice: priceDetails.basePrice,
+      discountedPrice: priceDetails.discountedPrice,
+      currency: priceDetails.currency || 'USD',
+      isFree: priceDetails.isFree,
+      isSubscription: priceDetails.isSubscription || false,
+      discountPercentage: priceDetails.discountPercentage || 0
+    });
+    
+    // Add consistent priceDetails to the form data
+    combinedAgent.priceDetails = priceDetails;
+    
+    // Handle image URLs (from nested objects or direct properties)
+    if (combinedAgent.image && combinedAgent.image.url) {
+      combinedAgent.imageUrl = combinedAgent.image.url;
+    }
+    
+    if (combinedAgent.jsonFile && combinedAgent.jsonFile.url) {
+      combinedAgent.downloadUrl = combinedAgent.jsonFile.url;
+    }
+    
+    // Clean up redundant properties
+    ['basePrice', 'discountedPrice', 'currency', 'isSubscription', 'discountPercentage', 'templateUrl', 'fileUrl']
+      .forEach(prop => {
+        if (combinedAgent[prop] !== undefined && prop !== 'isFree') { // Keep isFree for backward compatibility
+          delete combinedAgent[prop];
+        }
+      });
+    
+    return combinedAgent;
+  });
+  
+  // Track original values to detect actual changes
+  const [originalData, setOriginalData] = useState({});
+  
+  // State for image and icon previews
+  const [imagePreview, setImagePreview] = useState('');
+  const [iconPreview, setIconPreview] = useState('');
+  
   const [errors, setErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
@@ -372,110 +348,114 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange, hideOnSubmit = fa
     }
   };
   
-  // Use effect to synchronize form data when agent prop changes
+  // Initialize form when agent is provided
   useEffect(() => {
-    // Only run if agent exists and has changed
-    if (agent) {
-      console.log('Agent prop changed, syncing form data:', agent);
+    if (!agent) return;
+    
+    console.log("Using agent data for initialization:", agent);
       
-      // Start with the agent object itself
-      let combinedData = { ...agent };
-      
-      // First, check if there's a data property that needs parsing
-      let parsedOuterData = {};
-      if (agent.data && typeof agent.data === 'string') {
+    // Create a cleaned and normalized agent object
+    let cleanedAgent = { ...agent };
+    
+    // Step 1: Remove nested data property and flatten the structure
+    if (cleanedAgent.data) {
+      console.log("Found nested data property, flattening structure");
+      // If data is a string, parse it
+      if (typeof cleanedAgent.data === 'string') {
         try {
-          parsedOuterData = JSON.parse(agent.data);
-          console.log("Successfully parsed outer data field:", parsedOuterData);
-          // Merge the parsed data into our combined data
-          combinedData = { ...combinedData, ...parsedOuterData };
+          const parsedData = JSON.parse(cleanedAgent.data);
+          cleanedAgent = { ...cleanedAgent, ...parsedData };
         } catch (e) {
           console.error("Error parsing agent.data:", e);
         }
-      } else if (agent.data && typeof agent.data === 'object') {
-        // The data is already an object, merge it
-        combinedData = { ...combinedData, ...agent.data };
+      } else {
+        // It's already an object, merge it
+        cleanedAgent = { ...cleanedAgent, ...cleanedAgent.data };
       }
       
-      // Next, check if there's a nested data property inside the parsed data
-      if (parsedOuterData.data && typeof parsedOuterData.data === 'string') {
-        try {
-          const parsedInnerData = JSON.parse(parsedOuterData.data);
-          console.log("Successfully parsed nested inner data field:", parsedInnerData);
-          // Merge the inner parsed data, giving it highest priority
-          combinedData = { ...combinedData, ...parsedInnerData };
-        } catch (e) {
-          console.error("Error parsing nested inner data:", e);
-        }
-      } else if (parsedOuterData.data && typeof parsedOuterData.data === 'object') {
-        // The nested data is already an object, merge it
-        combinedData = { ...combinedData, ...parsedOuterData.data };
-      }
-      
-      // Look for image URLs in various locations
-      const imageUrl = 
-        combinedData.imageUrl || 
-        (agent.image && agent.image.url) || 
-        (parsedOuterData.image && parsedOuterData.image.url) || 
-        '';
-        
-      const iconUrl = 
-        combinedData.iconUrl || 
-        (agent.icon && agent.icon.url) || 
-        (parsedOuterData.icon && parsedOuterData.icon.url) || 
-        '';
-      
-      // Log what we found after all parsing
-      console.log("Final combined data for form:", combinedData);
-      console.log("- title:", combinedData.title);
-      console.log("- description:", combinedData.description);
-      
-      // Update form data directly with the combined data
-      setFormData(prevData => {
-        const updatedData = {
-          ...prevData, // Keep default structure
-          // Apply the combined data
-          ...combinedData,
-          // Ensure required fields are defined
-          id: combinedData.id || prevData.id || '',
-          name: combinedData.name || prevData.name || '',
-          title: combinedData.title || prevData.title || '',
-          description: combinedData.description || prevData.description || '',
-          category: combinedData.category || prevData.category || '',
-          // Use combined image URLs
-          imageUrl: imageUrl || prevData.imageUrl,
-          iconUrl: iconUrl || prevData.iconUrl,
-          // Handle arrays
-          features: Array.isArray(combinedData.features) && combinedData.features.length > 0 
-            ? combinedData.features 
-            : prevData.features || [''],
-          tags: Array.isArray(combinedData.tags) && combinedData.tags.length > 0 
-            ? combinedData.tags 
-            : prevData.tags || [''],
-          // Price data
-          basePrice: combinedData.basePrice || combinedData.priceDetails?.basePrice || prevData.basePrice || 0,
-          discountedPrice: combinedData.discountedPrice || combinedData.priceDetails?.discountedPrice || prevData.discountedPrice || 0,
-          currency: combinedData.currency || combinedData.priceDetails?.currency || prevData.currency || 'USD',
-          isFree: combinedData.isFree ?? (combinedData.priceDetails?.isFree) ?? prevData.isFree ?? false,
-        };
-        
-        console.log('Form data updated:', updatedData);
-        return updatedData;
-      });
-      
-      // Also update price data directly from combined data
-      const priceData = {
-        basePrice: combinedData.basePrice || combinedData.priceDetails?.basePrice || 0,
-        discountedPrice: combinedData.discountedPrice || combinedData.priceDetails?.discountedPrice || 0,
-        currency: combinedData.currency || combinedData.priceDetails?.currency || 'USD',
-        isFree: combinedData.isFree ?? combinedData.priceDetails?.isFree ?? false,
-        isSubscription: combinedData.isSubscription ?? combinedData.priceDetails?.isSubscription ?? false
-      };
-      
-      setPriceData(priceData);
-      console.log('Price data updated:', priceData);
+      // Explicitly delete the data field after extraction
+      delete cleanedAgent.data;
     }
-  }, [agent]); // Only depend on agent
+    
+    // Step 2: Normalize price information
+    // Extract all price information into a consistent priceDetails object
+    const priceDetails = {
+      basePrice: cleanedAgent.priceDetails?.basePrice ?? cleanedAgent.basePrice ?? 0,
+      discountedPrice: cleanedAgent.priceDetails?.discountedPrice ?? cleanedAgent.discountedPrice ?? 0,
+      currency: cleanedAgent.priceDetails?.currency ?? cleanedAgent.currency ?? 'USD',
+      isFree: cleanedAgent.priceDetails?.isFree ?? cleanedAgent.isFree ?? false,
+      isSubscription: cleanedAgent.priceDetails?.isSubscription ?? cleanedAgent.isSubscription ?? false,
+      discountPercentage: cleanedAgent.priceDetails?.discountPercentage ?? cleanedAgent.discountPercentage ?? 0
+    };
+    
+    // Special handling for isFree based on price
+    if (priceDetails.basePrice === 0 || priceDetails.discountedPrice === 0) {
+      priceDetails.isFree = true;
+    }
+    
+    // Set initial price data
+    setPriceData(priceDetails);
+    
+    // Ensure features and tags are arrays
+    if (!Array.isArray(cleanedAgent.features)) {
+      cleanedAgent.features = [];
+    }
+    
+    if (!Array.isArray(cleanedAgent.tags)) {
+      cleanedAgent.tags = [];
+    }
+    
+    // Step 3: Handle image URLs from nested objects
+    if (cleanedAgent.image && cleanedAgent.image.url) {
+      cleanedAgent.imageUrl = cleanedAgent.image.url;
+    }
+    
+    if (cleanedAgent.icon && cleanedAgent.icon.url) {
+      cleanedAgent.iconUrl = cleanedAgent.icon.url;
+    }
+    
+    if (cleanedAgent.jsonFile && cleanedAgent.jsonFile.url) {
+      cleanedAgent.downloadUrl = cleanedAgent.jsonFile.url || cleanedAgent.fileUrl || cleanedAgent.templateUrl || '';
+    }
+    
+    // Step 4: Initialize form data with cleaned information
+    const initialFormData = {
+      ...defaultFormData,
+      ...cleanedAgent,
+      priceDetails,
+      // Keep these at the root level for backward compatibility
+      isFree: priceDetails.isFree,
+      isSubscription: priceDetails.isSubscription,
+      price: priceDetails.discountedPrice
+    };
+    
+    // Remove redundant fields
+    ['originalAgentData', 'basePrice', 'discountedPrice', 'currency', 'discountPercentage', 'templateUrl', 'fileUrl']
+      .forEach(field => {
+        if (initialFormData[field] !== undefined && field !== 'isFree') {
+          delete initialFormData[field];
+        }
+    });
+    
+    // Initialize form data without redundancy
+    setFormData(initialFormData);
+    
+    // Set image previews
+    if (cleanedAgent.imageUrl) {
+      setImagePreview(handleImagePreview(cleanedAgent.imageUrl, 'image'));
+    } else if (cleanedAgent.image && cleanedAgent.image.url) {
+      setImagePreview(handleImagePreview(cleanedAgent.image.url, 'image'));
+    }
+    
+    if (cleanedAgent.iconUrl) {
+      setIconPreview(handleImagePreview(cleanedAgent.iconUrl, 'icon'));
+    } else if (cleanedAgent.icon && cleanedAgent.icon.url) {
+      setIconPreview(handleImagePreview(cleanedAgent.icon.url, 'icon'));
+    }
+    
+    // Store original data for comparison
+    setOriginalData(cleanedAgent);
+  }, [agent]);
   
   // Clean up blob URLs when component unmounts
   useEffect(() => {
@@ -787,7 +767,6 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange, hideOnSubmit = fa
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Add console logging to help diagnose issues
     console.log('Form submission starting with agent:', agent);
     console.log('Current form data:', formData);
     console.log('Current price data:', priceData);
@@ -800,13 +779,17 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange, hideOnSubmit = fa
     setIsSaving(true);
     
     try {
-      console.log('Starting form submission with data:', formData);
-      
       // Create a clean clone without runtime-only properties
       const finalFormData = { ...formData };
       
+      // Check for and remove any lingering data property early
+      if ('data' in finalFormData) {
+        console.log('Found lingering data property, removing it');
+        delete finalFormData.data;
+      }
+      
       // Define which properties should be removed before submission
-      const runtimeProperties = ['isSubmitting', 'errors', 'originalAgentData'];
+      const runtimeProperties = ['isSubmitting', 'errors', 'originalAgentData', 'data'];
       
       // Remove runtime-only properties
       runtimeProperties.forEach(prop => {
@@ -815,13 +798,25 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange, hideOnSubmit = fa
         }
       });
       
-      // Ensure all required arrays are properly initialized
-      finalFormData.features = finalFormData.features || [''];
-      finalFormData.tags = finalFormData.tags || [''];
+      // Ensure proper price structure
+      const priceDetails = {
+        basePrice: priceData.basePrice ?? 0,
+        discountedPrice: priceData.discountedPrice ?? 0,
+        currency: priceData.currency ?? 'USD',
+        isFree: priceData.isFree ?? finalFormData.isFree ?? false,
+        isSubscription: priceData.isSubscription ?? finalFormData.isSubscription ?? false,
+        discountPercentage: priceData.discountPercentage ?? 0
+      };
       
-      // Filter out empty feature and tag entries
-      finalFormData.features = finalFormData.features.filter(feature => feature.trim() !== '');
-      finalFormData.tags = finalFormData.tags.filter(tag => tag.trim() !== '');
+      // Update the form data with the normalized price details
+      finalFormData.priceDetails = priceDetails;
+      finalFormData.price = priceDetails.discountedPrice;
+      finalFormData.isFree = priceDetails.isFree;
+      finalFormData.isSubscription = priceDetails.isSubscription;
+      
+      // Ensure all required arrays are properly initialized
+      finalFormData.features = finalFormData.features?.filter(feature => feature.trim() !== '') || [];
+      finalFormData.tags = finalFormData.tags?.filter(tag => tag.trim() !== '') || [];
       
       // Ensure we have the creator info
       finalFormData.creator = {
@@ -830,13 +825,6 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange, hideOnSubmit = fa
         imageUrl: finalFormData.creator?.imageUrl || '',
         ...finalFormData.creator
       };
-      
-      // Add pricing details
-      finalFormData.basePrice = priceData.basePrice;
-      finalFormData.discountedPrice = priceData.discountedPrice;
-      finalFormData.currency = priceData.currency;
-      finalFormData.isFree = priceData.isFree;
-      finalFormData.isSubscription = priceData.isSubscription;
       
       // If we have image files, upload them
       if (selectedImageFile) {
@@ -851,30 +839,69 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange, hideOnSubmit = fa
         finalFormData.iconUrl = iconUrl;
       }
       
-      // Add jsonFile to finalFormData directly for the API to handle
+      // Handle JSON file upload separately to avoid FormData nesting issues
       if (jsonFile) {
-        console.log('Adding JSON file to form data');
+        // Only upload JSON file if it's an actual file object
+        if (jsonFile instanceof File) {
+          console.log('Uploading JSON file');
+          const jsonFileUrl = await uploadJsonFile(jsonFile, jsonFile.name);
+          
+          // Create proper jsonFile object structure
+          finalFormData.jsonFile = {
+            url: jsonFileUrl,
+            fileName: jsonFile.name,
+            originalName: jsonFile.name,
+            contentType: jsonFile.type,
+            size: jsonFile.size
+          };
+          
+          // Also set downloadUrl for backward compatibility
+          finalFormData.downloadUrl = jsonFileUrl;
+        } else {
+          // If jsonFile is already an object with URL, use it directly
         finalFormData.jsonFile = jsonFile;
-        finalFormData.jsonFileName = jsonFileName || jsonFile.name;
-        
-        // No need to upload here - will be handled by the API
-        /* 
-        console.log('Uploading JSON file');
-        const jsonUrl = await uploadJsonFile(jsonFile, jsonFileName || `${finalFormData.name.toLowerCase().replace(/\s+/g, '-')}.json`);
-        finalFormData.jsonFileUrl = jsonUrl;
-        */
+          
+          // Also ensure the jsonFileData field is removed to prevent nesting
+          finalFormData.jsonFileData = undefined;
+          delete finalFormData.jsonFileData;
+        }
       }
       
-      console.log('Submitting final form data:', finalFormData);
+      // Create a proper clean data structure for final submission
+      const submissionData = { ...finalFormData };
       
-      // Handle create or update
+      // Remove any nested fields that could cause data duplication
+      ['originalAgentData', 'data', 'jsonFile'].forEach(field => {
+        if (field === 'data') {
+          // Always delete the data field to prevent duplicate data
+          if (submissionData[field] !== undefined) {
+            console.log(`Removing ${field} field to prevent duplication`);
+            delete submissionData[field];
+          }
+        }
+        else if (typeof submissionData[field] === 'object' && !(submissionData[field] instanceof File)) {
+          // Move jsonFile properties up to the API expected format
+          if (field === 'jsonFile' && submissionData.jsonFile?.url) {
+            submissionData.jsonFileData = JSON.stringify(submissionData.jsonFile);
+          }
+        }
+      });
+      
+      // Final verification - no data field should exist at this point
+      if ('data' in submissionData) {
+        console.error('Data field still exists after cleanup, removing it');
+        delete submissionData.data;
+      }
+      
+      console.log('Submitting clean data:', submissionData);
+      
       if (formData.id) {
         // Update existing agent
-        await updateAgent(formData.id, finalFormData);
+        await updateAgent(formData.id, submissionData);
         toast.success('Agent updated successfully');
       } else {
         // Create new agent
-        await createAgent(finalFormData);
+        await createAgent(submissionData);
         toast.success('Agent created successfully');
         
         // Reset form for new entry if not in modal mode
@@ -1364,7 +1391,7 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange, hideOnSubmit = fa
           </label>
           <textarea
             id="features"
-            value={formData.features?.join(', ') || ''}
+            value={Array.isArray(formData.features) ? formData.features.join(', ') : ''}
             onChange={(e) => handleArrayInput('features', e.target.value)}
             placeholder="Desktop App, Voice Enabled, Web Interface"
             rows="3"
@@ -1378,7 +1405,7 @@ const AgentForm = ({ agent, onSubmit, onCancel, onFieldChange, hideOnSubmit = fa
           </label>
           <textarea
             id="tags"
-            value={formData.tags?.join(', ') || ''}
+            value={Array.isArray(formData.tags) ? formData.tags.join(', ') : ''}
             onChange={(e) => handleArrayInput('tags', e.target.value)}
             placeholder="Education, Assistant, AI, Creative"
             rows="3"

@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { fetchAgents, fetchFeaturedAgents, fetchWishlists } from '../utils/api';
 import SearchBar from '../components/agents/SearchBar';
 import CategoryNav from '../components/agents/CategoryNav';
 import FeaturedAgents from '../components/agents/FeaturedAgents';
@@ -11,48 +10,117 @@ import AgentCarousel from '../components/agents/AgentCarousel';
 import { useTheme } from '../contexts/ThemeContext';
 import { FaExclamationTriangle, FaCalendarAlt, FaArrowRight, FaBars, FaTimes, FaFilter, FaSync } from 'react-icons/fa';
 import { HashLoader } from 'react-spinners';
+import { FixedSizeGrid } from 'react-window';
+import useAgentStore from '../store/agentStore';
 import '../styles/Agents.css';
+import { debounce } from 'lodash';
 
 // Import theme classes - similar to AITools.jsx
 const themeClasses = "bg-gradient-to-br from-[#4158D0] via-[#C850C0] to-[#FFCC70] stars-pattern";
+const headerClass = "text-3xl font-bold mb-8 text-gray-900 dark:text-gray-100";
+const subHeaderClass = "text-2xl font-semibold mb-6 text-gray-800 dark:text-gray-200";
+const sectionClass = "mb-12";
+const cardGridClass = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6";
+
+// Add debounce function to reduce unnecessary filter calls
+// function debounce(func, wait) {
+//   let timeout;
+//   return function executedFunction(...args) {
+//     const later = () => {
+//       clearTimeout(timeout);
+//       func(...args);
+//     };
+//     clearTimeout(timeout);
+//     timeout = setTimeout(later, wait);
+//   };
+// }
 
 const Agents = () => {
   const location = useLocation();
   const { darkMode } = useTheme();
-  const [agents, setAgents] = useState([]);
-  const [allAgents, setAllAgents] = useState([]); // Store all agents for filtering
-  const [featuredAgents, setFeaturedAgents] = useState([]);
-  const [recommendedAgents, setRecommendedAgents] = useState([]);
-  const [wishlists, setWishlists] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedFilter, setSelectedFilter] = useState('Hot & New');
-  const [selectedPrice, setSelectedPrice] = useState('all');
-  const [selectedRating, setSelectedRating] = useState(0);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRecommendationsLoading, setIsRecommendationsLoading] = useState(true);
-  const [selectedTags, setSelectedTags] = useState([]);
-  const [selectedFeatures, setSelectedFeatures] = useState([]);
-  const [tagCounts, setTagCounts] = useState({}); // Dynamic tag counts
-  const [featureCounts, setFeatureCounts] = useState({}); // Dynamic feature counts
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [mobileOptionsOpen, setMobileOptionsOpen] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Get state from Zustand store
+  const { 
+    agents, 
+    featuredAgents, 
+    recommendedAgents, 
+    wishlists,
+    selectedCategory,
+    selectedFilter,
+    selectedPrice,
+    selectedRating,
+    searchQuery,
+    selectedTags,
+    selectedFeatures,
+    tagCounts,
+    featureCounts,
+    isLoading,
+    isRecommendationsLoading,
+    
+    // Actions
+    setCategory,
+    setFilter,
+    setPrice,
+    setRating,
+    setSearchQuery,
+    toggleTag,
+    toggleFeature,
+    resetFilters,
+    loadInitialData,
+    applyFilters
+  } = useAgentStore();
+
+  // Local UI states  
+  const [mobileFiltersOpen, setMobileFiltersOpen] = React.useState(false);
+  const [mobileOptionsOpen, setMobileOptionsOpen] = React.useState(false);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   // Add a ref for the agents container
   const agentsContainerRef = useRef(null);
+  const mountedRef = useRef(false);
+  const dataLoadedRef = useRef(false);
+  const applyFiltersTimeoutRef = useRef(null);
 
-  // Initial data load - only run once
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  // Filter application - run when filters change
-  useEffect(() => {
-    if (allAgents.length > 0) {
+  // Create debounced filter function
+  const debouncedApplyFilters = useCallback(
+    debounce(() => {
+      console.log('Applying filters (debounced)');
       applyFilters();
+    }, 500),
+    [applyFilters]
+  );
+
+  // Initial data load - only run once with proper mount check
+  useEffect(() => {
+    // Set visibility check for page
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && dataLoadedRef.current) {
+        // Check if data needs refreshing (only if more than 30 minutes old)
+        // Don't actually refresh automatically, leave that to user action
+        console.log('Page is visible - not auto-refreshing data to save quota');
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Only load data if this is the first mount and data isn't already loaded
+    if (!mountedRef.current && !dataLoadedRef.current) {
+      mountedRef.current = true;
+      console.log('Initial data load - first component mount');
+      loadInitialData().then(() => {
+        dataLoadedRef.current = true;
+        console.log('Initial data loaded successfully');
+      });
     }
-  }, [allAgents, selectedCategory, selectedFilter, selectedPrice, selectedRating, searchQuery, selectedTags, selectedFeatures]);
+    
+    // Cleanup function to reset mount status when component unmounts
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (applyFiltersTimeoutRef.current) {
+        clearTimeout(applyFiltersTimeoutRef.current);
+      }
+    };
+  }, []); // Empty dependency array as we're using mountedRef
 
   // Get search query from URL
   useEffect(() => {
@@ -66,328 +134,31 @@ const Agents = () => {
       setSearchQuery('');
       console.log('Clearing search query since URL has no q parameter');
     }
-  }, [location.search]);
+  }, [location.search, searchQuery, setSearchQuery]);
 
-  // Calculate counts for tag and feature filters based on all available agents
-  const calculateFilterCounts = (agents) => {
-    if (!agents || agents.length === 0) return;
-    
-    console.log("Calculating filter counts from", agents.length, "agents");
-    const tagCount = {};
-    const featureCount = {};
-    
-    // Count tags based on category or tags property
-    agents.forEach(agent => {
-      // For tags, use category or tags array if available
-      if (agent.category) {
-        const category = agent.category;
-        tagCount[category] = (tagCount[category] || 0) + 1;
-      }
-      
-      if (agent.tags && Array.isArray(agent.tags)) {
-        agent.tags.forEach(tag => {
-          tagCount[tag] = (tagCount[tag] || 0) + 1;
-        });
-      }
-      
-      // For features, check for specific properties or use features array if available
-      if (agent.features && Array.isArray(agent.features)) {
-        agent.features.forEach(feature => {
-          featureCount[feature] = (featureCount[feature] || 0) + 1;
-        });
-      }
-      
-      // Count free agents
-      if (agent.price === 0 || 
-          agent.price === '0' || 
-          agent.price === 'Free' || 
-          agent.price === '$0' || 
-          agent.isFree === true) {
-        featureCount['Free'] = (featureCount['Free'] || 0) + 1;
-      }
-      
-      // Count subscription agents
-      if (typeof agent.price === 'string' && 
-          (agent.price.includes('/month') || 
-           agent.price.includes('a month') || 
-           agent.price.includes('monthly') ||
-           agent.price.includes('subscription'))) {
-        featureCount['Subscription'] = (featureCount['Subscription'] || 0) + 1;
-      }
-    });
-    
-    console.log("Tag counts:", tagCount);
-    console.log("Feature counts:", featureCount);
-    
-    setTagCounts(tagCount);
-    setFeatureCounts(featureCount);
-  };
-
-  // Load initial data (featured, recommended, wishlists) only once
-  const loadInitialData = async () => {
-    try {
-      setIsLoading(true);
-      setIsRecommendationsLoading(true);
-      
-      // Add cache busting timestamp
-      const timestamp = new Date().getTime();
-      
-      // Load agents data from API with cache busting
-      const allAgentsData = await fetchAgents(undefined, undefined, undefined, { timestamp });
-      
-      // Save all agents to state for filtering
-      if (allAgentsData && allAgentsData.length > 0) {
-        // Process the agents data
-        const processedAgents = allAgentsData.map(agent => {
-          // Add any processing logic here
-          return agent;
-        });
-        
-        setAllAgents(processedAgents);
-        
-        // Calculate filter counts based on actual data
-        calculateFilterCounts(processedAgents);
-        
-        // Apply initial filters
-        applyFilters(processedAgents);
-      }
-      
-      // Load featured agents with cache busting
-      const featuredData = await fetchFeaturedAgents(8, { timestamp });
-      setFeaturedAgents(featuredData || []);
-      
-      // Create recommended agents - try to get from API with cache busting
-      let recommendedData = await fetchAgents('All', 'Top Rated', 1, { timestamp, limit: 6 });
-      
-      // Ensure we have some recommended agents, but no mocking
-      if (!recommendedData || recommendedData.length === 0) {
-        console.log('No recommended agents from API');
-        // Try to use featured agents if we have them
-        if (featuredData && featuredData.length > 0) {
-          console.log('Using featured agents as recommendations');
-          recommendedData = [...featuredData].sort(() => 0.5 - Math.random()).slice(0, Math.min(6, featuredData.length));
-        } else if (allAgentsData && allAgentsData.length > 0) {
-          // Otherwise use some random agents from allAgents
-          console.log('Using random agents from all agents as recommendations');
-          recommendedData = [...allAgentsData].sort(() => 0.5 - Math.random()).slice(0, Math.min(6, allAgentsData.length));
-        } else {
-          // No agents available at all
-          console.log('No agents available for recommendations');
-          recommendedData = [];
-        }
-      }
-      
-      setRecommendedAgents(recommendedData);
-      
-      // Fetch wishlists
-      const wishlistsData = await fetchWishlists();
-      setWishlists(wishlistsData || []);
-      
-      setIsRecommendationsLoading(false);
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Error loading initial data:', error);
-      setRecommendedAgents([]);
-      setFeaturedAgents([]);
-      setWishlists([]);
-      setAllAgents([]);
-      setIsRecommendationsLoading(false);
-      setIsLoading(false);
+  // Add a useEffect to apply filters whenever any filter criteria changes
+  useEffect(() => {
+    // Don't apply filters during initial load or multiple times in succession
+    if (mountedRef.current && dataLoadedRef.current) {
+      console.log('Applying filters due to filter change');
+      debouncedApplyFilters();
     }
-  };
-  
-  // Update the applyFilters function to properly handle all filter types
-  const applyFilters = (agentsToFilter = allAgents) => {
-    if (!agentsToFilter || agentsToFilter.length === 0) return;
-    
-    console.log(`Applying filters. Search query: "${searchQuery}". Total agents: ${agentsToFilter.length}`);
-    
-    let filteredResults = [...agentsToFilter];
-    
-    // Apply category filter
-    if (selectedCategory && selectedCategory !== 'All') {
-      filteredResults = filteredResults.filter(agent => agent.category === selectedCategory);
-      console.log(`After category filter (${selectedCategory}): ${filteredResults.length} agents`);
-    }
-    
-    // Apply price filter - ensure this works with different price formats
-    if (selectedPrice && selectedPrice !== 'all' && (selectedPrice.min > 0 || selectedPrice.max < 1000)) {
-      filteredResults = filteredResults.filter(agent => {
-        // First check the new format with priceDetails
-        if (agent.priceDetails) {
-          const basePrice = agent.priceDetails.basePrice || 0;
-          const discountedPrice = agent.priceDetails.discountedPrice || basePrice;
-          const effectivePrice = agent.isFree ? 0 : (discountedPrice || basePrice);
-          
-          return (
-            effectivePrice >= selectedPrice.min && 
-            effectivePrice <= selectedPrice.max
-          );
-        }
-        
-        // Legacy format - handle price as string (e.g. "$25" or "$25/month")
-        let price = agent.price;
-        if (typeof price === 'string') {
-          // Extract numeric part
-          const numValue = parseFloat(price.replace(/[^0-9.]/g, ''));
-          if (!isNaN(numValue)) {
-            price = numValue;
-          }
-        }
-        
-        // Compare with min and max
-        return (
-          price >= selectedPrice.min && 
-          price <= selectedPrice.max
-        );
-      });
-      console.log(`After price filter: ${filteredResults.length} agents`);
-    }
-    
-    // Apply rating filter
-    if (selectedRating > 0) {
-      filteredResults = filteredResults.filter(agent => {
-        const rating = agent.rating?.average ? parseFloat(agent.rating.average) : 0;
-        return rating >= selectedRating;
-      });
-      console.log(`After rating filter (${selectedRating}+): ${filteredResults.length} agents`);
-    }
-    
-    // Apply tag filters
-    if (selectedTags && selectedTags.length > 0) {
-      filteredResults = filteredResults.filter(agent => {
-        // Check if category matches any selected tag
-        if (agent.category && selectedTags.includes(agent.category)) {
-          return true;
-        }
-        
-        // Check agent tags if available
-        if (agent.tags && Array.isArray(agent.tags)) {
-          return agent.tags.some(tag => selectedTags.includes(tag));
-        }
-        
-        return false;
-      });
-      console.log(`After tag filters (${selectedTags.join(', ')}): ${filteredResults.length} agents`);
-      
-      // Debug logging for tags
-      console.log('Selected tags:', selectedTags);
-      console.log('Sample agent tags:', filteredResults.length > 0 ? 
-        (filteredResults[0].tags || 'No tags') : 'No agents after filtering');
-    }
-    
-    // Apply feature filters 
-    if (selectedFeatures && selectedFeatures.length > 0) {
-      filteredResults = filteredResults.filter(agent => {
-        // Process each selected feature
-        return selectedFeatures.some(feature => {
-          // Check for 'Free' feature
-          if (feature === 'Free') {
-            return agent.price === 0 || 
-                   agent.price === '0' || 
-                   agent.price === 'Free' || 
-                   agent.price === '$0' ||
-                   agent.isFree === true;
-          }
-          
-          // Check for 'Subscription' feature
-          if (feature === 'Subscription') {
-            return typeof agent.price === 'string' && 
-                   (agent.price.includes('/month') || 
-                    agent.price.includes('a month') || 
-                    agent.price.includes('monthly') ||
-                    agent.price.includes('subscription'));
-          }
-          
-          // Check other features in the features array
-          return agent.features && 
-                 Array.isArray(agent.features) && 
-                 agent.features.includes(feature);
-        });
-      });
-      console.log(`After feature filters (${selectedFeatures.join(', ')}): ${filteredResults.length} agents`);
-    }
-    
-    // Apply search query
-    if (searchQuery && searchQuery.trim() !== '') {
-      const query = searchQuery.toLowerCase().trim();
-      filteredResults = filteredResults.filter(agent => 
-        (agent.name && agent.name.toLowerCase().includes(query)) ||
-        (agent.title && agent.title.toLowerCase().includes(query)) ||
-        (agent.description && agent.description.toLowerCase().includes(query)) ||
-        (agent.category && agent.category.toLowerCase().includes(query)) ||
-        (agent.creator && agent.creator.name && 
-         agent.creator.name.toLowerCase().includes(query))
-      );
-      console.log(`After search query "${query}": ${filteredResults.length} agents`);
-    }
-    
-    // Apply sorting based on selected filter
-    if (selectedFilter) {
-      switch (selectedFilter) {
-        case 'Hot & New':
-          // Sort by newest first, then by rating
-          filteredResults.sort((a, b) => {
-            if (a.isNew && !b.isNew) return -1;
-            if (!a.isNew && b.isNew) return 1;
-            const aRating = a.rating?.average || 0;
-            const bRating = b.rating?.average || 0;
-            return bRating - aRating;
-          });
-          break;
-        case 'Top Rated':
-          // Sort by rating (highest first)
-          filteredResults.sort((a, b) => {
-            const aRating = a.rating?.average || 0;
-            const bRating = b.rating?.average || 0;
-            return bRating - aRating;
-          });
-          break;
-        case 'Most Popular':
-          // Sort by number of users or views if available, otherwise rating count
-          filteredResults.sort((a, b) => {
-            const aPopularity = a.usersCount || a.views || a.rating?.count || 0;
-            const bPopularity = b.usersCount || b.views || b.rating?.count || 0;
-            return bPopularity - aPopularity;
-          });
-          break;
-        case 'Price: Low to High':
-          // Sort by price (lowest first)
-          filteredResults.sort((a, b) => {
-            const aPrice = typeof a.price === 'number' ? a.price : 
-                          a.priceDetails?.basePrice || 
-                          (typeof a.price === 'string' ? parseFloat(a.price.replace(/[^0-9.]/g, '')) : 0);
-            const bPrice = typeof b.price === 'number' ? b.price : 
-                          b.priceDetails?.basePrice || 
-                          (typeof b.price === 'string' ? parseFloat(b.price.replace(/[^0-9.]/g, '')) : 0);
-            return aPrice - bPrice;
-          });
-          break;
-        case 'Price: High to Low':
-          // Sort by price (highest first)
-          filteredResults.sort((a, b) => {
-            const aPrice = typeof a.price === 'number' ? a.price : 
-                          a.priceDetails?.basePrice || 
-                          (typeof a.price === 'string' ? parseFloat(a.price.replace(/[^0-9.]/g, '')) : 0);
-            const bPrice = typeof b.price === 'number' ? b.price : 
-                          b.priceDetails?.basePrice || 
-                          (typeof b.price === 'string' ? parseFloat(b.price.replace(/[^0-9.]/g, '')) : 0);
-            return bPrice - aPrice;
-          });
-          break;
-        default:
-          // No sorting
-          break;
-      }
-      console.log(`After sorting by ${selectedFilter}: ${filteredResults.length} agents`);
-    }
-    
-    setAgents(filteredResults);
-  };
+  }, [
+    selectedCategory,
+    selectedFilter,
+    selectedPrice,
+    selectedRating,
+    selectedTags,
+    selectedFeatures,
+    searchQuery,
+    debouncedApplyFilters
+  ]);
 
   const handleCategoryChange = (category) => {
     // No page refresh needed, just update state
-    setSelectedCategory(category);
+    setCategory(category);
+    // Apply filters through the debounced function
+    debouncedApplyFilters();
     // Scroll to the curated section for better UX
     document.querySelector('.curated-marketplace').scrollIntoView({ behavior: 'smooth' });
   };
@@ -405,41 +176,41 @@ const Agents = () => {
     }
     
     setSearchQuery(query);
+    // Apply filters through the debounced function
+    debouncedApplyFilters();
   };
 
   const handleFilterChange = (filter) => {
-    setSelectedFilter(filter);
+    setFilter(filter);
+    // Apply filters through the debounced function
+    debouncedApplyFilters();
     // Scroll to the agents list when a filter is selected
     agentsContainerRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const handlePriceChange = (newPriceRange) => {
-    setSelectedPrice(newPriceRange);
+    setPrice(newPriceRange);
+    // Apply filters through the debounced function
+    debouncedApplyFilters();
   };
 
   const handleRatingChange = (rating) => {
     // If the same rating is clicked again, clear it
-    setSelectedRating(prevRating => prevRating === rating ? 0 : rating);
+    setRating(prevRating => prevRating === rating ? 0 : rating);
+    // Apply filters through the debounced function
+    debouncedApplyFilters();
   };
   
   const handleTagChange = (tag) => {
-    setSelectedTags(prev => {
-      if (prev.includes(tag)) {
-        return prev.filter(t => t !== tag);
-      } else {
-        return [...prev, tag];
-      }
-    });
+    toggleTag(tag);
+    // Apply filters through the debounced function
+    debouncedApplyFilters();
   };
   
   const handleFeatureChange = (feature) => {
-    setSelectedFeatures(prev => {
-      if (prev.includes(feature)) {
-        return prev.filter(f => f !== feature);
-      } else {
-        return [...prev, feature];
-      }
-    });
+    toggleFeature(feature);
+    // Apply filters through the debounced function
+    debouncedApplyFilters();
   };
 
   // Toggle mobile filters sidebar
@@ -456,28 +227,9 @@ const Agents = () => {
   const handleRefresh = async () => {
     try {
       setIsRefreshing(true);
-      // Use a unique timestamp for this refresh
-      const timestamp = new Date().getTime();
-      
-      // Load agents data from API with cache busting
-      const allAgentsData = await fetchAgents(undefined, undefined, undefined, { timestamp });
-      
-      // Save all agents to state for filtering
-      if (allAgentsData && allAgentsData.length > 0) {
-        // Process the agents data
-        const processedAgents = allAgentsData.map(agent => {
-          return agent;
-        });
-        
-        setAllAgents(processedAgents);
-        calculateFilterCounts(processedAgents);
-        applyFilters(processedAgents);
-      }
-      
-      // Also refresh featured agents
-      const featuredData = await fetchFeaturedAgents(8, { timestamp });
-      setFeaturedAgents(featuredData || []);
-      
+      await loadInitialData();
+      // Apply filters after data is loaded
+      applyFilters();
       setIsRefreshing(false);
     } catch (error) {
       console.error('Error refreshing data:', error);
@@ -488,10 +240,12 @@ const Agents = () => {
   // Render the agent grid with appropriate filtering
   const renderAgentGrid = () => {
     const isMockData = agents.some(agent => 
+      // Only consider it mock data if the ID specifically starts with 'mock-'
+      // or if the creator name is exactly one of the mock creator names
       (agent.id && agent.id.startsWith('mock-')) || 
-      (agent.title && agent.title.includes('Agent')) ||
-      (agent.imageUrl && agent.imageUrl.includes('picsum.photos')) ||
-      (agent.creator && agent.creator.name && agent.creator.name.includes('Creator'))
+      (agent.creator && agent.creator.name && ['AI Labs', 'Neural Studio', 'Quantum Works', 
+        'Vector AI', 'Synapse Systems', 'DeepMind Shop', 'Cortex Creators', 
+        'Brainwave Tech', 'Intelligent Solutions', 'AI Innovations'].includes(agent.creator.name))
     );
 
     if (isLoading) {
@@ -511,6 +265,14 @@ const Agents = () => {
       );
     }
 
+    // Calculate grid dimensions based on container width
+    const containerWidth = agentsContainerRef.current?.clientWidth || 960;
+    const cardWidth = 300; // Adjust based on your card size including margins
+    const cardHeight = 400; // Adjust based on your card height
+    const columnCount = Math.max(1, Math.floor(containerWidth / cardWidth));
+    const rowCount = Math.ceil(agents.length / columnCount);
+    const containerHeight = Math.min(window.innerHeight * 0.7, rowCount * cardHeight);
+
     return (
       <>
         {isMockData && (
@@ -519,89 +281,43 @@ const Agents = () => {
             <span>Showing mock data - not fetched from database</span>
           </div>
         )}
+        
+        {/* For small screens, use regular grid layout for better responsiveness */}
+        {window.innerWidth < 768 ? (
         <div className="marketplace-agents-grid">
           {agents.map(agent => (
             <AgentCard key={agent.id} agent={agent} />
           ))}
         </div>
+        ) : (
+          <FixedSizeGrid
+            className="marketplace-agents-virtualized-grid"
+            columnCount={columnCount}
+            columnWidth={cardWidth}
+            height={containerHeight}
+            rowCount={rowCount}
+            rowHeight={cardHeight}
+            width={containerWidth}
+            itemData={agents}
+          >
+            {({ columnIndex, rowIndex, style, data }) => {
+              const index = rowIndex * columnCount + columnIndex;
+              if (index >= data.length) return null;
+              
+              return (
+                <div style={{
+                  ...style,
+                  padding: '10px'
+                }}>
+                  <AgentCard agent={data[index]} />
+                </div>
+              );
+            }}
+          </FixedSizeGrid>
+        )}
       </>
     );
   };
-
-  // Add tags and features to the mockup agents for filtering demonstration
-  useEffect(() => {
-    if (allAgents.length > 0 && (!allAgents[0].tags || !allAgents[0].features)) {
-      // AI-specific tags for better categorization of agents
-      const tagsToAssign = [
-        'AI Writing',
-        'Automation',
-        'Business',
-        'Coding Assistant',
-        'Content Creation',
-        'Data Analysis',
-        'Email Management',
-        'Language Learning',
-        'Productivity',
-        'Research',
-        'Summarization',
-        'Task Management',
-        'Website Building'
-      ];
-      
-      // AI agent-specific features
-      const featuresToAssign = [
-        'API Access',
-        'Chat Interface',
-        'Code Generation',
-        'Custom Instructions',
-        'Document Processing',
-        'Free',
-        'Image Generation',
-        'Knowledge Base',
-        'Multiple Language Support',
-        'PDF Processing',
-        'Plugins',
-        'Subscription',
-        'Voice Enabled',
-        'Web Search'
-      ];
-      
-      // Add random tags and features to each agent
-      const enhancedAgents = allAgents.map(agent => {
-        // Generate 2-3 random tags for each agent
-        const numTags = Math.floor(Math.random() * 2) + 2;
-        const tags = [];
-        for (let i = 0; i < numTags; i++) {
-          const randomTag = tagsToAssign[Math.floor(Math.random() * tagsToAssign.length)];
-          if (!tags.includes(randomTag)) tags.push(randomTag);
-        }
-        
-        // Generate 2-3 random features for each agent
-        const numFeatures = Math.floor(Math.random() * 2) + 2;
-        const features = [];
-        for (let i = 0; i < numFeatures; i++) {
-          const randomFeature = featuresToAssign[Math.floor(Math.random() * featuresToAssign.length)];
-          if (!features.includes(randomFeature)) features.push(randomFeature);
-        }
-        
-        return {
-          ...agent,
-          tags,
-          features
-        };
-      });
-      
-      setAllAgents(enhancedAgents);
-      calculateFilterCounts(enhancedAgents);
-    }
-  }, [allAgents]);
-
-  // Make sure to call calculateFilterCounts whenever agent data changes
-  useEffect(() => {
-    if (allAgents.length > 0) {
-      calculateFilterCounts(allAgents);
-    }
-  }, [allAgents]);
 
   // Use the new loader
   if (isLoading) {
@@ -792,16 +508,7 @@ const Agents = () => {
                     We couldn't find any agents matching your current filters. Try adjusting your search criteria.
                   </p>
                   <button 
-                    onClick={() => {
-                      setSelectedCategory('All');
-                      setSelectedFilter('Hot & New');
-                      setSelectedPrice('all');
-                      setSelectedRating(0);
-                      setSelectedTags([]);
-                      setSelectedFeatures([]);
-                      setSearchQuery('');
-                      applyFilters(allAgents);
-                    }}
+                    onClick={() => resetFilters()}
                     className="reset-button"
                   >
                     Reset Filters
@@ -844,7 +551,7 @@ const Agents = () => {
       {/* Floating filter button for mobile */}
       <button 
         onClick={toggleMobileFilters}
-        className="fixed bottom-6 right-6 lg:hidden z-50 w-14 h-14 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-lg"
+        className="fixed bottom-6 right-6 lg:hidden z-50 w-14 h-14 text-white flex items-center justify-center shadow-lg"
       >
         <FaFilter size={20} />
       </button>

@@ -35,6 +35,7 @@ const getFeaturedCacheDuration = () => {
 // Public endpoints (cached)
 router.get('/', publicCacheMiddleware({ duration: getDefaultCacheDuration() }), agentsController.getAgents);
 router.get('/featured', publicCacheMiddleware({ duration: getFeaturedCacheDuration() }), agentsController.getFeaturedAgents);
+router.get('/latest', publicCacheMiddleware({ duration: getDefaultCacheDuration() }), agentsController.getLatestAgentsRoute);
 
 // Cache busting route
 router.get('/refresh-cache', validateFirebaseToken, (req, res) => {
@@ -236,6 +237,36 @@ router.post('/:agentId/toggle-like', validateFirebaseToken, async (req, res) => 
   }
 });
 
+// Check if user has liked an agent
+router.get('/:id/user-like-status', validateFirebaseToken, async (req, res) => {
+  try {
+    const agentId = req.params.id;
+    const userId = req.user.uid;
+    
+    // Get the agent document to check if the user is in the likes array
+    const agentRef = db.collection('agents').doc(agentId);
+    const agentDoc = await agentRef.get();
+    
+    if (!agentDoc.exists) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    
+    const agentData = agentDoc.data();
+    const likes = agentData.likes || [];
+    const liked = Array.isArray(likes) ? likes.includes(userId) : false;
+    const likesCount = Array.isArray(likes) ? likes.length : 0;
+    
+    return res.json({
+      liked,
+      likesCount
+    });
+    
+  } catch (error) {
+    console.error('Error checking like status:', error);
+    res.status(500).json({ error: 'Failed to check like status' });
+  }
+});
+
 // Run the database update script programmatically
 router.post('/update-collections', async (req, res) => {
   try {
@@ -272,6 +303,13 @@ router.patch('/:agentId', validateFirebaseToken, upload.fields([
   { name: 'jsonFile', maxCount: 1 }
 ]), agentsController.updateAgent);
 
+// Add PUT route for compatibility with frontend API calls
+router.put('/:agentId', validateFirebaseToken, upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'icon', maxCount: 1 },
+  { name: 'jsonFile', maxCount: 1 }
+]), agentsController.updateAgent);
+
 router.delete('/:agentId', validateFirebaseToken, agentsController.deleteAgent);
 
 // Development endpoint - only available in development environment
@@ -280,41 +318,41 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // Get agent stats (download count, etc.) - public endpoint
-router.get('/:agentId/stats', publicCacheMiddleware({ duration: 30 }), async (req, res) => {
-  try {
-    const { agentId } = req.params;
+// router.get('/:agentId/stats', publicCacheMiddleware({ duration: 30 }), async (req, res) => {
+//   try {
+//     const { agentId } = req.params;
     
-    if (!agentId) {
-      return res.status(400).json({ error: 'Agent ID is required' });
-    }
+//     if (!agentId) {
+//       return res.status(400).json({ error: 'Agent ID is required' });
+//     }
     
-    // Check if agent exists
-    const agentRef = db.collection('agents').doc(agentId);
-    const agentDoc = await agentRef.get();
+//     // Check if agent exists
+//     const agentRef = db.collection('agents').doc(agentId);
+//     const agentDoc = await agentRef.get();
     
-    if (!agentDoc.exists) {
-      return res.status(404).json({ error: 'Agent not found' });
-    }
+//     if (!agentDoc.exists) {
+//       return res.status(404).json({ error: 'Agent not found' });
+//     }
     
-    const agentData = agentDoc.data();
+//     const agentData = agentDoc.data();
     
-    // Return relevant public stats
-    return res.json({
-      downloadCount: agentData.downloadCount || 0,
-      viewCount: agentData.viewCount || 0,
-      rating: agentData.rating || { average: 0, count: 0 },
-      reviewCount: agentData.reviews?.length || 0,
-      likesCount: Array.isArray(agentData.likes) ? agentData.likes.length : (agentData.likes || 0)
-    });
+//     // Return relevant public stats
+//     return res.json({
+//       downloadCount: agentData.downloadCount || 0,
+//       viewCount: agentData.viewCount || 0,
+//       rating: agentData.rating || { average: 0, count: 0 },
+//       reviewCount: agentData.reviews?.length || 0,
+//       likesCount: Array.isArray(agentData.likes) ? agentData.likes.length : (agentData.likes || 0)
+//     });
     
-  } catch (error) {
-    console.error('Error fetching agent stats:', error);
-    return res.status(500).json({ 
-      error: 'Failed to fetch agent stats',
-      message: error.message
-    });
-  }
-});
+//   } catch (error) {
+//     console.error('Error fetching agent stats:', error);
+//     return res.status(500).json({ 
+//       error: 'Failed to fetch agent stats',
+//       message: error.message
+//     });
+//   }
+// });
 
 // Increment download count - works for both authenticated and unauthenticated users
 router.post('/:agentId/increment-downloads', async (req, res) => {
@@ -640,5 +678,7 @@ router.get('/:id/download-file', async (req, res) => {
     });
   }
 });
+
+// Add a new admin route for migrating download counts
 
 module.exports = router; 

@@ -4,6 +4,15 @@ import { toast } from 'react-toastify';
 // Define a consistent key for localStorage
 const CART_STORAGE_KEY = 'aiwaverider_cart';
 
+// Add debounce for localStorage operations
+const debounce = (fn, ms) => {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), ms);
+  };
+};
+
 const CartContext = createContext();
 
 export const useCart = () => useContext(CartContext);
@@ -13,18 +22,27 @@ export const CartProvider = ({ children }) => {
   const [initialized, setInitialized] = useState(false);
   // Add a ref to track if the component is mounted
   const isMounted = useRef(false);
+  // Add a ref to track cart storage operations
+  const storageInProgress = useRef(false);
 
   // Load cart from localStorage on mount - only runs once
   useEffect(() => {
     isMounted.current = true;
     try {
       const savedCart = localStorage.getItem(CART_STORAGE_KEY);
-      console.log('Loading cart from localStorage:', savedCart);
+      
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Loading cart from localStorage:', 
+          savedCart ? `${savedCart.length} characters` : 'empty');
+      }
       
       if (savedCart && savedCart !== 'undefined' && savedCart !== 'null') {
         const parsedCart = JSON.parse(savedCart);
         if (Array.isArray(parsedCart) && parsedCart.length > 0) {
-          console.log('Restoring cart with items:', parsedCart.length);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Restoring cart with items:', parsedCart.length);
+          }
           setCart(parsedCart);
         }
       }
@@ -40,17 +58,31 @@ export const CartProvider = ({ children }) => {
     };
   }, []);
 
-  // Replace the localStorage effect with one that doesn't use toast during render
-  useEffect(() => {
-    if (initialized) {
+  // Create a debounced save function to avoid frequent writes
+  const debouncedSaveCart = useCallback(
+    debounce((cartData) => {
+      if (storageInProgress.current) return;
+      storageInProgress.current = true;
       try {
-        console.log('Saving cart to localStorage, items:', cart.length);
-        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Saving cart to localStorage, items:', cartData.length);
+        }
+        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartData));
       } catch (error) {
         console.error('Failed to save cart to localStorage:', error);
+      } finally {
+        storageInProgress.current = false;
       }
+    }, 500), // 500ms debounce
+    []
+  );
+
+  // Replace the localStorage effect with the debounced version
+  useEffect(() => {
+    if (initialized && cart) {
+      debouncedSaveCart(cart);
     }
-  }, [cart, initialized]);
+  }, [cart, initialized, debouncedSaveCart]);
   
   // Calculate cart totals using memoization instead of effects to avoid setState during render
   const cartTotal = useMemo(() => {
@@ -145,7 +177,12 @@ export const CartProvider = ({ children }) => {
 
   // Check localStorage on mount - Move toast notification to a useEffect
   useEffect(() => {
+    let storageChecked = false;
+    
     const checkLocalStorage = async () => {
+      if (storageChecked) return;
+      storageChecked = true;
+      
       const storageAvailable = testLocalStorage();
       if (!storageAvailable && isMounted.current) {
         console.error('localStorage is not available. Cart persistence will not work.');

@@ -1,26 +1,34 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef, useContext, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { FaStar, FaRegStar, FaCheck, FaDownload, FaHeart, FaRegHeart, FaLink, FaArrowLeft, FaArrowRight, FaThumbsUp, FaComment, FaShare, FaCheckCircle } from 'react-icons/fa';
+import { FaStar, FaRegStar, FaCheck, FaDownload, FaHeart, FaRegHeart, FaLink, FaArrowLeft, FaArrowRight, FaThumbsUp, FaComment, FaShare, FaCheckCircle, FaShoppingCart } from 'react-icons/fa';
 import { 
-  fetchAgentById, 
   toggleWishlist, 
-  getAgentDownloadCount, 
-  incrementAgentDownloadCount,
   toggleAgentLike,
   getAgentReviews,
   addAgentReview,
-  recordAgentDownload,
   checkCanReviewAgent,
-  downloadFreeAgent
-} from '../../utils/api';
+  downloadFreeAgent,
+  incrementAgentDownloadCount,
+  recordAgentDownload,
+  fetchAgentById,
+  getUserLikeStatus,
+  API_URL
+} from '../../utils/api.jsx';
 import { useCart } from '../../contexts/CartContext.jsx';
 import { AuthContext } from '../../contexts/AuthContext';
 import { trackProductView } from '../../services/recommendationService';
+import { formatPrice } from '../../utils/priceUtils';
+import useAgentStore from '../../store/agentStore';
 import DOMPurify from 'dompurify';
 import { toast } from 'react-toastify';
-import { onSnapshot, doc, collection, query, where, orderBy, getDoc, updateDoc, serverTimestamp, getDocs, limit } from 'firebase/firestore';
-import { db } from '../../utils/firebase';
 import './AgentDetail.css';
+
+// Add debug logger
+const debug = (message, data) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[AgentDetail] ${message}`, data);
+  }
+};
 
 // Star Rating Component
 const StarRating = ({ rating, onRatingChange, size = "large", interactive = false }) => {
@@ -59,6 +67,61 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
   const [likeCount, setLikeCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [initialStateLoaded, setInitialStateLoaded] = useState(false);
+  const checkIntervalRef = useRef(null);
+
+  // Replace the Firebase onSnapshot listeners with direct document fetches
+  useEffect(() => {
+    // Initialize like count properly - handle array or number
+    if (Array.isArray(initialLikes)) {
+      setLikeCount(initialLikes.length);
+    } else if (typeof initialLikes === 'number') {
+      setLikeCount(initialLikes);
+    }
+    
+    // Check if the current user has liked this agent - only once, not with a listener
+    if (user && agentId) {
+      console.log(`Checking if user has liked agent. User ID: ${user.uid}, Agent ID: ${agentId}`);
+      
+      const checkUserLiked = async () => {
+        try {
+          const token = localStorage.getItem('authToken');
+          if (!user || !token) {
+            setInitialStateLoaded(true);
+            return;
+          }
+
+          // Check if the user has liked this agent using the API function
+          const likeStatus = await getUserLikeStatus(agentId);
+          const isLiked = likeStatus.liked || false;
+          console.log(`Initial check: User has liked agent: ${isLiked}`);
+          setLiked(isLiked);
+          
+          // Update like count if available
+          if (likeStatus.likesCount !== undefined) {
+            setLikeCount(likeStatus.likesCount);
+          }
+          
+          // Cache the like status
+          try {
+            localStorage.setItem(`like_status_${agentId}`, JSON.stringify(likeStatus));
+          } catch (e) {
+            // Ignore storage errors
+          }
+        } catch (error) {
+          console.error("Error checking like status:", error);
+          // Fallback to not liked state on error
+          setLiked(false);
+        }
+        
+        setInitialStateLoaded(true);
+      };
+      
+      checkUserLiked();
+    } else {
+      console.log("No user or agent ID, setting initialStateLoaded = true");
+      setInitialStateLoaded(true);
+    }
+  }, [user, agentId]);
 
   // Toast configuration for consistent, appealing notifications
   const showToast = (type, message, options = {}) => {
@@ -140,83 +203,6 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
       }
     );
   };
-  
-  useEffect(() => {
-    // Initialize like count properly - handle array or number
-    if (Array.isArray(initialLikes)) {
-      setLikeCount(initialLikes.length);
-    } else if (typeof initialLikes === 'number') {
-      setLikeCount(initialLikes);
-    }
-    
-    // Check if the current user has liked this agent
-    if (user && agentId) {
-      console.log(`Setting up Firebase listeners for like status. User ID: ${user.uid}, Agent ID: ${agentId}`);
-      
-      const userLikesRef = doc(db, 'user_likes', `${user.uid}_${agentId}`);
-      const agentRef = doc(db, 'agents', agentId);
-      
-      // Also check directly if user is in likes array
-      const checkUserLiked = async () => {
-        try {
-          const agentDoc = await getDoc(agentRef);
-          if (agentDoc.exists()) {
-            const data = agentDoc.data();
-            if (data.likes && Array.isArray(data.likes)) {
-              const isUserInLikesArray = data.likes.includes(user.uid);
-              console.log(`Initial check: User in likes array: ${isUserInLikesArray}`);
-              setLiked(isUserInLikesArray);
-            }
-          }
-        } catch (error) {
-          console.error("Error checking likes array:", error);
-        }
-        
-        setInitialStateLoaded(true);
-      };
-      
-      checkUserLiked();
-      
-      // Listen for changes to the user's like status
-      const userLikeUnsubscribe = onSnapshot(userLikesRef, (docSnapshot) => {
-        const userHasLiked = docSnapshot.exists();
-        console.log(`Firebase like status updated: User has liked: ${userHasLiked}`);
-        setLiked(userHasLiked);
-      }, (error) => {
-        console.error("Error in user like listener:", error);
-      });
-      
-      // Listen for changes to the agent's like count
-      const agentUnsubscribe = onSnapshot(agentRef, (docSnapshot) => {
-        if (docSnapshot.exists()) {
-          const data = docSnapshot.data();
-          console.log("Agent data updated:", data.likes);
-          if (data.likes) {
-            if (Array.isArray(data.likes)) {
-              setLikeCount(data.likes.length);
-              // Also check if user is in the likes array
-              const userInLikesArray = data.likes.includes(user.uid);
-              console.log(`Agent update: User in likes array: ${userInLikesArray}`);
-              setLiked(userInLikesArray);
-            } else if (typeof data.likes === 'number') {
-              setLikeCount(data.likes);
-            }
-          }
-        }
-      }, (error) => {
-        console.error("Error in agent listener:", error);
-      });
-      
-      return () => {
-        console.log("Cleaning up like listeners");
-        userLikeUnsubscribe();
-        agentUnsubscribe();
-      };
-    } else {
-      console.log("No user or agent ID, setting initialStateLoaded = true");
-      setInitialStateLoaded(true);
-    }
-  }, [user, agentId, initialLikes]);
   
   // Process like/unlike by letting the server determine the action
   const processLikeToggle = async () => {
@@ -340,6 +326,7 @@ const LikeButton = ({ agentId, initialLikes = 0, onLikeUpdate }) => {
 // Comments/Reviews Section Component
 const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
   const { user } = useContext(AuthContext);
+  console.log('CommentSection received existingReviews:', existingReviews);
   const [comments, setComments] = useState(existingReviews);
   const [newComment, setNewComment] = useState('');
   const [rating, setRating] = useState(5);
@@ -386,8 +373,9 @@ const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
     }
   };
   
+  // Optimize the useEffect in CommentSection that sets up the Firebase listener
   useEffect(() => {
-    // Load comments without Firebase listeners for unauthenticated users
+    // Load comments without Firebase listeners to reduce quota usage
     const loadComments = async () => {
       setIsLoadingComments(true);
       try {
@@ -417,59 +405,12 @@ const CommentSection = ({ agentId, existingReviews = [], onReviewsLoaded }) => {
       }
     };
     
-    // Always load comments via REST API (works for both authenticated and unauthenticated users)
+    // Load comments only once when component mounts, not on every render
     loadComments();
     
-    // Only set up Firebase realtime listener if user is authenticated
-    let unsubscribe = null;
-    
-    if (user && agentId) {
-      try {
-        console.log("Setting up Firebase listener for reviews (authenticated user)");
-        // Set up realtime listener for new reviews
-        const reviewsQuery = query(
-          collection(db, 'agent_reviews'),
-          where('agentId', '==', agentId),
-          orderBy('createdAt', 'desc')
-        );
-        
-        unsubscribe = onSnapshot(reviewsQuery, (snapshot) => {
-          const updatedComments = [];
-          snapshot.forEach(doc => {
-            updatedComments.push({
-              id: doc.id,
-              ...doc.data()
-            });
-          });
-          
-          if (updatedComments.length) {
-            setComments(updatedComments);
-            
-            // Always update the review count when snapshot changes
-            if (onReviewsLoaded) {
-              console.log('Firebase real-time update of review count to:', updatedComments.length);
-              onReviewsLoaded(updatedComments.length);
-            }
-            
-            // Check if current user has already reviewed
-            const userReview = updatedComments.find(review => review.userId === user.uid);
-            setHasUserReviewed(!!userReview);
-          }
-        }, (error) => {
-          console.error('Error in reviews listener:', error);
-        });
-      } catch (err) {
-        console.error("Error setting up Firebase listener:", err);
-      }
-    }
-    
-    return () => {
-      if (unsubscribe) {
-        console.log("Cleaning up Firebase listener for reviews");
-        unsubscribe();
-      }
-    };
-  }, [agentId, user, onReviewsLoaded]);
+    // Avoid setting up Firebase realtime listener to save quota
+    return () => {};
+  }, [agentId, user]); // Remove onReviewsLoaded from dependencies as it causes infinite rerendering
   
   const handleOpenSignInPopup = () => {
     setShowSignInPopup(true);
@@ -761,6 +702,141 @@ const AgentDetail = () => {
   const [imageAspectRatio, setImageAspectRatio] = useState(null);
   const [likesCount, setLikesCount] = useState(0);
   const [reviewCount, setReviewCount] = useState(0);
+  const [dataLoaded, setDataLoaded] = useState(false); // Add state to track if data was loaded
+  const intervalRef = useRef(null);
+  const reviewsFetchedRef = useRef(false);
+  const loadAttempt = useRef(0); // Track load attempts
+  
+  // Access the agent store
+  const { allAgents, isLoading: isStoreLoading } = useAgentStore();
+  
+  // Image slider refs
+  const sliderRef = useRef(null);
+  const imageRef = useRef(null);
+  
+  // Function to check if the agent is free
+  const isFreeAgent = (agent) => {
+    if (!agent) return true; // Default to free if no agent
+    
+    // First check priceDetails as the source of truth
+    if (agent.priceDetails) {
+      if (agent.priceDetails.isFree === true) return true;
+      if (agent.priceDetails.basePrice === 0) return true;
+    }
+    
+    // Check for explicit isFree flag
+    if (agent.isFree === true) return true;
+    
+    // Check for zero or free in the direct price field
+    if (agent.price === 0 || 
+        agent.price === '0' || 
+        agent.price === 'Free' || 
+        agent.price === 'free' || 
+        agent.price === '$0' ||
+        agent.price === undefined || 
+        agent.price === null ||
+        agent.price === '') {
+      return true;
+    }
+    
+    // Check for free in formatted price string
+    if (typeof agent.price === 'string' && 
+        (agent.price.toLowerCase().includes('free') || 
+         agent.price === '$0' || 
+         agent.price === '0' || 
+         agent.price.trim() === '')) {
+      return true;
+    }
+    
+    // Check priceDetails object
+    if (agent.priceDetails) {
+      // If basePrice or discountedPrice is 0 or missing
+      if (agent.priceDetails.basePrice === 0 || 
+          agent.priceDetails.basePrice === '0' ||
+          agent.priceDetails.basePrice === undefined ||
+          agent.priceDetails.discountedPrice === 0 ||
+          agent.priceDetails.discountedPrice === '0') {
+        return true;
+      }
+    }
+    
+    // Check for price object structure
+    if (typeof agent.price === 'object') {
+      const priceObj = agent.price;
+      if (priceObj.basePrice === 0 || 
+          priceObj.basePrice === '0' ||
+          priceObj.basePrice === undefined ||
+          priceObj.amount === 0 ||
+          priceObj.amount === '0' ||
+          priceObj.value === 0 ||
+          priceObj.value === '0') {
+        return true;
+      }
+    }
+    
+    return false;
+  };
+  
+  // Memoized derived values
+  const agentTitle = useMemo(() => {
+    if (!agent) return '';
+    return agent.title || agent.name || 'Unnamed Agent';
+  }, [agent]);
+  
+  const agentDescription = useMemo(() => {
+    if (!agent) return '';
+    return agent.description || 'No description available for this agent.';
+  }, [agent]);
+  
+  const agentPrice = useMemo(() => {
+    if (!agent) return 'Price unavailable';
+    
+    if (isFreeAgent(agent)) {
+      return 'Free';
+    }
+    
+    if (agent.priceDetails) {
+      const { basePrice, discountedPrice, currency } = agent.priceDetails;
+      const currencySymbol = currency === 'EUR' ? '€' : 
+                            currency === 'GBP' ? '£' : '$';
+      
+      if (discountedPrice !== undefined && discountedPrice < basePrice) {
+        return `${currencySymbol}${discountedPrice.toFixed(2)} (was ${currencySymbol}${basePrice.toFixed(2)})`;
+      }
+      
+      if (basePrice !== undefined) {
+        return `${currencySymbol}${basePrice.toFixed(2)}`;
+      }
+    }
+    
+    return formatPrice(agent.price);
+  }, [agent]);
+  
+  const agentCreator = useMemo(() => {
+    if (!agent) return 'Unknown Creator';
+    
+    if (agent.creator) {
+      return agent.creator.name || agent.creator.username || 'Unknown Creator';
+    }
+    
+    return 'Unknown Creator';
+  }, [agent]);
+  
+  const agentRatingValue = useMemo(() => {
+    if (!agent) return 0;
+    
+    if (agent.rating && agent.rating.average) {
+      return typeof agent.rating.average === 'number' ? 
+        agent.rating.average : 
+        parseFloat(agent.rating.average) || 0;
+    }
+    
+    return 0;
+  }, [agent]);
+  
+  const formattedRating = useMemo(() => {
+    return agentRatingValue.toFixed(1);
+  }, [agentRatingValue]);
   
   // Toast configuration for consistent, appealing notifications
   const showToast = (type, message, options = {}) => {
@@ -795,14 +871,10 @@ const AgentDetail = () => {
     }
   };
   
-  // Firebase listener for real-time updates
-  const firebaseListener = useRef(null);
-  
-  // Image slider refs
-  const sliderRef = useRef(null);
-  const imageRef = useRef(null);
-
   useEffect(() => {
+    // Skip if we already loaded data
+    if (dataLoaded || !agentId) return;
+    
     const loadAgent = async () => {
       try {
         setLoading(true);
@@ -817,50 +889,157 @@ const AgentDetail = () => {
         
         console.log(`Loading agent detail for ID: ${agentId}, from route: ${window.location.pathname}`);
         
-        // Try to load the agent data
-        const data = await fetchAgentById(agentId);
-        console.log('Successfully loaded agent data:', data);
-        
-        // Debug - check the image URL structures
-        console.log('Image URL check:',
-          { 
-            imageUrl: data?.imageUrl,
-            imageObj: data?.image,
-            imageObjUrl: data?.image?.url, 
-            hasDataField: !!data?.data,
-            dataFieldType: data?.data ? typeof data.data : 'none'
-          }
-        );
-        
-        // If data.data is a string, try to parse it to see if it contains the image URL
-        if (data?.data && typeof data.data === 'string') {
-          try {
-            const parsedData = JSON.parse(data.data);
-            console.log('Parsed data.data for imageUrl:', parsedData?.imageUrl);
+        // First check if data is already in the agent store
+        console.log('Checking agent store for agent data...', allAgents);
+        if (allAgents) {
+          const storeAgent = allAgents.find(a => a.id === agentId);
+          if (storeAgent && !loadAttempt.current) {
+            console.log('Using agent data from store:', storeAgent);
+            setAgent(storeAgent);
             
-            // If data has a parsed imageUrl but the main object doesn't, add it
-            if (parsedData.imageUrl && !data.imageUrl) {
-              data.imageUrl = parsedData.imageUrl;
-              console.log('Added imageUrl from parsed data:', data.imageUrl);
+            // Set initial likes count
+            if (storeAgent.likes) {
+              if (Array.isArray(storeAgent.likes)) {
+                setLikesCount(storeAgent.likes.length);
+              } else if (typeof storeAgent.likes === 'number') {
+                setLikesCount(storeAgent.likes);
+              }
             }
-          } catch (e) {
-            console.error('Error parsing data.data:', e);
+            
+            // Set download count
+            setDownloadCount(storeAgent.downloadCount || 0);
+            
+            // Set initial wishlist status
+            setIsWishlisted(storeAgent.isWishlisted || false);
+            
+            // Set initial price value
+            if (storeAgent.priceDetails && storeAgent.priceDetails.basePrice !== undefined) {
+              setCustomPrice(storeAgent.priceDetails.basePrice.toString());
+            } else if (typeof storeAgent.price === 'number') {
+              setCustomPrice(storeAgent.price.toString());
+            } else if (typeof storeAgent.price === 'string' && !isNaN(parseFloat(storeAgent.price))) {
+              setCustomPrice(parseFloat(storeAgent.price).toString());
+            } else {
+              setCustomPrice('0');
+            }
+            
+            // Set up periodic updates instead of real-time updates with Firebase
+            setupRealtimeUpdates(agentId, setAgent, setLikesCount, setDownloadCount);
+            setLoading(false);
+            setDataLoaded(true); // Mark data as loaded
+            return;
           }
         }
         
-        // If we have image object but no imageUrl, use the image.url
-        if (!data.imageUrl && data.image && data.image.url) {
-          data.imageUrl = data.image.url;
-          console.log('Using image.url as imageUrl:', data.imageUrl);
+        // If not in store or we're forcing a refresh, fetch from API
+        console.log('Fetching agent data from API...');
+        
+        // Create an abort controller with a longer timeout for initial load
+        const abortController = new AbortController();
+        const timeoutId = setTimeout(() => {
+          console.log('Aborting initial agent fetch due to timeout');
+          abortController.abort('Initial load timeout');
+        }, 20000); // 20 second timeout for initial load
+        
+        // Increment load attempt counter - mark this as our first attempt
+        loadAttempt.current += 1;
+        
+        const data = await fetchAgentById(agentId, { 
+          signal: abortController.signal,
+          skipCache: loadAttempt.current > 1 // Only use cache on retries
+        });
+
+
+        
+        // Clear the timeout since request completed
+        clearTimeout(timeoutId);
+        
+        console.log('Raw API response for fetchAgentById:', data);
+        
+        // Add data validation
+        if (!data) {
+          throw new Error("No agent data returned from API");
         }
         
-        setAgent(data);
+        // Add fallback values for critical fields
+        const sanitizedData = {
+          ...data,
+          title: data.title || data.name || "Unnamed Agent",
+          description: data.description || "No description available",
+          price: data.price !== undefined ? data.price : "Price unavailable",
+          creator: data.creator || { name: "Unknown Creator" },
+          downloadCount: data.downloadCount || 0 // Ensure downloadCount is always available
+        };
         
-        // Set initial review count if available
-        if (data.reviews && Array.isArray(data.reviews)) {
-          setReviewCount(data.reviews.length);
+        console.log('Sanitized agent data:', sanitizedData);
+        
+        // Ensure priceDetails is properly formatted
+        if (data.priceDetails) {
+          sanitizedData.priceDetails = {
+            ...data.priceDetails,
+            basePrice: typeof data.priceDetails.basePrice === 'number' ? data.priceDetails.basePrice : 
+                      parseFloat(data.priceDetails.basePrice) || 0,
+            discountedPrice: typeof data.priceDetails.discountedPrice === 'number' ? data.priceDetails.discountedPrice : 
+                            parseFloat(data.priceDetails.discountedPrice) || null,
+            currency: data.priceDetails.currency || 'USD'
+          };
+        } else if (typeof data.price === 'number' || (typeof data.price === 'string' && !isNaN(parseFloat(data.price)))) {
+          // Create priceDetails from price if it doesn't exist
+          const numericPrice = typeof data.price === 'number' ? data.price : parseFloat(data.price);
+          sanitizedData.priceDetails = {
+            basePrice: numericPrice,
+            discountedPrice: numericPrice,
+            currency: 'USD'
+          };
+        }
+        
+        // Handle image URLs
+        if (!sanitizedData.imageUrl && sanitizedData.image && sanitizedData.image.url) {
+          console.log('Adding main imageUrl');
+          sanitizedData.imageUrl = sanitizedData.image.url;
+        } else if (!sanitizedData.imageUrl && sanitizedData.images && sanitizedData.images.length > 0) {
+          console.log('Adding image.url');
+          sanitizedData.imageUrl = sanitizedData.images[0];
+        } else if (!sanitizedData.imageUrl && sanitizedData.iconUrl) {
+          console.log('Adding iconUrl');
+          sanitizedData.imageUrl = sanitizedData.iconUrl;
+        } else if (!sanitizedData.imageUrl) {
+          console.log('Creating placeholder image');
+          sanitizedData.imageUrl = `data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"%3E%3Crect width="300" height="200" fill="%234a4de7"/%3E%3Ctext x="150" y="100" font-family="Arial" font-size="24" text-anchor="middle" fill="white"%3E${encodeURIComponent(sanitizedData.title)}%3C/text%3E%3C/svg%3E`;
+        }
+        
+        // Make sure we have an images array
+        if (!sanitizedData.images || !Array.isArray(sanitizedData.images)) {
+          sanitizedData.images = [];
+        }
+        
+        // Add the main image to the images array if it's not already there
+        if (sanitizedData.imageUrl && !sanitizedData.images.includes(sanitizedData.imageUrl)) {
+          sanitizedData.images.unshift(sanitizedData.imageUrl);
+        }
+        
+        // Add gallery images to the images array if available
+        if (sanitizedData.gallery && Array.isArray(sanitizedData.gallery)) {
+          sanitizedData.gallery.forEach(item => {
+            const galleryUrl = typeof item === 'string' ? item : (item && item.url);
+            if (galleryUrl && !sanitizedData.images.includes(galleryUrl)) {
+              sanitizedData.images.push(galleryUrl);
+            }
+          });
+        }
+        
+        // Add icon to the images array if available
+        if (sanitizedData.iconUrl && !sanitizedData.images.includes(sanitizedData.iconUrl)) {
+          sanitizedData.images.push(sanitizedData.iconUrl);
+        }
+        
+        setAgent(sanitizedData);
+        console.log('Final agent data set in state:', sanitizedData);
+        
+        // Set initial review count
+        if (sanitizedData.reviews && Array.isArray(sanitizedData.reviews)) {
+          setReviewCount(sanitizedData.reviews.length);
         } else {
-          // If reviews aren't in agent data, fetch them
           try {
             const reviews = await getAgentReviews(agentId);
             if (reviews && Array.isArray(reviews)) {
@@ -872,37 +1051,76 @@ const AgentDetail = () => {
         }
         
         // Set likes count
-        if (data.likes) {
-          if (Array.isArray(data.likes)) {
-            setLikesCount(data.likes.length);
-          } else if (typeof data.likes === 'number') {
-            setLikesCount(data.likes);
+        if (sanitizedData.likes) {
+          if (Array.isArray(sanitizedData.likes)) {
+            setLikesCount(sanitizedData.likes.length);
+          } else if (typeof sanitizedData.likes === 'number') {
+            setLikesCount(sanitizedData.likes);
           }
         }
         
-        // Fetch the download count
-        const downloads = await getAgentDownloadCount(agentId);
-        setDownloadCount(downloads);
+        // Get download count directly from the agent data object
+        setDownloadCount(sanitizedData.downloadCount || 0);
         
-        // Set initial price value if agent data is available
-        if (data && data.price) {
-          const basePrice = typeof data.price === 'number' ? data.price : 
-                            typeof data.price === 'string' ? parseFloat(data.price.replace(/[^0-9.]/g, '')) || 0 : 0;
-          setCustomPrice(basePrice.toString());
+        // Set initial price value
+        if (sanitizedData.priceDetails && sanitizedData.priceDetails.basePrice !== undefined) {
+          setCustomPrice(sanitizedData.priceDetails.basePrice.toString());
+        } else if (typeof sanitizedData.price === 'number') {
+          setCustomPrice(sanitizedData.price.toString());
+        } else if (typeof sanitizedData.price === 'string' && !isNaN(parseFloat(sanitizedData.price))) {
+          setCustomPrice(parseFloat(sanitizedData.price).toString());
+        } else {
+          // Default to free if no price
+          setCustomPrice('0');
         }
         
-        setIsWishlisted(data.isWishlisted || false);
+        setIsWishlisted(sanitizedData.isWishlisted || false);
         
-        // Set up real-time updates with Firebase
-        setupRealtimeUpdates(agentId);
+        // Set up periodic updates instead of real-time updates with Firebase
+        setupRealtimeUpdates(agentId, setAgent, setLikesCount, setDownloadCount);
+        setDataLoaded(true); // Mark data as loaded
       } catch (err) {
         console.error('Error loading agent:', err);
-        if (err.response && err.response.status === 400) {
+        
+        // Clear any timeout that may have been set
+        if (typeof timeoutId !== 'undefined') {
+          clearTimeout(timeoutId);
+        }
+        
+        // Handle aborted request specially
+        if (err.name === 'AbortError' || (err.message && err.message.includes('aborted'))) {
+          console.log('Agent initial load was aborted due to timeout');
+          
+          // Try to get from cache as fallback
+          try {
+            console.log('Attempting to load from cache after abort');
+            const cachedData = await fetchAgentById(agentId, { 
+              skipCache: false,
+              forceCache: true 
+            });
+            
+            if (cachedData) {
+              console.log('Successfully loaded agent from cache after abort');
+              setAgent(cachedData);
+              setLoading(false);
+              setDataLoaded(true);
+              // Setup updates with the cached data
+              setupRealtimeUpdates(agentId, setAgent, setLikesCount, setDownloadCount);
+              return;
+            }
+          } catch (cacheErr) {
+            console.error('Failed to load from cache after abort:', cacheErr);
+          }
+        }
+        
+        // Standard error handling based on response codes
+        if (err.response && err.response.status === 404) {
           setError(`Agent with ID "${agentId}" not found. It may have been removed or doesn't exist.`);
+        } else if (err.response && err.response.status === 400) {
+          setError(`Invalid agent ID. Please check the URL and try again.`);
         } else {
           setError(`There was a problem loading this product. Please try again later.`);
         }
-      } finally {
         setLoading(false);
       }
     };
@@ -930,142 +1148,171 @@ const AgentDetail = () => {
       navigate(correctPath, { replace: true });
     }
     
-    // Clean up Firebase listener on unmount
+    // Clean up periodic updates on unmount
     return () => {
-      if (firebaseListener.current) {
-        firebaseListener.current();
+      // Cleanup periodic updates
+    };
+  }, [agentId, viewTracked, navigate, allAgents, isStoreLoading, dataLoaded]);
+  
+  // Set up periodic updates instead of real-time updates with Firebase - optimize this function
+  const setupRealtimeUpdates = (id, setAgent, setLikesCount, setDownloadCount) => {
+    console.log('Setting up periodic updates for agent', id);
+    
+    // Reference to the polling interval for cleanup
+    let intervalId = null;
+    
+    // Track whether polling is active
+    let isPollingActive = true;
+    
+    // Keep track of consecutive errors
+    let consecutiveErrors = 0;
+    const MAX_CONSECUTIVE_ERRORS = 3; // After this many errors, stop polling
+    
+    // Setup visibility change listener to pause/resume polling when tab is not active
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log('Page hidden, pausing polling');
+        isPollingActive = false;
+      } else {
+        console.log('Page visible, resuming polling');
+        isPollingActive = true;
       }
     };
-  }, [agentId, viewTracked, navigate]);
-  
-  // Set up real-time updates using Firebase
-  const setupRealtimeUpdates = (id) => {
-    // Clean up previous listener
-    if (firebaseListener.current) {
-      firebaseListener.current();
-    }
     
-    // For unauthenticated users, use REST API instead of Firestore listener
-    if (!user) {
-      console.log('User not authenticated, using REST API for updates');
-      // Fetch initial data via REST API and schedule periodic updates
-      const fetchData = async () => {
-        try {
-          // Get stats from REST API
-          const statsResponse = await fetch(`/api/agents/${id}/stats`);
-          if (statsResponse.ok) {
-            const statsData = await statsResponse.json();
-            
-            // Update agent with the stats data
-            setAgent(prev => {
-              if (!prev) return prev;
-              return {
-                ...prev,
-                likes: statsData.likes || [],
-                rating: statsData.rating || prev.rating,
-                reviews: statsData.reviews || prev.reviews,
-                downloadCount: statsData.downloadCount || prev.downloadCount
-              };
-            });
-            
-            // Update likes count
-            if (statsData.likes) {
-              if (Array.isArray(statsData.likes)) {
-                setLikesCount(statsData.likes.length);
-              } else if (typeof statsData.likes === 'number') {
-                setLikesCount(statsData.likes);
-              }
-            }
-            
-            // Update download count
-            if (statsData.downloadCount) {
-              setDownloadCount(statsData.downloadCount);
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching agent stats:', error);
+    // Add visibility change event listener
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Setup very infrequent polling (60 minutes)
+    const fetchData = async () => {
+      // Only fetch if polling is active (page is visible)
+      if (!isPollingActive) {
+        console.log('Skipping poll because page is not visible');
+        return;
+      }
+      
+      // If we've had too many consecutive errors, stop polling
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        console.log(`Stopping polling after ${consecutiveErrors} consecutive errors`);
+        if (intervalId) {
+          clearInterval(intervalId);
         }
-      };
+        return;
+      }
       
-      // Fetch initial data
-      fetchData();
-      
-      // Set interval for polling updates (every 30 seconds)
-      const intervalId = setInterval(fetchData, 30000);
-      
-      // Return cleanup function
-      return () => clearInterval(intervalId);
-    }
-    
-    // For authenticated users, use Firebase listener
-    try {
-      firebaseListener.current = onSnapshot(doc(db, 'agents', id), (docSnapshot) => {
-        if (docSnapshot.exists()) {
-          const docData = docSnapshot.data();
+      try {
+        console.log('Manual polling for agent updates');
+        
+        // Create an abort controller with a longer timeout
+        const abortController = new AbortController();
+        
+        // Set up a timeout to abort the request
+        let timeoutId = null;
+        try {
+          timeoutId = setTimeout(() => {
+            console.log('Aborting agent update poll due to timeout');
+            abortController.abort('Timeout');
+          }, 15000); // 15 second timeout
           
-          // Update only specific fields that might change
-          setAgent(prev => {
-            if (!prev) return { id, ...docData };
-            
-            return {
-              ...prev,
-              likes: docData.likes || [],
-              rating: docData.rating || prev.rating,
-              reviews: docData.reviews || prev.reviews,
-              downloadCount: docData.downloadCount || prev.downloadCount
-            };
+          // Use the fetchAgentById function from the API with the abort signal
+          const agentData = await fetchAgentById(id, { 
+            skipCache: true,
+            signal: abortController.signal
           });
           
-          // Update likes count properly
-          if (docData.likes) {
-            if (Array.isArray(docData.likes)) {
-              setLikesCount(docData.likes.length);
-            } else if (typeof docData.likes === 'number') {
-              setLikesCount(docData.likes);
+          // Reset consecutive errors on success
+          consecutiveErrors = 0;
+          
+          // Check if we actually got data
+          if (!agentData) {
+            console.warn('No agent data returned from API');
+            return;
+          }
+          
+          // Update agent with the data
+          setAgent(prev => {
+            if (!prev) return prev;
+            
+            // Keep important previous properties if the new data is missing them
+            const updatedAgent = {
+              ...prev,
+              ...agentData,
+              // Ensure we keep the imageUrl if the new data doesn't have it
+              imageUrl: agentData.imageUrl || prev.imageUrl,
+              // Keep previous image array if new one is empty
+              images: (agentData.images && agentData.images.length > 0) ? 
+                      agentData.images : prev.images,
+              // Ensure we merge likes, reviews, etc.
+              likes: agentData.likes || prev.likes,
+              rating: agentData.rating || prev.rating,
+              downloadCount: agentData.downloadCount || prev.downloadCount,
+              reviews: (agentData.reviews && agentData.reviews.length > 0) ?
+                       agentData.reviews : prev.reviews
+            };
+            
+            return updatedAgent;
+          });
+          
+          // Update likes count
+          if (agentData.likes) {
+            if (Array.isArray(agentData.likes)) {
+              setLikesCount(agentData.likes.length);
+            } else if (typeof agentData.likes === 'number') {
+              setLikesCount(agentData.likes);
             }
           }
           
-          // Update review count if available
-          if (docData.reviews && Array.isArray(docData.reviews)) {
-            console.log('Firebase agent update - setting review count to:', docData.reviews.length);
-            setReviewCount(docData.reviews.length);
+          // Update download count
+          if (agentData.downloadCount) {
+            setDownloadCount(agentData.downloadCount);
           }
-          
-          // Also check if we need to synchronize with agent_reviews collection
-          // Useful for databases that store reviews in a separate collection
-          if (reviewCount === 0) {
-            console.log('Review count is 0, checking agent_reviews collection');
-            // This will trigger the separate useEffect that fetches reviews
-            getAgentReviews(id).then(reviews => {
-              if (reviews && Array.isArray(reviews) && reviews.length > 0) {
-                console.log('Found reviews in collection, updating count to:', reviews.length);
-                setReviewCount(reviews.length);
-              }
-            }).catch(err => console.error('Error fetching reviews in realtime update:', err));
-          }
-          
-          // Update download count if changed
-          if (docData.downloadCount && docData.downloadCount !== downloadCount) {
-            setDownloadCount(docData.downloadCount);
-          }
+        } finally {
+          // Always clear the timeout
+          if (timeoutId) clearTimeout(timeoutId);
         }
-      }, (error) => {
-        console.error('Firebase listener error:', error);
-        // If we get a permission error, fall back to REST API
-        if (error.code === 'permission-denied') {
-          console.log('Firebase permission denied, falling back to REST API');
-          setupRealtimeUpdates(id);
+      } catch (error) {
+        consecutiveErrors++; // Increment error counter
+        
+        if (error.name === 'AbortError' || error.code === 'ERR_CANCELED' || 
+            (error.message && (error.message.includes('aborted') || error.message.includes('canceled')))) {
+          console.log('Agent update poll was aborted: ', error.message);
+          // Don't treat this as a fatal error
+        } else if (error.code === 'ERR_NETWORK') {
+          console.log('Network error during agent poll - will retry later');
+        } else if (error.response && error.response.status === 404) {
+          console.error('Agent not found (404) - stopping periodic updates');
+          if (intervalId) {
+            clearInterval(intervalId);
+          }
+        } else {
+          console.error('Error polling agent data:', error);
         }
-      });
-    } catch (error) {
-      console.error('Error setting up Firebase listener:', error);
-    }
+      }
+    };
+    
+    // Initial fetch - only do this once with a short delay to prevent race conditions
+    setTimeout(fetchData, 1000);
+    
+    // Set interval for very infrequent polling (60 minutes) to drastically reduce quota usage
+    intervalId = setInterval(fetchData, 60 * 60 * 1000);
+    
+    // Return cleanup function
+    return () => {
+      console.log('Cleaning up polling interval and visibility listener');
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   };
 
-  // Add a separate useEffect specifically for loading reviews that runs on page load
+  // Also modify the second useEffect to avoid duplicate fetching
   useEffect(() => {
-    // Skip if we don't have an agent ID or if already loading
-    if (!agentId || loading) return;
+    // Skip if we don't have an agent ID or if already loading or if reviews are already loaded
+    if (!agentId || loading || (agent && agent.reviews && agent.reviews.length > 0)) return;
+    
+    // Use the ref from the component level to ensure this effect only runs once per agent ID
+    if (reviewsFetchedRef.current) return;
+    reviewsFetchedRef.current = true;
     
     // Fetch reviews directly on page load
     const fetchReviews = async () => {
@@ -1091,7 +1338,7 @@ const AgentDetail = () => {
     };
     
     fetchReviews();
-  }, [agentId, loading]); // Run when agentId is available and after initial loading
+  }, [agentId, loading, agent?.reviews?.length]); // Replace agent with agent?.reviews?.length
 
   const handleWishlistToggle = async () => {
     if (!user) {
@@ -1100,50 +1347,17 @@ const AgentDetail = () => {
     }
     
     try {
-      // Get current agent info
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
+      // Use toggleWishlist API function rather than direct Firebase access
+      const response = await toggleWishlist(agentId);
       
-      if (!userSnap.exists()) {
-        console.error("User document not found");
-        toast.error("Error updating wishlist. Please try again later.");
-        return;
-      }
-      
-      const userData = userSnap.data();
-      const wishlist = userData.wishlist || [];
-      
-      // Check if agent is already in wishlist
-      const isInWishlist = wishlist.some(item => item.id === agent.id);
-      
-      let updatedWishlist;
-      
-      if (isInWishlist) {
-        // Remove from wishlist
-        updatedWishlist = wishlist.filter(item => item.id !== agent.id);
-        toast.success("Removed from your wishlist");
+      if (response.success) {
+        // Update local state
+        setIsWishlisted(response.isInWishlist);
+        toast.success(response.isInWishlist ? "Added to your wishlist" : "Removed from your wishlist");
       } else {
-        // Add to wishlist
-        const wishlistItem = {
-          id: agent.id,
-          name: agent.name,
-          imageUrl: agent.images && agent.images.length > 0 ? agent.images[0] : '',
-          category: agent.category || '',
-          price: agent.price || {},
-          createdAt: serverTimestamp()
-        };
-        
-        updatedWishlist = [...wishlist, wishlistItem];
-        toast.success("Added to your wishlist");
+        console.error("Error updating wishlist:", response.error);
+        toast.error("Error updating wishlist. Please try again later.");
       }
-      
-      // Update wishlist in Firestore
-      await updateDoc(userRef, {
-        wishlist: updatedWishlist
-      });
-      
-      // Update local state
-      setIsWishlisted(!isInWishlist);
     } catch (error) {
       console.error("Error updating wishlist:", error);
       toast.error("Error updating wishlist. Please try again later.");
@@ -1169,51 +1383,56 @@ const AgentDetail = () => {
       });
   };
 
-  // Update the formatPrice function to better handle price details
-  const formatPrice = (price) => {
-    if (!price && price !== 0) return 'Free';
+  // Format the price for display
+  const displayPrice = (agent) => {
+    // First check for explicit free indicators
+    if (isFreeAgent(agent)) {
+      return (
+        <div className="price-value-container free">
+          <FaCheckCircle className="price-check" />
+          <span className="price-value free">Free</span>
+        </div>
+      );
+    }
     
-    // Handle price details object
-    if (price && typeof price === 'object' && price.basePrice !== undefined) {
-      const currencySymbol = price.currency === 'EUR' ? '€' : 
-                            price.currency === 'GBP' ? '£' : '$';
+    // Handle price details object with discounted price
+    if (agent.priceDetails) {
+      const { basePrice, discountedPrice, currency } = agent.priceDetails;
+      const currencySymbol = currency === 'EUR' ? '€' : '$';
       
-      if (price.basePrice === 0) return 'Free';
-      return `${currencySymbol}${price.basePrice.toFixed(2)}`;
+      // If there's a discount, show both prices
+      if (discountedPrice !== undefined && discountedPrice < basePrice) {
+        return (
+          <>
+            <span className="price-value discount-price">
+              {currencySymbol}{discountedPrice.toFixed(2)}
+            </span>
+            <span className="original-price">
+              {currencySymbol}{basePrice.toFixed(2)}
+            </span>
+            <span className="discount-badge">
+              {Math.round((1 - discountedPrice / basePrice) * 100)}% OFF
+            </span>
+          </>
+        );
+      }
+      
+      // Otherwise just show regular price
+      if (basePrice !== undefined) {
+        return (
+          <span className="price-value">
+            {currencySymbol}{basePrice.toFixed(2)}
+          </span>
+        );
+      }
     }
     
-    // Handle string and number types
-    if (typeof price === 'string') {
-      if (price.toLowerCase() === 'free') return 'Free';
-      return price.startsWith('$') ? price : `$${price}`;
-    }
-    
-    if (typeof price === 'number') {
-      return price === 0 ? 'Free' : `$${price.toFixed(2)}`;
-    }
-    
-    return 'Price unavailable';
-  };
-  
-  // Get minimum price
-  const getMinimumPrice = () => {
-    if (!agent) return 0;
-    
-    if (agent.priceDetails && agent.priceDetails.minimumPrice !== undefined) {
-      return agent.priceDetails.minimumPrice;
-    }
-    
-    // Fall back to regular price if minimum not specified
-    if (typeof agent.price === 'number') {
-      return agent.price;
-    }
-    
-    if (typeof agent.price === 'string') {
-      const parsed = parseFloat(agent.price.replace(/[^0-9.]/g, '')) || 0;
-      return parsed;
-    }
-    
-    return 0;
+    // Fallback to formatted price from utils
+    return (
+      <span className="price-value">
+        {formatPrice(agent.price)}
+      </span>
+    );
   };
   
   // Handle custom price change
@@ -1291,39 +1510,65 @@ const AgentDetail = () => {
   const getImageUrls = () => {
     if (!agent) return [null];
     
+    const validUrls = [];
+    
     // If agent has images array, use it
-    if (agent.images && Array.isArray(agent.images) && agent.images.length > 0) {
-      console.log('Using agent.images array:', agent.images);
-      return agent.images;
+    // if (agent.images && Array.isArray(agent.images) && agent.images.length > 0) {
+    //   console.log('Using agent.images array');
+      
+    //   // Filter out any invalid URLs
+    //   agent.images.forEach(url => {
+    //     if (url && typeof url === 'string' && url.trim() !== '') {
+    //       validUrls.push(url);
+    //     }
+    //   });
+    // }
+    
+    // If agent has gallery array, add those too
+    // if (agent.gallery && Array.isArray(agent.gallery) && agent.gallery.length > 0) {
+    //   console.log('Adding gallery images');
+      
+    //   agent.gallery.forEach(item => {
+    //     // Handle both string URLs and object format
+    //     if (typeof item === 'string' && item.trim() !== '') {
+    //       validUrls.push(item);
+    //     } else if (item && typeof item === 'object' && item.url) {
+    //       validUrls.push(item.url);
+    //     }
+    //   });
+    // }
+    
+    // Add the main imageUrl if it exists and isn't already in the array
+    // if (agent.imageUrl && !validUrls.includes(agent.imageUrl)) {
+    //   console.log('Adding main imageUrl');
+    //   validUrls.push(agent.imageUrl);
+    // }
+    
+    // Check for image object format
+    if (agent.image && typeof agent.image === 'object' && agent.image.url && !validUrls.includes(agent.image.url)) {
+      console.log('Adding image.url');
+      validUrls.push(agent.image.url);
     }
     
-    // If agent has a direct imageUrl, use it
-    if (agent.imageUrl) {
-      console.log('Using direct agent.imageUrl:', agent.imageUrl);
-      return [agent.imageUrl];
+    // Check for iconUrl if we need more images
+    if (agent.iconUrl && !validUrls.includes(agent.iconUrl)) {
+      console.log('Adding iconUrl');
+      validUrls.push(agent.iconUrl);
     }
     
-    // Check if image info exists in a nested structure
-    if (agent.image && agent.image.url) {
-      console.log('Using agent.image.url:', agent.image.url);
-      return [agent.image.url];
+    // If no valid images were found, add a placeholder
+    if (validUrls.length === 0) {
+      console.log('No valid images found, using placeholder');
+      const title = agent.title || agent.name || 'Agent';
+      const placeholderUrl = `data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"%3E%3Crect width="300" height="200" fill="%234a4de7"/%3E%3Ctext x="150" y="100" font-family="Arial" font-size="24" text-anchor="middle" fill="white"%3E${encodeURIComponent(title)}%3C/text%3E%3C/svg%3E`;
+      validUrls.push(placeholderUrl);
     }
     
-    // Try to extract from data field if it's a string
-    if (agent.data && typeof agent.data === 'string') {
-      try {
-        const parsedData = JSON.parse(agent.data);
-        if (parsedData.imageUrl) {
-          console.log('Using parsed imageUrl from agent.data:', parsedData.imageUrl);
-          return [parsedData.imageUrl];
-        }
-      } catch (e) {
-        console.error('Error parsing agent.data in getImageUrls:', e);
-      }
-    }
+    // Deduplicate the URLs
+    const uniqueUrls = [...new Set(validUrls)];
+    console.log(`Assembled ${uniqueUrls.length} unique image URLs for agent`);
     
-    console.log('No image found, using fallback');
-    return [null];
+    return uniqueUrls;
   };
 
   // Handle add to cart click
@@ -1354,15 +1599,18 @@ const AgentDetail = () => {
       });
       
       // Record the download with the new API
-      recordAgentDownload(agentId).then(result => {
-        if (result.success) {
-          setDownloadCount(prev => prev + 1);
-        }
-      }).catch(err => {
-        console.error('Error recording download:', err);
-        // Still increment the display count since the user won't see this error
-        setDownloadCount(prev => prev + 1);
-      });
+      // recordAgentDownload(agentId).then(result => {
+      //   if (result.success) {
+      //     setDownloadCount(prev => prev + 1);
+      //   }
+      //   console.log('Download recorded successfully:', result);
+      //   setIsDownloading(false);
+      //   toast.success('Download complete!');
+      // }).catch(err => {
+      //   console.error('Error recording download:', err);
+      //   // Still increment the display count since the user won't see this error
+      //   setDownloadCount(prev => prev + 1);
+      // });
     } catch (err) {
       console.error('Error adding to cart:', err);
       showToast('error', '❌ Could not add item to cart. Please try again.', {
@@ -1395,25 +1643,6 @@ const AgentDetail = () => {
                Array.isArray(prev.likes) ? [...Array(newLikesCount)].map(() => ({})) : newLikesCount
       };
     });
-  };
-
-  // Add a function to check if the agent is free
-  const isFreeAgent = (agent) => {
-    if (!agent) return false;
-    
-    if (agent.price === 0 || agent.price === '0' || agent.price === 'Free' || agent.price === 'free') {
-      return true;
-    }
-    
-    if (typeof agent.price === 'object' && agent.price.basePrice === 0) {
-      return true;
-    }
-    
-    if (agent.priceDetails && agent.priceDetails.basePrice === 0) {
-      return true;
-    }
-    
-    return false;
   };
 
   // Add a function to handle direct download for free agents
@@ -1526,6 +1755,55 @@ const AgentDetail = () => {
     }
   };
 
+  // Get minimum price
+  const getMinimumPrice = () => {
+    if (!agent) return 0;
+    
+    // First check price details for minimum price or base price
+    if (agent.priceDetails) {
+      if (agent.priceDetails.minimumPrice !== undefined) {
+        return agent.priceDetails.minimumPrice;
+      }
+      
+      if (agent.priceDetails.basePrice !== undefined) {
+        return agent.priceDetails.basePrice;
+      }
+      
+      if (agent.priceDetails.discountedPrice !== undefined) {
+        return agent.priceDetails.discountedPrice;
+      }
+    }
+    
+    // Handle standard price field
+    if (typeof agent.price === 'number') {
+      return agent.price;
+    }
+    
+    if (typeof agent.price === 'string') {
+      // Check for free indicators
+      if (agent.price === 'Free' || 
+          agent.price === 'free' || 
+          agent.price === '$0' || 
+          agent.price === '0') {
+        return 0;
+      }
+      
+      // Try to extract numeric value
+      const parsed = parseFloat(agent.price.replace(/[^0-9.]/g, '')) || 0;
+      return parsed;
+    }
+    
+    // If price is an object, try to extract basePrice
+    if (agent.price && typeof agent.price === 'object') {
+      if (agent.price.basePrice !== undefined) {
+        return agent.price.basePrice;
+      }
+    }
+    
+    // Default to 0 (free) if we can't determine price
+    return 0;
+  };
+
   if (loading) {
     return (
       <div className="agent-detail-container">
@@ -1552,7 +1830,6 @@ const AgentDetail = () => {
   const imageUrls = getImageUrls();
   const minPrice = getMinimumPrice();
   const fileDetails = getFileDetails();
-  const agentRating = agent.rating?.average || agent.rating || 0;
 
   return (
     <div className="agent-detail-container">
@@ -1605,35 +1882,11 @@ const AgentDetail = () => {
 
         {/* Agent Info and Purchase Section */}
         <div className="agent-info-section">
-          <h1 className="agent-title">{agent.title}</h1>
+          <h1 className="agent-title">{agentTitle}</h1>
           
           <div className="agent-meta-row">
             <div className="price-display">
-              {agent.priceDetails && agent.priceDetails.basePrice > 0 && 
-               agent.priceDetails.discountedPrice < agent.priceDetails.basePrice ? (
-                <>
-                  <span className="price-value discount-price">
-                    ${agent.priceDetails.discountedPrice.toFixed(2)}
-                  </span>
-                  <span className="original-price">
-                    ${agent.priceDetails.basePrice.toFixed(2)}
-                  </span>
-                  <span className="discount-badge">
-                    {Math.round((1 - agent.priceDetails.discountedPrice / agent.priceDetails.basePrice) * 100)}% OFF
-                  </span>
-                </>
-              ) : (
-                <div className={`price-value-container ${isFreeAgent(agent) ? 'free' : 'paid'}`}> 
-                  {isFreeAgent(agent) ? (
-                    <>
-                      <FaCheckCircle className="price-check" />
-                      <span className="price-value free">Free</span>
-                    </>
-                  ) : (
-                    <span className="price-value">{formatPrice(agent.price)}</span>
-                  )}
-                </div>
-              )}
+              {displayPrice(agent)}
             </div>
             
             <div className="creator-info">
@@ -1645,9 +1898,9 @@ const AgentDetail = () => {
             
             <div className="rating-display">
               <div className="stars">
-                <StarRating rating={agentRating} />
+                <StarRating rating={agentRatingValue} />
               </div>
-              <span className="rating-count">({agent.reviews?.length || agent.rating?.count || 0})</span>
+              <span className="rating-count">({reviewCount || agent?.rating?.count || 0})</span>
               <LikeButton 
                 agentId={agentId} 
                 initialLikes={likesCount} 
@@ -1657,7 +1910,7 @@ const AgentDetail = () => {
           </div>
           
           <div className="agent-description">
-            <p>{agent.description || 'No description available for this agent.'}</p>
+            <p>{agentDescription}</p>
           </div>
           
           <div className="price-purchase-container">

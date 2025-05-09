@@ -1,6 +1,6 @@
 # Manual Testing Guide for Agent Reviews & Likes
 
-This document provides instructions for manually testing the agent reviews, ratings, and likes features in the AI Wave Rider application.
+This document provides instructions for manually testing the agent reviews, ratings, and likes features in the AI Waverider application.
 
 ## Prerequisites
 
