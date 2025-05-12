@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import '../../styles/globals.css'; // Tailwind global styles
 import Header from '../layout/Header';
 import Footer from '../layout/Footer';
-import SignUp from '../auth/SignUp';
+import SignUp from '../auth/SignUpForm';
 import AppRoutes from '../../routes/routes.jsx';
 import ChatBot from '../common/ChatBot';
 import BackToTop from '../common/BackToTop';

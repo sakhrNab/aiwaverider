@@ -36,7 +36,7 @@ When a user completes a payment for an agent, the system automatically:
 - Integrated with Stripe payment events (`payment_intent.succeeded`, `checkout.session.completed`)
 - Added metadata parsing to extract order information
 
-### 5. Checkout Success Page (`src/components/checkout/CheckoutSuccess.jsx`)
+### 5. Checkout Success Page (`src/components/checkout/CheckoutSuccessDisplay.jsx`)
 - New page that displays after successful payment
 - Shows order details and email delivery notification
 - Includes toast notification about the email delivery

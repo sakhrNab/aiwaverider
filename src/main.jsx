@@ -1,7 +1,6 @@
-import './fontAwesome'; // Add this line
+import './config/fontAwesome.js';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-// import './index.css'
 import '../src/styles/globals.css';
 import App from './App.jsx';
 import { BrowserRouter } from 'react-router-dom';

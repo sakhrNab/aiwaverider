@@ -1,6 +1,6 @@
 // src\editor\ToolBarButton.jsx
 import React from 'react';
-import '../styles/toolbarbtn.css'
+import './toolbarbtn.css'
 
 const ToolBarButton = ({ active, onClick, icon, label, className }) => {
   return (

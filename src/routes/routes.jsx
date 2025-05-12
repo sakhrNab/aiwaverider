@@ -1,36 +1,36 @@
 import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { HashLoader } from 'react-spinners';
-import ProtectedRoute from '../components/auth/ProtectedRoute';
+import ProtectedRoute from './ProtectedRoute';
 
 // Eagerly loaded components
 import HomePage from '../pages/HomePage';
 
 // Lazy loaded components
-const Agents = lazy(() => import('../pages/Agents'));
-const AgentDetail = lazy(() => import('../pages/agent/AgentDetail'));
-const AITools = lazy(() => import('../pages/AITools'));
-const Profile = lazy(() => import('../pages/Profile'));
-const SignIn = lazy(() => import('../components/auth/SignIn'));
-const SignUp = lazy(() => import('../components/auth/SignUp'));
-const About = lazy(() => import('../pages/About'));
-const LatestTech = lazy(() => import('../pages/LatestTech'));
-const Checkout = lazy(() => import('../pages/Checkout'));
-const ThankYou = lazy(() => import('../pages/ThankYou'));
-const CheckoutSuccess = lazy(() => import('../components/checkout/CheckoutSuccess'));
-const PostDetail = lazy(() => import('../posts/PostDetail'));
-const CreatePost = lazy(() => import('../posts/CreatePost'));
+const Agents = lazy(() => import('../pages/AgentsPage'));
+const AgentDetail = lazy(() => import('../pages/AgentDetailPage'));
+const AITools = lazy(() => import('../pages/AIToolsPage'));
+const Profile = lazy(() => import('../pages/ProfilePage'));
+const SignIn = lazy(() => import('../components/auth/SignInForm'));
+const SignUp = lazy(() => import('../components/auth/SignUpForm'));
+const About = lazy(() => import('../pages/AboutPage'));
+const LatestTech = lazy(() => import('../pages/LatestTechPage'));
+const Checkout = lazy(() => import('../pages/CheckoutPage'));
+const ThankYou = lazy(() => import('../pages/ThankYouPage'));
+const CheckoutSuccess = lazy(() => import('../components/checkout/CheckoutSuccessDisplay'));
+const PostDetail = lazy(() => import('../components/posts/PostDetail'));
+const CreatePost = lazy(() => import('../components/posts/CreatePost'));
 
 // Admin pages
-const Dashboard = lazy(() => import('../pages/admin/Dashboard'));
-const ManageAgents = lazy(() => import('../pages/admin/ManageAgents'));
-const ManageUsers = lazy(() => import('../pages/admin/ManageUsers'));
-const AdminAnalytics = lazy(() => import('../pages/admin/Analytics'));
-const Settings = lazy(() => import('../pages/admin/Settings'));
-const Pricing = lazy(() => import('../pages/admin/Pricing'));
-const AIToolsManager = lazy(() => import('../components/admin/AIToolsManager'));
-const EmailManagement = lazy(() => import('../pages/admin/EmailManagement'));
-const EmailComposer = lazy(() => import('../pages/admin/EmailComposer'));
+const Dashboard = lazy(() => import('../pages/admin/AdminDashboardPage'));
+const ManageAgents = lazy(() => import('../pages/admin/AdminManageAgentsPage'));
+const ManageUsers = lazy(() => import('../pages/admin/AdminManageUsersPage'));
+const AdminAnalytics = lazy(() => import('../pages/admin/AdminAnalyticsPage'));
+const Settings = lazy(() => import('../pages/admin/AdminSettingsPage'));
+const Pricing = lazy(() => import('../pages/admin/AdminPricingPage'));
+const AIToolsManager = lazy(() => import('../components/admin/ai-tools/AIToolsManager'));
+const EmailManagement = lazy(() => import('../pages/admin/AdminEmailManagementPage'));
+const EmailComposer = lazy(() => import('../pages/admin/AdminEmailComposerPage'));
 
 // Loading component for Suspense fallback
 const LoadingSpinner = () => (
