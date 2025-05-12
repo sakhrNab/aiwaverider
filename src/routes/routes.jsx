@@ -1,7 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { HashLoader } from 'react-spinners';
-import ProtectedRoute from '../components/ProtectedRoute';
+import ProtectedRoute from '../components/auth/ProtectedRoute';
 
 // Eagerly loaded components
 import HomePage from '../pages/HomePage';
@@ -11,8 +11,8 @@ const Agents = lazy(() => import('../pages/Agents'));
 const AgentDetail = lazy(() => import('../pages/agent/AgentDetail'));
 const AITools = lazy(() => import('../pages/AITools'));
 const Profile = lazy(() => import('../pages/Profile'));
-const SignIn = lazy(() => import('../components/SignIn'));
-const SignUp = lazy(() => import('../components/SignUp'));
+const SignIn = lazy(() => import('../components/auth/SignIn'));
+const SignUp = lazy(() => import('../components/auth/SignUp'));
 const About = lazy(() => import('../pages/About'));
 const LatestTech = lazy(() => import('../pages/LatestTech'));
 const Checkout = lazy(() => import('../pages/Checkout'));

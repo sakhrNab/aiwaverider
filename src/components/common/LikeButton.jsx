@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useContext, useCallback, useRef } from 'react';
-import { toggleLike } from '../utils/api';
-import { AuthContext } from '../contexts/AuthContext';
-import { PostsContext } from '../contexts/PostsContext';
+import { toggleLike } from '../../utils/api';
+import { AuthContext } from '../../contexts/AuthContext';
+import { PostsContext } from '../../contexts/PostsContext';
 import { toast } from 'react-toastify';
 import { FaHeart, FaRegHeart } from 'react-icons/fa';
 import debounce from 'lodash/debounce';

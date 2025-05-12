@@ -33,14 +33,13 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { Box, Typography, CircularProgress } from '@mui/material';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import {
-  processWalletPayment,
   handlePaymentSuccess,
   handlePaymentError,
   getCountryConfig
-} from '../services/paymentUtils';
-import { createPaymentIntent } from '../services/paymentApi';
+} from '../../services/paymentUtils';
+import { createPaymentIntent } from '../../services/paymentApi';
 import { toast } from 'react-toastify';
 
 const GooglePayButton = ({

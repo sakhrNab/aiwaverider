@@ -11,7 +11,7 @@ const logger = require('../../utils/logger');
 const { validateEmail } = require('../../utils/validators');
 const { db } = require('../../config/firebase');
 const config = require('../../config/email');
-const agentsController = require('../controllers/agent/agentsController');
+const agentsController = require('../agent/agentsController');
 
 /**
  * Send a test email to verify configuration
@@ -1702,7 +1702,7 @@ exports.sendAgentUpdateEmail = async (req, res) => {
     await emailNotificationModel.markCampaignAsSending(campaignId);
     
     // Get latest agents
-    const latestAgents = await agentsController.getLatestAgents(5);
+    const latestAgents = await agentsController.getLatestAgents(5) || [];
     
     console.log(`Fetched ${latestAgents.length} latest agents for agent update email`);
     

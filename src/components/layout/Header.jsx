@@ -1,10 +1,10 @@
-// src/components/Header.jsx
+// src/components/layout/Header.jsx
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import logo from '../assets/v6.webp';
-import { AuthContext } from '../contexts/AuthContext';
-import { useCart } from '../contexts/CartContext.jsx';
-import { useTheme } from '../contexts/ThemeContext';
+import logo from '../../assets/v6.webp';
+import { AuthContext } from '../../contexts/AuthContext';
+import { useCart } from '../../contexts/CartContext.jsx';
+import { useTheme } from '../../contexts/ThemeContext';
 import { toast } from 'react-toastify';
 import { 
   FaShoppingCart, 
@@ -13,13 +13,11 @@ import {
   FaHome, 
   FaRobot, 
   FaTools, 
-  FaChartLine, 
   FaMicrochip,
   FaUser,
   FaTimes,
   FaBars,
   FaCircle,
-  FaAngleRight,
   FaInfoCircle
 } from 'react-icons/fa';
 import './Header.css'; // Import custom Header CSS

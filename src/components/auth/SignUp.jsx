@@ -5,18 +5,16 @@ import PropTypes from 'prop-types';
 import { useNavigate } from 'react-router-dom';
 import ReactPhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
-import '../styles/signup.css'; // Import the signup.css
-import { signUp, signUpWithGoogle, signUpWithMicrosoft, uploadProfileImage } from '../utils/api'; // Import the signUp API functions
-import { AuthContext } from '../contexts/AuthContext'; // Import AuthContext
+import './signup.css'; // Import the signup.css
+import { signUp, signUpWithGoogle, signUpWithMicrosoft, uploadProfileImage } from '../../utils/api'; // Import the signUp API functions
+import { AuthContext } from '../../contexts/AuthContext'; // Import AuthContext
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
 import debounce from 'lodash.debounce';
-import { validateEmail } from '../utils/emailValidator';
+import { validateEmail } from '../../utils/emailValidator';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-// Add firebase import
-import firebase from 'firebase/compat/app';
-import { auth } from '../utils/firebase';
+
 
 // Define PasswordRequirements outside of SignUp for effective memoization
 const PasswordRequirements = React.memo(({ validation }) => (

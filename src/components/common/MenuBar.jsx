@@ -1,6 +1,6 @@
 import React from 'react';
 import { useCurrentEditor } from '@tiptap/react';
-import '../styles/toolbarbtn.scss'; // Make sure this path is correct for your project
+import '../../styles/toolbarbtn.scss'; // Make sure this path is correct for your project
 
 const MenuBar = () => {
   const [height, setHeight] = React.useState(480);

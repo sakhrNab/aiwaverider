@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import AdminLayout from '../../components/admin/AdminLayout';
 import HashLoader from 'react-spinners/HashLoader';
-import { FaEnvelope, FaBell, FaGlobe, FaUserPlus, FaPencilAlt, FaRobot, FaTools, FaUsers, FaPaperPlane } from 'react-icons/fa';
+import { FaBell, FaGlobe, FaUserPlus, FaPencilAlt, FaRobot, FaTools, FaUsers, FaPaperPlane } from 'react-icons/fa';
 import { sendTestEmail, updateEmailTemplate, getEmailTemplate, handleEmailError, sendCustomEmail } from '../../services/emailService';
-import RichTextEditor from '../../components/RichTextEditor';
+import RichTextEditor from '../../components/common/RichTextEditor';
 import './EmailManagement.css';
 
 const EmailManagement = () => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useContext, useMemo } from "react";
+import React, { useState, useEffect, useContext, useMemo } from "react";
 import {
   FaPlus,
   FaEdit,
@@ -6,20 +6,12 @@ import {
   FaSearch,
   FaFilter,
   FaSort,
-  FaCheck,
-  FaTimes,
   FaRobot,
   FaUsers,
   FaNewspaper,
-  FaEye,
-  FaLock,
-  FaLockOpen,
-  FaExclamationTriangle,
-  FaVial,
-  FaExclamationCircle,
   FaSync,
 } from "react-icons/fa";
-import Modal from "../../components/Modal";
+import Modal from "../../components/common/Modal";
 import AdminLayout from "../../components/admin/AdminLayout";
 import AgentForm from "../../components/admin/AgentForm";
 import "./ManageAgents.css";
@@ -30,12 +22,10 @@ import { checkApiStatus, deletePost, createAgent } from "../../utils/api";
 // Import contexts and components for posts management
 import { AuthContext } from "../../contexts/AuthContext";
 import { PostsContext } from "../../contexts/PostsContext";
-import ConfirmationModal from "../../components/ConfirmationModal";
-import { Link, useNavigate } from "react-router-dom";
+import ConfirmationModal from "../../components/common/ConfirmationModal";
+import { useNavigate } from "react-router-dom";
 import { CATEGORIES } from "../../constants/categories";
 import '../../styles/admin/ManageAgentsCards.css';
-import Select from 'react-select';
-import { PulseLoader } from 'react-spinners';
 import { handleGoogleProfileImage } from '../../utils/imageUtils';
 
 /**

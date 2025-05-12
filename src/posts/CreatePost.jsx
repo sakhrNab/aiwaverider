@@ -5,7 +5,7 @@ import { createPost } from '../utils/api';
 import { AuthContext } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 // import PostDetail from '../posts/PostDetail'; // REMOVE this import
-import RichTextEditor from '../components/RichTextEditor'; // NEW import
+import RichTextEditor from '../components/common/RichTextEditor'; // NEW import
 import DOMPurify from 'dompurify';
 import { CATEGORIES } from '../constants/categories';
 import { PostsContext } from '../contexts/PostsContext';

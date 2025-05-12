@@ -2,10 +2,9 @@ import React, { useEffect, useState, useContext } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { FaCheckCircle, FaArrowLeft } from 'react-icons/fa';
 import '../styles/ThankYou.css';
-import { getRecommendationsForPurchase } from '../services/recommendationService';
 import { AuthContext } from '../contexts/AuthContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
-import PaymentSuccessRecommendations from '../components/PaymentSuccessRecommendations';
+import PaymentSuccessRecommendations from '../components/payments/PaymentSuccessRecommendations';
 
 const ThankYou = () => {
   const [purchasedItems, setPurchasedItems] = useState([]);

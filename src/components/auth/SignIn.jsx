@@ -2,12 +2,11 @@
 
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthContext } from '../contexts/AuthContext';
-import { signIn, signInWithGoogle, signInWithMicrosoft } from '../utils/api';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
+import { AuthContext } from '../../contexts/AuthContext';
+import { signIn, signInWithGoogle, signInWithMicrosoft } from '../../utils/api';
+
 import { toast } from 'react-toastify';
-import { getLockInfo, setLockInfo, clearLockInfo } from '../utils/lockManager';
+import { getLockInfo, setLockInfo, clearLockInfo } from '../../utils/lockManager';
 // Add firebase import and remove duplicate auth import
 // import firebase from 'firebase/compat/app';
 // import { auth } from '../utils/firebase';

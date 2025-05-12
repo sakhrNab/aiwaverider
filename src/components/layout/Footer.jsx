@@ -1,4 +1,4 @@
-// src/components/Footer.jsx
+// src/components/layout/Footer.jsx
 
 import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';

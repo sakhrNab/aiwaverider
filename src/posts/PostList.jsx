@@ -3,11 +3,10 @@ import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import { PostsContext } from '../contexts/PostsContext';
 import { addComment, deletePost, getAllPosts, incrementPostView } from '../utils/api';
-import ConfirmationModal from '../components/ConfirmationModal';
-import { auth } from '../utils/firebase';
+import ConfirmationModal from '../components/common/ConfirmationModal';
 import { Link } from 'react-router-dom'; // Add this import
 import CommentsList from './CommentsList';
-import LikeButton from '../components/LikeButton';
+import LikeButton from '../components/common/LikeButton';
 import { toast } from 'react-toastify';
 
 const PostsList = () => {

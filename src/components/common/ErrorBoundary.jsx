@@ -1,4 +1,4 @@
-// src/components/ErrorBoundary.jsx
+// src/components/common/ErrorBoundary.jsx
 
 import React from 'react';
 

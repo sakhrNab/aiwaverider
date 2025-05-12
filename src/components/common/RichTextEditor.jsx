@@ -14,7 +14,7 @@ import TextAlign from '@tiptap/extension-text-align';
 
 import DOMPurify from 'dompurify';
 import MenuBar from './MenuBar'; // Adjust the path if needed
-import '../styles/TipTapEditor.module.scss'; // Adjust path if needed
+import '../../styles/TipTapEditor.module.scss'; // Adjust path if needed
 
 // We'll replicate the same Tiptap extensions from PostDetail
 const CustomTaskItem = TaskItem.extend({

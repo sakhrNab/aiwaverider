@@ -1,16 +1,16 @@
 // src/App.jsx
 import React, { useEffect, useState, useRef } from 'react';
 import './styles/globals.css';
-import AppContent from './components/AppContent';
+import AppContent from './components/app/AppContent';
 import { AuthProvider } from './contexts/AuthContext';
 import { PostsProvider } from './contexts/PostsContext';
 import { CartProvider } from './contexts/CartContext.jsx';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { PayPalScriptProvider } from '@paypal/react-paypal-js';
-import ErrorBoundary from './components/ErrorBoundary';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import AuthCallback from './components/AuthCallback';
+import AuthCallback from './components/auth/AuthCallback';
 import { PAYMENT } from './config/config';
 import useAgentStore from './store/agentStore'; // Import agentStore
 

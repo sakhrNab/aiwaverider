@@ -23,9 +23,9 @@ import {
   useElements,
   PaymentElement,
 } from '@stripe/react-stripe-js';
-import GooglePayButton from '../components/GooglePayButton';
-import ApplePayButton from '../components/ApplePayButton';
-import PaymentSuccessRecommendations from '../components/PaymentSuccessRecommendations';
+import GooglePayButton from '../components/payments/GooglePayButton';
+import ApplePayButton from '../components/payments/ApplePayButton';
+import PaymentSuccessRecommendations from '../components/payments/PaymentSuccessRecommendations';
 import '../styles/Checkout.css';
 
 import { HashLoader } from 'react-spinners';

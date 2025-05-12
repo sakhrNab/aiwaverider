@@ -5,7 +5,7 @@ import HashLoader from 'react-spinners/HashLoader';
 import { FaEnvelope, FaUsers, FaUser, FaSearch, FaEye, FaPaperPlane, FaRobot, FaTools } from 'react-icons/fa';
 import { fetchUsers } from '../../utils/api';
 import { sendCustomEmail } from '../../services/emailService';
-import RichTextEditor from '../../components/RichTextEditor';
+import RichTextEditor from '../../components/common/RichTextEditor';
 import 'react-quill/dist/quill.snow.css';
 // import { handleGoogleProfileImage } from '../../utils/imageUtils';
 import './EmailComposer.css';

@@ -1,4 +1,4 @@
-// src/components/ConfirmationModal.jsx
+// src/components/common/ConfirmationModal.jsx
 
 import React from 'react';
 

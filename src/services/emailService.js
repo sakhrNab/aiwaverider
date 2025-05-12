@@ -397,7 +397,7 @@ export default {
   sendTestEmail,
   sendWelcomeEmail,
   sendCustomEmail,
-  getEmailStats,
+  // getEmailStats,
   getEmailTemplate,
   updateEmailTemplate,
   handleEmailError

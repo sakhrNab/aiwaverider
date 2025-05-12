@@ -4,13 +4,13 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import Slider from 'react-slick';
-import CardBox from './CardBox';
-import { PostsContext } from '../contexts/PostsContext';
-import { useTheme } from '../contexts/ThemeContext';
-import { CATEGORIES } from '../constants/categories';
+import CardBox from '../common/CardBox';
+import { PostsContext } from '../../contexts/PostsContext';
+import { useTheme } from '../../contexts/ThemeContext';
+import { CATEGORIES } from '../../constants/categories';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
-import '../styles/carousel.css';
+import './carousel.css';
 import { Link } from 'react-router-dom';
 
 const Carousel = ({ userPreferences, searchQuery }) => {

@@ -1,15 +1,15 @@
 // src/components/AppContent.jsx
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import '../styles/globals.css'; // Tailwind global styles
-import Header from './Header';
-import Footer from './Footer';
-import SignUp from './SignUp';
-import AppRoutes from '../routes/routes.jsx';
-import ChatBot from './ChatBot';
-import BackToTop from './BackToTop';
+import '../../styles/globals.css'; // Tailwind global styles
+import Header from '../layout/Header';
+import Footer from '../layout/Footer';
+import SignUp from '../auth/SignUp';
+import AppRoutes from '../../routes/routes.jsx';
+import ChatBot from '../common/ChatBot';
+import BackToTop from '../common/BackToTop';
 import { Analytics as VercelAnalytics } from '@vercel/analytics/react';
-import ErrorBoundary from './ErrorBoundary';
+import ErrorBoundary from '../common/ErrorBoundary';
 
 const AppContent = () => {
   const [isSignUpModalOpen, setIsSignUpModalOpen] = useState(false);

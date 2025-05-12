@@ -2,14 +2,13 @@
 import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
-import { getPostById, updatePost, incrementPostView } from '../utils/api';
+import { updatePost, incrementPostView } from '../utils/api';
 import CommentsSection from './CommentsSection';
 import DOMPurify from 'dompurify';
 import { PostsContext } from '../contexts/PostsContext';
 import { onSnapshot, doc } from 'firebase/firestore';
-import { toast } from 'react-toastify';
 import { db } from '../utils/firebase';
-import LikeButton from '../components/LikeButton';
+import LikeButton from '../components/common/LikeButton';
 
 // TipTap + EditorProvider
 import { EditorProvider } from '@tiptap/react';
@@ -76,7 +75,7 @@ const extensions = [
 ];
 
 // Menu bar for TipTap
-import MenuBar from '../components/MenuBar'; // Ensure path is correct
+import MenuBar from '../components/common/MenuBar';
 import '../styles/TipTapEditor.module.scss'; // Ensure path is correct
 
 // A small sub-component handling the actual TipTap editor in "edit mode"

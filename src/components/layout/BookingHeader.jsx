@@ -1,8 +1,8 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { FaCalendarAlt, FaArrowRight, FaBolt, FaClock } from 'react-icons/fa';
-import { useTheme } from '../contexts/ThemeContext';
-import '../styles/BookingHeader.css';
+import { useTheme } from '../../contexts/ThemeContext';
+import '../../styles/BookingHeader.css';
 
 const BookingHeader = () => {
   const location = useLocation();

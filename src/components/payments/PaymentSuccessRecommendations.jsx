@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom';
 import { FaStar, FaExternalLinkAlt } from 'react-icons/fa';
 import { LazyLoadImage } from 'react-lazy-load-image-component';
 import 'react-lazy-load-image-component/src/effects/blur.css';
-import useAgentStore from '../store/agentStore';
-import { formatPrice, formatRating } from '../services/recommendationService';
-import '../styles/PaymentSuccessRecommendations.css';
+import useAgentStore from '../../store/agentStore';
+import { formatPrice, formatRating } from '../../services/recommendationService';
+import './PaymentSuccessRecommendations.css';
 
 // Add additional styling for recommendation cards
 const additionalStyles = `
