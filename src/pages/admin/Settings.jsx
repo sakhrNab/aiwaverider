@@ -3,7 +3,7 @@ import { toast } from 'react-toastify';
 import { FaSave, FaSync, FaEnvelope, FaBell, FaPalette, FaQuestion, FaCheck } from 'react-icons/fa';
 import { HashLoader } from 'react-spinners';
 import AdminLayout from '../../components/admin/AdminLayout';
-import ColorPicker from '../../components/ColorPicker';
+import ColorPicker from '../../components/common/ColorPicker';
 import { AuthContext } from '../../contexts/AuthContext';
 import './Settings.css';
 
