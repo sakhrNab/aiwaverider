@@ -222,13 +222,21 @@ export const getAllAITools = async (forceRefresh = false) => {
     
     if (response.data && response.data.data) {
       // Process and normalize the data
-      const tools = response.data.data.map(tool => ({
-        ...tool,
-        // Ensure image URL is properly formatted
-        image: formatImageUrl(tool.image),
-        // Ensure tags is always an array
-        tags: Array.isArray(tool.tags) ? tool.tags : (tool.tags ? [tool.tags] : [])
-      }));
+      const tools = response.data.data.map(tool => {
+        // Validate the image URL
+        const validatedImage = tool.image && 
+          !tool.image.includes('/undefined') && 
+          tool.image !== '/uploads/undefined' ? 
+          formatImageUrl(tool.image) : '';
+        
+        return {
+          ...tool,
+          // Use validated image URL
+          image: validatedImage,
+          // Ensure tags is always an array
+          tags: Array.isArray(tool.tags) ? tool.tags : (tool.tags ? [tool.tags] : [])
+        };
+      });
       
       // Cache the data
       localStorage.setItem('ai_tools_cache', JSON.stringify(tools));
@@ -258,7 +266,13 @@ export const getAllAITools = async (forceRefresh = false) => {
  * @returns {string} - Properly formatted image URL
  */
 const formatImageUrl = (imageUrl) => {
-  if (!imageUrl) return '';
+  // Better handling of invalid image URLs
+  if (!imageUrl || 
+      imageUrl === '/uploads/undefined' || 
+      imageUrl.includes('/undefined') || 
+      imageUrl === '') {
+    return '';
+  }
   
   // If it's already a full URL, return as is
   if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {

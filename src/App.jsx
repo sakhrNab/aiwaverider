@@ -25,6 +25,27 @@ const paypalOptions = {
 // Track if app has been initialized - use module scope
 let appInitialized = false;
 
+// Expose agent store preloading as a global function for pages to use
+window.preloadAgentData = async (force = false) => {
+  try {
+    console.log('Preloading agent data (called manually)');
+    const agentStore = useAgentStore.getState();
+    
+    // Only load if we have no agents or force is true
+    const currentAgents = agentStore.allAgents;
+    if (force || currentAgents.length === 0) {
+      await agentStore.loadInitialData(force);
+      console.log('Agent data preloaded successfully');
+    } else {
+      console.log('Agent data already loaded, skipping preload');
+    }
+    return true;
+  } catch (error) {
+    console.error('Error preloading agent data:', error);
+    return false;
+  }
+};
+
 const App = () => {
   // State to track if app has initialized
   const [isInitialized, setIsInitialized] = useState(false);
@@ -39,15 +60,13 @@ const App = () => {
     // Enhanced initialization with data preloading
     const initializeApp = async () => {
       try {
-        console.log('Initializing application and preloading essential data...');
+        console.log('Initializing application...');
         
-        // Preload agent data to avoid duplicate API calls later
-        const agentStore = useAgentStore.getState();
-        await agentStore.loadInitialData();
-        console.log('Agent data preloaded successfully');
+        // Initialize store but don't preload data automatically
+        // This keeps the caching mechanism intact but doesn't make API calls on startup
         
         if (process.env.NODE_ENV === 'development' && !appInitialized) {
-          console.log('App initialized with preloaded data');
+          console.log('App initialized without preloaded agent data');
           appInitialized = true;
         }
       } catch (error) {

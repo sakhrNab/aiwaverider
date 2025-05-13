@@ -165,7 +165,11 @@ const AITools = () => {
 
   // Helper function to get image URL with proper caching
   const getImageUrl = useCallback((tool) => {
-    if (!tool.image || tool.image === '/uploads/undefined') {
+    // More comprehensive check for invalid image values
+    if (!tool.image || 
+        tool.image === '/uploads/undefined' || 
+        tool.image.includes('/undefined') || 
+        tool.image === '') {
       return null;
     }
     
@@ -419,47 +423,52 @@ const AITools = () => {
                         <p className="text-white/70">No tools match your search criteria. Try adjusting your filters.</p>
                       </div>
                     ) : (
-                      filteredTools.map((tool, index) => (
-                        <a
-                          key={tool.id || `tool-${index}`}
-                          href={formatLink(tool.url || tool.link)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="ai-tool-card glass-effect animate-fade-in shimmer-effect"
-                          style={{ animationDelay: `${index * 100}ms` }}
-                        >
-                          <div className="tool-icon-container">
-                            <img 
-                              src={getToolImage(tool)}
-                              alt={tool.title} 
-                              className="img-loading w-full h-full object-cover" 
-                              onLoad={handleImageLoad}
-                              onError={(e) => handleImageError(e, tool)}
-                              loading="lazy"
-                            />
-                          </div>
-                          <div className="ai-tool-content">
-                            <div className="flex justify-between items-center">
-                              <h3 className="ai-tool-title">{tool.title}</h3>
-                              <FaExternalLinkAlt className="external-link-icon" />
+                      filteredTools.map((tool, index) => {
+                        // Get valid image URL or fallback
+                        const toolImageSrc = getToolImage(tool);
+                        
+                        return (
+                          <a
+                            key={tool.id || `tool-${index}`}
+                            href={formatLink(tool.url || tool.link)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ai-tool-card glass-effect animate-fade-in shimmer-effect"
+                            style={{ animationDelay: `${index * 100}ms` }}
+                          >
+                            <div className="tool-icon-container">
+                              <img 
+                                src={toolImageSrc}
+                                alt={tool.title} 
+                                className="img-loading w-full h-full object-cover" 
+                                onLoad={handleImageLoad}
+                                onError={(e) => handleImageError(e, tool)}
+                                loading="lazy"
+                              />
                             </div>
-                            <p className="ai-tool-description">{tool.description}</p>
-                            <div className="ai-tool-tags">
-                              <span className="ai-tool-primary-tag">
-                                {tool.category || tool.keyword || 'AI Tool'}
-                              </span>
-                              {tool.tags?.slice(0, 2).map((tag, tagIndex) => (
-                                <span 
-                                  key={tagIndex} 
-                                  className="ai-tool-secondary-tag"
-                                >
-                                  {tag}
+                            <div className="ai-tool-content">
+                              <div className="flex justify-between items-center">
+                                <h3 className="ai-tool-title">{tool.title}</h3>
+                                <FaExternalLinkAlt className="external-link-icon" />
+                              </div>
+                              <p className="ai-tool-description">{tool.description}</p>
+                              <div className="ai-tool-tags">
+                                <span className="ai-tool-primary-tag">
+                                  {tool.category || tool.keyword || 'AI Tool'}
                                 </span>
-                              ))}
+                                {tool.tags?.slice(0, 2).map((tag, tagIndex) => (
+                                  <span 
+                                    key={tagIndex} 
+                                    className="ai-tool-secondary-tag"
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        </a>
-                      ))
+                          </a>
+                        );
+                      })
                     )}
                   </div>
                 </div>

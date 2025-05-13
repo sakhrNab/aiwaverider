@@ -105,13 +105,33 @@ const Agents = () => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
     // Only load data if this is the first mount and data isn't already loaded
-    if (!mountedRef.current && !dataLoadedRef.current) {
+    if (!mountedRef.current) {
       mountedRef.current = true;
-      console.log('Initial data load - first component mount');
-      loadInitialData().then(() => {
+      
+      // Check if we already have agents in the store before loading
+      const currentAgents = useAgentStore.getState().allAgents;
+      const lastLoadTime = useAgentStore.getState().lastLoadTime;
+      const now = Date.now();
+      const cacheExpiry = useAgentStore.getState().cacheExpiry;
+      
+      // Only fetch from API if we have no agents or the cache is expired
+      const shouldFetchFromApi = 
+        currentAgents.length === 0 || 
+        !lastLoadTime || 
+        (now - lastLoadTime > cacheExpiry);
+      
+      if (shouldFetchFromApi) {
+        console.log('Initial data load - fetching from API');
+        loadInitialData().then(() => {
+          dataLoadedRef.current = true;
+          console.log('Initial data loaded successfully from API');
+        });
+      } else {
+        console.log('Using cached agent data from store');
+        // Apply filters to the existing data
+        applyFilters();
         dataLoadedRef.current = true;
-        console.log('Initial data loaded successfully');
-      });
+      }
     }
     
     // Cleanup function to reset mount status when component unmounts
@@ -228,7 +248,10 @@ const Agents = () => {
   const handleRefresh = async () => {
     try {
       setIsRefreshing(true);
-      await loadInitialData();
+      
+      // Clear any existing data in the cache by forcing a refresh
+      await loadInitialData(true); // Pass true to force refresh
+      
       // Apply filters after data is loaded
       applyFilters();
       setIsRefreshing(false);
