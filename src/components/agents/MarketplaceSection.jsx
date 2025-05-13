@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useContext } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
-import { toggleWishlist } from '../../utils/agentApi';
+import { toggleWishlist } from '../../api/marketplace/agentApi';
 import { toast } from 'react-toastify';
 import { fixPlaceholderUrl } from '../../utils/imageUtils';
 import '../../styles/MarketplaceAgentCard.css';

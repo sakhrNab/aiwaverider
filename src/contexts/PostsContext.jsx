@@ -8,8 +8,8 @@ import React, {
   useCallback,
   useMemo,
 } from 'react';
-import { getAllPosts as apiGetAllPosts, getPostById as apiGetPostById } from '../utils/postApi';
-import { API_URL, api } from '../utils/apiConfig';
+import { getAllPosts as apiGetAllPosts, getPostById as apiGetPostById } from '../api/content/postApi';
+import { API_URL, api } from '../api/core/apiConfig';
 import { AuthContext } from './AuthContext';
 import { toast } from 'react-toastify';
 

@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../../contexts/AuthContext';
-import { updatePost, incrementPostView } from '../../utils/postApi';
+import { updatePost, incrementPostView } from '../../api/content/postApi';
 import CommentsSection from './CommentsSection';
 import DOMPurify from 'dompurify';
 import { PostsContext } from '../../contexts/PostsContext';

@@ -1,7 +1,7 @@
-// src/utils/profileApi.js
+// src/api/user/profileApi.js
 
 import firebase from 'firebase/compat/app';
-import { api, API_URL } from './apiConfig';
+import { api, API_URL } from '../core/apiConfig';
 
 // Helper function to create a mock profile from Firebase user
 const createMockProfileFromFirebase = (firebaseUser) => {

@@ -3,7 +3,7 @@ import { toast } from 'react-toastify';
 import AdminLayout from '../../components/layout/AdminLayout';
 import HashLoader from 'react-spinners/HashLoader';
 import { FaEnvelope, FaUsers, FaSearch, FaEye, FaPaperPlane, FaRobot, FaTools } from 'react-icons/fa';
-import { fetchUsers } from '../../utils/adminManageUsersApi';
+import { fetchUsers } from '../../api/admin/adminManageUsersApi';
 import { sendCustomEmail } from '../../services/emailService';
 import RichTextEditor from '../../components/editor/RichTextEditor';
 import 'react-quill/dist/quill.snow.css';

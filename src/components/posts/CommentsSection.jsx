@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 import { PostsContext } from '../../contexts/PostsContext';
-import { addComment } from '../../utils/postApi';
+import { addComment } from '../../api/content/postApi';
 import CommentsList from './CommentsList';
 import { toast } from 'react-toastify';
 

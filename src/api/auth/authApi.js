@@ -1,6 +1,6 @@
 import firebase from 'firebase/compat/app';
-import { auth } from './firebase';
-import { api, API_URL, clearTokenCache } from './apiConfig';
+import { auth } from '../../utils/firebase';
+import { api, API_URL, clearTokenCache } from '../core/apiConfig';
 
 // Create Session using Axios
 export const createSession = async (user) => {

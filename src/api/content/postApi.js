@@ -1,6 +1,6 @@
-import { api } from './apiConfig';
-import { getAuthHeaders } from './apiConfig';
-import { auth } from './firebase';
+import { api } from '../core/apiConfig';
+import { getAuthHeaders } from '../core/apiConfig';
+import { auth } from '../../utils/firebase';
 
 // Create Post
 export const createPost = async (formData) => {

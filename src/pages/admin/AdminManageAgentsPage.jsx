@@ -18,8 +18,8 @@ import "./AdminManageAgentsPage.css";
 import { getAuthHeaders, validateAndRefreshToken } from "../../utils/auth";
 import { deleteAgent as deleteAgentHelper } from "../../utils/agent-helper";
 import { toast } from "react-hot-toast";
-import { checkApiStatus, deletePost, createAgent } from "../../utils/agentApi";
-import { fetchUsers, createUser, updateUser, deleteUser } from "../../utils/adminManageUsersApi";
+import { checkApiStatus, deletePost, createAgent } from "../../api/marketplace/agentApi";
+import {  createUser, updateUser, deleteUser } from "../../api/admin/adminManageUsersApi";
 // Import contexts and components for posts management
 import { AuthContext } from "../../contexts/AuthContext";
 import { PostsContext } from "../../contexts/PostsContext";
@@ -976,7 +976,7 @@ const ManageAgents = () => {
       let updateAgentWithPrice;
       try {
         // Using dynamic import to ensure the function is loaded
-        const api = await import('../../utils/agentApi');
+        const api = await import('../../api/marketplace/agentApi');
         updateAgentWithPrice = api.updateAgentWithPrice;
       } catch (importError) {
         console.error('Error importing updateAgentWithPrice:', importError);

@@ -4,7 +4,7 @@ import { FaCalendarAlt, FaEye, FaHeart, FaComment, FaArrowRight } from 'react-ic
 import { PostsContext } from '../contexts/PostsContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { HashLoader } from 'react-spinners';
-import { incrementPostView } from '../utils/postApi';
+import { incrementPostView } from '../api/content/postApi';
 
 const LatestTech = () => {
   const { darkMode } = useTheme();

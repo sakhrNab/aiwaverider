@@ -1,9 +1,14 @@
-import { api } from './apiConfig';
-import { auth } from '../utils/firebase';
-import { API_URL } from './apiConfig';
+import { api, API_URL } from '../core/apiConfig';
+import { auth } from '../../utils/firebase';
+
 // Add token caching
 let cachedToken = null;
 let tokenExpirationTime = null;
+// Add a request cache
+const requestCache = new Map();
+const pendingRequests = new Map();
+// Cache expiration time - 5 minutes (in milliseconds)
+const CACHE_EXPIRY = 5 * 60 * 1000;
 // Function to get token with caching
 const getTokenWithCache = async (currentUser) => {
   console.log('getTokenWithCache called');
@@ -285,55 +290,113 @@ export const searchAgents = async (query, filters = {}) => {
 };
 
 /**
- * Fetch agents with advanced filtering options
- * @param {string} category - Category to filter by ('All' for no filtering)
- * @param {string} sortType - Sort type ('All', 'Top Rated', 'Newest', etc.)
- * @param {number} page - Page number for pagination
- * @param {Object} options - Additional options like limit, bypassCache, etc.
- * @returns {Promise<Array>} - Array of agents matching the criteria
+ * Fetch agents from the API with caching and request deduplication
  */
-export const fetchAgents = async (category = 'All', sortType = 'All', page = 1, options = {}) => {
+export const fetchAgents = async (
+  category = 'All',
+  filter = 'Hot & Now',
+  page = 1,
+  options = {}
+) => {
   try {
+    // Extract options or use defaults
     const {
       limit = 20,
-      bypassCache = false,
-      forceRefresh = false,
-      excludeIds = []
+      priceRange = { min: 0, max: 1000 },
+      rating = 0,
+      tags = [],
+      features = [],
+      search = '',
+      timestamp = Date.now(), // Add timestamp for cache busting
+      bypassCache = false
     } = options;
-
-    const queryParams = new URLSearchParams();
     
-    // Add standard parameters
-    if (category && category !== 'All') {
-      queryParams.append('category', category);
+    // Create query params for API
+    const params = new URLSearchParams();
+    params.append('category', category);
+    params.append('filter', filter);
+    params.append('page', page);
+    params.append('limit', limit);
+    
+    // Add filter params
+    if (priceRange?.min > 0) params.append('priceMin', priceRange.min);
+    if (priceRange?.max < 1000) params.append('priceMax', priceRange.max);
+    if (rating > 0) params.append('rating', rating);
+    
+    // Join arrays for API consumption
+    if (tags && tags.length > 0) params.append('tags', tags.join(','));
+    if (features && features.length > 0) params.append('features', features.join(','));
+    if (search) params.append('search', search);
+    
+    // Add timestamp for cache busting only if bypassCache is true
+    if (bypassCache) {
+      params.append('_t', timestamp);
     }
     
-    if (sortType && sortType !== 'All') {
-      queryParams.append('sortBy', sortType.toLowerCase().replace(' ', '_'));
+    // Create a cache key from the params
+    const cacheKey = createCacheKey(params);
+    
+    // Check if we already have a cached response that's not expired
+    if (!bypassCache && requestCache.has(cacheKey)) {
+      const { data, expiry } = requestCache.get(cacheKey);
+      if (expiry > Date.now()) {
+        console.log('Using cached agents data:', data.length, 'agents');
+        return data;
+      } else {
+        // Remove expired cache entry
+        requestCache.delete(cacheKey);
+      }
     }
     
-    queryParams.append('page', page.toString());
-    queryParams.append('limit', limit.toString());
-    
-    if (bypassCache || forceRefresh) {
-      queryParams.append('refresh', 'true');
+    // Check if there's already a request in flight for this exact query
+    if (pendingRequests.has(cacheKey)) {
+      console.log('Request already in flight, waiting for existing request to complete');
+      return pendingRequests.get(cacheKey);
     }
     
-    // Add excluded IDs if provided
-    if (excludeIds && excludeIds.length > 0) {
-      queryParams.append('excludeIds', excludeIds.join(','));
-    }
+    // Create the promise for this request
+    console.log(`Fetching agents from API with params: ${params.toString()}`);
     
-    const url = `/api/agents?${queryParams.toString()}`;
-    console.log(`[API] Fetching agents with params:`, { category, sortType, page, options });
+    // Create promise for the API request
+    const requestPromise = (async () => {
+      // Fetch from backend API
+      const response = await api.get(`/api/agents?${params.toString()}`);
+      console.log('Successfully fetched agents from API:', response.data.agents.length);
+      
+      // Validate agents to ensure they exist and have valid IDs
+      // This removes any potentially corrupted data that could cause errors
+      const validAgents = response.data.agents.filter(agent => {
+        return agent && agent.id && typeof agent.id === 'string';
+      });
+      
+      if (validAgents.length !== response.data.agents.length) {
+        console.warn(`Filtered out ${response.data.agents.length - validAgents.length} invalid agents from results`);
+      }
+      
+      // Cache the valid response data
+      requestCache.set(cacheKey, {
+        data: validAgents,
+        expiry: Date.now() + CACHE_EXPIRY
+      });
+      
+      // Remove from pending requests
+      pendingRequests.delete(cacheKey);
+      
+      return validAgents;
+    })();
     
-    const response = await api.get(url);
-    return response.data?.agents || [];
+    // Store the promise in pending requests map
+    pendingRequests.set(cacheKey, requestPromise);
+    
+    // Return the promise
+    return requestPromise;
   } catch (error) {
-    console.error('Error in fetchAgents:', error);
+    console.error('Error fetching agents from API:', error);
+    // Return empty array on error
     return [];
   }
 };
+
 
 /**
  * Fetch featured agents with options
@@ -777,3 +840,7 @@ export const recordAgentDownload = async (agentId) => {
     }
   };
   
+  // Add this helper function before the fetchAgents export
+const createCacheKey = (params) => {
+  return params.toString();
+};

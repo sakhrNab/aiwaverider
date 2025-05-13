@@ -16,7 +16,7 @@ import './AgentForm.css';
 import { toast } from 'react-hot-toast';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/storage';
-import { createAgent, updateAgent } from '../../../utils/agentApi';
+import { createAgent, updateAgent } from '../../../api/marketplace/agentApi';
 
 /**
  * Form component for creating and editing agents

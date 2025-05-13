@@ -7,7 +7,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { initializeErrorMonitoring } from './services/logService';
 import { ENV } from './config/config';
-import { scheduleHealthChecks } from './utils/healthCheck';
+import { scheduleHealthChecks } from './api/core/healthCheck';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext.jsx';

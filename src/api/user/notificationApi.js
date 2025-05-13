@@ -1,23 +1,25 @@
-import { api } from './apiConfig';
+import { api } from '../core/apiConfig';
 
-// Get user notifications
-export const getUserNotifications = async (limit = 20, page = 1) => {
+// Get notifications for the current user
+export const getUserNotifications = async (page = 1, limit = 10) => {
   try {
-    const response = await api.get(`/api/notifications?limit=${limit}&page=${page}`);
+    const response = await api.get('/api/notifications', {
+      params: { page, limit }
+    });
     return response.data;
   } catch (error) {
     console.error('Error fetching notifications:', error);
-    return { notifications: [], unreadCount: 0 };
+    throw error;
   }
 };
 
-// Mark notification as read
+// Mark a notification as read
 export const markNotificationAsRead = async (notificationId) => {
   try {
     const response = await api.put(`/api/notifications/${notificationId}/read`);
     return response.data;
   } catch (error) {
-    console.error(`Error marking notification ${notificationId} as read:`, error);
+    console.error('Error marking notification as read:', error);
     throw error;
   }
 };
@@ -61,7 +63,7 @@ export const deleteNotification = async (notificationId) => {
     const response = await api.delete(`/api/notifications/${notificationId}`);
     return response.data;
   } catch (error) {
-    console.error(`Error deleting notification ${notificationId}:`, error);
+    console.error('Error deleting notification:', error);
     throw error;
   }
 };
@@ -81,17 +83,17 @@ export const deleteAllNotifications = async () => {
 export const getUnreadNotificationCount = async () => {
   try {
     const response = await api.get('/api/notifications/unread-count');
-    return response.data.count;
+    return response.data;
   } catch (error) {
     console.error('Error fetching unread notification count:', error);
-    return 0;
+    return { count: 0 };
   }
 };
 
 // Subscribe to push notifications
 export const subscribeToPushNotifications = async (subscription) => {
   try {
-    const response = await api.post('/api/notifications/push/subscribe', subscription);
+    const response = await api.post('/api/notifications/push-subscription', subscription);
     return response.data;
   } catch (error) {
     console.error('Error subscribing to push notifications:', error);
@@ -100,9 +102,9 @@ export const subscribeToPushNotifications = async (subscription) => {
 };
 
 // Unsubscribe from push notifications
-export const unsubscribeFromPushNotifications = async (endpoint) => {
+export const unsubscribeFromPushNotifications = async (subscriptionId) => {
   try {
-    const response = await api.post('/api/notifications/push/unsubscribe', { endpoint });
+    const response = await api.delete(`/api/notifications/push-subscription/${subscriptionId}`);
     return response.data;
   } catch (error) {
     console.error('Error unsubscribing from push notifications:', error);

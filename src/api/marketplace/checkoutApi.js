@@ -1,6 +1,6 @@
-// src/utils/checkoutApi.js
+// src/api/marketplace/checkoutApi.js
 
-import { api } from './apiConfig';
+import { api } from '../core/apiConfig';
 
 // Initialize checkout session for an agent subscription
 export const initializeCheckout = async (agentId, planId) => {

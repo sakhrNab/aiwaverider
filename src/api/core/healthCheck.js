@@ -8,9 +8,9 @@
  * - Scheduled health monitoring
  */
 
-import { API, ENV, PAYMENT, FEATURES } from '../config/config';
-import { logError, logInfo, logWarning } from '../services/logService';
-import apiClient from '../services/apiClient';
+import { API, ENV, PAYMENT, FEATURES } from '../../config/config';
+import { logError, logInfo, logWarning } from '../../services/logService';
+import apiClient from '../../services/apiClient';
 
 const SERVICE_NAME = 'healthCheck';
 

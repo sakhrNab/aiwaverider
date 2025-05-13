@@ -2,7 +2,7 @@
 
 import axios from 'axios';
 import { toast as hotToast } from 'react-hot-toast';
-import { auth } from './firebase';
+import { auth } from '../../utils/firebase';
 // Set API base URL from environment variable or default to localhost:4000
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -14,7 +14,7 @@ let tokenExpirationTime = null;
 export const refreshAgentStore = async () => {
   try {
     // Dynamically import to avoid hook usage outside of components
-    const { default: agentStore } = await import('../store/agentStore');
+    const { default: agentStore } = await import('../../store/agentStore');
     await agentStore.getState().refreshAfterMutation();
   } catch (error) {
     console.error('Error refreshing agent store:', error);

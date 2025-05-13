@@ -1,7 +1,7 @@
 // src/components/posts/CreatePost.jsx
 
 import React, { useState, useContext } from 'react';
-import { createPost } from '../../utils/postApi';
+import { createPost } from '../../api/content/postApi';
 import { AuthContext } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import RichTextEditor from '../editor/RichTextEditor'; 

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { fetchAgents } from '../utils/agentApi'; //fetchWishlists
+import { fetchAgents } from '../api/marketplace/agentApi'; //fetchWishlists
 import { fixPlaceholderUrl } from '../utils/imageUtils';
 
 // Helper to fix any via.placeholder.com URLs at runtime
@@ -422,7 +422,8 @@ const useAgentStore = create(
           // 3. Recommended agents
           const allAgentsResponse = await fetchAgents('All', 'All', 1, { 
             limit: 100, // Higher limit to get enough data for all needs
-            bypassCache: forceRefresh // Only bypass cache if forceRefresh is true
+            bypassCache: forceRefresh, // Only bypass cache if forceRefresh is true
+            useMockData: process.env.NODE_ENV === 'development' // Use mock data in development if needed
           });
           
           // Check if this request is still relevant
@@ -452,7 +453,7 @@ const useAgentStore = create(
           }
           
           // Apply URL fixes to ensure placeholders work
-          const fixedAgents = fixPlaceholderUrls(allAgentsResponse);
+          const fixedAgents = fixPlaceholderUrls(allAgentsResponse) || [];
           
           // DERIVE FEATURED AGENTS - No separate API call
           const featuredAgents = [...fixedAgents]

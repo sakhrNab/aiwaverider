@@ -13,7 +13,7 @@ import {
   fetchAgentById,
   getUserLikeStatus
 
-} from '../utils/agentApi.js';
+} from '../api/marketplace/agentApi.js';
 import { useCart } from '../contexts/CartContext.jsx';
 import { AuthContext } from '../contexts/AuthContext.jsx';
 import { trackProductView } from '../services/recommendationService.js';

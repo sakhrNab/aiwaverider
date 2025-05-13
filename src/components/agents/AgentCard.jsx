@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { FaStar, FaHeart, FaRegHeart, FaPlus } from 'react-icons/fa';
 import { LazyLoadImage } from 'react-lazy-load-image-component';
 import 'react-lazy-load-image-component/src/effects/blur.css';
-import { addToWishlist, removeFromWishlist } from '../../utils/agentApi';
+import { addToWishlist, removeFromWishlist } from '../../api/marketplace/agentApi';
 import { useCart } from '../../contexts/CartContext';
 import { toast } from 'react-toastify';
 import { fixPlaceholderUrl, generatePlaceholderImage } from '../../utils/imageUtils';

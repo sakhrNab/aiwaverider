@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaEdit, FaTrash, FaExclamationTriangle, FaSearch, FaPlus, FaSpinner, FaAngleLeft, FaAngleRight, FaBell, FaEnvelope, FaTools, FaRobot } from 'react-icons/fa';
 import AdminLayout from '../../components/layout/AdminLayout';
-import { fetchUsers, createUser, updateUser, deleteUser } from '../../utils/adminManageUsersApi';
+import { fetchUsers, createUser, updateUser, deleteUser } from '../../api/admin/adminManageUsersApi';
 import { toast } from 'react-toastify';
 import './AdminManageUsersPage.css';
 import { handleGoogleProfileImage } from '../../utils/imageUtils';
