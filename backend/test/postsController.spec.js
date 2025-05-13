@@ -191,12 +191,12 @@ jest.mock('../controllers/posts/postsController', () => {
 
 // Mock utility functions
 jest.mock('../utils/sanitize', () => jest.fn(html => html));
-jest.mock('../utils/github', () => ({
-  uploadImageToGitHub: jest.fn().mockResolvedValue({ 
+jest.mock('../utils/storage', () => ({
+  uploadImageToStorage: jest.fn().mockResolvedValue({ 
     url: 'https://example.com/image.jpg', 
-    sha: 'abc123' 
+    filename: 'posts/abc123-image.jpg' 
   }),
-  deleteImageFromGitHub: jest.fn().mockResolvedValue(true)
+  deleteImageFromStorage: jest.fn().mockResolvedValue(true)
 }));
 jest.mock('../utils/cache', () => ({
   getCache: jest.fn().mockResolvedValue(null),

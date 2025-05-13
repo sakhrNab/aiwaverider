@@ -41,7 +41,7 @@ const mockData = {
       description: 'A test post for unit testing',
       category: 'Technology',
       imageUrl: 'https://example.com/test.jpg',
-      imageSha: 'test123',
+      imageFilename: 'posts/test123-test.jpg',
       createdBy: 'test-user-id',
       createdByUsername: 'testuser',
       likes: ['user-1', 'user-2'],

@@ -2,9 +2,9 @@
 
 const sanitizeUtils = require('../../utils/sanitize');
 const {
-  uploadImageToGitHub,
-  deleteImageFromGitHub,
-} = require('../../utils/github');
+  uploadImageToStorage,
+  deleteImageFromStorage
+} = require('../../utils/storage');
 const admin = require('firebase-admin');
 const {
   getCache,
@@ -36,15 +36,20 @@ const createPost = async (req, res) => {
 
     // Handle image upload if provided
     let imageUrl = null;
-    let imageSha = null;
+    let imageFilename = null;
     if (req.file) {
-      const filename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
-      const uploadResult = await uploadImageToGitHub(filename, req.file.buffer);
-      if (!uploadResult || !uploadResult.url || !uploadResult.sha) {
-        throw new Error('Image upload failed: Missing URL or SHA.');
+      const uploadResult = await uploadImageToStorage(
+        req.file.buffer, 
+        req.file.originalname, 
+        'posts'
+      );
+      
+      if (!uploadResult || !uploadResult.url || !uploadResult.filename) {
+        throw new Error('Image upload failed: Missing URL or filename.');
       }
+      
       imageUrl = uploadResult.url;
-      imageSha = uploadResult.sha;
+      imageFilename = uploadResult.filename;
     }
 
     // Get username from users collection
@@ -61,7 +66,7 @@ const createPost = async (req, res) => {
       description,
       category,
       imageUrl,
-      imageSha,
+      imageFilename,
       additionalHTML: sanitizedAdditionalHTML,
       graphHTML: sanitizedGraphHTML,
       createdBy: user.uid || null,
@@ -202,19 +207,22 @@ const updatePost = async (req, res) => {
     // Handle image updates if needed
     if (req.file) {
       // Delete old image if it exists
-      if (postData.imageSha) {
-        await deleteImageFromGitHub(postData.imageSha);
+      if (postData.imageFilename) {
+        await deleteImageFromStorage(postData.imageFilename);
       }
 
-      const filename = `${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`;
-      const uploadResult = await uploadImageToGitHub(filename, req.file.buffer);
+      const uploadResult = await uploadImageToStorage(
+        req.file.buffer, 
+        req.file.originalname, 
+        'posts'
+      );
       
-      if (!uploadResult || !uploadResult.url || !uploadResult.sha) {
+      if (!uploadResult || !uploadResult.url || !uploadResult.filename) {
         throw new Error('Image upload failed');
       }
 
       updates.imageUrl = uploadResult.url;
-      updates.imageSha = uploadResult.sha;
+      updates.imageFilename = uploadResult.filename;
     }
 
     // Sanitize HTML content if present
@@ -262,9 +270,9 @@ const deletePost = async (req, res, user) => {
       return res.status(403).json({ error: 'Unauthorized to delete this post.' });
     }
 
-    // Delete image from GitHub if it exists
-    if (postData.imageSha) {
-      await deleteImageFromGitHub(postData.imageSha);
+    // Delete image from Firebase Storage if it exists
+    if (postData.imageFilename) {
+      await deleteImageFromStorage(postData.imageFilename);
     }
 
     // Delete the post
