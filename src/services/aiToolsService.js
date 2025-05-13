@@ -1,9 +1,11 @@
 import { fetchAITools, fetchAIToolById, createAITool, updateAITool as apiUpdateAITool, deleteAITool as apiDeleteAITool } from '../api/marketplace/aiToolsApi';
 
+import { createSvgDataUri } from '../utils/imageUtils';
+
 // Cache configuration
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 const CACHE_KEY = 'ai_tools_cache';
-const CACHE_TIMESTAMP_KEY = 'ai_tools_cache_timestamp';
+const CACHE_TIMESTAMP_KEY = 'ai_tools_cache_timestamp'; // 24 hours
 
 // Mock data for fallback
 const mockAITools = [
@@ -16,8 +18,22 @@ const mockAITools = [
     tags: ['Image Generation', 'Art', 'Design'],
     url: 'https://www.midjourney.com',
     link: 'https://www.midjourney.com',
-    imageUrl: 'https://via.placeholder.com/300x200/6b21ff/ffffff?text=Midjourney',
-    image: 'https://via.placeholder.com/300x200/6b21ff/ffffff?text=Midjourney',
+    imageUrl: createSvgDataUri({
+      text: 'Midjourney',
+      width: 300,
+      height: 200,
+      bgColor: '6b21ff',
+      textColor: 'ffffff',
+      fontSize: 24
+    }),
+    image: createSvgDataUri({
+      text: 'Midjourney',
+      width: 300,
+      height: 200,
+      bgColor: '6b21ff',
+      textColor: 'ffffff',
+      fontSize: 24
+    }),
     isFree: false,
     price: '$10/month',
     rating: 4.8,
@@ -32,8 +48,22 @@ const mockAITools = [
     tags: ['AI Writing', 'Text Generation', 'Free tools'],
     url: 'https://chat.openai.com',
     link: 'https://chat.openai.com',
-    imageUrl: 'https://via.placeholder.com/300x200/10a37f/ffffff?text=ChatGPT',
-    image: 'https://via.placeholder.com/300x200/10a37f/ffffff?text=ChatGPT',
+    imageUrl: createSvgDataUri({
+      text: 'ChatGPT',
+      width: 300,
+      height: 200,
+      bgColor: '10a37f',
+      textColor: 'ffffff',
+      fontSize: 24
+    }),
+    image: createSvgDataUri({
+      text: 'ChatGPT',
+      width: 300,
+      height: 200,
+      bgColor: '10a37f',
+      textColor: 'ffffff',
+      fontSize: 24
+    }),
     isFree: true,
     price: 'Free',
     rating: 4.9,
@@ -48,8 +78,22 @@ const mockAITools = [
     tags: ['Video Generator', 'Video Editing', 'Content'],
     url: 'https://runwayml.com',
     link: 'https://runwayml.com',
-    imageUrl: 'https://via.placeholder.com/300x200/d14836/ffffff?text=Runway',
-    image: 'https://via.placeholder.com/300x200/d14836/ffffff?text=Runway',
+    imageUrl: createSvgDataUri({
+      text: 'Runway',
+      width: 300,
+      height: 200,
+      bgColor: 'd14836',
+      textColor: 'ffffff',
+      fontSize: 24
+    }),
+    image: createSvgDataUri({
+      text: 'Runway',
+      width: 300,
+      height: 200,
+      bgColor: 'd14836',
+      textColor: 'ffffff',
+      fontSize: 24
+    }),
     isFree: false,
     price: '$15/month',
     rating: 4.7,
@@ -64,8 +108,22 @@ const mockAITools = [
     tags: ['AI Coding', 'Development', 'Productivity'],
     url: 'https://github.com/features/copilot',
     link: 'https://github.com/features/copilot',
-    imageUrl: 'https://via.placeholder.com/300x200/333333/ffffff?text=GitHub+Copilot',
-    image: 'https://via.placeholder.com/300x200/333333/ffffff?text=GitHub+Copilot',
+    imageUrl: createSvgDataUri({
+      text: 'GitHub Copilot',
+      width: 300,
+      height: 200,
+      bgColor: '333333',
+      textColor: 'ffffff',
+      fontSize: 24
+    }),
+    image: createSvgDataUri({
+      text: 'GitHub Copilot',
+      width: 300,
+      height: 200,
+      bgColor: '333333',
+      textColor: 'ffffff',
+      fontSize: 24
+    }),
     isFree: false,
     price: '$10/month',
     rating: 4.6,
@@ -80,8 +138,22 @@ const mockAITools = [
     tags: ['Design', 'Content', 'Image Generation'],
     url: 'https://www.canva.com',
     link: 'https://www.canva.com',
-    imageUrl: 'https://via.placeholder.com/300x200/00c4cc/ffffff?text=Canva+AI',
-    image: 'https://via.placeholder.com/300x200/00c4cc/ffffff?text=Canva+AI',
+    imageUrl: createSvgDataUri({
+      text: 'Canva AI',
+      width: 300,
+      height: 200,
+      bgColor: '00c4cc',
+      textColor: 'ffffff',
+      fontSize: 24
+    }),
+    image: createSvgDataUri({
+      text: 'Canva AI',
+      width: 300,
+      height: 200,
+      bgColor: '00c4cc',
+      textColor: 'ffffff',
+      fontSize: 24
+    }),
     isFree: true,
     price: 'Free (Pro: $12.99/month)',
     rating: 4.5,
@@ -96,8 +168,22 @@ const mockAITools = [
     tags: ['AI Writing', 'Productivity', 'Organization'],
     url: 'https://www.notion.so/product/ai',
     link: 'https://www.notion.so/product/ai',
-    imageUrl: 'https://via.placeholder.com/300x200/000000/ffffff?text=Notion+AI',
-    image: 'https://via.placeholder.com/300x200/000000/ffffff?text=Notion+AI',
+    imageUrl: createSvgDataUri({
+      text: 'Notion AI',
+      width: 300,
+      height: 200,
+      bgColor: '000000',
+      textColor: 'ffffff',
+      fontSize: 24
+    }),
+    image: createSvgDataUri({
+      text: 'Notion AI',
+      width: 300,
+      height: 200,
+      bgColor: '000000',
+      textColor: 'ffffff',
+      fontSize: 24
+    }),
     isFree: false,
     price: '$10/month (with Notion)',
     rating: 4.4,
@@ -121,33 +207,25 @@ export const getAllAITools = async (forceRefresh = false) => {
 
     // If no cache or refresh forced, fetch from API
     console.log('[AIToolsService] Fetching fresh AI tools data');
-    const tools = await fetchAITools();
-
-    // If we got empty array from API, use mock data
-    if (!tools || tools.length === 0) {
-      console.log('[AIToolsService] No tools from API, using mock data');
-      cacheTools(mockAITools);
-      return mockAITools;
-    }
-
-    // Cache the results
-    cacheTools(tools);
+    const response = await fetchAITools();
     
-    return tools;
+    if (response && Array.isArray(response) && response.length > 0) {
+      // Cache the data
+      cacheToolsData(response);
+      return response;
+    } else {
+      console.log('[AIToolsService] No tools from API, using mock data');
+      // If API returns empty data, use mock data
+      const mockData = generateMockTools();
+      cacheToolsData(mockData);
+      return mockData;
+    }
   } catch (error) {
     console.error('[AIToolsService] Error fetching AI tools:', error);
-    
-    // For errors, try getting from cache
-    const cachedData = getCachedTools();
-    if (cachedData) {
-      console.log('[AIToolsService] Error occurred, using cached data');
-      return cachedData;
-    }
-    
-    // If no cache, return mock data
-    console.log('[AIToolsService] No cache available, using mock data');
-    cacheTools(mockAITools); // Cache the mock data
-    return mockAITools;
+    // Return mock data on error
+    const mockData = generateMockTools();
+    cacheToolsData(mockData);
+    return mockData;
   }
 };
 
@@ -231,7 +309,7 @@ export const deleteAITool = async (id) => {
 /**
  * Cache tools data in localStorage
  */
-const cacheTools = (tools) => {
+const cacheToolsData = (tools) => {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(tools));
     localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
@@ -283,4 +361,385 @@ const invalidateCache = () => {
   } catch (error) {
     console.error('[AIToolsService] Error invalidating cache:', error);
   }
+};
+
+/**
+ * Generate mock AI tools data with SVG images instead of via.placeholder.com URLs
+ * @returns {Array} - Array of mock AI tools
+ */
+const generateMockTools = () => {
+  // Original tools array (using SVG data URIs instead of placeholder URLs)
+  const tools = [
+    {
+      id: 'chatgpt',
+      title: 'ChatGPT',
+      description: 'Powerful AI assistant for text generation, answering questions, and more',
+      url: 'https://chat.openai.com',
+      category: 'AI Assistant',
+      tags: ['Text Generation', 'AI Assistant', 'Productivity'],
+      imageUrl: createSvgDataUri({
+        text: 'ChatGPT',
+        width: 300,
+        height: 200,
+        bgColor: '10a37f',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      image: createSvgDataUri({
+        text: 'ChatGPT',
+        width: 300,
+        height: 200,
+        bgColor: '10a37f',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      isFree: true,
+      price: 'Free',
+      rating: 4.9,
+      createdAt: '2022-11-30'
+    },
+    {
+      id: 'midjourney',
+      title: 'Midjourney',
+      description: 'Create stunning AI-generated images from text descriptions',
+      url: 'https://www.midjourney.com',
+      category: 'Image Generation',
+      tags: ['Image Generation', 'Creative', 'Art'],
+      imageUrl: createSvgDataUri({
+        text: 'Midjourney',
+        width: 300,
+        height: 200,
+        bgColor: '6b21ff',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      image: createSvgDataUri({
+        text: 'Midjourney',
+        width: 300,
+        height: 200,
+        bgColor: '6b21ff',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      isFree: false,
+      price: '$10/month',
+      rating: 4.8,
+      createdAt: '2023-01-15'
+    },
+    {
+      id: 'notion-ai',
+      title: 'Notion AI',
+      description: 'AI writing assistant integrated with Notion for better notes and documents',
+      url: 'https://www.notion.so/product/ai',
+      category: 'Productivity',
+      tags: ['Writing', 'Productivity', 'Notes'],
+      imageUrl: createSvgDataUri({
+        text: 'Notion AI',
+        width: 300,
+        height: 200,
+        bgColor: '000000',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      image: createSvgDataUri({
+        text: 'Notion AI',
+        width: 300,
+        height: 200,
+        bgColor: '000000',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      isFree: false,
+      price: '$10/month (with Notion)',
+      rating: 4.4,
+      createdAt: '2023-04-05'
+    },
+    {
+      id: 'github-copilot',
+      title: 'GitHub Copilot',
+      description: 'AI pair programmer that helps you write code faster',
+      url: 'https://github.com/features/copilot',
+      category: 'Coding',
+      tags: ['Coding', 'Programming', 'AI Coding'],
+      imageUrl: createSvgDataUri({
+        text: 'GitHub Copilot',
+        width: 300,
+        height: 200,
+        bgColor: '333333',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      image: createSvgDataUri({
+        text: 'GitHub Copilot',
+        width: 300,
+        height: 200,
+        bgColor: '333333',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      isFree: false,
+      price: '$10/month',
+      rating: 4.6,
+      createdAt: '2022-10-15'
+    },
+    {
+      id: 'canva-ai',
+      title: 'Canva AI',
+      description: 'AI-powered design tools for creating stunning visuals',
+      url: 'https://www.canva.com',
+      category: 'Design',
+      tags: ['Design', 'Creative', 'Marketing'],
+      imageUrl: createSvgDataUri({
+        text: 'Canva AI',
+        width: 300,
+        height: 200,
+        bgColor: '00c4cc',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      image: createSvgDataUri({
+        text: 'Canva AI',
+        width: 300,
+        height: 200,
+        bgColor: '00c4cc',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      isFree: true,
+      price: 'Free (Pro: $12.99/month)',
+      rating: 4.5,
+      createdAt: '2023-02-20'
+    },
+    {
+      id: 'runway',
+      title: 'Runway',
+      description: 'AI video editing and generation platform',
+      url: 'https://runwayml.com',
+      category: 'Video',
+      tags: ['Video', 'Creative', 'Video Editing'],
+      imageUrl: createSvgDataUri({
+        text: 'Runway',
+        width: 300,
+        height: 200,
+        bgColor: 'd14836',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      image: createSvgDataUri({
+        text: 'Runway',
+        width: 300,
+        height: 200,
+        bgColor: 'd14836',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      isFree: false,
+      price: '$15/month',
+      rating: 4.7,
+      createdAt: '2023-03-10'
+    }
+  ];
+
+  // Add more tools to the array
+  const extendedTools = [
+    ...tools,
+    {
+      id: 'dall-e',
+      title: 'DALL-E',
+      description: 'Create realistic images and art from text descriptions',
+      url: 'https://openai.com/dall-e-2',
+      category: 'Image Generation',
+      tags: ['Image Generation', 'Creative', 'Art'],
+      imageUrl: createSvgDataUri({
+        text: 'DALL-E',
+        width: 300,
+        height: 200,
+        bgColor: '5436da',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      image: createSvgDataUri({
+        text: 'DALL-E',
+        width: 300,
+        height: 200,
+        bgColor: '5436da',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      isFree: false,
+      price: 'Pay-per-use',
+      rating: 4.7,
+      createdAt: '2023-01-20'
+    },
+    {
+      id: 'jasper',
+      title: 'Jasper',
+      description: 'AI content platform for marketing teams',
+      url: 'https://www.jasper.ai',
+      category: 'Writing',
+      tags: ['Writing', 'Marketing', 'Content'],
+      imageUrl: createSvgDataUri({
+        text: 'Jasper',
+        width: 300,
+        height: 200,
+        bgColor: 'ff7a59',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      image: createSvgDataUri({
+        text: 'Jasper',
+        width: 300,
+        height: 200,
+        bgColor: 'ff7a59',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      isFree: false,
+      price: '$49/month',
+      rating: 4.5,
+      createdAt: '2022-12-05'
+    },
+    {
+      id: 'copy-ai',
+      title: 'Copy.ai',
+      description: 'AI-powered copywriting tool for marketing content',
+      url: 'https://www.copy.ai',
+      category: 'Writing',
+      tags: ['Writing', 'Marketing', 'Content'],
+      imageUrl: createSvgDataUri({
+        text: 'Copy.ai',
+        width: 300,
+        height: 200,
+        bgColor: '3a86ff',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      image: createSvgDataUri({
+        text: 'Copy.ai',
+        width: 300,
+        height: 200,
+        bgColor: '3a86ff',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      isFree: true,
+      price: 'Free (Pro: $36/month)',
+      rating: 4.3,
+      createdAt: '2023-02-15'
+    },
+    {
+      id: 'synthesia',
+      title: 'Synthesia',
+      description: 'Create AI-generated videos with virtual presenters',
+      url: 'https://www.synthesia.io',
+      category: 'Video',
+      tags: ['Video', 'Marketing', 'AI Video'],
+      imageUrl: createSvgDataUri({
+        text: 'Synthesia',
+        width: 300,
+        height: 200,
+        bgColor: '7209b7',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      image: createSvgDataUri({
+        text: 'Synthesia',
+        width: 300,
+        height: 200,
+        bgColor: '7209b7',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      isFree: false,
+      price: '$30/month',
+      rating: 4.6,
+      createdAt: '2023-03-25'
+    },
+    {
+      id: 'descript',
+      title: 'Descript',
+      description: 'All-in-one audio & video editing with AI tools',
+      url: 'https://www.descript.com',
+      category: 'Video',
+      tags: ['Video Editing', 'Audio Editing', 'Podcasting'],
+      imageUrl: createSvgDataUri({
+        text: 'Descript',
+        width: 300,
+        height: 200,
+        bgColor: '4361ee',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      image: createSvgDataUri({
+        text: 'Descript',
+        width: 300,
+        height: 200,
+        bgColor: '4361ee',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      isFree: true,
+      price: 'Free (Pro: $12/month)',
+      rating: 4.8,
+      createdAt: '2022-11-10'
+    },
+    {
+      id: 'grammarly',
+      title: 'Grammarly',
+      description: 'AI writing assistant for grammar and style',
+      url: 'https://www.grammarly.com',
+      category: 'Writing',
+      tags: ['Writing', 'Grammar', 'Productivity'],
+      imageUrl: createSvgDataUri({
+        text: 'Grammarly',
+        width: 300,
+        height: 200,
+        bgColor: '15c39a',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      image: createSvgDataUri({
+        text: 'Grammarly',
+        width: 300,
+        height: 200,
+        bgColor: '15c39a',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      isFree: true,
+      price: 'Free (Premium: $12/month)',
+      rating: 4.7,
+      createdAt: '2022-09-20'
+    },
+    {
+      id: 'stable-diffusion',
+      title: 'Stable Diffusion',
+      description: 'Open-source AI image generation model',
+      url: 'https://stability.ai',
+      category: 'Image Generation',
+      tags: ['Image Generation', 'Open Source', 'Art'],
+      imageUrl: createSvgDataUri({
+        text: 'Stable Diffusion',
+        width: 300,
+        height: 200,
+        bgColor: '0b7285',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      image: createSvgDataUri({
+        text: 'Stable Diffusion',
+        width: 300,
+        height: 200,
+        bgColor: '0b7285',
+        textColor: 'ffffff',
+        fontSize: 24
+      }),
+      isFree: true,
+      price: 'Free (Self-hosted)',
+      rating: 4.7,
+      createdAt: '2022-08-22'
+    }
+  ];
+
+  return extendedTools;
 }; 

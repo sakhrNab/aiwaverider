@@ -9,7 +9,7 @@
  * - Caching for GET requests
  */
 
-import { API, ENV } from '../config/config';
+import { API } from '../config/config';
 import { logError, logInfo } from './logService';
 
 const SERVICE_NAME = 'apiClient';
@@ -271,11 +271,7 @@ const fetchWithRetry = async (url, options = {}) => {
  * @returns {Promise<Object>} - Parsed response
  */
 export const get = (url, options = {}) => {
-  return fetchWithRetry(url, {
-    method: 'GET',
-    cache: true, // Default to cache for GET requests
-    ...options
-  });
+  return fetchWithRetry(url, { ...options, cache: true, method: 'GET' });
 };
 
 /**
@@ -287,9 +283,9 @@ export const get = (url, options = {}) => {
  */
 export const post = (url, data, options = {}) => {
   return fetchWithRetry(url, {
+    ...options,
     method: 'POST',
-    body: JSON.stringify(data),
-    ...options
+    body: JSON.stringify(data)
   });
 };
 
@@ -302,9 +298,9 @@ export const post = (url, data, options = {}) => {
  */
 export const put = (url, data, options = {}) => {
   return fetchWithRetry(url, {
+    ...options,
     method: 'PUT',
-    body: JSON.stringify(data),
-    ...options
+    body: JSON.stringify(data)
   });
 };
 
@@ -316,8 +312,8 @@ export const put = (url, data, options = {}) => {
  */
 export const del = (url, options = {}) => {
   return fetchWithRetry(url, {
-    method: 'DELETE',
-    ...options
+    ...options,
+    method: 'DELETE'
   });
 };
 
@@ -330,9 +326,9 @@ export const del = (url, options = {}) => {
  */
 export const patch = (url, data, options = {}) => {
   return fetchWithRetry(url, {
+    ...options,
     method: 'PATCH',
-    body: JSON.stringify(data),
-    ...options
+    body: JSON.stringify(data)
   });
 };
 
@@ -362,12 +358,15 @@ export const checkApiConnectivity = async () => {
   }
 };
 
-// Default export
-export default {
+// Export API object that contains all methods
+export const api = {
   get,
   post,
   put,
   delete: del,
   patch,
   checkApiConnectivity
-}; 
+};
+
+// Default export
+export default api; 

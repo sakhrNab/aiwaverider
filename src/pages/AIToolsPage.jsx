@@ -4,6 +4,8 @@ import './AIToolsPage.css';
 import * as aiToolsService from '../services/aiToolsService';
 import { useTheme } from '../contexts/ThemeContext';
 import { HashLoader } from 'react-spinners';
+import { createSvgDataUri } from '../utils/imageUtils';
+import { getToolColor } from '../api/marketplace/aiToolsApi';
 
 // Import icons
 import promptIcon from '../assets/ai-tools/prompt-icon.svg';
@@ -141,25 +143,6 @@ const AITools = () => {
 
   // Helper function to get the appropriate image for a tool
   const getToolImage = (tool) => {
-    // Check all possible image field names
-    if (tool.imageUrl && !tool.imageUrl.includes('substackcdn.com') && !tool.imageUrl.includes('gallerycdn.vsassets.io')) {
-      return tool.imageUrl;
-    }
-    if (tool.image && !tool.image.includes('substackcdn.com') && !tool.image.includes('gallerycdn.vsassets.io')) {
-      return tool.image;
-    }
-    
-    // Match common tools to their default icons
-    if (tool.title?.toLowerCase().includes('github copilot')) {
-      return 'https://via.placeholder.com/300x300/333333/ffffff?text=GitHub+Copilot';
-    }
-    if (tool.title?.toLowerCase().includes('chatgpt')) {
-      return 'https://via.placeholder.com/300x300/10a37f/ffffff?text=ChatGPT';
-    }
-    if (tool.title?.toLowerCase().includes('midjourney')) {
-      return 'https://via.placeholder.com/300x300/6b21ff/ffffff?text=Midjourney';
-    }
-    
     // Try to get an icon based on the tool's name or keyword
     const toolName = tool.title?.split(' ')[0];
     if (iconMap[toolName]) {
@@ -169,8 +152,25 @@ const AITools = () => {
       return iconMap[tool.keyword];
     }
     
-    // Return default icon as fallback
-    return defaultAiIcon;
+    // Always use SVG data URIs to avoid external image loading issues
+    // Get the appropriate color based on the tool name
+    const bgColor = getToolColor(tool.title);
+    const textColor = 'ffffff'; // Default white
+    
+    // Get text to display (use the full name if it fits, otherwise first word)
+    const displayText = tool.title ? 
+      (tool.title.length > 15 ? tool.title.split(' ')[0] : tool.title) : 
+      'AI Tool';
+    
+    // Use the utility function to create the SVG data URI
+    return createSvgDataUri({
+      text: displayText,
+      width: 300,
+      height: 200,
+      bgColor,
+      textColor,
+      fontSize: 24
+    });
   };
 
   // Use the new loader component
@@ -320,11 +320,40 @@ const AITools = () => {
                               className="img-loading w-full h-full" 
                               onLoad={handleImageLoad}
                               onError={(e) => {
+                                // Prevent infinite loops by removing the error handler
+                                e.target.onerror = null;
+                                
                                 // First try the fallback specific to this tool's name
                                 const toolName = tool.title?.split(' ')[0];
-                                const fallbackIcon = iconMap[toolName] || iconMap[tool.keyword] || defaultAiIcon;
-                                console.log(`Image load error for ${tool.title}, using fallback: ${fallbackIcon}`);
-                                e.target.src = fallbackIcon;
+                                const fallbackIcon = iconMap[toolName] || iconMap[tool.keyword];
+                                
+                                if (fallbackIcon) {
+                                  console.log(`Image load error for ${tool.title}, using icon fallback`);
+                                  e.target.src = fallbackIcon;
+                                } else {
+                                  // Generate SVG fallback if no icon is available - don't use external services
+                                  console.log(`Image load error for ${tool.title}, generating SVG fallback`);
+                                  
+                                  // Get the appropriate color based on the tool name
+                                  const bgColor = getToolColor(tool.title);
+                                  const textColor = 'ffffff'; // Default white
+                                  
+                                  // Get text to display (use the full name if it fits, otherwise first word or initial)
+                                  const displayText = tool.title ? 
+                                    (tool.title.length > 15 ? tool.title.split(' ')[0] : tool.title) : 
+                                    'AI';
+                                  
+                                  // Use the utility function to create the SVG data URI
+                                  e.target.src = createSvgDataUri({
+                                    text: displayText,
+                                    width: 300,
+                                    height: 200,
+                                    bgColor,
+                                    textColor,
+                                    fontSize: 24
+                                  });
+                                }
+                                
                                 e.target.setAttribute('data-aspect', 'square');
                                 e.target.classList.remove('img-loading');
                               }}
