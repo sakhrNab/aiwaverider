@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
 const { auth } = require('../../middleware/authenticationMiddleware');
+const upload = require('../../middleware/upload');
+const path = require('path');
+const crypto = require('crypto');
+const fs = require('fs');
 
 // Collection reference
 const COLLECTION_NAME = 'ai_tools';
@@ -83,8 +87,10 @@ router.get('/:id', async (req, res) => {
  * @desc    Create a new AI tool
  * @access  Private (Admin only)
  */
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, upload.single('image'), async (req, res) => {
   try {
+    console.log('Creating AI tool with data:', req.body);
+    
     // Check if user is admin
     if (!req.user.isAdmin) {
       return res.status(403).json({
@@ -93,7 +99,32 @@ router.post('/', auth, async (req, res) => {
       });
     }
     
-    const { title, description, link, image, keyword, tags } = req.body;
+    // Extract fields from request body
+    const { title, description, link, keyword } = req.body;
+    
+    // Handle tags which might be a string, array, or missing
+    let tags = [];
+    if (req.body.tags) {
+      if (Array.isArray(req.body.tags)) {
+        tags = req.body.tags;
+      } else if (typeof req.body.tags === 'string') {
+        // If it's a comma-separated string, split it
+        if (req.body.tags.includes(',')) {
+          tags = req.body.tags.split(',').map(tag => tag.trim());
+        } else {
+          tags = [req.body.tags];
+        }
+      }
+    }
+    
+    // Debug logging
+    console.log('Extracted fields:');
+    console.log('Title:', title);
+    console.log('Description:', description);
+    console.log('Link:', link);
+    console.log('Keyword:', keyword);
+    console.log('Tags:', tags);
+    console.log('Image file:', req.file);
     
     // Validate required fields
     if (!title || !description || !link) {
@@ -103,12 +134,86 @@ router.post('/', auth, async (req, res) => {
       });
     }
     
+    // Get image path if uploaded
+    let imageUrl = '';
+    if (req.file) {
+      console.log('File received:', req.file.originalname, req.file.mimetype, req.file.size);
+      
+      // Generate a unique filename
+      const timestamp = Date.now();
+      const filename = `${timestamp}-${req.file.originalname.replace(/\s+/g, '-')}`;
+      
+      try {
+        // Try Firebase Storage first
+        const storage = admin.storage();
+        const bucketName = process.env.FIREBASE_STORAGE_BUCKET;
+        
+        if (bucketName) {
+          console.log('Using Firebase Storage bucket:', bucketName);
+          
+          const bucket = storage.bucket(bucketName);
+          
+          // Create a file reference
+          const fileName = `ai-tools/${filename}`;
+          const fileRef = bucket.file(fileName);
+          
+          // Upload file
+          await fileRef.save(req.file.buffer, {
+            metadata: {
+              contentType: req.file.mimetype,
+            },
+          });
+          
+          // Make file public
+          await fileRef.makePublic();
+          
+          // Get public URL
+          imageUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media`;
+          console.log('Firebase Storage URL:', imageUrl);
+        } else {
+          // Fallback to local storage
+          console.log('Firebase Storage bucket not configured. Using local storage.');
+          
+          // Ensure uploads directory exists
+          const uploadsDir = path.join(__dirname, '../../uploads');
+          if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+          }
+          
+          // Save file locally
+          fs.writeFileSync(path.join(uploadsDir, filename), req.file.buffer);
+          
+          // Set the URL to the local path
+          imageUrl = `/uploads/${filename}`;
+          console.log('Local storage URL:', imageUrl);
+        }
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        
+        // Fallback to local storage on error
+        console.log('Falling back to local storage');
+        
+        // Ensure uploads directory exists
+        const uploadsDir = path.join(__dirname, '../../uploads');
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        
+        // Save file locally
+        fs.writeFileSync(path.join(uploadsDir, filename), req.file.buffer);
+        
+        // Set the URL to the local path
+        imageUrl = `/uploads/${filename}`;
+        console.log('Local storage URL:', imageUrl);
+      }
+    }
+    
     // Prepare the document
     const newTool = {
       title,
       description,
       link,
-      image: image || '',
+      image: imageUrl || '',
       keyword: keyword || '',
       tags: tags || [],
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -143,7 +248,7 @@ router.post('/', auth, async (req, res) => {
  * @desc    Update an AI tool
  * @access  Private (Admin only)
  */
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, upload.single('image'), async (req, res) => {
   try {
     // Check if user is admin
     if (!req.user.isAdmin) {
@@ -154,7 +259,22 @@ router.put('/:id', auth, async (req, res) => {
     }
     
     const id = req.params.id;
-    const { title, description, link, image, keyword, tags } = req.body;
+    const { title, description, link, keyword } = req.body;
+    
+    // Handle tags which might be a string, array, or missing
+    let tags = undefined;
+    if (req.body.tags) {
+      if (Array.isArray(req.body.tags)) {
+        tags = req.body.tags;
+      } else if (typeof req.body.tags === 'string') {
+        // If it's a comma-separated string, split it
+        if (req.body.tags.includes(',')) {
+          tags = req.body.tags.split(',').map(tag => tag.trim());
+        } else {
+          tags = [req.body.tags];
+        }
+      }
+    }
     
     // Check if the tool exists
     const toolRef = admin.firestore().collection(COLLECTION_NAME).doc(id);
@@ -167,12 +287,86 @@ router.put('/:id', auth, async (req, res) => {
       });
     }
     
+    // Get image URL if uploaded
+    let imageUrl = undefined;
+    if (req.file) {
+      console.log('File received:', req.file.originalname, req.file.mimetype, req.file.size);
+      
+      // Generate a unique filename
+      const timestamp = Date.now();
+      const filename = `${timestamp}-${req.file.originalname.replace(/\s+/g, '-')}`;
+      
+      try {
+        // Try Firebase Storage first
+        const storage = admin.storage();
+        const bucketName = process.env.FIREBASE_STORAGE_BUCKET;
+        
+        if (bucketName) {
+          console.log('Using Firebase Storage bucket:', bucketName);
+          
+          const bucket = storage.bucket(bucketName);
+          
+          // Create a file reference
+          const fileName = `ai-tools/${filename}`;
+          const fileRef = bucket.file(fileName);
+          
+          // Upload file
+          await fileRef.save(req.file.buffer, {
+            metadata: {
+              contentType: req.file.mimetype,
+            },
+          });
+          
+          // Make file public
+          await fileRef.makePublic();
+          
+          // Get public URL
+          imageUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media`;
+          console.log('Firebase Storage URL:', imageUrl);
+        } else {
+          // Fallback to local storage
+          console.log('Firebase Storage bucket not configured. Using local storage.');
+          
+          // Ensure uploads directory exists
+          const uploadsDir = path.join(__dirname, '../../uploads');
+          if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+          }
+          
+          // Save file locally
+          fs.writeFileSync(path.join(uploadsDir, filename), req.file.buffer);
+          
+          // Set the URL to the local path
+          imageUrl = `/uploads/${filename}`;
+          console.log('Local storage URL:', imageUrl);
+        }
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        
+        // Fallback to local storage on error
+        console.log('Falling back to local storage');
+        
+        // Ensure uploads directory exists
+        const uploadsDir = path.join(__dirname, '../../uploads');
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        
+        // Save file locally
+        fs.writeFileSync(path.join(uploadsDir, filename), req.file.buffer);
+        
+        // Set the URL to the local path
+        imageUrl = `/uploads/${filename}`;
+        console.log('Local storage URL:', imageUrl);
+      }
+    }
+    
     // Prepare the update data
     const updateData = {
       ...(title && { title }),
       ...(description && { description }),
       ...(link && { link }),
-      ...(image && { image }),
+      ...(imageUrl && { image: imageUrl }),
       ...(keyword && { keyword }),
       ...(tags && { tags }),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),

@@ -1,24 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
-const multer = require('multer');
 const validateFirebaseToken = require('../../middleware/authenticationMiddleware').validateFirebaseToken;
 const crypto = require('crypto'); // NEW: require crypto
-
-// Configure multer for memory storage
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Not an image! Please upload an image.'), false);
-    }
-  }
-});
+const upload = require('../../middleware/upload');
 
 // Initialize Firestore
 const db = admin.firestore();

@@ -6,10 +6,12 @@ const session = require('express-session');
 const passport = require('passport');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 const logger = require('./utils/logger');
 const { initializePassport } = require('./config/passport');
 const { db } = require('./config/firebase');
 const { initializeSettings } = require('./models/siteSettings');
+const uploadMiddleware = require('./middleware/upload');
 
 // Initialize express
 const app = express();
@@ -23,6 +25,12 @@ const PORT = process.env.PORT || (isProduction ? 8080 : 4000);
 initializeSettings(db).catch(err => {
   logger.error('Failed to initialize site settings:', err);
 });
+
+// Make upload middleware available globally
+app.locals.upload = uploadMiddleware;
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ------------------ CORS Configuration ------------------
 const allowedOrigins = isProduction

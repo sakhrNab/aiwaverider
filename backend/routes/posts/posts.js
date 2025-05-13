@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
 const validateFirebaseToken = require('../../middleware/authenticationMiddleware').validateFirebaseToken;
 const { 
   createPost, 
@@ -21,16 +20,9 @@ const {
   initializeViewCounts
 } = require('../../controllers/posts/postsController');
 const admin = require('firebase-admin');
+const upload = require('../../middleware/upload');
 // Initialize Firestore
 const db = admin.firestore();
-
-// Configure multer for file uploads
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-  }
-});
 
 // Health check endpoint
 router.get('/health', (req, res) => {
