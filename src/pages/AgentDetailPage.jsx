@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useContext, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { FaStar, FaRegStar, FaCheck, FaDownload, FaHeart, FaRegHeart, FaLink, FaArrowLeft, FaArrowRight, FaThumbsUp, FaComment, FaShare, FaCheckCircle, FaShoppingCart } from 'react-icons/fa';
+import { FaStar, FaRegStar, FaDownload, FaHeart, FaRegHeart, FaLink, FaArrowLeft, FaArrowRight, FaThumbsUp, FaComment, FaShare, FaCheckCircle, FaShoppingCart } from 'react-icons/fa';
 import { 
   toggleWishlist, 
   toggleAgentLike,
@@ -11,9 +11,9 @@ import {
   incrementAgentDownloadCount,
   recordAgentDownload,
   fetchAgentById,
-  getUserLikeStatus,
-  API_URL
-} from '../utils/api.jsx';
+  getUserLikeStatus
+
+} from '../utils/agentApi.js';
 import { useCart } from '../contexts/CartContext.jsx';
 import { AuthContext } from '../contexts/AuthContext.jsx';
 import { trackProductView } from '../services/recommendationService.js';
@@ -22,7 +22,6 @@ import useAgentStore from '../store/agentStore.js';
 import DOMPurify from 'dompurify';
 import { toast } from 'react-toastify';
 import './AgentDetailPage.css';
-
 // Add debug logger
 const debug = (message, data) => {
   if (process.env.NODE_ENV === 'development') {

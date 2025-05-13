@@ -1,9 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { FaStar, FaHeart, FaRegHeart } from 'react-icons/fa';
 import { useContext } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
-import { toggleWishlist } from '../../utils/api';
+import { toggleWishlist } from '../../utils/agentApi';
 import { toast } from 'react-toastify';
 import { fixPlaceholderUrl } from '../../utils/imageUtils';
 import '../../styles/MarketplaceAgentCard.css';

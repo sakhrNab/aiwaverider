@@ -3,7 +3,7 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../contexts/AuthContext';
-import { signIn, signInWithGoogle, signInWithMicrosoft } from '../../utils/api';
+import { signIn, signInWithGoogle, signInWithMicrosoft } from '../../utils/authApi';
 
 import { toast } from 'react-toastify';
 import { getLockInfo, setLockInfo, clearLockInfo } from '../../utils/lockManager';

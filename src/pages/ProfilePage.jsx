@@ -10,7 +10,7 @@ import {
   getCommunityInfo, 
   uploadProfileImage,
   updateEmailPreferences
-} from '../utils/api';
+} from '../utils/profileApi';
 import { AuthContext } from '../contexts/AuthContext';
 import { INTEREST_CATEGORIES } from '../constants/categories';
 // import { handleGoogleProfileImage } from '../utils/imageUtils';

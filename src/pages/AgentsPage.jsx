@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import SearchBar from '../components/agents/SearchBar';
 import CategoryNav from '../components/agents/CategoryNav';
 import FeaturedAgents from '../components/agents/FeaturedAgents';
-import WishlistSection from '../components/agents/WishlistSection';
+// import WishlistSection from '../components/agents/WishlistSection';
 import FilterSidebar from '../components/agents/FilterSidebar';
 import AgentCard from '../components/agents/AgentCard';
 import AgentCarousel from '../components/agents/AgentCarousel';
@@ -538,12 +538,12 @@ const Agents = () => {
               )}
 
               {/* Wishlists */}
-              {wishlists.length > 0 && (
+              {/* {wishlists.length > 0 && (
                 <section className="mt-16 glass-effect section-container">
                   <h2 className="section-title">Your Saved Collections</h2>
                   <WishlistSection wishlists={wishlists} />
                 </section>
-              )}
+              )} */}
             </main>
           </div>
         </div>

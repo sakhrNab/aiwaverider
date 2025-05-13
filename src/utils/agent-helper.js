@@ -1,6 +1,6 @@
 // Helper functions for agent operations with proper authentication
 
-import { API_URL } from './api';
+import { API_URL } from './apiConfig';
 import { getAuthToken, getAuthHeaders } from './auth';
 
 /**

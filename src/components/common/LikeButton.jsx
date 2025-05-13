@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useContext, useCallback, useRef } from 'react';
-import { toggleLike } from '../../utils/api';
+import { toggleLike } from '../../utils/postApi';
 import { AuthContext } from '../../contexts/AuthContext';
 import { PostsContext } from '../../contexts/PostsContext';
 import { toast } from 'react-toastify';

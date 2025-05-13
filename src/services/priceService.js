@@ -5,7 +5,7 @@
  * for retrieving and managing agent pricing information.
  */
 
-import { API_URL } from '../utils/api';
+import { API_URL } from '../utils/apiConfig';
 import { getAuthHeaders } from '../utils/auth';
 
 /**

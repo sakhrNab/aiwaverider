@@ -1,4 +1,4 @@
-import { fetchAITools, fetchAIToolById, createAITool, updateAITool as apiUpdateAITool, deleteAITool as apiDeleteAITool } from '../utils/api';
+import { fetchAITools, fetchAIToolById, createAITool, updateAITool as apiUpdateAITool, deleteAITool as apiDeleteAITool } from '../utils/aiToolsApi';
 
 // Cache configuration
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds

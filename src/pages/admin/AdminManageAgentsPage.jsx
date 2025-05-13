@@ -18,7 +18,8 @@ import "./AdminManageAgentsPage.css";
 import { getAuthHeaders, validateAndRefreshToken } from "../../utils/auth";
 import { deleteAgent as deleteAgentHelper } from "../../utils/agent-helper";
 import { toast } from "react-hot-toast";
-import { checkApiStatus, deletePost, createAgent } from "../../utils/api";
+import { checkApiStatus, deletePost, createAgent } from "../../utils/agentApi";
+import { fetchUsers, createUser, updateUser, deleteUser } from "../../utils/adminManageUsersApi";
 // Import contexts and components for posts management
 import { AuthContext } from "../../contexts/AuthContext";
 import { PostsContext } from "../../contexts/PostsContext";
@@ -975,7 +976,7 @@ const ManageAgents = () => {
       let updateAgentWithPrice;
       try {
         // Using dynamic import to ensure the function is loaded
-        const api = await import('../../utils/api');
+        const api = await import('../../utils/agentApi');
         updateAgentWithPrice = api.updateAgentWithPrice;
       } catch (importError) {
         console.error('Error importing updateAgentWithPrice:', importError);
@@ -1644,17 +1645,16 @@ const ManageAgents = () => {
     setUserError(null);
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users?page=${usersPage}&limit=10&search=${userSearchQuery}&sortBy=${userSortBy}&sortDirection=${userSortDirection}`, {
-        headers: getAuthHeaders(),
-      });
+      const result = await fetchUsers(
+        usersPage,
+        10,
+        userSearchQuery,
+        userSortBy,
+        userSortDirection
+      );
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch users: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      setUsers(data.users || []);
-      setUsersTotalPages(data.totalPages || 1);
+      setUsers(result.users || []);
+      setUsersTotalPages(result.totalPages || 1);
     } catch (error) {
       console.error("Error fetching users:", error);
       setUserError(error.message);
@@ -1707,35 +1707,11 @@ const ManageAgents = () => {
     try {
       if (selectedUser) {
         // Update existing user
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${selectedUser.id}`, {
-          method: 'PUT',
-          headers: {
-            ...getAuthHeaders(),
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(userForm)
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Failed to update user: ${response.status}`);
-        }
-        
+        await updateUser(selectedUser.id, userForm);
         toast.success('User updated successfully');
       } else {
         // Create new user
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users`, {
-          method: 'POST',
-          headers: {
-            ...getAuthHeaders(),
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(userForm)
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Failed to create user: ${response.status}`);
-        }
-        
+        await createUser(userForm);
         toast.success('User created successfully');
       }
       
@@ -1768,14 +1744,7 @@ const ManageAgents = () => {
     if (!userToDelete) return;
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${userToDelete.id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to delete user: ${response.status}`);
-      }
+      await deleteUser(userToDelete.id);
       
       toast.success('User deleted successfully');
       setShowDeleteUserModal(false);

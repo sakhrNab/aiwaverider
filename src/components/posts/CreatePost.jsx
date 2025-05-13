@@ -1,14 +1,14 @@
 // src/components/posts/CreatePost.jsx
 
 import React, { useState, useContext } from 'react';
-import { createPost } from '../utils/api';
-import { AuthContext } from '../contexts/AuthContext';
+import { createPost } from '../../utils/postApi';
+import { AuthContext } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import RichTextEditor from '../components/editor/RichTextEditor'; // NEW import
+import RichTextEditor from '../editor/RichTextEditor'; 
 import DOMPurify from 'dompurify';
-import { CATEGORIES } from '../constants/categories';
-import { PostsContext } from '../contexts/PostsContext';
-import { auth } from '../utils/firebase'; // Add this import
+import { CATEGORIES } from '../../constants/categories';
+import { PostsContext } from '../../contexts/PostsContext';
+import { auth } from '../../utils/firebase'; 
 
 const CreatePost = () => {
   const [formData, setFormData] = useState({

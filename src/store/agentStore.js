@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { fetchAgents, fetchFeaturedAgents, fetchWishlists } from '../utils/api';
+import { fetchAgents } from '../utils/agentApi'; //fetchWishlists
 import { fixPlaceholderUrl } from '../utils/imageUtils';
 
 // Helper to fix any via.placeholder.com URLs at runtime
@@ -45,7 +45,7 @@ const useAgentStore = create(
       allAgents: [],
       featuredAgents: [],
       recommendedAgents: [],
-      wishlists: [],
+      // wishlists: [],
       selectedCategory: 'All',
       selectedFilter: 'Hot & New',
       selectedPrice: { min: 0, max: 1000 },
@@ -65,7 +65,7 @@ const useAgentStore = create(
       setAllAgents: (allAgents) => set({ allAgents }),
       setFeaturedAgents: (featuredAgents) => set({ featuredAgents }),
       setRecommendedAgents: (recommendedAgents) => set({ recommendedAgents }),
-      setWishlists: (wishlists) => set({ wishlists }),
+      // setWishlists: (wishlists) => set({ wishlists }),
       setCategory: (category) => set({ selectedCategory: category }),
       setFilter: (filter) => set({ selectedFilter: filter }),
       setPrice: (price) => set({ selectedPrice: price }),
@@ -433,17 +433,17 @@ const useAgentStore = create(
           
           // Fetch wishlists separately (this is essential user data, not redundant)
           // Only fetch wishlists if we have an authenticated user or force refresh is true
-          let wishlistsResponse = [];
-          if (localStorage.getItem('authToken') || forceRefresh) {
-            try {
-              wishlistsResponse = await fetchWishlists();
-            } catch (error) {
-              console.error('Error fetching wishlists, using empty array:', error);
-              wishlistsResponse = [];
-            }
-          } else {
-            console.log('Skipping wishlist fetch for unauthenticated user');
-          }
+          // let wishlistsResponse = [];
+          // if (localStorage.getItem('authToken') || forceRefresh) {
+          //   try {
+          //     wishlistsResponse = await fetchWishlists();
+          //   } catch (error) {
+          //     console.error('Error fetching wishlists, using empty array:', error);
+          //     wishlistsResponse = [];
+          //   }
+          // } else {
+          //   console.log('Skipping wishlist fetch for unauthenticated user');
+          // }
           
           // Check again if this request is still relevant
           if (currentLoadId !== requestId) {
@@ -491,7 +491,7 @@ const useAgentStore = create(
             allAgents: fixedAgents,
             featuredAgents: featuredAgents,
             recommendedAgents: recommendedAgents,
-            wishlists: wishlistsResponse,
+            // wishlists: wishlistsResponse,
             isLoading: false,
             isRecommendationsLoading: false,
             lastLoadTime: Date.now() // Update the cache timestamp

@@ -8,9 +8,9 @@ import React, {
   useCallback,
   useMemo,
 } from 'react';
-import { getAllPosts as apiGetAllPosts, getPostById as apiGetPostById, API_URL, api } from '../utils/api';
+import { getAllPosts as apiGetAllPosts, getPostById as apiGetPostById } from '../utils/postApi';
+import { API_URL, api } from '../utils/apiConfig';
 import { AuthContext } from './AuthContext';
-import { auth } from '../utils/firebase';
 import { toast } from 'react-toastify';
 
 export const PostsContext = createContext();

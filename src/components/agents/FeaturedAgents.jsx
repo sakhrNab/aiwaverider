@@ -7,7 +7,7 @@ import { LazyLoadImage } from 'react-lazy-load-image-component';
 import 'react-lazy-load-image-component/src/effects/blur.css';
 import useAgentStore from '../../store/agentStore';
 import { useCart } from '../../contexts/CartContext';
-import { toggleAgentLike } from '../../utils/api';
+// import { toggleAgentLike } from '../../utils/agentApi';
 import { toast } from 'react-toastify';
 import { generatePlaceholderImage, fixPlaceholderUrl } from '../../utils/imageUtils';
 import './FeaturedAgents.css';

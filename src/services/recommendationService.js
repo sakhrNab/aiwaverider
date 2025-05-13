@@ -16,7 +16,7 @@ console.log('Recommendation Service initialized with API_URL:', API_URL);
 
 // Import the product data utilities and agent utilities
 import { getFeaturedProducts, getRelatedProducts } from '../utils/productData';
-import { fetchAgents, fetchFeaturedAgents } from '../utils/api';
+import { fetchAgents, fetchFeaturedAgents } from '../utils/agentApi';
 // Import agentStore for shared state
 import useAgentStore from '../store/agentStore';
 // Import the imageUtils functions directly at the top of the file

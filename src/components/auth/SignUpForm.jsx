@@ -6,7 +6,8 @@ import { useNavigate } from 'react-router-dom';
 import ReactPhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import './signup.css'; // Import the signup.css
-import { signUp, signUpWithGoogle, signUpWithMicrosoft, uploadProfileImage } from '../../utils/api'; // Import the signUp API functions
+import { signUp, signUpWithGoogle, signUpWithMicrosoft } from '../../utils/authApi'; // Import auth functions
+import { uploadProfileImage } from '../../utils/profileApi'; // Import profile functions
 import { AuthContext } from '../../contexts/AuthContext'; // Import AuthContext
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';

@@ -2,24 +2,21 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { 
   FaImage, 
   FaDollarSign, 
-  FaTags, 
   FaInfoCircle, 
   FaSave, 
   FaRegCheckCircle,
-  FaFeatherAlt,
   FaTools,
   FaArrowUp,
-  FaChevronRight,
   FaFileUpload,
   FaFileAlt
 } from 'react-icons/fa';
-import { getAgentPrice, updateAgentPrice } from '../../../services/priceService';
+import { getAgentPrice } from '../../../services/priceService';
 import { AuthContext } from '../../../contexts/AuthContext';
 import './AgentForm.css';
 import { toast } from 'react-hot-toast';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/storage';
-import { createAgent, updateAgent } from '../../../utils/api';
+import { createAgent, updateAgent } from '../../../utils/agentApi';
 
 /**
  * Form component for creating and editing agents

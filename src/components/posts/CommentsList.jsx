@@ -3,7 +3,7 @@ import React, { useState, useContext, useCallback } from 'react';
 import DOMPurify from 'dompurify';
 import { AuthContext } from '../../contexts/AuthContext';
 import { PostsContext } from '../../contexts/PostsContext';
-import { likeComment, unlikeComment, deleteComment, updateComment, addComment } from '../../utils/api';
+import { likeComment, unlikeComment, deleteComment, updateComment, addComment } from '../../utils/postApi';
 import '../../styles/comments.css';  // Import the new CSS
 import { FaRegHeart, FaHeart } from 'react-icons/fa';
 import { formatDistanceToNow } from 'date-fns';
