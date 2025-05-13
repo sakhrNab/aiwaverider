@@ -1,11 +1,14 @@
 import { fetchAITools, fetchAIToolById, createAITool, updateAITool as apiUpdateAITool, deleteAITool as apiDeleteAITool } from '../api/marketplace/aiToolsApi';
 
 import { createSvgDataUri } from '../utils/imageUtils';
-
+import axios from 'axios';
+import  { API_URL } from '../api/core/apiConfig'
 // Cache configuration
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
 const CACHE_KEY = 'ai_tools_cache';
 const CACHE_TIMESTAMP_KEY = 'ai_tools_cache_timestamp'; // 24 hours
+
+// Get API base URL from environment variables or use default
 
 // Mock data for fallback
 const mockAITools = [
@@ -193,65 +196,116 @@ const mockAITools = [
 
 /**
  * Get all AI tools with caching
+ * @param {boolean} forceRefresh - Whether to bypass cache and force a fresh fetch
+ * @returns {Promise<Array>} - Array of AI tools
  */
 export const getAllAITools = async (forceRefresh = false) => {
   try {
-    // Check cache first if not forcing refresh
-    if (!forceRefresh) {
-      const cachedData = getCachedTools();
-      if (cachedData) {
-        console.log('[AIToolsService] Using cached AI tools data');
-        return cachedData;
+    // Check if we have cached data and it's still valid
+    const cachedData = localStorage.getItem('ai_tools_cache');
+    const cachedTimestamp = localStorage.getItem('ai_tools_cache_timestamp');
+    
+    if (!forceRefresh && cachedData && cachedTimestamp) {
+      const timestamp = parseInt(cachedTimestamp, 10);
+      const now = Date.now();
+      
+      // If cache is still valid, use it
+      if (now - timestamp < CACHE_DURATION) {
+        console.log('Using cached AI tools data');
+        return JSON.parse(cachedData);
       }
     }
-
-    // If no cache or refresh forced, fetch from API
-    console.log('[AIToolsService] Fetching fresh AI tools data');
-    const response = await fetchAITools();
     
-    if (response && Array.isArray(response) && response.length > 0) {
+    // Fetch fresh data
+    console.log('Fetching fresh AI tools data');
+    const response = await axios.get(`${API_URL}/api/ai-tools`);
+    
+    if (response.data && response.data.data) {
+      // Process and normalize the data
+      const tools = response.data.data.map(tool => ({
+        ...tool,
+        // Ensure image URL is properly formatted
+        image: formatImageUrl(tool.image),
+        // Ensure tags is always an array
+        tags: Array.isArray(tool.tags) ? tool.tags : (tool.tags ? [tool.tags] : [])
+      }));
+      
       // Cache the data
-      cacheToolsData(response);
-      return response;
-    } else {
-      console.log('[AIToolsService] No tools from API, using mock data');
-      // If API returns empty data, use mock data
-      const mockData = generateMockTools();
-      cacheToolsData(mockData);
-      return mockData;
+      localStorage.setItem('ai_tools_cache', JSON.stringify(tools));
+      localStorage.setItem('ai_tools_cache_timestamp', Date.now().toString());
+      
+      return tools;
     }
+    
+    return [];
   } catch (error) {
-    console.error('[AIToolsService] Error fetching AI tools:', error);
-    // Return mock data on error
-    const mockData = generateMockTools();
-    cacheToolsData(mockData);
-    return mockData;
+    console.error('Error fetching AI tools:', error);
+    
+    // If there's an error but we have cached data, use it as fallback
+    const cachedData = localStorage.getItem('ai_tools_cache');
+    if (cachedData) {
+      console.log('Using cached AI tools data as fallback due to error');
+      return JSON.parse(cachedData);
+    }
+    
+    throw error;
   }
 };
 
 /**
+ * Format image URL to ensure it's properly accessible
+ * @param {string} imageUrl - The image URL from the API
+ * @returns {string} - Properly formatted image URL
+ */
+const formatImageUrl = (imageUrl) => {
+  if (!imageUrl) return '';
+  
+  // If it's already a full URL, return as is
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    return imageUrl;
+  }
+  
+  // If it's a relative path, prepend the API base URL
+  if (imageUrl.startsWith('/')) {
+    return `${API_URL}${imageUrl}`;
+  }
+  
+  return imageUrl;
+};
+
+/**
  * Get a single AI tool by ID
+ * @param {string} id - The tool ID
+ * @returns {Promise<Object>} - The AI tool object
  */
 export const getAIToolById = async (id) => {
   try {
-    // Check cache first
-    const cachedTools = getCachedTools();
-    if (cachedTools) {
-      const cachedTool = cachedTools.find(tool => tool.id === id);
-      if (cachedTool) {
-        console.log(`[AIToolsService] Using cached data for tool ${id}`);
-        return cachedTool;
+    // Check if we have it in cache first
+    const cachedData = localStorage.getItem('ai_tools_cache');
+    if (cachedData) {
+      const tools = JSON.parse(cachedData);
+      const tool = tools.find(t => t.id === id);
+      if (tool) {
+        console.log('Found tool in cache');
+        return tool;
       }
     }
-
-    // If not in cache, fetch from API
-    console.log(`[AIToolsService] Fetching fresh data for tool ${id}`);
-    const tool = await fetchAIToolById(id);
     
-    return tool;
+    // Fetch from API if not in cache
+    const response = await axios.get(`${API_URL}/api/ai-tools/${id}`);
+    
+    if (response.data && response.data.data) {
+      const tool = {
+        ...response.data.data,
+        image: formatImageUrl(response.data.data.image)
+      };
+      return tool;
+    }
+    
+    return null;
   } catch (error) {
-    console.error(`[AIToolsService] Error fetching AI tool ${id}:`, error);
-    throw error; // Let the component handle the error
+    console.error(`Error fetching AI tool with ID ${id}:`, error);
+    throw error;
   }
 };
 
@@ -307,57 +361,13 @@ export const deleteAITool = async (id) => {
 };
 
 /**
- * Cache tools data in localStorage
- */
-const cacheToolsData = (tools) => {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(tools));
-    localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-    console.log('[AIToolsService] Tools data cached successfully');
-  } catch (error) {
-    console.error('[AIToolsService] Error caching tools data:', error);
-    // Clear any partial cache to prevent inconsistency
-    localStorage.removeItem(CACHE_KEY);
-    localStorage.removeItem(CACHE_TIMESTAMP_KEY);
-  }
-};
-
-/**
- * Get cached tools if available and not expired
- */
-const getCachedTools = () => {
-  try {
-    const timestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
-    const cachedData = localStorage.getItem(CACHE_KEY);
-    
-    if (!timestamp || !cachedData) {
-      return null;
-    }
-    
-    // Check if cache is still valid
-    const now = Date.now();
-    const cacheTime = parseInt(timestamp, 10);
-    
-    if (now - cacheTime > CACHE_DURATION) {
-      console.log('[AIToolsService] Cache expired');
-      return null;
-    }
-    
-    return JSON.parse(cachedData);
-  } catch (error) {
-    console.error('[AIToolsService] Error reading cache:', error);
-    return null;
-  }
-};
-
-/**
  * Invalidate the cache
  */
 const invalidateCache = () => {
   try {
-    localStorage.removeItem(CACHE_KEY);
-    localStorage.removeItem(CACHE_TIMESTAMP_KEY);
-    console.log('[AIToolsService] Cache invalidated');
+    localStorage.removeItem('ai_tools_cache');
+    localStorage.removeItem('ai_tools_cache_timestamp');
+    console.log('AI tools cache cleared');
   } catch (error) {
     console.error('[AIToolsService] Error invalidating cache:', error);
   }

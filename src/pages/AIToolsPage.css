@@ -446,67 +446,85 @@ input[type="text"]:focus {
 /* Enhanced tool icon container */
 .tool-icon-container {
   position: relative;
-  width: 56px;
-  height: 56px;
+  width: 100%;
+  height: 160px;
   overflow: hidden;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 1;
+  transition: all 0.3s ease;
 }
 
-.tool-icon-container::after {
+.tool-icon-container::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(
-    circle at center,
-    rgba(255, 255, 255, 0.1) 0%,
-    transparent 70%
-  );
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
+  z-index: 1;
   opacity: 0;
   transition: opacity 0.3s ease;
-  z-index: -1;
 }
 
-.tool-icon-container:hover::after {
+.tool-icon-container:hover::before {
   opacity: 1;
 }
 
+/* Image aspect ratio handling */
 .tool-icon-container img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
   object-position: center;
-  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.5s ease, opacity 0.3s ease;
 }
 
-/* Support for different aspect ratios */
-.tool-icon-container img[data-aspect="portrait"] {
-  object-fit: cover;
-  object-position: center top;
-}
-
-.tool-icon-container img[data-aspect="landscape"] {
-  object-fit: cover;
-  object-position: center;
-}
-
-.tool-icon-container img[data-aspect="square"] {
+/* Specific handling for different aspect ratios */
+.tool-icon-container .portrait-image {
   object-fit: contain;
+  max-height: 100%;
+  width: auto;
 }
 
-/* Enhanced image loading effect */
+.tool-icon-container .landscape-image {
+  object-fit: cover;
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+}
+
+.tool-icon-container .square-image {
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+}
+
+/* Loading state */
 .img-loading {
-  background: linear-gradient(90deg, 
-    rgba(255,255,255,0.05) 0%, 
-    rgba(255,255,255,0.15) 50%, 
-    rgba(255,255,255,0.05) 100%);
+  opacity: 0.6;
+  filter: blur(5px);
+  animation: shimmer 1.5s infinite;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05),
+    rgba(255, 255, 255, 0.2),
+    rgba(255, 255, 255, 0.05)
+  );
   background-size: 200% 100%;
-  animation: shimmer 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
+/* Loaded state */
+.img-loaded {
+  opacity: 1;
+  filter: blur(0);
+}
+
+/* Hover effects */
+.ai-tool-card:hover .tool-icon-container img {
+  transform: scale(1.05);
+}
+
+/* Shimmer effect for loading images */
 @keyframes shimmer {
   0% {
     background-position: 200% 0;

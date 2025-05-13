@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { FaExternalLinkAlt, FaSearch, FaCalendarAlt, FaArrowRight, FaTimes } from 'react-icons/fa';
 import './AIToolsPage.css';
 import * as aiToolsService from '../services/aiToolsService';
@@ -50,6 +50,9 @@ const defaultAvailableTags = [
   'Organization'
 ];
 
+// Create a cache for images
+const imageCache = new Map();
+
 const AITools = () => {
   const { darkMode } = useTheme();
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,6 +62,7 @@ const AITools = () => {
   const [tools, setTools] = useState([]);
   const [tags, setTags] = useState(['All']);
   const [retryCount, setRetryCount] = useState(0);
+  const [imageCacheTimestamp, setImageCacheTimestamp] = useState(Date.now());
 
   // Helper function to ensure links have proper format
   const formatLink = (link) => {
@@ -73,7 +77,7 @@ const AITools = () => {
     return `https://${link}`;
   };
 
-  // Image loading handler
+  // Image loading handler with improved error handling and caching
   const handleImageLoad = (e) => {
     const img = e.target;
     const { naturalWidth, naturalHeight } = img;
@@ -82,17 +86,108 @@ const AITools = () => {
     if (naturalHeight > naturalWidth * 1.2) {
       // Portrait image (taller than wide)
       img.setAttribute('data-aspect', 'portrait');
+      img.classList.add('portrait-image');
     } else if (naturalWidth > naturalHeight * 1.2) {
       // Landscape image (wider than tall)
       img.setAttribute('data-aspect', 'landscape');
+      img.classList.add('landscape-image');
     } else {
       // Roughly square image
       img.setAttribute('data-aspect', 'square');
+      img.classList.add('square-image');
     }
     
     // Remove loading state
     img.classList.remove('img-loading');
+    img.classList.add('img-loaded');
+    
+    // Add to cache
+    if (img.src && !img.src.startsWith('data:')) {
+      imageCache.set(img.src, {
+        timestamp: Date.now(),
+        loaded: true
+      });
+    }
   };
+
+  // Handle image error with better fallback strategy
+  const handleImageError = useCallback((e, tool) => {
+    const img = e.target;
+    
+    // Prevent infinite loops by removing the error handler
+    img.onerror = null;
+    
+    // First try the fallback specific to this tool's name
+    const toolName = tool.title?.split(' ')[0];
+    const fallbackIcon = iconMap[toolName] || iconMap[tool.keyword];
+    
+    if (fallbackIcon) {
+      console.log(`Image load error for ${tool.title}, using icon fallback`);
+      img.src = fallbackIcon;
+    } else {
+      // Generate SVG fallback if no icon is available
+      console.log(`Image load error for ${tool.title}, generating SVG fallback`);
+      
+      // Get the appropriate color based on the tool name
+      const bgColor = getToolColor(tool.title);
+      const textColor = 'ffffff'; // Default white
+      
+      // Get text to display (use the full name if it fits, otherwise first word or initial)
+      const displayText = tool.title ? 
+        (tool.title.length > 15 ? tool.title.split(' ')[0] : tool.title) : 
+        'AI';
+      
+      // Use the utility function to create the SVG data URI
+      img.src = createSvgDataUri({
+        text: displayText,
+        width: 300,
+        height: 200,
+        bgColor,
+        textColor,
+        fontSize: 24
+      });
+    }
+    
+    img.setAttribute('data-aspect', 'square');
+    img.classList.remove('img-loading');
+    img.classList.add('img-loaded');
+    img.classList.add('square-image');
+    
+    // Mark as failed in cache to avoid repeated attempts
+    if (tool.image) {
+      imageCache.set(tool.image, {
+        timestamp: Date.now(),
+        loaded: false,
+        fallback: img.src
+      });
+    }
+  }, []);
+
+  // Helper function to get image URL with proper caching
+  const getImageUrl = useCallback((tool) => {
+    if (!tool.image || tool.image === '/uploads/undefined') {
+      return null;
+    }
+    
+    // Check if image is a full URL or a relative path
+    let imageUrl = tool.image;
+    if (imageUrl.startsWith('/')) {
+      // For local development, prepend the API base URL
+      const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:4000';
+      imageUrl = `${apiBase}${imageUrl}`;
+    }
+    
+    // Check cache
+    if (imageCache.has(imageUrl)) {
+      const cacheEntry = imageCache.get(imageUrl);
+      // If cache entry is marked as failed, return the fallback
+      if (!cacheEntry.loaded && cacheEntry.fallback) {
+        return cacheEntry.fallback;
+      }
+    }
+    
+    return imageUrl;
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -129,7 +224,21 @@ const AITools = () => {
 
   useEffect(() => {
     fetchData();
-  }, [retryCount]); // Adding retryCount to enable manual refresh
+    
+    // Clear image cache every hour
+    const cacheInterval = setInterval(() => {
+      // Remove cache entries older than 1 hour
+      const now = Date.now();
+      imageCache.forEach((value, key) => {
+        if (now - value.timestamp > 3600000) { // 1 hour in milliseconds
+          imageCache.delete(key);
+        }
+      });
+      setImageCacheTimestamp(now);
+    }, 3600000); // Check every hour
+    
+    return () => clearInterval(cacheInterval);
+  }, [retryCount]);
 
   const handleRetry = () => {
     setRetryCount(prev => prev + 1);
@@ -142,7 +251,13 @@ const AITools = () => {
   });
 
   // Helper function to get the appropriate image for a tool
-  const getToolImage = (tool) => {
+  const getToolImage = useCallback((tool) => {
+    // First check if the tool has an image URL from the database
+    const imageUrl = getImageUrl(tool);
+    if (imageUrl) {
+      return imageUrl;
+    }
+    
     // Try to get an icon based on the tool's name or keyword
     const toolName = tool.title?.split(' ')[0];
     if (iconMap[toolName]) {
@@ -171,7 +286,7 @@ const AITools = () => {
       textColor,
       fontSize: 24
     });
-  };
+  }, [getImageUrl]);
 
   // Use the new loader component
   if (loading) {
@@ -317,46 +432,10 @@ const AITools = () => {
                             <img 
                               src={getToolImage(tool)}
                               alt={tool.title} 
-                              className="img-loading w-full h-full" 
+                              className="img-loading w-full h-full object-cover" 
                               onLoad={handleImageLoad}
-                              onError={(e) => {
-                                // Prevent infinite loops by removing the error handler
-                                e.target.onerror = null;
-                                
-                                // First try the fallback specific to this tool's name
-                                const toolName = tool.title?.split(' ')[0];
-                                const fallbackIcon = iconMap[toolName] || iconMap[tool.keyword];
-                                
-                                if (fallbackIcon) {
-                                  console.log(`Image load error for ${tool.title}, using icon fallback`);
-                                  e.target.src = fallbackIcon;
-                                } else {
-                                  // Generate SVG fallback if no icon is available - don't use external services
-                                  console.log(`Image load error for ${tool.title}, generating SVG fallback`);
-                                  
-                                  // Get the appropriate color based on the tool name
-                                  const bgColor = getToolColor(tool.title);
-                                  const textColor = 'ffffff'; // Default white
-                                  
-                                  // Get text to display (use the full name if it fits, otherwise first word or initial)
-                                  const displayText = tool.title ? 
-                                    (tool.title.length > 15 ? tool.title.split(' ')[0] : tool.title) : 
-                                    'AI';
-                                  
-                                  // Use the utility function to create the SVG data URI
-                                  e.target.src = createSvgDataUri({
-                                    text: displayText,
-                                    width: 300,
-                                    height: 200,
-                                    bgColor,
-                                    textColor,
-                                    fontSize: 24
-                                  });
-                                }
-                                
-                                e.target.setAttribute('data-aspect', 'square');
-                                e.target.classList.remove('img-loading');
-                              }}
+                              onError={(e) => handleImageError(e, tool)}
+                              loading="lazy"
                             />
                           </div>
                           <div className="ai-tool-content">
