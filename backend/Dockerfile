@@ -1,26 +1,37 @@
-# Use the Node.js 22.12.1 base image
-FROM node:22.12.1
+# Use Node.js 18 image - compatible with dependency requirements
+FROM node:18-slim
 
-# Set the working directory inside the container
+# Install build dependencies for bcrypt
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json into the container
+# Copy package files 
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install --production
+# Install dependencies with --force to bypass compatibility warnings
+RUN npm install --force
 
-# Copy the rest of the application code
+# Copy application code
 COPY . .
 
-# Build frontend if applicable (optional)
-# RUN npm run build
+# Create uploads directory with proper permissions
+RUN mkdir -p uploads && chmod 777 uploads
 
-# Expose the application port (Google Cloud Run uses 8080 by default)
+# Create logs directory
+RUN mkdir -p logs && chmod 777 logs
+
+# Expose the port the app runs on
 EXPOSE 8080
 
-# Set environment variables (override during deployment)
-ENV NODE_ENV=production
+# Set environment variables
+ENV NODE_ENV=production \
+    PORT=8080
 
-# Start the application
+# Run the application
 CMD ["node", "index.js"]

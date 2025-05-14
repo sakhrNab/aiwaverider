@@ -1,6 +1,17 @@
 node_modules
 npm-debug.log
 .env
+.env.*
+!.env.example
 Dockerfile
 .git
 .gitignore
+*.md
+.DS_Store
+logs
+*.log
+coverage
+.vscode
+.idea
+tests
+test
