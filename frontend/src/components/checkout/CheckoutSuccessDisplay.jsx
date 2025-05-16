@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getPaymentStatus } from '../../services/paymentApi';
 import { toast } from 'react-hot-toast';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCheckCircle, faEnvelope, faExclamationTriangle, faMoneyBillTransfer, faDownload } from '@fortawesome/free-solid-svg-icons';
-import PaymentSuccessRecommendations from '../../components/PaymentSuccessRecommendations';
+import PaymentSuccessRecommendations from '../payments/PaymentSuccessRecommendations'
 import { HashLoader } from 'react-spinners';
 import './CheckoutSuccessDisplay.css';
 
