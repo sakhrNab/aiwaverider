@@ -1,0 +1,450 @@
+/* src/styles/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    font-family: 'Roboto', sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
+
+    color-scheme: light dark;
+    color: rgba(0, 0, 0, 0.87);
+    background-color: #ffffff;
+
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    /* Core color variables */
+    --purple-light: #e0e7ff;
+    --black: #000000;
+    --white: #ffffff;
+    --gray-2: #e5e7eb;
+    --gray-3: #d1d5db;
+    
+    /* Theme variables - Light Mode */
+    --background: #ffffff;
+    --text: #000000;
+    --card-bg: #f9fafb;
+    --card-border: #e5e7eb;
+    --header-bg: rgba(255, 255, 255, 0.8);
+    --button-bg: rgba(255, 255, 255, 0.2);
+    --button-active-bg: rgba(99, 102, 241, 0.7);
+    --button-text: #000000;
+    --gradient-from: #4158D0;
+    --gradient-via: #C850C0;
+    --gradient-to: #FFCC70;
+    --card-shadow: rgba(0, 0, 0, 0.1);
+    --glass-bg: rgba(255, 255, 255, 0.08);
+    --glass-border: rgba(255, 255, 255, 0.2);
+    
+    /* Navigation colors */
+    --nav-bg: #1a1a2e;
+    --nav-text: #ffffff;
+    --nav-hover: #00bcd4;
+    --nav-border: rgba(75, 85, 99, 0.5);
+  }
+  
+  /* Dark mode variables */
+  [data-theme="dark"] {
+    --background: #1a0b2e;
+    --text: #ffffff;
+    --card-bg: rgba(45, 24, 70, 0.7);
+    --card-border: rgba(255, 255, 255, 0.1);
+    --header-bg: rgba(26, 11, 46, 0.8);
+    --button-bg: rgba(255, 255, 255, 0.1);
+    --button-active-bg: rgba(128, 90, 213, 0.6);
+    --button-text: #ffffff;
+    --gradient-from: #2D1846;
+    --gradient-via: #5C33A0;
+    --gradient-to: #7533A8;
+    --card-shadow: rgba(0, 0, 0, 0.3);
+    --glass-bg: rgba(45, 24, 70, 0.3);
+    --glass-border: rgba(128, 90, 213, 0.2);
+    
+    /* Navigation colors - dark mode */
+    --nav-bg: rgba(26, 11, 46, 0.9);
+    --nav-border: rgba(128, 90, 213, 0.2);
+  }
+}
+
+/* Theme Application for All Pages */
+body {
+  background-color: var(--background);
+  color: var(--text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  font-family: 'Roboto', sans-serif;
+  min-height: 100vh;
+}
+
+/* Dark mode class for Tailwind */
+.dark {
+  @apply text-white bg-[#1a0b2e];
+}
+
+/* Proper gradient background for dark mode */
+body[data-theme="dark"], 
+html[data-theme="dark"] body {
+  background-image: linear-gradient(to bottom right, var(--gradient-from), var(--gradient-via), var(--gradient-to));
+  background-attachment: fixed;
+  background-size: 200% 200%;
+  animation: gradientAnimation 15s ease infinite;
+  color: white;
+  min-height: 100vh;
+}
+
+/* Make HTML element dark in dark mode */
+html[data-theme="dark"] {
+  background-color: #1a0b2e;
+}
+
+/* Global container styles */
+#root, 
+.App, 
+div[class^="min-h-screen"] {
+  background-color: transparent !important;
+  color: inherit;
+}
+
+/* Header styling for dark mode */
+[data-theme="dark"] .main-header {
+  background-color: var(--nav-bg) !important;
+  border-bottom: 1px solid var(--nav-border);
+}
+
+/* ----------------- Animations ----------------- */
+
+/* Gradient animation */
+@keyframes gradientAnimation {
+  0% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 100% 100%;
+  }
+  100% {
+    background-position: 0% 0%;
+  }
+}
+
+/* Spinner animation */
+@keyframes spinner {
+  to { transform: rotate(360deg); }
+}
+
+/* Pulse effect */
+@keyframes pulse-subtle {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(79, 70, 229, 0);
+  }
+}
+
+/* Fade in animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Shimmer effect animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Twinkle effect for stars */
+@keyframes twinkle {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ----------------- Common Layout Classes ----------------- */
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.2;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+h1 { 
+  font-size: 2rem;
+  font-weight: bold;
+}
+
+h2 { 
+  font-size: 1.75rem;
+  font-weight: bold;
+}
+
+h3 { 
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+h4 { 
+  font-size: 1.25rem;
+}
+
+h5, h6 { 
+  font-size: 1rem;
+}
+
+/* ----------------- Common UI Components ----------------- */
+
+/* Gradient background */
+.bg-gradient-to-br {
+  background-image: linear-gradient(to bottom right, var(--gradient-from), var(--gradient-via), var(--gradient-to));
+}
+
+/* Card styles */
+.card {
+  padding: 2em;
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.card:hover,
+.custom-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0px 4px 8px var(--card-shadow);
+}
+
+/* Glass effect */
+.glass-effect {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 
+    0 8px 32px 0 rgba(31, 38, 135, 0.3),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="dark"] .glass-effect {
+  background: rgba(45, 24, 70, 0.3);
+  border: 1px solid rgba(128, 90, 213, 0.2);
+  box-shadow: 
+    0 8px 32px 0 rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+}
+
+.glass-effect:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 
+    0 12px 36px 0 rgba(31, 38, 135, 0.4),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Filter button styles */
+.filter-button {
+  background-color: var(--button-bg);
+  color: var(--text);
+  transition: all 0.2s ease;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.filter-button.active {
+  background-color: var(--button-active-bg);
+}
+
+/* Button hover effects */
+button {
+  position: relative;
+  overflow: hidden;
+}
+
+  button:hover {
+  background-color: var(--button-active-bg);
+    transition: background-color 0.3s ease;
+  }
+
+/* Stars pattern for backgrounds */
+.stars-pattern {
+  position: relative;
+  overflow: hidden;
+}
+
+.stars-pattern::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(1px 1px at 25% 15%, rgba(255, 255, 255, 0.7) 1%, transparent 0%),
+                   radial-gradient(1px 1px at 50% 50%, rgba(255, 255, 255, 0.5) 1%, transparent 0%),
+                   radial-gradient(1px 1px at 75% 25%, rgba(255, 255, 255, 0.6) 1%, transparent 0%),
+                   radial-gradient(2px 2px at 10% 80%, rgba(255, 255, 255, 0.4) 1%, transparent 0%),
+                   radial-gradient(2px 2px at 20% 40%, rgba(255, 255, 255, 0.5) 1%, transparent 0%),
+                   radial-gradient(2px 2px at 30% 70%, rgba(255, 255, 255, 0.6) 1%, transparent 0%),
+                   radial-gradient(2px 2px at 60% 20%, rgba(255, 255, 255, 0.6) 1%, transparent 0%),
+                   radial-gradient(2px 2px at 80% 90%, rgba(255, 255, 255, 0.5) 1%, transparent 0%),
+                   radial-gradient(2px 2px at 90% 60%, rgba(255, 255, 255, 0.4) 1%, transparent 0%);
+  opacity: 0.3;
+  z-index: -1;
+  animation: twinkle 10s ease infinite alternate;
+}
+
+/* Background pattern */
+.bg-pattern {
+  background: 
+    radial-gradient(circle at 0% 0%, rgba(65, 88, 208, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 100% 0%, rgba(200, 80, 192, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(255, 204, 112, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 0% 100%, rgba(65, 88, 208, 0.4) 0%, transparent 50%);
+  mix-blend-mode: soft-light;
+}
+
+/* ----------------- Utility Classes ----------------- */
+
+/* Font faces */
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/roboto/v18/KFOmCnqEu92Fr1Mu4mxK.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/roboto/v18/KFOlCnqEu92Fr1MmEU9fBBc4.woff2') format('woff2');
+}
+
+/* Loader styles */
+.loader {
+  border: 8px solid #f3f3f3;
+  border-top: 8px solid #3490dc;
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  animation: spinner 1.5s linear infinite;
+}
+
+/* Animation utility classes */
+.pulse-subtle {
+  animation: pulse-subtle 3s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
+
+/* Shimmer effect for interactive elements */
+.shimmer-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-effect:hover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(90deg, 
+    rgba(255,255,255,0) 0%, 
+    rgba(255,255,255,0.2) 50%, 
+    rgba(255,255,255,0) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* ----------------- Common Page Layout Elements ----------------- */
+
+/* Page section styles */
+.page-section {
+  margin-bottom: 2rem;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+/* Container for 3D headers used across pages */
+.page-header-3d {
+  @apply bg-gradient-to-br from-purple-900/70 via-[#2D1846]/80 to-indigo-900/70 backdrop-blur-lg rounded-3xl p-8 mb-8 shadow-2xl border border-white/20 transition-all duration-700 hover:border-white/30 transform hover:translate-y-[-5px] relative overflow-hidden;
+}
+
+/* Filter tags container */
+.filter-tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 1.5rem 0;
+  perspective: 1000px;
+}
+
+.filter-tags-container button {
+  transform: translateZ(0);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.filter-tags-container button:hover {
+  transform: translateY(-2px) scale(1.05);
+}
+
+/* Content grids */
+.content-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+/* Media queries for responsive design */
+@media (max-width: 640px) {
+  .filter-tags-container {
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+  }
+  
+  h1.text-4xl {
+    font-size: 2.25rem;
+  }
+  
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Image loading styles */
+.img-loading {
+  background: linear-gradient(90deg, 
+    rgba(255,255,255,0.05) 0%, 
+    rgba(255,255,255,0.15) 50%, 
+    rgba(255,255,255,0.05) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}

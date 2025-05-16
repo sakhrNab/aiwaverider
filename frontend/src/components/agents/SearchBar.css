@@ -1,0 +1,151 @@
+.search-bar-container {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.search-form {
+  width: 100%;
+}
+
+.search-input-wrapper {
+  display: flex;
+  position: relative;
+  width: 100%;
+  height: 50px;
+  border-radius: 25px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e0e0e0;
+  transition: all 0.3s ease;
+}
+
+.search-input-wrapper:focus-within {
+  box-shadow: 0 3px 15px rgba(74, 77, 231, 0.15);
+  border-color: #4a4de7;
+}
+
+.search-icon {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #999;
+  font-size: 16px;
+  z-index: 2;
+}
+
+.search-input {
+  flex: 1;
+  border: none;
+  padding: 0 45px 0 45px;
+  font-size: 16px;
+  outline: none;
+  height: 100%;
+  color: #333;
+  background: white;
+  text-overflow: ellipsis;
+}
+
+/* Fix for dark mode - ensure text is visible */
+[data-theme="dark"] .search-input,
+.dark .search-input,
+body.dark .search-input,
+.filter-search-container .search-input /* Target specifically the search in Master AI Agents */ {
+  color: white !important; /* Use !important to override any inline styles */
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Dark mode for placeholder */
+[data-theme="dark"] .search-input::placeholder,
+.dark .search-input::placeholder,
+body.dark .search-input::placeholder,
+.filter-search-container .search-input::placeholder {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Dark mode for search icon */
+[data-theme="dark"] .search-icon,
+.dark .search-icon,
+body.dark .search-icon,
+.filter-search-container .search-icon {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.clear-button {
+  position: absolute;
+  right: 60px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #999;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s ease, color 0.2s ease;
+  z-index: 2;
+}
+
+.clear-button:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #333;
+}
+
+/* Dark mode for clear button */
+[data-theme="dark"] .clear-button,
+.dark .clear-button,
+body.dark .clear-button,
+.filter-search-container .clear-button {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+[data-theme="dark"] .clear-button:hover,
+.dark .clear-button:hover,
+body.dark .clear-button:hover,
+.filter-search-container .clear-button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+}
+
+.search-button {
+  width: 50px;
+  height: 100%;
+  background: #4a4de7;
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.search-button:hover {
+  background: #3a3dc7;
+}
+
+@media (max-width: 768px) {
+  .search-input-wrapper {
+    height: 45px;
+  }
+  
+  .search-input {
+    font-size: 14px;
+    padding: 0 40px 0 40px;
+  }
+  
+  .search-icon {
+    font-size: 14px;
+  }
+  
+  .clear-button {
+    right: 55px;
+    width: 18px;
+    height: 18px;
+  }
+} 

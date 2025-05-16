@@ -1,0 +1,546 @@
+/* src/components/ProfilePage.module.css */
+
+.profilePage {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  color: #333;
+}
+
+.profileHeader {
+  position: relative;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.coverImage {
+  width: 100%;
+  height: 200px;
+  background: #eee;
+  border-radius: 8px 8px 0 0;
+}
+
+.avatarContainer {
+  position: relative;
+  top: -50px; /* Ensures proper alignment under the cover */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 120px;
+  border: 2.5px solid #fff;
+  border-radius: 50%;
+  overflow: visible; /* or visible if needed */
+  background: #b9b9b9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 5px; /* Extra spacing below avatar for better visual flow */
+}
+
+.avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
+}
+
+/* Overlay remains visible only when no image is set */
+.avatarOverlay {
+  position: absolute;
+  bottom: -5px;
+  right: -5px;
+  width: 36px;
+  height: 36px;
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid white;
+  box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.15);
+  /* transform: translate(-25%, 25%); */
+}
+
+/* Hide overlay when avatar image is present */
+.avatarContainer.hasImage .avatarOverlay {
+  display: none;
+}
+
+/* Ensure the overlay is hidden when an image exists */
+.avatarContainer.hasImage .avatarOverlay {
+  display: none !important;
+}
+
+/* Modal styling for image pop-up */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modalContent {
+  max-width: 90%;
+  max-height: 90%;
+}
+
+.modalClose {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-size: 2rem;
+  color: #fff;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+/* Save Profile Image button styling */
+.saveAvatarButton {
+  margin-top: 10px;
+  padding: 5px 10px;
+  background-color: #0073e6;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+.saveAvatarButton:hover {
+  background-color: #005bb5;
+}
+
+.profileInfo {
+  margin-top: 80px;
+}
+
+.displayName {
+  font-size: 1.8rem;
+  margin: 10px 0 5px;
+}
+
+.username {
+  font-size: 1rem;
+  color: #777;
+  margin-bottom: 10px;
+}
+
+.bio {
+  font-size: 1.1rem;
+  color: #555;
+}
+
+.profileNav {
+  display: flex;
+  justify-content: space-around;
+  margin: 20px 0;
+  border-bottom: 1px solid #ddd;
+}
+
+.profileNav button {
+  background: none;
+  border: none;
+  padding: 10px 15px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: color 0.2s, border-bottom 0.2s;
+  border-bottom: 3px solid transparent;
+}
+
+.profileNav button:hover,
+.profileNav button.active {
+  color: #0073e6;
+  border-bottom: 3px solid #0073e6;
+}
+
+.profileContent {
+  padding: 20px 0;
+}
+
+.tabContent {
+  margin-top: 20px;
+}
+
+.editButton {
+  margin-top: 10px;
+  padding: 8px 16px;
+  background: #0073e6;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.editButton:hover {
+  background: #005bb5;
+}
+
+.editForm {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.editForm label {
+  display: flex;
+  flex-direction: column;
+  font-size: 1rem;
+}
+
+.editForm input,
+.editForm textarea {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.formButtons {
+  display: flex;
+  gap: 10px;
+}
+
+.editForm button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #0073e6;
+  color: #fff;
+  transition: background 0.2s;
+}
+
+.editForm button:hover {
+  background: #005bb5;
+}
+
+.favoritesList {
+  list-style: none;
+  padding: 0;
+}
+
+.favoritesList li {
+  background: #f7f7f7;
+  padding: 10px;
+  margin: 5px 0;
+  border-radius: 4px;
+}
+
+.communityLink {
+  display: inline-block;
+  padding: 10px 15px;
+  background: #7289da;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.communityLink:hover {
+  background: #5b6eae;
+}
+
+.loading {
+  text-align: center;
+  font-size: 1.2rem;
+  padding: 50px;
+}
+
+.error {
+  color: red;
+  text-align: center;
+  padding: 20px;
+}
+
+/* New/Updated styling for image action buttons */
+.imageActionButtons {
+  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.saveAvatarButton,
+.cancelUploadButton,
+.editImageButton {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+/* Enhanced Buttons */
+.saveAvatarButton {
+  background-color: #0073e6;
+  color: #fff;
+}
+.saveAvatarButton:hover {
+  background-color: #005bb5;
+}
+
+.cancelUploadButton {
+  background-color: #dc3545;
+  color: #fff;
+}
+.cancelUploadButton:hover {
+  background-color: #c82333;
+}
+
+/* Ensure Change Image button is distinct */
+.editImageButton {
+  background-color: #6c757d;
+  color: #fff;
+}
+.editImageButton:hover {
+  background-color: #5a6268;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .saveAvatarButton,
+  .cancelUploadButton,
+  .editImageButton {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+}
+
+/* Responsive adjustments for tablets */
+@media (max-width: 768px) {
+  .profilePage {
+    padding: 10px;
+  }
+  .coverImage {
+    height: 150px;
+  }
+  .avatarContainer {
+    width: 100px;
+    height: 100px;
+    top: -40px;
+  }
+  .displayName {
+    font-size: 1.5rem;
+  }
+  .profileNav button {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Responsive adjustments for mobile devices */
+@media (max-width: 480px) {
+  .saveAvatarButton,
+  .cancelUploadButton,
+  .editImageButton {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .profilePage {
+    padding: 5px;
+  }
+  .coverImage {
+    height: 120px;
+  }
+  .avatarContainer {
+    width: 80px;
+    height: 80px;
+    top: -35px;
+  }
+  .displayName {
+    font-size: 1.3rem;
+  }
+  .username, .bio {
+    font-size: 0.9rem;
+  }
+  .profileNav button {
+    padding: 6px 8px;
+    font-size: 0.8rem;
+  }
+}
+
+.interestsList {
+  margin: 20px 0;
+}
+
+.interestTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.interestTag {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 14px;
+}
+
+.interestsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 15px;
+  margin: 20px 0;
+}
+
+.interestCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.interestCheckbox:hover {
+  background-color: #f5f5f5;
+}
+
+.interestCheckbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.settingsForm {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.settingSection {
+  margin-bottom: 30px;
+}
+
+.settingSection h3 {
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.languageSelect {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  margin-right: 10px;
+  width: 18px;
+  height: 18px;
+}
+
+.preferencesNote {
+  font-size: 0.9rem;
+  color: #666;
+  margin-top: 10px;
+  padding: 8px;
+  background-color: #f8f9fa;
+  border-left: 3px solid #4a86e8;
+  border-radius: 4px;
+}
+
+.saveButton {
+  padding: 10px 20px;
+  background-color: #0073e6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-top: 20px;
+}
+
+.saveButton:hover {
+  background-color: #005bb5;
+}
+
+.communitySection {
+  margin-bottom: 40px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+}
+
+.communitySection h3 {
+  color: #333;
+  margin-bottom: 15px;
+}
+
+.benefitsList {
+  margin: 20px 0;
+}
+
+.benefitsList ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+.benefitsList li {
+  margin-bottom: 10px;
+  padding-left: 24px;
+  position: relative;
+}
+
+.benefitsList li:before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #4caf50;
+}
+
+.discordButton, .upgradeButton {
+  display: inline-block;
+  padding: 12px 24px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  margin-top: 15px;
+}
+
+.discordButton {
+  background-color: #7289da;
+  color: white;
+}
+
+.discordButton:hover {
+  background-color: #5b73c7;
+}
+
+.upgradeButton {
+  background-color: #4caf50;
+  color: white;
+}
+
+.upgradeButton:hover {
+  background-color: #388e3c;
+}

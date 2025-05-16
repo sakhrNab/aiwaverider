@@ -12,7 +12,7 @@ package-lock.json
 dist
 dist-ssr
 *.local
-.env
+.env*
 aiwaverider-privatekey.json
 aiwaverider8-privatekey.json
 fetch_file_contents.py
@@ -20,7 +20,9 @@ file_contents.txt
 deleteFiles.ps1
 classes_found.txt
 fetch_classes.py
-
+firebase-storage*
+TODO.md
+package-lock*
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -31,3 +33,13 @@ fetch_classes.py
 *.njsproj
 *.sln
 *.sw?
+*.bat
+*.ps1
+*.xlsx
+# unneccessary generated files
+*.$*
+
+# Plan diagram
+AI Waverider.drawio
+package-lock.json
+package-lock.json

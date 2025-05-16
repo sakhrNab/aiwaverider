@@ -1,0 +1,223 @@
+.checkout-success-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 80vh;
+  padding: 2rem;
+  background-color: #f9f9f9;
+}
+
+.checkout-success-card {
+  width: 100%;
+  max-width: 800px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.checkout-success-content {
+  padding: 2.5rem;
+  text-align: center;
+}
+
+.checkout-success-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  text-align: center;
+  min-height: 300px;
+}
+
+.checkout-success-loading p {
+  margin-top: 1.5rem;
+  color: #555;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+/* Remove the spinner styles since we're using HashLoader */
+.spinner {
+  display: none;
+}
+
+.checkout-error {
+  padding: 2.5rem;
+  text-align: center;
+  color: #d9534f;
+}
+
+.success-icon {
+  color: #5cb85c;
+  margin-bottom: 1.5rem;
+}
+
+.error-icon {
+  color: #d9534f;
+  margin-bottom: 1.5rem;
+}
+
+.email-icon {
+  color: #4a86e8;
+  font-size: 1.5rem;
+  margin-right: 1rem;
+}
+
+.checkout-success-content h1 {
+  margin-bottom: 1rem;
+  color: #333;
+  font-size: 2rem;
+}
+
+.checkout-success-content p {
+  margin-bottom: 1.5rem;
+  color: #555;
+  font-size: 1.1rem;
+}
+
+.order-info {
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1.5rem 0;
+  text-align: left;
+}
+
+.email-notification {
+  display: flex;
+  align-items: center;
+  background-color: #e8f4fd;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  text-align: left;
+}
+
+.email-notification h3 {
+  color: #4a86e8;
+  margin-bottom: 0.5rem;
+}
+
+.next-steps {
+  text-align: left;
+  margin: 2rem 0;
+}
+
+.next-steps h3 {
+  color: #333;
+  margin-bottom: 1rem;
+}
+
+.next-steps ul {
+  padding-left: 1.5rem;
+}
+
+.next-steps li {
+  margin-bottom: 0.5rem;
+  color: #555;
+}
+
+.checkout-success-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.primary-button {
+  background-color: #4a86e8;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.primary-button:hover {
+  background-color: #3a76d8;
+}
+
+.secondary-button {
+  background-color: white;
+  color: #4a86e8;
+  border: 1px solid #4a86e8;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.secondary-button:hover {
+  background-color: #f0f5ff;
+}
+
+@media (max-width: 768px) {
+  .checkout-success-container {
+    padding: 1rem;
+  }
+  
+  .checkout-success-content {
+    padding: 1.5rem;
+  }
+  
+  .checkout-success-actions {
+    flex-direction: column;
+  }
+  
+  .email-notification {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .email-icon {
+    margin-right: 0;
+    margin-bottom: 1rem;
+    font-size: 2rem;
+  }
+  
+  .checkout-success-content h1 {
+    font-size: 1.5rem;
+  }
+}
+
+.success-recommendations-section {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #eaeaea;
+  width: 100%;
+}
+
+/* Make recommendations fit well into the success page */
+.success-recommendations-section .payment-success-recommendations {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.success-recommendations-section .recommendation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.success-recommendations-section .recommendation-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.success-recommendations-section .recommendation-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 768px) {
+  .success-recommendations-section .recommendation-grid {
+    grid-template-columns: 1fr;
+  }
+} 

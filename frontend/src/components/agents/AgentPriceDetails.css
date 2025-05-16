@@ -1,0 +1,244 @@
+.agent-price-details {
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.agent-price-details.free {
+  background-color: #f0f8ff;
+}
+
+.agent-price-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+}
+
+.agent-price-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.history-toggle-button {
+  background: transparent;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.history-toggle-button:hover {
+  background-color: #f0f0f0;
+  border-color: #ccc;
+}
+
+.agent-price-free-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #0066cc;
+  font-size: 16px;
+  margin-top: 10px;
+}
+
+.info-icon {
+  font-size: 20px;
+}
+
+.agent-price-main {
+  margin-bottom: 20px;
+}
+
+.agent-price-value {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+.agent-price-original {
+  font-size: 18px;
+  color: #777;
+  text-decoration: line-through;
+  margin-right: 10px;
+}
+
+.agent-price-current {
+  font-size: 24px;
+  font-weight: bold;
+  color: #333;
+}
+
+.agent-price-current.discounted {
+  color: #e53935;
+}
+
+.agent-price-subscription-label {
+  font-size: 16px;
+  font-weight: normal;
+  color: #666;
+  margin-left: 2px;
+}
+
+.agent-price-discount-badge {
+  background-color: #e53935;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 10px;
+}
+
+.agent-discount-details {
+  margin-top: 15px;
+  font-size: 14px;
+  color: #555;
+}
+
+.discount-save {
+  font-weight: bold;
+  color: #e53935;
+}
+
+/* Pricing tiers */
+.agent-pricing-tiers {
+  margin-top: 20px;
+  border-top: 1px solid #eee;
+  padding-top: 20px;
+}
+
+.agent-pricing-tiers h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 16px;
+  color: #333;
+}
+
+.pricing-tiers-container {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.pricing-tier {
+  flex: 1;
+  min-width: 200px;
+  background-color: white;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 15px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.pricing-tier h5 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 16px;
+  color: #333;
+}
+
+.tier-price {
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 15px;
+  color: #0066cc;
+}
+
+.tier-features {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.tier-features li {
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+/* Price history section */
+.agent-price-history {
+  margin-top: 20px;
+  border-top: 1px solid #eee;
+  padding-top: 20px;
+}
+
+.agent-price-history h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 16px;
+  color: #333;
+}
+
+.price-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.price-history-table th,
+.price-history-table td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.price-history-table th {
+  font-weight: bold;
+  color: #555;
+  background-color: #f5f5f5;
+}
+
+.price-history-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Loading and error states */
+.agent-price-loading,
+.agent-price-error,
+.agent-price-unavailable {
+  padding: 20px;
+  text-align: center;
+  color: #666;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.agent-price-error {
+  color: #e53935;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .pricing-tiers-container {
+    flex-direction: column;
+  }
+  
+  .pricing-tier {
+    min-width: 100%;
+  }
+  
+  .agent-price-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .history-toggle-button {
+    width: 100%;
+    justify-content: center;
+  }
+} 

@@ -1,0 +1,55 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai_wave_rider_frontend
+    ports:
+      - "5173:5173"
+    env_file:
+      - ./frontend.env
+    environment:
+      - NODE_ENV=production
+    networks:
+      - frontend-network
+      - backend-network
+    restart: unless-stopped
+
+  # Development version
+  frontend-dev:
+    build:
+      context: .
+      dockerfile: frontend.dev.Dockerfile
+    container_name: ai_wave_rider_frontend_dev
+    ports:
+      - "5173:5173"
+    env_file:
+      - ./frontend.env
+    environment:
+      - NODE_ENV=development
+      # For Docker networking, override API URL
+      - VITE_API_URL=http://ai_wave_rider_backend:4000
+      - VITE_HMR_HOST=0.0.0.0
+      - VITE_HMR_PORT=5173
+    volumes:
+      # Mount source code for hot reloading
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./index.html:/app/index.html
+      - ./vite.config.js:/app/vite.config.js
+      # Mount env file for environment variables
+      - ./frontend.env:/app/.env
+    networks:
+      - frontend-network
+      - backend-network
+    restart: unless-stopped
+    # Add explicit host networking
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  frontend-network:
+    name: frontend-network
+  backend-network:
+    name: backend-network
+    external: true 

@@ -1,0 +1,869 @@
+/* AITools.css */
+.ai-tools-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* Theme transition */
+.tool-card,
+.filter-tag,
+input,
+h1,
+p,
+span,
+button {
+  transition: all 0.3s ease;
+}
+
+/* Enhanced gradient background animation */
+.min-h-screen.bg-gradient-to-br {
+  animation: gradientAnimation 20s ease infinite alternate;
+  background-size: 300% 300%;
+}
+
+@keyframes gradientAnimation {
+  0% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 100%;
+  }
+}
+
+/* Particles container - Light Mode */
+.particles-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.particles-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='5' cy='5' r='1' fill='white' fill-opacity='0.3'/%3E%3C/svg%3E");
+  opacity: 0.5;
+  animation: particles-float 120s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes particles-float {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  100% {
+    transform: translate(100px, 100px) rotate(360deg);
+  }
+}
+
+/* Enhanced stars pattern with more twinkle effect */
+.stars-pattern {
+  position: relative;
+  overflow: hidden;
+}
+
+.stars-pattern::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(1px 1px at 25% 15%, rgba(255, 255, 255, 0.7) 1%, transparent 0%),
+    radial-gradient(1px 1px at 50% 50%, rgba(255, 255, 255, 0.5) 1%, transparent 0%),
+    radial-gradient(1px 1px at 75% 25%, rgba(255, 255, 255, 0.6) 1%, transparent 0%),
+    radial-gradient(2px 2px at 10% 80%, rgba(255, 255, 255, 0.4) 1%, transparent 0%),
+    radial-gradient(2px 2px at 20% 40%, rgba(255, 255, 255, 0.5) 1%, transparent 0%),
+    radial-gradient(2px 2px at 30% 70%, rgba(255, 255, 255, 0.6) 1%, transparent 0%),
+    radial-gradient(2px 2px at 60% 20%, rgba(255, 255, 255, 0.6) 1%, transparent 0%),
+    radial-gradient(2px 2px at 80% 90%, rgba(255, 255, 255, 0.5) 1%, transparent 0%),
+    radial-gradient(2px 2px at 90% 60%, rgba(255, 255, 255, 0.4) 1%, transparent 0%);
+  animation: twinkle 10s ease infinite alternate;
+  z-index: -1;
+}
+
+@keyframes twinkle {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  25% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 0.8;
+  }
+}
+
+/* Improved glass effect */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 8px 32px 0 rgba(31, 38, 135, 0.3),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Background pattern */
+.bg-pattern {
+  background: 
+    radial-gradient(circle at 0% 0%, rgba(65, 88, 208, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 100% 0%, rgba(200, 80, 192, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(255, 204, 112, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 0% 100%, rgba(65, 88, 208, 0.4) 0%, transparent 50%);
+  mix-blend-mode: soft-light;
+}
+
+/* Enhanced glow effect for text in dark mode */
+.glow-text-blue {
+  text-shadow: 0 0 10px rgba(99, 102, 241, 0.5), 0 0 20px rgba(99, 102, 241, 0.3);
+}
+
+/* Shadow with glow for dark mode */
+.shadow-glow-sm {
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06),
+    0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+/* Subtle pulse animation for avatar in dark mode */
+.pulse-subtle {
+  animation: pulse-subtle 3s ease-in-out infinite;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(79, 70, 229, 0);
+  }
+}
+
+/* Enhanced tool card */
+.tool-card,
+a[class*='group p-6 rounded-2xl'] {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  animation: fadeInUp 0.5s ease forwards;
+  animation-fill-mode: both;
+  opacity: 0;
+  transform: translateY(20px);
+  position: relative;
+  overflow: hidden;
+}
+
+.tool-card::before,
+a[class*='group p-6 rounded-2xl']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.15) 0%,
+    transparent 100%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.tool-card:hover,
+a[class*='group p-6 rounded-2xl']:hover {
+  transform: translateY(-5px) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 
+              0 10px 10px -5px rgba(0, 0, 0, 0.04),
+              0 0 0 1px rgba(255, 255, 255, 0.2) !important;
+}
+
+.tool-card:hover::before,
+a[class*='group p-6 rounded-2xl']:hover::before {
+  opacity: 1;
+}
+
+/* Filter tag enhancements */
+.filter-tag,
+button[class*='px-5 py-2 rounded-full'] {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateZ(0); /* Force GPU acceleration */
+}
+
+/* Animation keyframes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Main heading enhancement */
+h1.text-4xl,
+h1.text-5xl {
+  letter-spacing: -0.02em;
+}
+
+/* Filter tags container with better spacing */
+.filter-tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 1.5rem 0;
+  perspective: 1000px;
+}
+
+.filter-tags-container button {
+  transform: translateZ(0);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.filter-tags-container button:hover {
+  transform: translateY(-2px) scale(1.05);
+}
+
+/* Tool card hover animations with improved timing */
+a[class*='group p-6 rounded-2xl']:hover img {
+  animation: wobble 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes wobble {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-5px) rotate(-5deg);
+  }
+  30% {
+    transform: translateX(4px) rotate(3deg);
+  }
+  45% {
+    transform: translateX(-3px) rotate(-2deg);
+  }
+  60% {
+    transform: translateX(2px) rotate(1deg);
+  }
+  75% {
+    transform: translateX(-1px) rotate(-1deg);
+  }
+}
+
+/* Improved search input focus state */
+input[type="text"]:focus {
+  outline: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: pulse-input 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-input {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+  }
+}
+
+/* Improved scrollbar for dark mode */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(30, 27, 75, 0.3);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(79, 70, 229, 0.4);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.6);
+}
+
+/* Enhanced shimmer effect on hover for buttons */
+button:not([class*='bg-gray-800']):hover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: shimmer 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Custom focus styles for interactive elements */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: none;
+  ring: 2px;
+  ring-offset: 2px;
+  ring-color: rgba(139, 92, 246, 0.5);
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .filter-tags-container {
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+  }
+  
+  h1.text-4xl {
+    font-size: 2.25rem;
+  }
+}
+
+/* Improved training header */
+div[class*='bg-[#2D1846]'] {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+div[class*='bg-[#2D1846]']:hover {
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+}
+
+/* Emphasized keyword tags */
+span[class*='inline-block px-3 py-1'] {
+  background: rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+span[class*='inline-block px-3 py-1']:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Enhanced training header animation */
+@keyframes gradientFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.training-header {
+  background-size: 200% 200%;
+  animation: gradientFlow 15s ease infinite;
+}
+
+/* Smooth transitions for interactive elements */
+button, a, input {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced card hover effects */
+.tool-card:hover .tool-icon {
+  transform: scale(1.05);
+}
+
+.tool-card .tool-icon {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced container */
+.tools-container {
+  border-radius: 2rem;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 8px 32px rgba(31, 38, 135, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tools-container:hover {
+  box-shadow: 
+    0 15px 35px rgba(31, 38, 135, 0.25),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.tools-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    transparent 100%
+  );
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Enhanced search input */
+input[type="text"] {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+input[type="text"]:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(139, 92, 246, 0.3);
+  transform: scale(1.01);
+}
+
+/* Enhanced tool icon container */
+.tool-icon-container {
+  position: relative;
+  width: 100%;
+  height: 160px;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.tool-icon-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.tool-icon-container:hover::before {
+  opacity: 1;
+}
+
+/* Image aspect ratio handling */
+.tool-icon-container img {
+  width: 100%;
+  height: 100%;
+  object-position: center;
+  transition: transform 0.5s ease, opacity 0.3s ease;
+}
+
+/* Specific handling for different aspect ratios */
+.tool-icon-container .portrait-image {
+  object-fit: contain;
+  max-height: 100%;
+  width: auto;
+}
+
+.tool-icon-container .landscape-image {
+  object-fit: cover;
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+}
+
+.tool-icon-container .square-image {
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+}
+
+/* Loading state */
+.img-loading {
+  opacity: 0.6;
+  filter: blur(5px);
+  animation: shimmer 1.5s infinite;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05),
+    rgba(255, 255, 255, 0.2),
+    rgba(255, 255, 255, 0.05)
+  );
+  background-size: 200% 100%;
+}
+
+/* Loaded state */
+.img-loaded {
+  opacity: 1;
+  filter: blur(0);
+}
+
+/* Hover effects */
+.ai-tool-card:hover .tool-icon-container img {
+  transform: scale(1.05);
+}
+
+/* Shimmer effect for loading images */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Enhanced animation for fading in elements */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 0;
+}
+
+/* Enhanced heartbeat pulse animation for the booking button */
+.heartbeat-pulse {
+  position: relative;
+  box-shadow: 0 0 0 0 rgba(255, 138, 0, 0.7);
+  animation: heartbeat-pulse 1.8s infinite cubic-bezier(0.66, 0, 0, 1);
+  transform-origin: center;
+}
+
+.heartbeat-pulse:hover {
+  animation: none;
+  transform: scale(1.05);
+  box-shadow: 0 0 25px rgba(255, 138, 0, 0.6);
+  background-size: 200% 200%;
+  background-position: right center;
+}
+
+.heartbeat-pulse::after {
+  content: '';
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  bottom: -5px;
+  left: -5px;
+  border-radius: 30px;
+  background: linear-gradient(45deg, rgba(255, 138, 0, 0.3), rgba(255, 0, 128, 0.3));
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.heartbeat-pulse:hover::after {
+  opacity: 1;
+  animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(1.1);
+    opacity: 0;
+  }
+}
+
+@keyframes heartbeat-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 138, 0, 0.7);
+  }
+  
+  25% {
+    transform: scale(1.03);
+  }
+  
+  40% {
+    transform: scale(1);
+  }
+  
+  60% {
+    transform: scale(1.03);
+    box-shadow: 0 0 0 8px rgba(255, 138, 0, 0);
+  }
+  
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 138, 0, 0);
+  }
+}
+
+/* Additional glow effect for yellow highlights */
+.text-yellow-400 {
+  text-shadow: 0 0 10px rgba(250, 204, 21, 0.4);
+  animation: soft-glow 3s ease-in-out infinite alternate;
+}
+
+@keyframes soft-glow {
+  0% {
+    text-shadow: 0 0 10px rgba(250, 204, 21, 0.4);
+  }
+  100% {
+    text-shadow: 0 0 20px rgba(250, 204, 21, 0.7);
+  }
+}
+
+/* Custom black header styling */
+.bg-black {
+  position: relative;
+  overflow: hidden;
+  background-color: #000;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+}
+
+.bg-black::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: radial-gradient(
+    ellipse at top,
+    rgba(50, 50, 50, 0.4) 0%,
+    rgba(0, 0, 0, 0) 70%
+  );
+  pointer-events: none;
+}
+
+/* AI Tool card styling */
+.ai-tool-card {
+  display: flex;
+  align-items: start;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.ai-tool-card:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-4px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.tool-icon-container {
+  width: 3.5rem;
+  height: 3.5rem;
+  background: linear-gradient(to bottom right, rgba(139, 92, 246, 0.4), rgba(219, 39, 119, 0.4));
+  border-radius: 0.75rem;
+  padding: 0.625rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}
+
+.ai-tool-card:hover .tool-icon-container {
+  transform: scale(1.1);
+}
+
+.ai-tool-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-tool-title {
+  font-weight: 600;
+  font-size: 1.125rem;
+  color: rgba(255, 255, 255, 0.9);
+  transition: color 0.3s ease;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-tool-card:hover .ai-tool-title {
+  color: white;
+}
+
+.external-link-icon {
+  opacity: 0.5;
+  font-size: 0.875rem;
+  transition: opacity 0.3s ease;
+}
+
+.ai-tool-card:hover .external-link-icon {
+  opacity: 1;
+}
+
+.ai-tool-description {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0.25rem 0 0.75rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 0.3s ease;
+}
+
+.ai-tool-card:hover .ai-tool-description {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ai-tool-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.ai-tool-primary-tag {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: white;
+}
+
+.ai-tool-secondary-tag {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Image aspect ratio handling */
+img[data-aspect="portrait"] {
+  object-fit: cover;
+  height: 100%;
+  width: auto;
+}
+
+img[data-aspect="landscape"] {
+  object-fit: cover;
+  width: 100%;
+  height: auto;
+}
+
+img[data-aspect="square"] {
+  object-fit: contain;
+  width: 100%;
+  height: 100%;
+}
+
+/* Search container - Enhanced styles with ID selector for higher specificity */
+#ai-tools-search.search-container {
+  position: relative;
+  transition: all 0.3s ease;
+  transform: translateZ(0);
+}
+
+#ai-tools-search.search-container:hover {
+  transform: scale(1.01);
+}
+
+#ai-tools-search .search-icon-wrapper {
+  position: absolute;
+  left: 1.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+}
+
+#ai-tools-search .search-icon {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1.25rem;
+}
+
+#ai-tools-search .search-input {
+  width: 100%;
+  padding: 1rem;
+  padding-left: 3.75rem !important; /* Increased left padding for icon spacing */
+  padding-right: 3.5rem !important; /* Added right padding for clear button */
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.1));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+  color: white;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+#ai-tools-search .search-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+#ai-tools-search .search-input:focus {
+  outline: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* Clear button for search */
+#ai-tools-search .search-clear-button {
+  position: absolute !important;
+  right: 1.25rem !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: none !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  z-index: 10 !important;
+  font-size: 0.875rem !important;
+}
+
+#ai-tools-search .search-clear-button:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
+} 

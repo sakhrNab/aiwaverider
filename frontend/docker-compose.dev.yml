@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: frontend_dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app # Mount current directory to app directory in container
+      - /app/node_modules # Anonymous volume to prevent host node_modules overwriting
+    env_file:
+      - .env # Load frontend .env file
+    environment:
+      # CHOKIDAR_USEPOLLING is often needed for HMR to work correctly in Docker
+      - CHOKIDAR_USEPOLLING=true
+      # VITE_PROXY_TARGET is used by vite.config.js
+      # For Docker Desktop (Mac/Windows):
+      - VITE_PROXY_TARGET=http://host.docker.internal:4000
+      # For Linux, if backend is on host, it might be:
+      # - VITE_PROXY_TARGET=http://172.17.0.1:4000 # (Default Docker bridge IP, verify this)
+      # Or if backend is also in a Docker container on a shared network:
+      # - VITE_PROXY_TARGET=http://backend_service_name:4000
+    networks:
+      - app_network_frontend # Can be a separate network for frontend dev
+
+networks:
+  app_network_frontend:
+    driver: bridge

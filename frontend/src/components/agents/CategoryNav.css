@@ -1,0 +1,142 @@
+.category-nav-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border-radius: 0.75rem;
+  overflow: hidden; /* Hide any overflow to prevent artifacts */
+}
+
+.category-nav {
+  width: 100%;
+  overflow-x: auto;
+  padding: 8px 12px;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+  position: relative;
+}
+
+.category-nav::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+.scroll-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  cursor: pointer;
+  z-index: 3; /* Higher z-index than buttons and gradients */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  color: #1c1d1f;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  position: relative; /* Ensure proper stacking context */
+}
+
+.scroll-button:hover {
+  background: white;
+  transform: scale(1.05);
+}
+
+.scroll-button:active {
+  transform: scale(0.95);
+}
+
+.scroll-left {
+  margin-right: -18px; /* Position it slightly inside the scrollable area */
+}
+
+.scroll-right {
+  margin-left: -18px; /* Position it slightly inside the scrollable area */
+}
+
+.category-scroll {
+  display: flex;
+  gap: 12px;
+  padding: 2px 10px;
+  min-width: min-content;
+  width: max-content; /* Ensure all buttons can be displayed */
+}
+
+.category-button {
+  position: relative;
+  z-index: 2;
+  padding: 12px 20px;
+  border: 1px solid #e8e9eb;
+  border-radius: 50px;
+  background-color: #fff;
+  color: #1c1d1f;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.category-button:hover:not(.active) {
+  background-color: #f7f9fa;
+  color: #1c1d1f;
+  border-color: #d1d7dc;
+}
+
+.category-button.active {
+  background-color: #1c1d1f;
+  color: white;
+  border-color: #1c1d1f;
+}
+
+/* Add fancy scroll indicators with fixed opacity values for dark backgrounds */
+.category-nav::before,
+.category-nav::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 60px; /* Wider gradient for smoother transition */
+  pointer-events: none;
+  z-index: 1; /* Lower z-index to prevent overlap with buttons */
+}
+
+.category-nav::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(139, 92, 246, 1), rgba(139, 92, 246, 0));
+}
+
+.category-nav::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(139, 92, 246, 1), rgba(139, 92, 246, 0));
+}
+
+@media (max-width: 768px) {
+  .category-button {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+  
+  .category-scroll {
+    gap: 8px;
+    padding: 2px 6px;
+  }
+  
+  .category-nav {
+    padding: 6px 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .category-button {
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+  
+  .category-scroll {
+    gap: 6px;
+    padding: 2px 4px;
+  }
+} 
