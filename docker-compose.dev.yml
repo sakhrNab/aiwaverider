@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # Backend service (Development)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: aiwaverider-backend-dev
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    env_file:
+      - ./backend/.env
+    networks:
+      - aiwaverider-network
+    restart: unless-stopped
+
+  # Frontend service (Development)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: aiwaverider-frontend-dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:4000
+      - VITE_HMR_HOST=0.0.0.0
+      - VITE_HMR_PORT=5173
+    env_file:
+      - ./frontend/.env
+    networks:
+      - aiwaverider-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Redis service for backend
+  redis:
+    image: redis:alpine
+    container_name: aiwaverider-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - aiwaverider-network
+    restart: unless-stopped
+
+networks:
+  aiwaverider-network:
+    driver: bridge

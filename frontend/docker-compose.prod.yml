@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        # Pass production VITE_ variables as build arguments
+        # These should match the ARG declarations in Dockerfile.prod
+        # Get these values from a secure place or a .env.prod file (gitignored)
+        VITE_API_URL: "https://aiwaverider.com/api" # IMPORTANT: Your actual prod backend URL
+        VITE_FIREBASE_API_KEY: "YOUR_PROD_FIREBASE_API_KEY"
+        VITE_FIREBASE_AUTH_DOMAIN: "aiwaverider.firebaseapp.com"
+        VITE_FIREBASE_PROJECT_ID: "aiwaverider"
+        VITE_FIREBASE_STORAGE_BUCKET: "aiwaverider.firebasestorage.app"
+        VITE_FIREBASE_MESSAGING_SENDER_ID: "426527634066"
+        VITE_FIREBASE_APP_ID: "1:426527634066:web:7de5cabb9c89b34cdaec4b"
+        # ... add all other VITE_ production variables here
+        # Example for Stripe (ensure these are correct for prod):
+        VITE_STRIPE_PUBLISHABLE_KEY: "pk_live_YOUR_STRIPE_PROD_PUBLISHABLE_KEY" 
+        # VITE_STRIPE_SECRET_KEY should NOT be in frontend. It's a backend concern.
+        # VITE_PAYPAL_CLIENT_ID: "YOUR_PROD_PAYPAL_CLIENT_ID"
+    container_name: frontend_prod
+    ports:
+      - "80:80" # Map container's port 80 (Nginx) to host's port 80
+      # Or use a different host port if 80 is taken: e.g., "5174:80"
+    restart: unless-stopped
+    networks:
+      - app_network_frontend_prod
+
+networks:
+  app_network_frontend_prod:
+    driver: bridge

@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # Backend service (Production)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: aiwaverider-backend-prod
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - CORS_ORIGINS=https://aiwaverider.com,http://localhost:5173
+    env_file:
+      - ./backend/.env
+    networks:
+      - aiwaverider-network
+    restart: unless-stopped
+
+  # Frontend service (Production)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: aiwaverider-frontend-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - VITE_API_URL=https://aiwaverider.com/api
+    env_file:
+      - ./frontend/.env
+    networks:
+      - aiwaverider-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Redis service for backend
+  redis:
+    image: redis:alpine
+    container_name: aiwaverider-redis
+    volumes:
+      - redis-data:/data
+    networks:
+      - aiwaverider-network
+    restart: unless-stopped
+
+networks:
+  aiwaverider-network:
+    driver: bridge
+
+volumes:
+  redis-data:
